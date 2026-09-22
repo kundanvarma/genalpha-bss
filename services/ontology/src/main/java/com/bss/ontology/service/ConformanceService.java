@@ -1,12 +1,12 @@
 package com.bss.ontology.service;
 
 import com.bss.ontology.client.ComponentClient;
+import com.bss.ontology.dto.ConformanceResult;
 import com.bss.ontology.registry.Registry;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,25 +28,19 @@ public class ConformanceService {
         this.client = client;
     }
 
-    public Map<String, Object> component(String name, String tenant) {
+    public ConformanceResult component(String name, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode declared = l.components().get(name);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", name);
         if (declared == null) {
-            out.put("ok", false);
-            out.put("says", "the registry has no entry for this component");
-            return out;
+            return ConformanceResult.unknown(name, null, "the registry has no entry for this component");
         }
         ComponentClient.Reply reply = client.call(name, "GET", "/.well-known/genalpha-component.json", Map.of(), Map.of(), null, null, Map.of());
-        out.put("declared", Map.of("events", declared.path("events"), "manages", declared.path("manages"), "capabilities", declared.path("capabilities")));
+        ConformanceResult.Declared declaration = new ConformanceResult.Declared(declared.path("events"), declared.path("manages"), declared.path("capabilities"));
         if (!reply.ok()) {
-            out.put("ok", false);
-            out.put("says", "the component does not describe itself (" + Resolver.statusWords(reply) + ")");
-            return out;
+            return ConformanceResult.unknown(name, declaration, "the component does not describe itself (" + Resolver.statusWords(reply) + ")");
         }
         JsonNode runtime = reply.body();
-        out.put("runtime", Map.of("events", runtime.path("events"), "manages", runtime.path("manages"), "routes", runtime.path("routes").size()));
+        ConformanceResult.Runtime reality = new ConformanceResult.Runtime(runtime.path("events"), runtime.path("manages"), runtime.path("routes").size());
         List<String> missingEvents = new ArrayList<>();
         for (JsonNode ev : declared.path("events")) {
             boolean found = false;
@@ -93,20 +87,15 @@ public class ConformanceService {
             }
         }
         boolean ok = missingEvents.isEmpty() && missingRoutes.isEmpty() && missingManages.isEmpty();
-        out.put("ok", ok);
-        out.put("missingEvents", missingEvents);
-        out.put("missingRoutes", missingRoutes);
-        out.put("servedRoutes", servedRoutes);
-        out.put("missingManages", missingManages);
-        out.put("says", ok ? "the registry and the running component agree"
+        String says = ok ? "the registry and the running component agree"
                 : "disagreement: " + (missingEvents.isEmpty() ? "" : "events " + missingEvents + " ")
                 + (missingRoutes.isEmpty() ? "" : "routes " + missingRoutes + " ")
-                + (missingManages.isEmpty() ? "" : "manages " + missingManages));
-        return out;
+                + (missingManages.isEmpty() ? "" : "manages " + missingManages);
+        return new ConformanceResult(name, declaration, reality, ok, missingEvents, missingRoutes, servedRoutes, missingManages, says);
     }
 
-    public List<Map<String, Object>> all(String tenant) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<ConformanceResult> all(String tenant) {
+        List<ConformanceResult> out = new ArrayList<>();
         for (String name : registry.forTenant(tenant).components().keySet()) {
             out.add(component(name, tenant));
         }

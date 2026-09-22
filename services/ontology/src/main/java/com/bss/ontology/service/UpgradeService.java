@@ -1,13 +1,13 @@
 package com.bss.ontology.service;
 
 import com.bss.ontology.client.ComponentClient;
+import com.bss.ontology.dto.UpgradeOption;
 import com.bss.ontology.registry.Registry;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +31,7 @@ public class UpgradeService {
         this.client = client;
     }
 
-    public List<Map<String, Object>> availableUpgrades(String subscriptionId, Caller caller) {
+    public List<UpgradeOption> availableUpgrades(String subscriptionId, Caller caller) {
         JsonNode action = registry.forTenant(caller.tenant()).actions().get("upgradeSubscription");
         Resolver.Resolved r = resolver.resolve(action, Map.of("subscriptionId", subscriptionId), caller);
         return availableUpgrades(r, caller);
@@ -53,9 +53,9 @@ public class UpgradeService {
         return out;
     }
 
-    public List<Map<String, Object>> availableUpgrades(Resolver.Resolved r, Caller caller) {
+    public List<UpgradeOption> availableUpgrades(Resolver.Resolved r, Caller caller) {
         JsonNode current = r.get("currentOffering");
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<UpgradeOption> out = new ArrayList<>();
         if (current == null) {
             return out;
         }
@@ -113,14 +113,9 @@ public class UpgradeService {
             if (monthly == null || (currentMonthly != null && monthly.compareTo(currentMonthly) <= 0)) {
                 continue;
             }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", o.path("id").asText());
-            row.put("name", o.path("name").asText());
-            row.put("monthly", monthly);
-            row.put("family", family);
-            out.add(row);
+            out.add(new UpgradeOption(o.path("id").asText(), o.path("name").asText(), monthly, family));
         }
-        out.sort((a, b) -> ((BigDecimal) a.get("monthly")).compareTo((BigDecimal) b.get("monthly")));
+        out.sort((a, b) -> a.monthly().compareTo(b.monthly()));
         return out;
     }
 }

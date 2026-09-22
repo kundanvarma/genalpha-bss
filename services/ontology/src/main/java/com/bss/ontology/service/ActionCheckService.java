@@ -1,6 +1,10 @@
 package com.bss.ontology.service;
 
 import com.bss.ontology.client.ComponentClient;
+import com.bss.ontology.dto.Check;
+import com.bss.ontology.dto.PermissionVerdict;
+import com.bss.ontology.dto.PolicyVerdict;
+import com.bss.ontology.dto.Verdict;
 import com.bss.ontology.registry.Registry;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
@@ -23,34 +27,6 @@ import java.util.Map;
 @Service
 public class ActionCheckService {
 
-    public record Verdict(String id, String says, Boolean ok, String detail) {
-        public Map<String, Object> toMap() {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", id);
-            m.put("says", says);
-            m.put("verdict", ok == null ? "unknown" : ok ? "holds" : "fails");
-            if (detail != null) {
-                m.put("detail", detail);
-            }
-            return m;
-        }
-    }
-
-    public record Check(boolean allowed, List<Verdict> preconditions, Map<String, Object> permission,
-            Map<String, Object> policy, Resolver.Resolved resolved, String refusal) {
-        public Map<String, Object> toMap() {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("allowed", allowed);
-            if (refusal != null) {
-                m.put("refusal", refusal);
-            }
-            m.put("preconditions", preconditions.stream().map(Verdict::toMap).toList());
-            m.put("permission", permission);
-            m.put("policy", policy);
-            return m;
-        }
-    }
-
     private final Registry registry;
     private final Resolver resolver;
     private final ComponentClient client;
@@ -72,8 +48,8 @@ public class ActionCheckService {
         for (JsonNode pc : action.path("preconditions")) {
             verdicts.add(evaluate(pc, action, inputs, r, caller, layer));
         }
-        Map<String, Object> permission = permission(action, r, caller);
-        Map<String, Object> policy = policy(action, inputs, r, caller, layer);
+        PermissionVerdict permission = permission(action, r, caller);
+        PolicyVerdict policy = policy(action, inputs, r, caller, layer);
         String refusal = null;
         for (String p : r.problems) {
             if (refusal == null && p.contains("is required")) {
@@ -85,13 +61,13 @@ public class ActionCheckService {
                 refusal = v.says() + (v.detail() == null ? "" : " — " + v.detail());
             }
         }
-        if (refusal == null && !Boolean.TRUE.equals(permission.get("ok"))) {
-            refusal = String.valueOf(permission.get("says"));
+        if (refusal == null && !permission.ok()) {
+            refusal = permission.says();
         }
-        if (refusal == null && "deny".equals(policy.get("decision"))) {
-            refusal = "a business rule refuses it: " + policy.getOrDefault("message", policy.get("ruleName"));
+        if (refusal == null && policy.denied()) {
+            refusal = "a business rule refuses it: " + (policy.message() != null ? policy.message() : policy.ruleName());
         }
-        return new Check(refusal == null, verdicts, permission, policy, r, refusal);
+        return new Check(refusal == null, refusal, verdicts, permission, policy, r);
     }
 
     /* ------------------------------------------------------------------ preconditions */
@@ -348,8 +324,7 @@ public class ActionCheckService {
 
     /* ------------------------------------------------------------------ permissions */
 
-    private Map<String, Object> permission(JsonNode action, Resolver.Resolved r, Caller caller) {
-        Map<String, Object> out = new LinkedHashMap<>();
+    private PermissionVerdict permission(JsonNode action, Resolver.Resolved r, Caller caller) {
         List<String> tried = new ArrayList<>();
         for (JsonNode clause : action.path("permissions").path("anyOf")) {
             if (clause.has("self")) {
@@ -360,13 +335,9 @@ public class ActionCheckService {
                 }
                 boolean ok = owner != null && !owner.path("id").asText().isEmpty()
                         && owner.path("id").asText().equals(caller.subject());
-                tried.add("as the " + clause.path("self").asText() + (ok ? " — yes" : " — no"));
+                tried.add("as the " + selfName + (ok ? " — yes" : " — no"));
                 if (ok) {
-                    out.put("ok", true);
-                    out.put("by", "self:" + clause.path("self").asText());
-                    out.put("says", "the caller is the " + clause.path("self").asText() + " of the subscription");
-                    out.put("tried", tried);
-                    return out;
+                    return new PermissionVerdict(true, "self:" + selfName, "the caller is the " + selfName + " of the subscription", tried);
                 }
             } else if (clause.has("role")) {
                 String role = clause.path("role").asText();
@@ -374,31 +345,21 @@ public class ActionCheckService {
                 boolean ok = caller.has(role) && !caller.isCustomer();
                 tried.add("with role " + role + (ok ? " — yes" : caller.isCustomer() ? " — no, a customer acts only on their own line" : " — no"));
                 if (ok) {
-                    out.put("ok", true);
-                    out.put("by", "role:" + role);
-                    out.put("says", "the caller holds " + role);
-                    out.put("tried", tried);
-                    return out;
+                    return new PermissionVerdict(true, "role:" + role, "the caller holds " + role, tried);
                 }
             }
         }
-        out.put("ok", false);
-        out.put("says", caller.isCustomer()
+        return new PermissionVerdict(false, null, caller.isCustomer()
                 ? "this is not your subscription"
-                : "the caller holds none of the roles this action needs");
-        out.put("tried", tried);
-        return out;
+                : "the caller holds none of the roles this action needs", tried);
     }
 
     /* ------------------------------------------------------------------ policy */
 
-    private Map<String, Object> policy(JsonNode action, Map<String, String> inputs, Resolver.Resolved r, Caller caller,
+    private PolicyVerdict policy(JsonNode action, Map<String, String> inputs, Resolver.Resolved r, Caller caller,
             Registry.Layer layer) {
-        Map<String, Object> out = new LinkedHashMap<>();
         if (!action.has("policy")) {
-            out.put("decision", "none");
-            out.put("says", "no policy domain applies to this action");
-            return out;
+            return PolicyVerdict.none();
         }
         String domain = action.path("policy").path("domain").asText();
         JsonNode cap = layer.capabilities().get(action.path("policy").path("capability").asText());
@@ -420,22 +381,16 @@ public class ActionCheckService {
         context.put("verifiedIdentity", false);
         ComponentClient.Reply reply = client.callAsMachine(cap.path("component").asText(), "POST", cap.path("route").path("path").asText(),
                 Map.of(), Map.of("domain", domain, "context", context), Map.of());
-        out.put("domain", domain);
         if (!reply.ok()) {
-            out.put("decision", "unknown");
-            out.put("says", "the policy service did not answer (" + Resolver.statusWords(reply) + "); the order desk enforces the same rules at execution");
-            return out;
+            return new PolicyVerdict(domain, "unknown", null, null,
+                    "the policy service did not answer (" + Resolver.statusWords(reply) + "); the order desk enforces the same rules at execution");
         }
-        out.put("decision", reply.body().path("decision").asText("allow"));
-        if (reply.body().has("ruleName")) {
-            out.put("ruleName", reply.body().path("ruleName").asText());
-        }
-        if (reply.body().has("message")) {
-            out.put("message", reply.body().path("message").asText());
-        }
-        out.put("says", "deny".equals(out.get("decision"))
-                ? "rule \"" + out.get("ruleName") + "\" refuses: " + out.get("message")
-                : reply.body().has("ruleName") ? "allowed by rule \"" + out.get("ruleName") + "\"" : "no rule in domain \"" + domain + "\" objects");
-        return out;
+        String decision = reply.body().path("decision").asText("allow");
+        String ruleName = reply.body().has("ruleName") ? reply.body().path("ruleName").asText() : null;
+        String message = reply.body().has("message") ? reply.body().path("message").asText() : null;
+        String says = "deny".equals(decision)
+                ? "rule \"" + ruleName + "\" refuses: " + message
+                : ruleName != null ? "allowed by rule \"" + ruleName + "\"" : "no rule in domain \"" + domain + "\" objects";
+        return new PolicyVerdict(domain, decision, ruleName, message, says);
     }
 }

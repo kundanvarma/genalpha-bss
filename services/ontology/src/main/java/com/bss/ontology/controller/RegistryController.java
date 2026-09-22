@@ -1,18 +1,33 @@
 package com.bss.ontology.controller;
 
 import com.bss.ontology.api.ApiConstants;
+import com.bss.ontology.dto.ConformanceResult;
+import com.bss.ontology.dto.CustomerContext;
+import com.bss.ontology.dto.CustomerRecommendations;
+import com.bss.ontology.dto.Explanation;
+import com.bss.ontology.dto.RecommendationOutcome;
+import com.bss.ontology.dto.RegistryOverview;
 import com.bss.ontology.exception.NotFoundException;
 import com.bss.ontology.registry.Registry;
 import com.bss.ontology.security.TenantScope;
+import com.bss.ontology.service.Caller;
+import com.bss.ontology.service.ConformanceService;
+import com.bss.ontology.service.ContextService;
 import com.bss.ontology.service.ExplainService;
+import com.bss.ontology.service.RdfExportService;
+import com.bss.ontology.service.RecommendationService;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,15 +39,14 @@ public class RegistryController {
     private final Registry registry;
     private final ExplainService explain;
     private final TenantScope tenantScope;
-    private final com.bss.ontology.service.RdfExportService rdf;
-    private final com.bss.ontology.service.ContextService context;
-    private final com.bss.ontology.service.ConformanceService conformanceService;
-    private final com.bss.ontology.service.RecommendationService recommendationService;
+    private final RdfExportService rdf;
+    private final ContextService context;
+    private final ConformanceService conformanceService;
+    private final RecommendationService recommendationService;
 
     public RegistryController(Registry registry, ExplainService explain, TenantScope tenantScope,
-            com.bss.ontology.service.RdfExportService rdf, com.bss.ontology.service.ContextService context,
-            com.bss.ontology.service.ConformanceService conformanceService,
-            com.bss.ontology.service.RecommendationService recommendationService) {
+            RdfExportService rdf, ContextService context, ConformanceService conformanceService,
+            RecommendationService recommendationService) {
         this.recommendationService = recommendationService;
         this.conformanceService = conformanceService;
         this.registry = registry;
@@ -43,21 +57,14 @@ public class RegistryController {
     }
 
     @GetMapping
-    public Map<String, Object> overview() {
-        Registry.Layer l = registry.forTenant(tenantScope.currentTenantId());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", "GenAlpha Operational Ontology");
-        out.put("registry", "Operational Semantic Registry");
-        out.put("tenant", tenantScope.currentTenantId());
-        out.put("tenantOverlay", registry.tenantsWithOverlay().contains(tenantScope.currentTenantId()));
-        out.put("concepts", l.concepts().size());
-        out.put("actions", l.actions().size());
-        out.put("capabilities", l.capabilities().size());
-        out.put("components", l.components().size());
-        out.put("agents", l.agents().size());
-        out.put("layers", List.of("TM Forum semantics (lineage)", "GenAlpha core", "operator extensions"));
-        out.put("rule", "AI reasons and proposes. Policies govern. Deterministic components execute.");
-        return out;
+    public RegistryOverview overview() {
+        String tenant = tenantScope.currentTenantId();
+        Registry.Layer l = registry.forTenant(tenant);
+        return new RegistryOverview("GenAlpha Operational Ontology", "Operational Semantic Registry", tenant,
+                registry.tenantsWithOverlay().contains(tenant), l.concepts().size(), l.actions().size(), l.capabilities().size(),
+                l.components().size(), l.agents().size(),
+                List.of("TM Forum semantics (lineage)", "GenAlpha core", "operator extensions"),
+                "AI reasons and proposes. Policies govern. Deterministic components execute.");
     }
 
     @GetMapping("/concepts")
@@ -109,8 +116,8 @@ public class RegistryController {
     }
 
     @GetMapping("/explain/agent/{name}")
-    public Map<String, Object> explainAgent(@PathVariable String name) {
-        Map<String, Object> e = explain.agent(name, tenantScope.currentTenantId());
+    public Explanation explainAgent(@PathVariable String name) {
+        Explanation e = explain.agent(name, tenantScope.currentTenantId());
         if (e == null) {
             throw new NotFoundException("no agent named " + name);
         }
@@ -124,12 +131,12 @@ public class RegistryController {
 
     /** Declaration against reality for one component, or all of them. */
     @GetMapping("/components/{name}/conformance")
-    public Map<String, Object> conformance(@PathVariable String name) {
+    public ConformanceResult conformance(@PathVariable String name) {
         return conformanceService.component(name, tenantScope.currentTenantId());
     }
 
     @GetMapping("/conformance")
-    public List<Map<String, Object>> conformanceAll() {
+    public List<ConformanceResult> conformanceAll() {
         return conformanceService.all(tenantScope.currentTenantId());
     }
 
@@ -139,8 +146,8 @@ public class RegistryController {
     }
 
     @GetMapping("/explain/action/{name}")
-    public Map<String, Object> explainAction(@PathVariable String name) {
-        Map<String, Object> m = explain.action(name, tenantScope.currentTenantId());
+    public Explanation explainAction(@PathVariable String name) {
+        Explanation m = explain.action(name, tenantScope.currentTenantId());
         if (m == null) {
             throw NotFoundException.forResource("action", name);
         }
@@ -148,8 +155,8 @@ public class RegistryController {
     }
 
     @GetMapping("/explain/journey/{name}")
-    public Map<String, Object> explainJourney(@PathVariable String name) {
-        Map<String, Object> m = explain.journey(name, tenantScope.currentTenantId());
+    public Explanation explainJourney(@PathVariable String name) {
+        Explanation m = explain.journey(name, tenantScope.currentTenantId());
         if (m == null) {
             throw NotFoundException.forResource("action", name);
         }
@@ -157,8 +164,8 @@ public class RegistryController {
     }
 
     @GetMapping("/explain/concept/{name}")
-    public Map<String, Object> explainConcept(@PathVariable String name) {
-        Map<String, Object> m = explain.concept(name, tenantScope.currentTenantId());
+    public Explanation explainConcept(@PathVariable String name) {
+        Explanation m = explain.concept(name, tenantScope.currentTenantId());
         if (m == null) {
             throw NotFoundException.forResource("concept", name);
         }
@@ -173,34 +180,32 @@ public class RegistryController {
 
     /** One call: a customer's sub-graph for an agent, walked with the caller's rights. */
     @GetMapping("/context/customer/{id}")
-    public Map<String, Object> customerContext(@PathVariable String id, jakarta.servlet.http.HttpServletRequest request) {
-        return context.customer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
+    public CustomerContext customerContext(@PathVariable String id, HttpServletRequest request) {
+        return context.customer(id, Caller.current(request, tenantScope.currentTenantId()));
     }
 
     /** What should I do next for this customer — governed actions dry-run through the registry, and things to explain. */
     @GetMapping("/context/customer/{id}/recommendations")
-    public Map<String, Object> recommendations(@PathVariable String id, jakarta.servlet.http.HttpServletRequest request) {
-        return recommendationService.forCustomer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
+    public CustomerRecommendations recommendations(@PathVariable String id, HttpServletRequest request) {
+        return recommendationService.forCustomer(id, Caller.current(request, tenantScope.currentTenantId()));
     }
 
     /** What the agent did with a recommendation — accepted, dismissed, helpful, unhelpful — so the ranking learns. */
-    @org.springframework.web.bind.annotation.PostMapping("/context/recommendations/{decisionId}/outcome")
-    public Map<String, Object> recommendationOutcome(@PathVariable String decisionId,
-            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body,
-            jakarta.servlet.http.HttpServletRequest request) {
-        Map<String, Object> b = body == null ? Map.of() : body;
+    @PostMapping("/context/recommendations/{decisionId}/outcome")
+    public RecommendationOutcome recommendationOutcome(@PathVariable String decisionId,
+            @RequestBody(required = false) RecommendationOutcome.Request body, HttpServletRequest request) {
+        RecommendationOutcome.Request b = body == null ? RecommendationOutcome.Request.EMPTY : body;
         try {
-            return recommendationService.outcome(decisionId, String.valueOf(b.getOrDefault("outcome", "")),
-                    b.get("reason") == null ? null : String.valueOf(b.get("reason")),
-                    com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
+            return recommendationService.outcome(decisionId, b.outcomeOrEmpty(), b.reason(),
+                    Caller.current(request, tenantScope.currentTenantId()));
         } catch (IllegalArgumentException e) {
-            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
     }
 
     /** Console page paths may carry a slash (simulate/priceChange): the rest of the path is the page. */
     @GetMapping("/explain/page/**")
-    public Map<String, Object> explainPage(jakarta.servlet.http.HttpServletRequest request) {
+    public Explanation explainPage(HttpServletRequest request) {
         String prefix = ApiConstants.BASE_PATH + "/explain/page/";
         String path = request.getRequestURI().substring(request.getRequestURI().indexOf(prefix) + prefix.length());
         return explain.page(path, tenantScope.currentTenantId());

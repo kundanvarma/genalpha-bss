@@ -26,6 +26,11 @@ with its suites green.
 - Request bodies are records too (`GovernanceRequest`, `ProductConfigurationRequest`) with `@JsonIgnoreProperties(ignoreUnknown = true)` and an `EMPTY` for an optional body; a lenient `@JsonCreator` keeps old parsing (a bare date in `TimePeriod`).
 - A mutable stored blob (`GovernanceState`, the `governance_json` column) is a plain class with public fields plus `extensions`, unwrapped into the view with `@JsonUnwrapped`; a `DtoRoundTripTest` (pure Jackson, no context) pins bytes and order, and runs in seconds.
 
+**Worked example: ontology (22 Sep).** 25 → 0 (plus product-ordering's descriptor), wire unchanged (#125, CSR/Home suites, generated SDK identical). What the registry *declares* stays `JsonNode` (actions, agents, `effects`/`emits` copied into a receipt); what the service *computes* is a record (`Check`, `Verdict`, `ExecuteReceipt`, `CustomerContext`, `Recommendation`, `Explanation`, `ConformanceResult`).
+- A response written path by path (execute: refused, filed, done) gets a private mutable `Draft` in the service and one `receipt()` that freezes it; a record enriched in stages (ranking, then decision id) grows by `with`-style copies (`ranked(…)`, `decided(…)`), never by mutation.
+- A verdict keeps its domain form (`Boolean ok`) and writes its wire form (`verdict: holds|fails|unknown`) from a `@JsonProperty` getter with `@JsonIgnore` on the component; evaluation context (`resolved`) is `@JsonIgnore`d, so the same record serves the check, the receipt and the MCP result.
+- `@JsonUnwrapped` puts a check's keys beside the action name (`ActionCheck`); one `@JsonPropertyOrder` is the union of every path's order and `NON_NULL` leaves off what a path never wrote — where paths disagreed, the common path wins and the deviation is in the report, not the code. Protocol shapes the server owns (MCP tool schema, JSON-RPC envelope) are records too; `Map.of(...)` had been randomising their key order.
+
 ## 2. Modules and size
 
 | Rule | Check |

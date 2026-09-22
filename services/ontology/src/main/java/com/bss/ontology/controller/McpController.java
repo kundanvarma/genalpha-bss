@@ -1,12 +1,22 @@
 package com.bss.ontology.controller;
 
 import com.bss.ontology.api.ApiConstants;
+import com.bss.ontology.dto.Check;
+import com.bss.ontology.dto.McpMessages;
+import com.bss.ontology.dto.McpMessages.ActionRow;
+import com.bss.ontology.dto.McpMessages.AgentRow;
+import com.bss.ontology.dto.McpMessages.InputSchema;
+import com.bss.ontology.dto.McpMessages.Property;
+import com.bss.ontology.dto.McpMessages.Tool;
+import com.bss.ontology.dto.McpMessages.ToolResult;
 import com.bss.ontology.registry.Registry;
 import com.bss.ontology.security.TenantScope;
 import com.bss.ontology.service.ActionCheckService;
 import com.bss.ontology.service.ActionExecuteService;
 import com.bss.ontology.service.Caller;
+import com.bss.ontology.service.ContextService;
 import com.bss.ontology.service.ExplainService;
+import com.bss.ontology.service.RecommendationService;
 import com.bss.ontology.service.UpgradeService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,12 +54,12 @@ public class McpController {
     private final ExplainService explain;
     private final TenantScope tenantScope;
     private final ObjectMapper json;
-    private final com.bss.ontology.service.ContextService context;
-    private final com.bss.ontology.service.RecommendationService recommendations;
+    private final ContextService context;
+    private final RecommendationService recommendations;
 
     public McpController(Registry registry, ActionCheckService checks, ActionExecuteService executes,
             UpgradeService upgrades, ExplainService explain, TenantScope tenantScope, ObjectMapper json,
-            com.bss.ontology.service.ContextService context, com.bss.ontology.service.RecommendationService recommendations) {
+            ContextService context, RecommendationService recommendations) {
         this.recommendations = recommendations;
         this.context = context;
         this.registry = registry;
@@ -63,13 +73,10 @@ public class McpController {
 
     /** A plain description for people who open the URL. */
     @GetMapping
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", "genalpha-ontology");
-        out.put("protocol", PROTOCOL);
-        out.put("transport", "JSON-RPC 2.0 over HTTP POST, bearer token of the person the agent acts for");
-        out.put("tools", tools().stream().map(t -> t.get("name")).toList());
-        return out;
+    public McpMessages.Description describe() {
+        return new McpMessages.Description("genalpha-ontology", PROTOCOL,
+                "JSON-RPC 2.0 over HTTP POST, bearer token of the person the agent acts for",
+                tools().stream().map(Tool::name).toList());
     }
 
     @PostMapping
@@ -97,11 +104,12 @@ public class McpController {
         }
         try {
             Object result = switch (method) {
-                case "initialize" -> Map.of("protocolVersion", PROTOCOL, "capabilities", Map.of("tools", Map.of("listChanged", false)),
-                        "serverInfo", Map.of("name", "genalpha-ontology", "version", "1.0.0"),
-                        "instructions", "Every tool is a governed business action or a read of the ontology. Writes are refused with the failed condition named; read it back to the person.");
+                case "initialize" -> new McpMessages.Initialize(PROTOCOL,
+                        new McpMessages.Initialize.Capabilities(new McpMessages.Initialize.Tools(false)),
+                        new McpMessages.Initialize.ServerInfo("genalpha-ontology", "1.0.0"),
+                        "Every tool is a governed business action or a read of the ontology. Writes are refused with the failed condition named; read it back to the person.");
                 case "ping" -> Map.of();
-                case "tools/list" -> Map.of("tools", tools());
+                case "tools/list" -> new McpMessages.ToolList(tools());
                 case "tools/call" -> call(params, request);
                 case "resources/list" -> Map.of("resources", List.of());
                 case "prompts/list" -> Map.of("prompts", List.of());
@@ -110,11 +118,7 @@ public class McpController {
             if (result == null) {
                 return error(id, -32601, "method not found: " + method);
             }
-            Map<String, Object> ok = new LinkedHashMap<>();
-            ok.put("jsonrpc", "2.0");
-            ok.put("id", id);
-            ok.put("result", result);
-            return ok;
+            return new McpMessages.Reply("2.0", id, result);
         } catch (IllegalArgumentException e) {
             return error(id, -32602, e.getMessage());
         } catch (RuntimeException e) {
@@ -122,42 +126,39 @@ public class McpController {
         }
     }
 
-    private static Map<String, Object> error(JsonNode id, int code, String message) {
-        Map<String, Object> err = new LinkedHashMap<>();
-        err.put("jsonrpc", "2.0");
-        err.put("id", id);
-        err.put("error", Map.of("code", code, "message", message));
-        return err;
+    private static McpMessages.ErrorReply error(JsonNode id, int code, String message) {
+        return new McpMessages.ErrorReply("2.0", id, new McpMessages.ErrorReply.Error(code, message));
     }
 
     /* ------------------------------------------------------------------ tools, generated */
 
-    List<Map<String, Object>> tools() {
+    List<Tool> tools() {
         Registry.Layer l = registry.forTenant(tenantScope.currentTenantId());
-        List<Map<String, Object>> tools = new ArrayList<>();
-        tools.add(tool("list_actions", "List every governed business action this BSS offers, with its meaning and who may perform it.", Map.of()));
+        List<Tool> tools = new ArrayList<>();
+        tools.add(tool("list_actions", "List every governed business action this BSS offers, with its meaning and who may perform it.", new LinkedHashMap<>()));
+        Map<String, Property> explainProps = new LinkedHashMap<>();
+        explainProps.put("kind", new Property("string", null, List.of("concept", "action", "page", "journey")));
+        explainProps.put("name", new Property("string", null, null));
         tools.add(tool("explain", "Explain a concept, an action, a console page or a whole journey from the operational ontology, in words.",
-                Map.of("kind", Map.of("type", "string", "enum", List.of("concept", "action", "page", "journey")), "name", Map.of("type", "string")),
-                List.of("kind", "name")));
+                explainProps, List.of("kind", "name")));
         tools.add(tool("available_upgrades", "The offerings a subscription could move up to: same family, on sale on your channel, dearer per month.",
-                Map.of("subscriptionId", Map.of("type", "string", "description", "the subscription (product) id")), List.of("subscriptionId")));
+                one("subscriptionId", "the subscription (product) id"), List.of("subscriptionId")));
         tools.add(tool("recommend", "What should be done next for a customer: governed actions dry-run through the registry (with every condition's verdict) and things to explain — an open incident, a paused line, an open bill, a dearer plan. Grounded; no free text.",
-                Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
-        tools.add(tool("list_agents", "The registered AI agents of this BSS: whose rights each runs with, what it may read, check and execute, and how autonomous it is.", Map.of()));
+                one("customerId", "the customer (party) id"), List.of("customerId")));
+        tools.add(tool("list_agents", "The registered AI agents of this BSS: whose rights each runs with, what it may read, check and execute, and how autonomous it is.", new LinkedHashMap<>()));
         tools.add(tool("customer_context", "One call: a customer's subscriptions (with what each could become), lines, bills and the receipts of what the BSS decided about them — walked with your rights; edges that did not answer are listed.",
-                Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
+                one("customerId", "the customer (party) id"), List.of("customerId")));
         for (JsonNode a : l.actions().values()) {
             if ("deprecated".equals(a.path("status").asText())) {
                 continue;
             }
             String snake = snake(a.path("action").asText());
-            Map<String, Object> props = new LinkedHashMap<>();
+            Map<String, Property> props = new LinkedHashMap<>();
             List<String> required = new ArrayList<>();
             for (JsonNode in : a.path("inputs")) {
-                Map<String, Object> p = new LinkedHashMap<>();
-                p.put("type", switch (in.path("type").asText()) { case "number", "money" -> "number"; case "boolean" -> "boolean"; default -> "string"; });
-                p.put("description", in.path("meaning").asText(in.has("concept") ? "id of a " + in.path("concept").asText() : in.path("name").asText()));
-                props.put(in.path("name").asText(), p);
+                String type = switch (in.path("type").asText()) { case "number", "money" -> "number"; case "boolean" -> "boolean"; default -> "string"; };
+                props.put(in.path("name").asText(), new Property(type,
+                        in.path("meaning").asText(in.has("concept") ? "id of a " + in.path("concept").asText() : in.path("name").asText()), null));
                 if (in.path("required").asBoolean(false)) {
                     required.add(in.path("name").asText());
                 }
@@ -170,25 +171,21 @@ public class McpController {
         return tools;
     }
 
-    private static Map<String, Object> tool(String name, String description, Map<String, Object> props) {
+    private static Map<String, Property> one(String name, String description) {
+        Map<String, Property> props = new LinkedHashMap<>();
+        props.put(name, Property.string(description));
+        return props;
+    }
+
+    private static Tool tool(String name, String description, Map<String, Property> props) {
         return tool(name, description, props, List.of());
     }
 
-    private static Map<String, Object> tool(String name, String description, Map<String, Object> props, List<String> required) {
-        Map<String, Object> schema = new LinkedHashMap<>();
-        schema.put("type", "object");
-        schema.put("properties", props);
-        if (!required.isEmpty()) {
-            schema.put("required", required);
-        }
-        Map<String, Object> t = new LinkedHashMap<>();
-        t.put("name", name);
-        t.put("description", description);
-        t.put("inputSchema", schema);
-        return t;
+    private static Tool tool(String name, String description, Map<String, Property> props, List<String> required) {
+        return new Tool(name, description, new InputSchema("object", props, required.isEmpty() ? null : required));
     }
 
-    private Map<String, Object> call(JsonNode params, HttpServletRequest request) {
+    private ToolResult call(JsonNode params, HttpServletRequest request) {
         String name = params.path("name").asText();
         JsonNode args = params.path("arguments");
         String tenant = tenantScope.currentTenantId();
@@ -200,17 +197,10 @@ public class McpController {
         Object result;
         boolean isError = false;
         if ("list_actions".equals(name)) {
-            List<Map<String, Object>> rows = new ArrayList<>();
+            List<ActionRow> rows = new ArrayList<>();
             for (JsonNode a : l.actions().values()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("action", a.path("action").asText());
-                row.put("tool", snake(a.path("action").asText()));
-                row.put("concept", a.path("concept").asText());
-                row.put("meaning", a.path("meaning").asText());
-                row.put("whoMay", ExplainService.who(a));
-                row.put("version", a.path("version").asInt());
-                row.put("status", a.path("status").asText());
-                rows.add(row);
+                rows.add(new ActionRow(a.path("action").asText(), snake(a.path("action").asText()), a.path("concept").asText(),
+                        a.path("meaning").asText(), ExplainService.who(a), a.path("version").asInt(), a.path("status").asText()));
             }
             result = rows;
         } else if ("explain".equals(name)) {
@@ -224,22 +214,16 @@ public class McpController {
                 default -> null;
             };
             if (result == null) {
-                result = Map.of("error", "nothing named \"" + what + "\" of kind " + kind);
+                result = new McpMessages.NotFound("nothing named \"" + what + "\" of kind " + kind);
                 isError = true;
             }
         } else if ("available_upgrades".equals(name)) {
             result = upgrades.availableUpgrades(args.path("subscriptionId").asText(), caller);
         } else if ("list_agents".equals(name)) {
-            List<Map<String, Object>> rows = new ArrayList<>();
+            List<AgentRow> rows = new ArrayList<>();
             for (JsonNode a : l.agents().values()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("agent", a.path("agent").asText());
-                row.put("kind", a.path("kind").asText());
-                row.put("meaning", a.path("meaning").asText());
-                row.put("runsAs", a.path("runsAs").asText());
-                row.put("autonomy", a.path("autonomy").asText());
-                row.put("executes", a.path("actions").path("execute"));
-                rows.add(row);
+                rows.add(new AgentRow(a.path("agent").asText(), a.path("kind").asText(), a.path("meaning").asText(),
+                        a.path("runsAs").asText(), a.path("autonomy").asText(), a.path("actions").path("execute")));
             }
             result = rows;
         } else if ("customer_context".equals(name)) {
@@ -256,8 +240,8 @@ public class McpController {
             Map<String, String> inputs = new LinkedHashMap<>();
             args.fields().forEachRemaining(f -> inputs.put(f.getKey(), f.getValue().asText()));
             if (dry) {
-                ActionCheckService.Check c = checks.check(action, inputs, caller);
-                result = c.toMap();
+                Check c = checks.check(action, inputs, caller);
+                result = c;
                 isError = !c.allowed();
             } else {
                 ActionExecuteService.Outcome o = executes.execute(action, inputs, caller);
@@ -271,11 +255,7 @@ public class McpController {
         } catch (Exception e) {
             text = String.valueOf(result);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("content", List.of(Map.of("type", "text", "text", text)));
-        out.put("structuredContent", result instanceof Map || result instanceof List ? result : Map.of("value", result));
-        out.put("isError", isError);
-        return out;
+        return new ToolResult(List.of(new ToolResult.Content("text", text)), McpMessages.structured(result), isError);
     }
 
     static String snake(String camel) {

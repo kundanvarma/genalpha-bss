@@ -1,13 +1,12 @@
 package com.bss.ontology.service;
 
+import com.bss.ontology.dto.Explanation;
 import com.bss.ontology.registry.Registry;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The definitions, in words. The same sentences reach the console's ? drawer,
@@ -24,7 +23,7 @@ public class ExplainService {
         this.registry = registry;
     }
 
-    public Map<String, Object> action(String name, String tenant) {
+    public Explanation action(String name, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode a = l.actions().get(name);
         if (a == null) {
@@ -70,17 +69,11 @@ public class ExplainService {
                 + ("deprecated".equals(a.path("status").asText()) ? ", deprecated " + a.path("deprecated").asText()
                 + (a.has("supersededBy") ? " — use " + a.path("supersededBy").asText() : "") : "")
                 + (a.path("tenantExtended").asBoolean(false) ? ". This tenant has extended it with guardrails of its own" : "") + ".");
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("kind", "action");
-        out.put("name", name);
-        out.put("title", title(name));
-        out.put("text", String.join("\n", lines));
-        out.put("lines", lines);
-        return out;
+        return Explanation.of("action", name, title(name), lines, "\n");
     }
 
     /** An agent in words: who it acts as, what it may read, check and do, how free it is, what bounds it. */
-    public Map<String, Object> agent(String name, String tenant) {
+    public Explanation agent(String name, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode a = l.agents().get(name);
         if (a == null) {
@@ -121,16 +114,10 @@ public class ExplainService {
         if (a.has("memory")) {
             lines.add("Remembers: " + a.path("memory").asText() + ".");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("kind", "agent");
-        out.put("name", name);
-        out.put("title", title(name.replace('-', ' ')));
-        out.put("text", String.join(" ", lines));
-        out.put("lines", lines);
-        return out;
+        return Explanation.of("agent", name, title(name.replace('-', ' ')), lines, " ");
     }
 
-    public Map<String, Object> concept(String name, String tenant) {
+    public Explanation concept(String name, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode c = l.concepts().get(name);
         if (c == null) {
@@ -171,17 +158,11 @@ public class ExplainService {
         if (c.path("pages").size() > 0) {
             lines.add("Console pages: " + join(c.path("pages")) + ".");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("kind", "concept");
-        out.put("name", name);
-        out.put("title", name);
-        out.put("text", String.join("\n", lines));
-        out.put("lines", lines);
-        return out;
+        return Explanation.of("concept", name, name, lines, "\n");
     }
 
     /** What a console page manages and what can be done there — the structural half of "explain this page". */
-    public Map<String, Object> page(String path, String tenant) {
+    public Explanation page(String path, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         List<String> lines = new ArrayList<>();
         List<String> concepts = new ArrayList<>();
@@ -200,11 +181,8 @@ public class ExplainService {
                 }
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("kind", "page");
-        out.put("name", path);
-        out.put("known", !concepts.isEmpty() || !actions.isEmpty());
-        if (concepts.isEmpty() && actions.isEmpty()) {
+        boolean known = !concepts.isEmpty() || !actions.isEmpty();
+        if (!known) {
             lines.add("The ontology has no entry for this page yet — it is described by its help articles and the manual only.");
         } else {
             if (!concepts.isEmpty()) {
@@ -214,20 +192,18 @@ public class ExplainService {
                 lines.add("Actions offered here: " + String.join(" ", actions));
             }
         }
-        out.put("text", String.join("\n", lines));
-        out.put("lines", lines);
-        return out;
+        return new Explanation("page", path, null, known, String.join("\n", lines), lines, null);
     }
 
     /** The whole journey of one action, as the registry knows it: concept → checks → policy → component → effects → events → receipt. */
-    public Map<String, Object> journey(String action, String tenant) {
-        Map<String, Object> a = action(action, tenant);
+    public Explanation journey(String action, String tenant) {
+        Explanation a = action(action, tenant);
         if (a == null) {
             return null;
         }
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode def = l.actions().get(action);
-        List<Map<String, Object>> steps = new ArrayList<>();
+        List<Explanation.Step> steps = new ArrayList<>();
         steps.add(step("concept", def.path("concept").asText(), l.concepts().get(def.path("concept").asText()).path("meaning").asText()));
         for (JsonNode p : def.path("preconditions")) {
             steps.add(step("precondition", p.path("id").asText(), p.path("says").asText()));
@@ -246,16 +222,11 @@ public class ExplainService {
             steps.add(step("event", e.path("event").asText(), e.path("component").asText() + (e.has("meaning") ? ": " + e.path("meaning").asText() : "")));
         }
         steps.add(step("receipt", "ontology." + action, "a decision receipt in insight's decision log, with every verdict above as evidence"));
-        a.put("steps", steps);
-        return a;
+        return a.withSteps(steps);
     }
 
-    private static Map<String, Object> step(String kind, String name, String says) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("kind", kind);
-        m.put("name", name);
-        m.put("says", says);
-        return m;
+    private static Explanation.Step step(String kind, String name, String says) {
+        return new Explanation.Step(kind, name, says);
     }
 
     public static String who(JsonNode a) {

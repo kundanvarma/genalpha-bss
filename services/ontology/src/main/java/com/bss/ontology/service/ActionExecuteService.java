@@ -1,6 +1,10 @@
 package com.bss.ontology.service;
 
 import com.bss.ontology.client.ComponentClient;
+import com.bss.ontology.dto.Check;
+import com.bss.ontology.dto.ExecuteReceipt;
+import com.bss.ontology.dto.UpgradeOption;
+import com.bss.ontology.dto.Verdict;
 import com.bss.ontology.registry.Registry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +30,41 @@ import java.util.UUID;
 @Service
 public class ActionExecuteService {
 
-    public record Outcome(boolean done, int status, Map<String, Object> body) { }
+    public record Outcome(boolean done, int status, ExecuteReceipt body) { }
+
+    /** The receipt as it is written, path by path; {@link #receipt()} freezes it for the wire. */
+    private static final class Draft {
+        final String action;
+        Check check;
+        String executedAs;
+        ExecuteReceipt.ExecutedBy executedBy;
+        boolean done;
+        Boolean filed;
+        JsonNode result;
+        String decisionId;
+        String approvalId;
+        String refusal;
+        Integer componentStatus;
+        JsonNode effects;
+        JsonNode emits;
+        String said;
+
+        Draft(String action) {
+            this.action = action;
+        }
+
+        Outcome refused(int status, String why) {
+            done = false;
+            refusal = why;
+            said = "Refused: " + why + ".";
+            return new Outcome(false, status, receipt());
+        }
+
+        ExecuteReceipt receipt() {
+            return new ExecuteReceipt(action, check, executedAs, executedBy, done, filed, result, decisionId, approvalId, refusal,
+                    componentStatus, effects, emits, said);
+        }
+    }
 
     private final Registry registry;
     private final ActionCheckService checks;
@@ -47,29 +85,21 @@ public class ActionExecuteService {
 
     public Outcome execute(JsonNode action, Map<String, String> inputs, Caller caller) {
         String name = action.path("action").asText();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("action", name);
+        Draft out = new Draft(name);
         // a retired action refuses past its date and points at its successor; until then it still runs
         if ("deprecated".equals(action.path("status").asText())) {
             String until = action.path("deprecated").asText("");
             boolean past = !until.isEmpty() && java.time.LocalDate.parse(until).isBefore(java.time.LocalDate.now());
             if (past) {
-                String why = name + " was retired on " + until
-                        + (action.has("supersededBy") ? "; use " + action.path("supersededBy").asText() : "");
-                out.put("done", false);
-                out.put("refusal", why);
-                out.put("said", "Refused: " + why + ".");
-                return new Outcome(false, 410, out);
+                return out.refused(410, name + " was retired on " + until
+                        + (action.has("supersededBy") ? "; use " + action.path("supersededBy").asText() : ""));
             }
         }
-        ActionCheckService.Check check = checks.check(action, inputs, caller);
-        out.put("check", check.toMap());
+        Check check = checks.check(action, inputs, caller);
+        out.check = check;
         if (!check.allowed()) {
-            out.put("done", false);
-            out.put("refusal", check.refusal());
-            out.put("said", "Refused: " + check.refusal() + ".");
             receipt(action, inputs, caller, check, null, "refused", check.refusal());
-            return new Outcome(false, 422, out);
+            return out.refused(422, check.refusal());
         }
         Registry.Layer layer = registry.forTenant(caller.tenant());
         JsonNode cap = layer.capabilities().get(action.path("executes").path("capability").asText());
@@ -78,11 +108,8 @@ public class ActionExecuteService {
         JsonNode body = fill(template, action, inputs, check.resolved(), missing);
         if (!missing.isEmpty()) {
             String why = "the request could not be built: " + String.join(", ", missing);
-            out.put("done", false);
-            out.put("refusal", why);
-            out.put("said", "Refused: " + why + ".");
             receipt(action, inputs, caller, check, null, "refused", why);
-            return new Outcome(false, 422, out);
+            return out.refused(422, why);
         }
         Map<String, String> pathVars = new LinkedHashMap<>();
         action.path("executes").path("pathVars").fields().forEachRemaining(f -> {
@@ -101,11 +128,7 @@ public class ActionExecuteService {
             }
         });
         if (!missing.isEmpty()) {
-            String why = "the request could not be built: " + String.join(", ", missing);
-            out.put("done", false);
-            out.put("refusal", why);
-            out.put("said", "Refused: " + why + ".");
-            return new Outcome(false, 422, out);
+            return out.refused(422, "the request could not be built: " + String.join(", ", missing));
         }
         JsonNode governance = action.path("governance");
         String approverRole = governance.path("approverRole").asText("");
@@ -131,27 +154,27 @@ public class ActionExecuteService {
                         fillPath(cap.path("route").path("path").asText(), pathVars), query, payload, Map.of(Caller.CHANNEL_HEADER, caller.channel()))
                 : client.call(cap.path("component").asText(), cap.path("route").path("method").asText(),
                         cap.path("route").path("path").asText(), pathVars, query, payload, caller.bearer(), Map.of(Caller.CHANNEL_HEADER, caller.channel()));
-        out.put("executedAs", asRegistry ? "the registry's own identity — the action's permission model governed this, and the receipt names " + caller.subject() : "the caller");
-        out.put("executedBy", Map.of("component", cap.path("component").asText(), "capability", cap.path("id").asText(),
-                "route", cap.path("route").path("method").asText() + " " + cap.path("route").path("path").asText()));
+        out.executedAs = asRegistry ? "the registry's own identity — the action's permission model governed this, and the receipt names " + caller.subject() : "the caller";
+        out.executedBy = new ExecuteReceipt.ExecutedBy(cap.path("component").asText(), cap.path("id").asText(),
+                cap.path("route").path("method").asText() + " " + cap.path("route").path("path").asText());
         if (!reply.ok()) {
             String why = componentWords(reply);
-            out.put("done", false);
-            out.put("refusal", why);
-            out.put("said", "The " + cap.path("component").asText() + " component refused: " + why);
-            out.put("componentStatus", reply.status());
+            out.done = false;
+            out.refusal = why;
+            out.said = "The " + cap.path("component").asText() + " component refused: " + why;
+            out.componentStatus = reply.status();
             receipt(action, inputs, caller, check, null, "refused-by-component", why);
-            return new Outcome(false, reply.status() >= 400 && reply.status() < 500 ? reply.status() : 502, out);
+            return new Outcome(false, reply.status() >= 400 && reply.status() < 500 ? reply.status() : 502, out.receipt());
         }
         JsonNode result = reply.body();
         String decisionId = receipt(action, inputs, caller, check, result, "executed", null);
-        out.put("done", true);
-        out.put("result", json.convertValue(result, Map.class));
-        out.put("decisionId", decisionId);
-        out.put("effects", json.convertValue(action.path("effects"), List.class));
-        out.put("emits", json.convertValue(action.path("emits"), List.class));
-        out.put("said", said(action, check, result, cap));
-        return new Outcome(true, 200, out);
+        out.done = true;
+        out.result = result.isMissingNode() ? json.getNodeFactory().nullNode() : result;
+        out.decisionId = decisionId;
+        out.effects = action.path("effects");
+        out.emits = action.path("emits");
+        out.said = said(action, check, result, cap);
+        return new Outcome(true, 200, out.receipt());
     }
 
     private static String fillPath(String path, Map<String, String> pathVars) {
@@ -168,7 +191,7 @@ public class ActionExecuteService {
      * their own token. The receipt records the ask; the execution gets its own receipt in the desk.
      */
     private Outcome fileForApproval(JsonNode action, JsonNode cap, Map<String, String> pathVars, JsonNode body,
-            Map<String, String> inputs, Caller caller, ActionCheckService.Check check, Map<String, Object> out) {
+            Map<String, String> inputs, Caller caller, Check check, Draft out) {
         String name = action.path("action").asText();
         Registry.Layer layer = registry.forTenant(caller.tenant());
         JsonNode filer = layer.capabilities().get("workforce.fileApproval");
@@ -185,20 +208,18 @@ public class ActionExecuteService {
                 : client.callAsMachine(filer.path("component").asText(), "POST", filer.path("route").path("path").asText(), Map.of(), request, Map.of());
         String decisionId = receipt(action, inputs, caller, check, null, "filed-for-approval",
                 "above the threshold — filed for " + action.path("governance").path("approverRole").asText("an approver"));
-        out.put("done", false);
-        out.put("filed", reply != null && reply.ok());
-        out.put("decisionId", decisionId);
+        out.done = false;
+        out.filed = reply != null && reply.ok();
+        out.decisionId = decisionId;
         if (reply != null && reply.ok()) {
-            out.put("approvalId", reply.body().path("id").asText());
-            out.put("said", "Filed for approval: " + name + " is above the threshold this caller may decide alone; someone holding "
+            out.approvalId = reply.body().path("id").asText();
+            out.said = "Filed for approval: " + name + " is above the threshold this caller may decide alone; someone holding "
                     + action.path("governance").path("approverRole").asText("the approver role")
-                    + " decides it under AI & Automation › Workforce and it executes with their token.");
-            return new Outcome(false, 202, out);
+                    + " decides it under AI & Automation › Workforce and it executes with their token.";
+            return new Outcome(false, 202, out.receipt());
         }
-        out.put("refusal", "needs a human approver and the approval desk did not take the request ("
+        return out.refused(503, "needs a human approver and the approval desk did not take the request ("
                 + (reply == null ? "no filing capability" : Resolver.statusWords(reply)) + ")");
-        out.put("said", "Refused: " + out.get("refusal") + ".");
-        return new Outcome(false, 503, out);
     }
 
     /* ------------------------------------------------------------------ the request */
@@ -308,7 +329,7 @@ public class ActionExecuteService {
         return Resolver.statusWords(reply);
     }
 
-    private String said(JsonNode action, ActionCheckService.Check check, JsonNode result, JsonNode cap) {
+    private String said(JsonNode action, Check check, JsonNode result, JsonNode cap) {
         JsonNode target = check.resolved().has("targetOffering") ? check.resolved().get("targetOffering")
                 : check.resolved().get("targetOfferingAnyChannel");
         JsonNode sub = check.resolved().get("subscription");
@@ -322,7 +343,7 @@ public class ActionExecuteService {
         if (unknown > 0) {
             sb.append(" (").append(unknown).append(" could not be checked here and were left to the component)");
         }
-        sb.append("; permission ").append(check.permission().get("by")).append("; policy ").append(check.policy().get("decision")).append(". ");
+        sb.append("; permission ").append(check.permission().by()).append("; policy ").append(check.policy().decision()).append(". ");
         sb.append("Executed by ").append(cap.path("component").asText()).append(" as order ")
                 .append(result.path("id").asText("?")).append(" in state ").append(result.path("state").asText("?")).append(". ");
         sb.append("What follows: ");
@@ -336,7 +357,7 @@ public class ActionExecuteService {
 
     /* ------------------------------------------------------------------ the receipt */
 
-    private String receipt(JsonNode action, Map<String, String> inputs, Caller caller, ActionCheckService.Check check,
+    private String receipt(JsonNode action, Map<String, String> inputs, Caller caller, Check check,
             JsonNode result, String outcome, String why) {
         String decisionId = "ontology-" + UUID.randomUUID();
         Map<String, Object> d = new LinkedHashMap<>();
@@ -346,8 +367,8 @@ public class ActionExecuteService {
         d.put("subjectId", inputs.getOrDefault("subscriptionId", inputs.values().stream().findFirst().orElse("")));
         List<String> candidates = new ArrayList<>();
         try {
-            for (Map<String, Object> u : upgrades.availableUpgrades(check.resolved(), caller)) {
-                candidates.add(String.valueOf(u.get("id")));
+            for (UpgradeOption u : upgrades.availableUpgrades(check.resolved(), caller)) {
+                candidates.add(String.valueOf(u.id()));
             }
         } catch (RuntimeException ignored) {
             // candidates are context, never a reason to lose the receipt
@@ -359,7 +380,7 @@ public class ActionExecuteService {
         d.put("candidates", candidates);
         d.put("eligibleActions", "executed".equals(outcome) ? candidates : List.of());
         List<String> constraints = new ArrayList<>();
-        for (ActionCheckService.Verdict v : check.preconditions()) {
+        for (Verdict v : check.preconditions()) {
             if (v.ok() == null) {
                 constraints.add("unchecked: " + v.id() + (v.detail() == null ? "" : " — " + v.detail()));
             }
@@ -373,8 +394,8 @@ public class ActionExecuteService {
         d.put("policy", "operational-semantic-registry");
         d.put("policyVersion", String.valueOf(action.path("version").asInt(1)));
         d.put("reason", "executed".equals(outcome)
-                ? "every precondition of " + action.path("action").asText() + " held, permission " + check.permission().get("by")
-                        + ", policy " + check.policy().get("decision") + "; order " + (result == null ? "?" : result.path("id").asText("?"))
+                ? "every precondition of " + action.path("action").asText() + " held, permission " + check.permission().by()
+                        + ", policy " + check.policy().decision() + "; order " + (result == null ? "?" : result.path("id").asText("?"))
                 : "refused: " + why);
         Map<String, Object> context = new LinkedHashMap<>(inputs);
         context.put("channel", caller.channel());
@@ -382,7 +403,7 @@ public class ActionExecuteService {
         context.put("agent", agentLabel(caller));
         d.put("context", context);
         Map<String, Object> evidence = new LinkedHashMap<>();
-        evidence.put("preconditions", check.preconditions().stream().map(ActionCheckService.Verdict::toMap).toList());
+        evidence.put("preconditions", check.preconditions());
         evidence.put("permission", check.permission());
         evidence.put("policy", check.policy());
         d.put("evidence", evidence);

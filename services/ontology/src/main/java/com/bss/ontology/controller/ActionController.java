@@ -1,11 +1,16 @@
 package com.bss.ontology.controller;
 
 import com.bss.ontology.api.ApiConstants;
+import com.bss.ontology.dto.ActionCheck;
+import com.bss.ontology.dto.ExecuteReceipt;
+import com.bss.ontology.dto.SweepResult;
+import com.bss.ontology.dto.UpgradeOption;
 import com.bss.ontology.exception.NotFoundException;
 import com.bss.ontology.security.TenantScope;
 import com.bss.ontology.service.ActionCheckService;
 import com.bss.ontology.service.ActionExecuteService;
 import com.bss.ontology.service.Caller;
+import com.bss.ontology.service.OutcomeSweeper;
 import com.bss.ontology.service.UpgradeService;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,8 +27,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Check and execute. The body is the action's inputs by name; the caller's own
- * token and X-Channel travel downstream unchanged.
+ * Check and execute. The body is the action's inputs by name — the shape is the
+ * action's own declaration, so it arrives as a node; the caller's own token and
+ * X-Channel travel downstream unchanged.
  */
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
@@ -33,10 +39,10 @@ public class ActionController {
     private final ActionExecuteService executes;
     private final UpgradeService upgrades;
     private final TenantScope tenantScope;
-    private final com.bss.ontology.service.OutcomeSweeper sweeper;
+    private final OutcomeSweeper sweeper;
 
     public ActionController(ActionCheckService checks, ActionExecuteService executes, UpgradeService upgrades,
-            TenantScope tenantScope, com.bss.ontology.service.OutcomeSweeper sweeper) {
+            TenantScope tenantScope, OutcomeSweeper sweeper) {
         this.sweeper = sweeper;
         this.checks = checks;
         this.executes = executes;
@@ -45,22 +51,18 @@ public class ActionController {
     }
 
     @PostMapping("/actions/{name}/check")
-    public Map<String, Object> check(@PathVariable String name, @RequestBody(required = false) Map<String, Object> body,
-            HttpServletRequest request) {
+    public ActionCheck check(@PathVariable String name, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         Caller caller = Caller.current(request, tenantScope.currentTenantId());
         JsonNode action = checks.actionOf(name, caller);
         if (action == null) {
             throw NotFoundException.forResource("action", name);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("action", name);
-        out.putAll(checks.check(action, inputs(body), caller).toMap());
-        return out;
+        return new ActionCheck(name, checks.check(action, inputs(body), caller));
     }
 
     @PostMapping("/actions/{name}/execute")
-    public ResponseEntity<Map<String, Object>> execute(@PathVariable String name,
-            @RequestBody(required = false) Map<String, Object> body, HttpServletRequest request) {
+    public ResponseEntity<ExecuteReceipt> execute(@PathVariable String name, @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
         Caller caller = Caller.current(request, tenantScope.currentTenantId());
         JsonNode action = checks.actionOf(name, caller);
         if (action == null) {
@@ -72,26 +74,27 @@ public class ActionController {
 
     /** Judge the receipts whose outcome window has passed, now (the scheduler does the same on its own clock). */
     @PostMapping("/outcomes/sweep")
-    public Map<String, Object> sweepOutcomes() {
+    public SweepResult sweepOutcomes() {
         int judged = sweeper.sweepTenant(tenantScope.currentTenantId());
-        return Map.of("judged", judged, "tenant", tenantScope.currentTenantId());
+        return new SweepResult(judged, tenantScope.currentTenantId());
     }
 
     @GetMapping("/subscriptions/{id}/availableUpgrades")
-    public List<Map<String, Object>> availableUpgrades(@PathVariable String id, HttpServletRequest request) {
+    public List<UpgradeOption> availableUpgrades(@PathVariable String id, HttpServletRequest request) {
         return upgrades.availableUpgrades(id, Caller.current(request, tenantScope.currentTenantId()));
     }
 
-    static Map<String, String> inputs(Map<String, Object> body) {
+    /** The inputs by name, flat or under {@code inputs}; a null value is an input not given. */
+    static Map<String, String> inputs(JsonNode body) {
         Map<String, String> in = new LinkedHashMap<>();
-        if (body == null) {
+        if (body == null || !body.isObject()) {
             return in;
         }
-        Object nested = body.get("inputs");
-        Map<?, ?> src = nested instanceof Map<?, ?> m ? m : body;
-        src.forEach((k, v) -> {
-            if (v != null) {
-                in.put(String.valueOf(k), String.valueOf(v));
+        JsonNode nested = body.get("inputs");
+        JsonNode src = nested != null && nested.isObject() ? nested : body;
+        src.fields().forEachRemaining(f -> {
+            if (!f.getValue().isNull()) {
+                in.put(f.getKey(), f.getValue().asText());
             }
         });
         return in;

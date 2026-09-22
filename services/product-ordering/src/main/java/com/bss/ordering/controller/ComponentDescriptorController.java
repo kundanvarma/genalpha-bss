@@ -1,5 +1,6 @@
 package com.bss.ordering.controller;
 
+import com.bss.ordering.dto.ComponentDescriptor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -7,9 +8,7 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -32,13 +31,7 @@ public class ComponentDescriptorController {
     }
 
     @GetMapping(WELL_KNOWN)
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", "product-ordering");
-        out.put("meaning", "Validates and captures product orders — the one door through which subscriptions are created, changed and ended; consults policy before it accepts.");
-        out.put("manages", List.of("ProductOrder"));
-        out.put("events", EVENTS);
-        out.put("topic", "bss.ordering.events");
+    public ComponentDescriptor describe() {
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
             if (info.getPathPatternsCondition() == null) {
@@ -49,8 +42,8 @@ public class ComponentDescriptorController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        out.put("routes", new ArrayList<>(routes));
-        out.put("@type", "GenAlphaComponent");
-        return out;
+        return new ComponentDescriptor("product-ordering",
+                "Validates and captures product orders — the one door through which subscriptions are created, changed and ended; consults policy before it accepts.",
+                List.of("ProductOrder"), EVENTS, "bss.ordering.events", new ArrayList<>(routes), "GenAlphaComponent");
     }
 }
