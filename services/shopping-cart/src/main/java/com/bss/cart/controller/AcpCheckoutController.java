@@ -1,5 +1,8 @@
 package com.bss.cart.controller;
 
+import com.bss.cart.dto.CheckoutSessionRequest;
+import com.bss.cart.dto.CheckoutSessionView;
+import com.bss.cart.dto.CompleteRequest;
 import com.bss.cart.exception.NotFoundException;
 import com.bss.cart.security.TenantRegistry;
 import com.bss.cart.security.TenantScope;
@@ -13,8 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * The Agentic Commerce Protocol checkout endpoints, spec-shaped:
@@ -48,35 +49,36 @@ public class AcpCheckoutController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<CheckoutSessionView> create(@RequestBody CheckoutSessionRequest request) {
         requireFull();
         return respond(HttpStatus.CREATED, service.create(request));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String id) {
+    public ResponseEntity<CheckoutSessionView> get(@PathVariable String id) {
         requireFull();
         return respond(HttpStatus.OK, service.get(id));
     }
 
     @PostMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> update(@PathVariable String id,
-            @RequestBody Map<String, Object> request) {
+    public ResponseEntity<CheckoutSessionView> update(@PathVariable String id,
+            @RequestBody CheckoutSessionRequest request) {
         requireFull();
         return respond(HttpStatus.OK, service.update(id, request));
     }
 
     @PostMapping("/{id}/complete")
-    public ResponseEntity<Map<String, Object>> complete(@PathVariable String id,
-            @RequestBody(required = false) Map<String, Object> request,
+    public ResponseEntity<CheckoutSessionView> complete(@PathVariable String id,
+            @RequestBody(required = false) CompleteRequest request,
             @RequestHeader(name = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestHeader(name = "Authorization", required = false) String authorization) {
         requireFull();
-        return respond(HttpStatus.OK, service.complete(id, request, idempotencyKey, authorization));
+        return respond(HttpStatus.OK, service.complete(id, request == null ? CompleteRequest.EMPTY : request,
+                idempotencyKey, authorization));
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<Map<String, Object>> cancel(@PathVariable String id) {
+    public ResponseEntity<CheckoutSessionView> cancel(@PathVariable String id) {
         requireFull();
         return respond(HttpStatus.OK, service.cancel(id));
     }
@@ -92,7 +94,7 @@ public class AcpCheckoutController {
         }
     }
 
-    private ResponseEntity<Map<String, Object>> respond(HttpStatus status, Map<String, Object> body) {
+    private ResponseEntity<CheckoutSessionView> respond(HttpStatus status, CheckoutSessionView body) {
         return ResponseEntity.status(status).header("API-Version", API_VERSION).body(body);
     }
 }

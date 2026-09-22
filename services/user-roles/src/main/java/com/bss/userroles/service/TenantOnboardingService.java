@@ -1,5 +1,25 @@
 package com.bss.userroles.service;
 
+import com.bss.userroles.dto.BaseImportReport;
+import com.bss.userroles.dto.BrandPatch;
+import com.bss.userroles.dto.BrandView;
+import com.bss.userroles.dto.CloneReceipt;
+import com.bss.userroles.dto.CloneReceipt.CopyCounts;
+import com.bss.userroles.dto.CloneRequest;
+import com.bss.userroles.dto.ClockReceipt;
+import com.bss.userroles.dto.ImportBaseRequest;
+import com.bss.userroles.dto.MutateReceipt;
+import com.bss.userroles.dto.OnboardReceipt;
+import com.bss.userroles.dto.OnboardRequest;
+import com.bss.userroles.dto.OperatorPatch;
+import com.bss.userroles.dto.OperatorView;
+import com.bss.userroles.dto.ProspectSimulation;
+import com.bss.userroles.dto.ProspectSimulationRequest;
+import com.bss.userroles.dto.QuarterResult;
+import com.bss.userroles.dto.QuarterResult.SimulatedQuarter;
+import com.bss.userroles.dto.SeedTwinRequest;
+import com.bss.userroles.dto.TwinBaseReceipt;
+import com.bss.userroles.dto.UserView;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -90,30 +110,21 @@ public class TenantOnboardingService {
     }
 
     /** Every operator the registry knows — the console's list view. */
-    public List<Map<String, Object>> list() {
-        return tenants.getRegistry().stream().map(t -> {
-            Map<String, Object> map = new LinkedHashMap<String, Object>();
-            map.put("id", t.getId());
-            map.put("name", t.getBrandName() == null ? t.getId() : t.getBrandName());
-            map.put("locale", t.getLocale());
-            map.put("currency", t.getCurrency());
-            map.put("agentCommerce", t.getAgentCommerce());
-            map.put("issuer", t.getIssuer());
-            map.put("@type", "Operator");
-            return map;
-        }).toList();
+    public List<OperatorView> list() {
+        return tenants.getRegistry().stream().map(OperatorView::of).toList();
     }
 
-    public Map<String, Object> onboard(Map<String, Object> dto) throws Exception {
-        String id = String.valueOf(dto.get("id")).toLowerCase().trim();
+    public OnboardReceipt onboard(OnboardRequest dto) throws Exception {
+        // a nameless form must never mint a realm called "null"
+        String id = dto.id() == null ? "" : dto.id().toLowerCase().trim();
         if (!SAFE_ID.matcher(id).matches() || "master".equals(id)) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "operator id: 3-21 chars, a-z0-9, starting with a letter");
         }
-        String name = dto.get("name") == null ? id : String.valueOf(dto.get("name"));
-        String locale = dto.get("locale") == null ? "en" : String.valueOf(dto.get("locale"));
-        String currency = dto.get("currency") == null ? "EUR" : String.valueOf(dto.get("currency"));
-        String color = dto.get("color") == null ? "#B85C38" : String.valueOf(dto.get("color"));
+        String name = dto.name() == null ? id : dto.name();
+        String locale = dto.locale() == null ? "en" : dto.locale();
+        String currency = dto.currency() == null ? "EUR" : dto.currency();
+        String color = dto.color() == null ? "#B85C38" : dto.color();
         long t0 = System.currentTimeMillis();
 
         String adminToken = masterAdminToken();
@@ -144,8 +155,7 @@ public class TenantOnboardingService {
         seedCatalog(id, name, currency);
         long seconds = (System.currentTimeMillis() - t0) / 1000;
         log.info("operator '{}' ({}) is LIVE in {}s — no restart, no rebuild", name, id, seconds);
-        return Map.of("id", id, "name", name, "locale", locale, "currency", currency,
-                "storefrontHost", "shop." + id + ".localhost", "seconds", seconds);
+        return new OnboardReceipt(id, name, locale, currency, "shop." + id + ".localhost", seconds);
     }
 
     /**
@@ -156,34 +166,24 @@ public class TenantOnboardingService {
      */
     /** The caller's OWN brand card — the fields a hosted operator's
      *  marketing team may read: name, color, tagline. Nothing operational. */
-    public Map<String, Object> brandOf(String id) throws Exception {
+    public BrandView brandOf(String id) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
         Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
         if (!m.find()) {
             throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
         }
         String block = m.group(1);
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("id", id);
-        out.put("name", firstGroup(block, "brand-name: (.*)"));
-        out.put("color", strip(firstGroup(block, "brand-color: (.*)")));
-        out.put("tagline", strip(firstGroup(block, "tagline: (.*)")));
-        return out;
+        return new BrandView(id, firstGroup(block, "brand-name: (.*)"),
+                strip(firstGroup(block, "brand-color: (.*)")), strip(firstGroup(block, "tagline: (.*)")));
     }
 
     /** Brand-only mutation for the tenant's own team: name, color, tagline —
      *  locale, currency and agent-commerce stay with the host operator. */
-    public Map<String, Object> mutateBrand(String id, Map<String, Object> dto) throws Exception {
-        Map<String, Object> safe = new java.util.LinkedHashMap<>();
-        for (String k : java.util.List.of("name", "color", "tagline")) {
-            if (dto.get(k) != null) {
-                safe.put(k, dto.get(k));
-            }
+    public MutateReceipt mutateBrand(String id, BrandPatch dto) throws Exception {
+        if (dto.isEmpty()) {
+            return new MutateReceipt(id, false);
         }
-        if (safe.isEmpty()) {
-            return Map.of("id", id, "mutated", false);
-        }
-        return mutate(id, safe);
+        return mutate(id, OperatorPatch.brand(dto));
     }
 
     private static String firstGroup(String block, String regex) {
@@ -196,7 +196,7 @@ public class TenantOnboardingService {
                 ? v.substring(1, v.length() - 1) : v;
     }
 
-    public Map<String, Object> mutate(String id, Map<String, Object> dto) throws Exception {
+    public MutateReceipt mutate(String id, OperatorPatch dto) throws Exception {
         // the SEED operators are env-governed and form-protected — only
         // form-born operators are form-mutable
         if (java.util.Set.of(protectedTenants.split(",")).contains(id)) {
@@ -213,20 +213,20 @@ public class TenantOnboardingService {
                     "operator '" + id + "' is a built-in — built-ins mutate by env, not by form");
         }
         String block = m.group(1);
-        if (dto.get("name") != null) {
-            block = block.replaceAll("brand-name: .*", "brand-name: " + dto.get("name"));
+        if (dto.name() != null) {
+            block = block.replaceAll("brand-name: .*", "brand-name: " + dto.name());
         }
-        if (dto.get("color") != null) {
-            block = block.replaceAll("brand-color: .*", "brand-color: \"" + dto.get("color") + "\"");
+        if (dto.color() != null) {
+            block = block.replaceAll("brand-color: .*", "brand-color: \"" + dto.color() + "\"");
         }
-        if (dto.get("locale") != null) {
-            block = block.replaceAll("locale: .*", "locale: \"" + dto.get("locale") + "\"");
+        if (dto.locale() != null) {
+            block = block.replaceAll("locale: .*", "locale: \"" + dto.locale() + "\"");
         }
-        if (dto.get("currency") != null) {
-            block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
+        if (dto.currency() != null) {
+            block = block.replaceAll("currency: .*", "currency: " + dto.currency());
         }
-        if (dto.get("catalogGovernance") != null) {
-            String mode = String.valueOf(dto.get("catalogGovernance")).trim();
+        if (dto.catalogGovernance() != null) {
+            String mode = dto.catalogGovernance().trim();
             if (!java.util.Set.of("direct", "governed").contains(mode)) {
                 throw new com.bss.userroles.exception.BadRequestException(
                         "catalogGovernance must be direct or governed");
@@ -240,8 +240,8 @@ public class TenantOnboardingService {
                         "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
             }
         }
-                if (dto.get("priceParityMode") != null) {
-            String mode = String.valueOf(dto.get("priceParityMode")).trim();
+        if (dto.priceParityMode() != null) {
+            String mode = dto.priceParityMode().trim();
             if (!java.util.Set.of("uniform", "per-channel").contains(mode)) {
                 throw new com.bss.userroles.exception.BadRequestException(
                         "priceParityMode must be uniform or per-channel");
@@ -255,10 +255,10 @@ public class TenantOnboardingService {
                         "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
             }
         }
-                if (dto.get("tagline") != null) {
+        if (dto.tagline() != null) {
             // the storefront hero line — free text, so it rides YML double-quoted;
             // insert-if-absent because older tenant blocks predate the field
-            String tagline = String.valueOf(dto.get("tagline")).replace("\"", "'").trim();
+            String tagline = dto.tagline().replace("\"", "'").trim();
             if (tagline.length() > 200) {
                 throw new com.bss.userroles.exception.BadRequestException(
                         "tagline must be 200 characters or fewer");
@@ -271,11 +271,11 @@ public class TenantOnboardingService {
                         "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
             }
         }
-        if (dto.get("agentCommerce") != null) {
+        if (dto.agentCommerce() != null) {
             // The agentic-commerce switch: how much of this operator AI
             // shopping agents may see. Flipping it here live-refreshes the
             // gateway's gate — reversible in one refresh interval.
-            String mode = String.valueOf(dto.get("agentCommerce"));
+            String mode = dto.agentCommerce();
             if (!java.util.Set.of("off", "discovery", "full").contains(mode)) {
                 throw new com.bss.userroles.exception.BadRequestException(
                         "agentCommerce must be off, discovery or full");
@@ -285,7 +285,7 @@ public class TenantOnboardingService {
         Files.writeString(Path.of(tenantsFile), yml.replace(m.group(1), block));
         refresher.refresh();
         log.info("operator '{}' mutated LIVE — the fleet follows within one refresh interval", id);
-        return Map.of("id", id, "mutated", true);
+        return new MutateReceipt(id, true);
     }
 
     private String masterAdminToken() {
@@ -377,7 +377,7 @@ public class TenantOnboardingService {
      * flag rides the tenant block, so the whole fleet knows: real engines,
      * no real-world side effects. Simulation by running the actual thing.
      */
-    public Map<String, Object> cloneOperator(String sourceId, Map<String, Object> dto) throws Exception {
+    public CloneReceipt cloneOperator(String sourceId, CloneRequest dto) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
         Matcher src = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
         if (!src.find()) {
@@ -389,32 +389,23 @@ public class TenantOnboardingService {
         if (srcRealm == null) {
             srcRealm = sourceId;
         }
-        String id = String.valueOf(dto.get("id")).toLowerCase().trim();
-        String name = dto.get("name") == null
-                ? strip(firstGroup(block, "brand-name: (.*)")) + " Sandbox" : String.valueOf(dto.get("name"));
-        Map<String, Object> seed = new java.util.LinkedHashMap<>();
-        seed.put("id", id);
-        seed.put("name", name);
-        seed.put("locale", strip(orDefault(firstGroup(block, "locale: (.*)"), "en")));
-        seed.put("currency", strip(orDefault(firstGroup(block, "currency: (.*)"), "EUR")));
-        seed.put("color", strip(orDefault(firstGroup(block, "brand-color: (.*)"), "#B85C38")));
-        Map<String, Object> made = onboard(seed);
-        markSandbox(id);
+        String id = dto.id() == null ? null : dto.id().toLowerCase().trim();
+        String name = dto.name() == null ? strip(firstGroup(block, "brand-name: (.*)")) + " Sandbox" : dto.name();
+        OnboardReceipt made = onboard(OnboardRequest.of(id, name,
+                strip(orDefault(firstGroup(block, "locale: (.*)"), "en")),
+                strip(orDefault(firstGroup(block, "currency: (.*)"), "EUR")),
+                strip(orDefault(firstGroup(block, "brand-color: (.*)"), "#B85C38"))));
+        markSandbox(made.id());
         refresher.refresh();
         String srcTok = staffToken(srcRealm);
-        String dstTok = staffToken(id);
+        String dstTok = staffToken(made.id());
         waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", dstTok);
         waitAdopt(policyBase, "/tmf-api/policyManagement/v4/policyRule", dstTok);
         waitAdopt(usageBase, "/tmf-api/usageManagement/v4/wholesaleRateCard", dstTok);
-        Map<String, Object> copied = copyCatalog(srcTok, dstTok);
-        copied.put("policyRules", copyPolicyRules(srcTok, dstTok));
-        copied.put("rateCards", copyRateCards(srcTok, dstTok));
-        log.info("sandbox clone '{}' of '{}' is LIVE — copied {}", id, sourceId, copied);
-        Map<String, Object> out = new java.util.LinkedHashMap<>(made);
-        out.put("sourceId", sourceId);
-        out.put("sandbox", true);
-        out.put("copied", copied);
-        return out;
+        CopyCounts copied = copyCatalog(srcTok, dstTok)
+                .withRules(copyPolicyRules(srcTok, dstTok), copyRateCards(srcTok, dstTok));
+        log.info("sandbox clone '{}' of '{}' is LIVE — copied {}", made.id(), sourceId, copied);
+        return new CloneReceipt(made, sourceId, true, copied);
     }
 
     /**
@@ -427,20 +418,20 @@ public class TenantOnboardingService {
      * has a real base to bill. Refused outside a sandbox: twins in
      * production would be pollution, not simulation.
      */
-    public Map<String, Object> seedTwinBase(String cloneId, Map<String, Object> dto) throws Exception {
+    public TwinBaseReceipt seedTwinBase(String cloneId, SeedTwinRequest dto) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
         Matcher cm = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
         if (!cm.find() || !cm.group(1).contains("sandbox:")) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "twin seeding is sandbox-only — '" + cloneId + "' is not a sandbox clone");
         }
-        String sourceId = String.valueOf(dto.getOrDefault("sourceId", "genalpha"));
+        String sourceId = dto.sourceId() == null ? "genalpha" : dto.sourceId();
         Matcher sm = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
         if (!sm.find()) {
             throw new com.bss.userroles.exception.BadRequestException("unknown source '" + sourceId + "'");
         }
         String srcRealm = orDefault(firstGroup(sm.group(1), "issuer: .*?/realms/([a-z0-9-]+)"), sourceId);
-        int cap = dto.get("count") == null ? 25 : Integer.parseInt(String.valueOf(dto.get("count")));
+        int cap = dto.count() == null ? 25 : dto.count();
         String srcTok = staffToken(srcRealm);
         String dstTok = staffToken(cloneId);
 
@@ -509,20 +500,15 @@ public class TenantOnboardingService {
                 }
             }
         }
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("cloneId", cloneId);
-        out.put("sourceId", sourceId);
-        out.put("seeded", seeded);
-        out.put("distribution", seededBy);
-        out.put("privacy", "only the AGGREGATE offering distribution was read from the source — "
-                + "no name, email or id crossed; every subscriber here is fictional by construction");
         log.info("twin base seeded into sandbox '{}': {} subscribers shaped like '{}'",
                 cloneId, seeded, sourceId);
-        return out;
+        return new TwinBaseReceipt(cloneId, sourceId, seeded, seededBy,
+                "only the AGGREGATE offering distribution was read from the source — "
+                + "no name, email or id crossed; every subscriber here is fictional by construction");
     }
 
     /** T1 — advance a SANDBOX clone's clock (clock-offset-days in its block). */
-    public Map<String, Object> advanceClock(String cloneId, int days) throws Exception {
+    public ClockReceipt advanceClock(String cloneId, int days) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
         Matcher m = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
         if (!m.find() || !m.group(1).contains("sandbox:")) {
@@ -541,16 +527,16 @@ public class TenantOnboardingService {
                 : block.replaceFirst("( +)sandbox: ", "$1clock-offset-days: \"" + next + "\"\n$1sandbox: ");
         Files.writeString(Path.of(tenantsFile), yml.replace(block, updated));
         refresher.refresh();
-        return Map.of("cloneId", cloneId, "clockOffsetDays", next);
+        return new ClockReceipt(cloneId, next);
     }
 
     /** T1 — the simulated quarter: 3 x (advance 30 days -> REAL billing run).
      *  Recurring charges only until T3; the report says so on its face. */
-    public Map<String, Object> simulateQuarter(String cloneId) throws Exception {
+    public SimulatedQuarter simulateQuarter(String cloneId) throws Exception {
         String dstTok = staffToken(cloneId);
-        java.util.List<Map<String, Object>> cycles = new java.util.ArrayList<>();
+        java.util.List<QuarterResult.Cycle> cycles = new java.util.ArrayList<>();
         for (int cycle = 1; cycle <= 3; cycle++) {
-            int offset = (Integer) advanceClock(cloneId, 30).get("clockOffsetDays");
+            int offset = advanceClock(cloneId, 30).clockOffsetDays();
             try {
                 // the fleet learns the new clock on its refresh tick — outwait it
                 Thread.sleep(35000);
@@ -558,30 +544,19 @@ public class TenantOnboardingService {
                 Thread.currentThread().interrupt();
                 break;
             }
-            Map<String, Object> run;
+            // billing's own answer rides the report as its document; a refusal as {"error": …}
+            JsonNode run;
             try {
                 run = rest.post().uri(billingBase + "/tmf-api/customerBillManagement/v4/billingRun")
                         .header("Authorization", "Bearer " + dstTok)
                         .header("Content-Type", "application/json")
-                        .body(Map.of()).retrieve().body(Map.class);
+                        .body(Map.of()).retrieve().body(JsonNode.class);
             } catch (Exception e) {
-                run = Map.of("error", String.valueOf(e.getMessage()));
+                run = JSON.createObjectNode().put("error", String.valueOf(e.getMessage()));
             }
-            Map<String, Object> row = new java.util.LinkedHashMap<>();
-            row.put("cycle", cycle);
-            row.put("clockOffsetDays", offset);
-            row.put("run", run);
-            cycles.add(row);
+            cycles.add(new QuarterResult.Cycle(cycle, offset, run));
         }
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("@type", "SimulatedQuarter");
-        out.put("cloneId", cloneId);
-        out.put("cycle", cycles);
-        out.put("assumptions", java.util.List.of(
-                "dates were compressed: 3 cycles of +30 days on the sandbox clock",
-                "recurring charges only — usage-dependent lines reflect seeded meters, not a lived quarter",
-                "billed by the SAME engine as production; no day billed twice across cycles"));
-        return out;
+        return SimulatedQuarter.of(cloneId, cycles);
     }
 
     /**
@@ -593,22 +568,20 @@ public class TenantOnboardingService {
      * quarter. The report carries its assumptions on its face; the sandbox
      * survives for the live walk-through and dies with its realm.
      */
-    public Map<String, Object> prospectSimulation(Map<String, Object> dto) throws Exception {
-        if (!(dto.get("priceList") instanceof java.util.List<?> priceList) || priceList.isEmpty()) {
+    public ProspectSimulation prospectSimulation(ProspectSimulationRequest dto) throws Exception {
+        List<ProspectSimulationRequest.PriceRow> priceList = dto.priceList();
+        if (priceList == null || priceList.isEmpty()) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "priceList [{offeringName, monthly}] is required — the prospect's PUBLIC tariffs");
         }
-        String id = dto.get("id") == null
+        String id = dto.id() == null
                 ? "ps" + String.valueOf(System.currentTimeMillis()).substring(7)
-                : String.valueOf(dto.get("id"));
-        String name = String.valueOf(dto.getOrDefault("name", "Prospect"));
-        String currency = String.valueOf(dto.getOrDefault("currency", "EUR"));
-        Map<String, Object> seed = new java.util.LinkedHashMap<>();
-        seed.put("id", id);
-        seed.put("name", name + " (simulation)");
-        seed.put("currency", currency);
-        seed.put("locale", dto.getOrDefault("locale", "en"));
-        onboard(seed);
+                : dto.id();
+        String name = dto.name() == null ? "Prospect" : dto.name();
+        String currency = dto.currency() == null ? "EUR" : dto.currency();
+        OnboardReceipt made = onboard(OnboardRequest.of(id, name + " (simulation)",
+                dto.locale() == null ? "en" : dto.locale(), currency, null));
+        id = made.id();
         markSandbox(id);
         refresher.refresh();
         String tok = staffToken(id);
@@ -616,7 +589,7 @@ public class TenantOnboardingService {
 
         // the shelf, from the PUBLIC price list — categorized, because the
         // storefront's line-of-business tabs hide category-less offerings
-        String categoryName = String.valueOf(dto.getOrDefault("category", "Broadband"));
+        String categoryName = dto.category() == null ? "Broadband" : dto.category();
         String categoryId = null;
         try {
             Map<String, Object> cat = rest.post()
@@ -631,10 +604,9 @@ public class TenantOnboardingService {
         }
         java.math.BigDecimal bookMonthly = java.math.BigDecimal.ZERO;
         Map<String, String> offeringByName = new java.util.LinkedHashMap<>();
-        for (Object raw : priceList) {
-            Map<?, ?> row = (Map<?, ?>) raw;
-            String offName = String.valueOf(row.get("offeringName"));
-            java.math.BigDecimal monthly = new java.math.BigDecimal(String.valueOf(row.get("monthly")));
+        for (ProspectSimulationRequest.PriceRow row : priceList) {
+            String offName = String.valueOf(row.offeringName());
+            java.math.BigDecimal monthly = row.monthly() == null ? java.math.BigDecimal.ZERO : row.monthly();
             try {
                 Map<String, Object> price = rest.post()
                         .uri(catalogBase + "/tmf-api/productCatalogManagement/v4/productOfferingPrice")
@@ -670,17 +642,16 @@ public class TenantOnboardingService {
         // the assumed base — twins at the prospect's mix
         int seeded = 0;
         long stamp = System.currentTimeMillis();
-        if (dto.get("baseMix") instanceof java.util.List<?> mix) {
+        if (dto.baseMix() != null) {
             waitAdopt(partyBase, "/tmf-api/party/v4/individual", tok);
             waitAdopt(inventoryBase, "/tmf-api/productInventory/v4/product", tok);
-            for (Object raw : mix) {
-                Map<?, ?> row = (Map<?, ?>) raw;
-                String offName = String.valueOf(row.get("offeringName"));
+            for (ProspectSimulationRequest.MixRow row : dto.baseMix()) {
+                String offName = String.valueOf(row.offeringName());
                 String offId = offeringByName.get(offName);
                 if (offId == null) {
                     continue;
                 }
-                int n = Integer.parseInt(String.valueOf(row.get("subscribers")));
+                int n = row.subscribers() == null ? 0 : row.subscribers();
                 for (int i = 0; i < n; i++) {
                     seeded += mintTwin(tok, offName, offId, stamp, i) ? 1 : 0;
                 }
@@ -688,20 +659,8 @@ public class TenantOnboardingService {
         }
 
         // the quarter, on the real engines
-        Map<String, Object> quarter = seeded > 0 ? simulateQuarter(id) : Map.of("skipped", "no base mix given");
-
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("@type", "ProspectSimulation");
-        out.put("sandboxId", id);
-        out.put("prospect", name);
-        out.put("shelf", offeringByName.size());
-        out.put("twinBase", seeded);
-        out.put("quarter", quarter);
-        out.put("assumptions", java.util.List.of(
-                "input was PUBLIC only: the prospect's price list and an assumed mix — none of their data was touched",
-                "billed by the SAME engines that cut production bills, over a compressed quarter",
-                "the sandbox is walled from the outside world and dies with its realm"));
-        return out;
+        QuarterResult quarter = seeded > 0 ? simulateQuarter(id) : QuarterResult.Skipped.NO_BASE;
+        return ProspectSimulation.of(id, name, offeringByName.size(), seeded, quarter);
     }
 
     /** One synthetic subscriber with one product — shared by twin seeding. */
@@ -742,8 +701,9 @@ public class TenantOnboardingService {
      * S6-style: what landed, what already existed, which offerings are
      * missing BY NAME, and what this version does not do — on its face.
      */
-    public Map<String, Object> importBase(String tenantId, Map<String, Object> dto) throws Exception {
-        if (!(dto.get("rows") instanceof java.util.List<?> rows) || rows.isEmpty()) {
+    public BaseImportReport importBase(String tenantId, ImportBaseRequest dto) throws Exception {
+        List<ImportBaseRequest.Row> rows = dto.rows();
+        if (rows == null || rows.isEmpty()) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "rows [{externalRef, givenName, familyName, email, msisdn?, offeringName}] are required");
         }
@@ -758,34 +718,29 @@ public class TenantOnboardingService {
             shelf.putIfAbsent(String.valueOf(o.get("name")), o);
         }
 
-        java.util.List<Map<String, Object>> imported = new java.util.ArrayList<>();
+        java.util.List<BaseImportReport.ImportedCustomer> imported = new java.util.ArrayList<>();
         java.util.List<String> alreadyPresent = new java.util.ArrayList<>();
-        java.util.List<Map<String, Object>> offeringMissing = new java.util.ArrayList<>();
-        java.util.List<Map<String, Object>> failed = new java.util.ArrayList<>();
-        for (Object raw : rows) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> row = (Map<String, Object>) raw;
-            String externalRef = String.valueOf(row.get("externalRef"));
-            String email = String.valueOf(row.get("email"));
-            String offeringName = String.valueOf(row.get("offeringName"));
+        java.util.List<BaseImportReport.MissingOffering> offeringMissing = new java.util.ArrayList<>();
+        java.util.List<BaseImportReport.FailedRow> failed = new java.util.ArrayList<>();
+        for (ImportBaseRequest.Row row : rows) {
+            String externalRef = row.externalRef();
+            String email = row.email();
+            String offeringName = row.offeringName();
             Map<String, Object> offering = shelf.get(offeringName);
             if (offering == null) {
-                Map<String, Object> miss = new java.util.LinkedHashMap<>();
-                miss.put("externalRef", externalRef);
-                miss.put("offeringName", offeringName);
-                miss.put("reason", "no offering with this name in the target catalog — author it first");
-                offeringMissing.add(miss);
+                offeringMissing.add(new BaseImportReport.MissingOffering(externalRef, offeringName,
+                        "no offering with this name in the target catalog — author it first"));
                 continue;
             }
-            Map<String, Object> login;
+            UserView login;
             try {
                 login = rest.post().uri(self + "/tmf-api/rolesAndPermissionsManagement/v4/user")
                         .header("Authorization", "Bearer " + tok)
                         .header("Content-Type", "application/json")
-                        .body(Map.of("email", email,
-                                "givenName", String.valueOf(row.getOrDefault("givenName", "Imported")),
-                                "familyName", String.valueOf(row.getOrDefault("familyName", externalRef))))
-                        .retrieve().body(Map.class);
+                        .body(new com.bss.userroles.dto.CreateUserRequest(email,
+                                row.givenName() == null ? "Imported" : row.givenName(),
+                                row.familyName() == null ? externalRef : row.familyName()))
+                        .retrieve().body(UserView.class);
             } catch (Exception dup) {
                 // idempotency: this email already has a login — the row is done
                 alreadyPresent.add(externalRef);
@@ -798,10 +753,9 @@ public class TenantOnboardingService {
                 product.put("startDate", java.time.OffsetDateTime.now().toString());
                 product.put("productOffering", Map.of("id", offering.get("id"), "name", offeringName));
                 product.put("relatedParty", java.util.List.of(Map.of(
-                        "id", login.get("id"), "role", "customer", "@referredType", "Individual")));
-                if (row.get("msisdn") != null) {
-                    product.put("supportingResource", java.util.List.of(
-                            Map.of("value", String.valueOf(row.get("msisdn")))));
+                        "id", login.id(), "role", "customer", "@referredType", "Individual")));
+                if (row.msisdn() != null) {
+                    product.put("supportingResource", java.util.List.of(Map.of("value", row.msisdn())));
                 }
                 rest.post().uri(inventoryBase + "/tmf-api/productInventory/v4/product")
                         .header("Authorization", "Bearer " + tok)
@@ -812,47 +766,18 @@ public class TenantOnboardingService {
                 rest.post().uri(somBase + "/som/v1/importService")
                         .header("Authorization", "Bearer " + tok)
                         .header("Content-Type", "application/json")
-                        .body(Map.of("ownerPartyId", login.get("id"), "name", offeringName,
-                                "msisdn", row.get("msisdn") == null ? "" : String.valueOf(row.get("msisdn"))))
+                        .body(Map.of("ownerPartyId", login.id(), "name", offeringName,
+                                "msisdn", row.msisdn() == null ? "" : row.msisdn()))
                         .retrieve().body(Map.class);
-                Map<String, Object> out = new java.util.LinkedHashMap<>();
-                out.put("externalRef", externalRef);
-                out.put("partyId", login.get("id"));
-                out.put("email", email);
-                out.put("temporaryPassword", login.get("temporaryPassword"));
-                out.put("offeringName", offeringName);
-                if (row.get("msisdn") != null) {
-                    out.put("msisdn", row.get("msisdn"));
-                }
-                imported.add(out);
+                imported.add(new BaseImportReport.ImportedCustomer(externalRef, login.id(), email,
+                        login.temporaryPassword(), offeringName, row.msisdn()));
             } catch (Exception e) {
-                Map<String, Object> f = new java.util.LinkedHashMap<>();
-                f.put("externalRef", externalRef);
-                f.put("reason", String.valueOf(e.getMessage()));
-                failed.add(f);
+                failed.add(new BaseImportReport.FailedRow(externalRef, String.valueOf(e.getMessage())));
             }
         }
-        Map<String, Object> report = new java.util.LinkedHashMap<>();
-        report.put("@type", "BaseImport");
-        report.put("tenantId", tenantId);
-        report.put("rows", rows.size());
-        report.put("imported", imported.size());
-        report.put("alreadyPresent", alreadyPresent.size());
-        report.put("offeringMissing", offeringMissing.size());
-        report.put("failed", failed.size());
-        report.put("customers", imported);
-        report.put("exceptions", Map.of("offeringMissing", offeringMissing,
-                "alreadyPresent", alreadyPresent, "failed", failed));
-        report.put("readyForCutover", offeringMissing.isEmpty() && failed.isEmpty());
-        report.put("assumptions", java.util.List.of(
-                "idempotent per EMAIL: a re-run counts alreadyPresent and creates nothing",
-                "each customer gets a LOGIN with a temporary password — hand it over on cutover",
-                "the MSISDN rides the product as its supporting resource (the number the portal shows)",
-                "NOT in this version: open balances, SIM ICCIDs, port-in orchestration — book balances "
-                        + "separately and port numbers in waves"));
         log.info("base import into '{}': {} imported, {} already present, {} missing offerings, {} failed",
                 tenantId, imported.size(), alreadyPresent.size(), offeringMissing.size(), failed.size());
-        return report;
+        return BaseImportReport.of(tenantId, rows.size(), imported, alreadyPresent, offeringMissing, failed);
     }
 
     private static String orDefault(String v, String dflt) {
@@ -977,37 +902,34 @@ public class TenantOnboardingService {
         return null;
     }
 
-    private Map<String, Object> copyCatalog(String srcTok, String dstTok) {
+    private CopyCounts copyCatalog(String srcTok, String dstTok) {
         String cat = "/tmf-api/productCatalogManagement/v4";
         Map<String, String> ids = new java.util.HashMap<>();
-        Map<String, Object> counts = new java.util.LinkedHashMap<>();
-        int n = 0;
+        int categories = 0;
         for (Map<String, Object> row : fetchAll(catalogBase, cat + "/category", srcTok)) {
-            n += createRemapped(catalogBase, cat + "/category", dstTok, row, ids) != null ? 1 : 0;
+            categories += createRemapped(catalogBase, cat + "/category", dstTok, row, ids) != null ? 1 : 0;
         }
-        counts.put("categories", n);
-        n = 0;
+        int specifications = 0;
         for (Map<String, Object> row : fetchAll(catalogBase, cat + "/productSpecification", srcTok)) {
-            n += createRemapped(catalogBase, cat + "/productSpecification", dstTok, row, ids) != null ? 1 : 0;
+            specifications += createRemapped(catalogBase, cat + "/productSpecification", dstTok, row, ids) != null
+                    ? 1 : 0;
         }
-        counts.put("specifications", n);
-        n = 0;
+        int prices = 0;
         for (Map<String, Object> row : fetchAll(catalogBase, cat + "/productOfferingPrice", srcTok)) {
-            n += createRemapped(catalogBase, cat + "/productOfferingPrice", dstTok, row, ids) != null ? 1 : 0;
+            prices += createRemapped(catalogBase, cat + "/productOfferingPrice", dstTok, row, ids) != null ? 1 : 0;
         }
-        counts.put("prices", n);
         // leaves before bundles: a bundle's children must already exist to remap
         java.util.List<Map<String, Object>> offerings = fetchAll(catalogBase, cat + "/productOffering", srcTok);
-        n = 0;
+        int offeringCount = 0;
         for (boolean bundlePass : new boolean[] {false, true}) {
             for (Map<String, Object> row : offerings) {
                 if (Boolean.TRUE.equals(row.get("isBundle")) == bundlePass) {
-                    n += createRemapped(catalogBase, cat + "/productOffering", dstTok, row, ids) != null ? 1 : 0;
+                    offeringCount += createRemapped(catalogBase, cat + "/productOffering", dstTok, row, ids) != null
+                            ? 1 : 0;
                 }
             }
         }
-        counts.put("offerings", n);
-        return counts;
+        return new CopyCounts(categories, specifications, prices, offeringCount, 0, 0);
     }
 
     /** The wholesale money-model travels with the clone: seeker AND provider

@@ -2,6 +2,9 @@ package com.bss.cart.controller;
 
 import com.bss.cart.api.ApiConstants;
 import com.bss.cart.api.PagedResult;
+import com.bss.cart.dto.CartPatch;
+import com.bss.cart.dto.CartRequest;
+import com.bss.cart.dto.CartView;
 import com.bss.cart.service.ShoppingCartService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -38,14 +41,14 @@ public class ShoppingCartController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<CartView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
+        PagedResult<CartView> result = service.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -53,19 +56,18 @@ public class ShoppingCartController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<CartView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody(required = false) Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<CartView> create(@RequestBody(required = false) CartRequest dto) {
+        CartView created = service.create(dto == null ? CartRequest.EMPTY : dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                     @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<CartView> patch(@PathVariable("id") String id, @RequestBody CartPatch patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 }

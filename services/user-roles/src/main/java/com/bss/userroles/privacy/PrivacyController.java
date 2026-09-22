@@ -1,5 +1,8 @@
 package com.bss.userroles.privacy;
 
+import com.bss.userroles.dto.EraseReceipt;
+import com.bss.userroles.dto.EraseRequest;
+import com.bss.userroles.exception.BadRequestException;
 import com.bss.userroles.security.TenantScope;
 import com.bss.userroles.service.IdpAdminClient;
 import org.springframework.http.HttpStatus;
@@ -10,8 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.Map;
 
 /**
  * The GDPR corner of identity: erasure DISABLES the login and scrubs
@@ -33,14 +34,16 @@ public class PrivacyController {
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
-        String target = String.valueOf(request.get("partyId"));
-        idp.eraseUser(tenantScope.currentTenantId(), target);
-        return Map.of("category", "identity", "deleted", 1, "retained", 0,
-                "note", "login disabled, IdP profile scrubbed; account id kept as the audit's reference");
+        if (request.partyId() == null || request.partyId().isBlank()) {
+            throw new BadRequestException("partyId is required");
+        }
+        idp.eraseUser(tenantScope.currentTenantId(), request.partyId());
+        return new EraseReceipt("identity", 1, 0,
+                "login disabled, IdP profile scrubbed; account id kept as the audit's reference");
     }
 
     private boolean isDpo() {

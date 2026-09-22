@@ -1,6 +1,11 @@
 package com.bss.userroles.controller;
 
 import com.bss.userroles.api.ApiConstants;
+import com.bss.userroles.dto.CreateUserRequest;
+import com.bss.userroles.dto.GrantRequest;
+import com.bss.userroles.dto.PermissionView;
+import com.bss.userroles.dto.RoleView;
+import com.bss.userroles.dto.UserView;
 import com.bss.userroles.service.UserRolesService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
@@ -27,28 +31,28 @@ public class UserRolesController {
     }
 
     @GetMapping("/userRole")
-    public ResponseEntity<List<Map<String, Object>>> roles() {
+    public ResponseEntity<List<RoleView>> roles() {
         return ResponseEntity.ok(service.roles());
     }
 
     @GetMapping("/user")
-    public ResponseEntity<List<Map<String, Object>>> users(
+    public ResponseEntity<List<UserView>> users(
             @RequestParam(required = false) String username) {
         return ResponseEntity.ok(service.users(username));
     }
 
     @PostMapping("/user")
-    public ResponseEntity<Map<String, Object>> createUser(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<UserView> createUser(@RequestBody CreateUserRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createUser(dto));
     }
 
     @GetMapping("/permission")
-    public ResponseEntity<List<Map<String, Object>>> permissions(@RequestParam String userId) {
+    public ResponseEntity<List<PermissionView>> permissions(@RequestParam String userId) {
         return ResponseEntity.ok(service.permissionsOf(userId));
     }
 
     @PostMapping("/permission")
-    public ResponseEntity<Map<String, Object>> grant(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PermissionView> grant(@RequestBody GrantRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.grant(dto));
     }
 

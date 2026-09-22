@@ -1,8 +1,11 @@
 package com.bss.userroles.service;
 
+import com.bss.userroles.dto.IdpRole;
+import com.bss.userroles.dto.IdpUser;
 import com.bss.userroles.exception.BadRequestException;
 import com.bss.userroles.exception.NotFoundException;
 import com.bss.userroles.security.TenantRegistry;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -18,10 +21,18 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Keycloak realm-admin implementation: authenticates as the tenant's
  * bss-user-admin service account (client credentials, cached per tenant)
- * and works the realm's users and role mappings.
+ * and works the realm's users and role mappings. Keycloak's own
+ * representations are parsed straight into the seam's records
+ * (unknown vendor keys ignored); a role mapping is written back from the
+ * same record — id and name are what Keycloak needs.
  */
 @Component
 public class KeycloakAdminClient implements IdpAdminClient {
+
+    private static final ParameterizedTypeReference<List<IdpRole>> ROLES = new ParameterizedTypeReference<>() {
+    };
+    private static final ParameterizedTypeReference<List<IdpUser>> USERS = new ParameterizedTypeReference<>() {
+    };
 
     private record CachedToken(String value, Instant expiresAt) {
     }
@@ -42,21 +53,21 @@ public class KeycloakAdminClient implements IdpAdminClient {
     }
 
     @Override
-    public List<Map<String, Object>> realmRoles(String tenantId) {
-        return getList(tenantId, "/roles");
+    public List<IdpRole> realmRoles(String tenantId) {
+        return getList(tenantId, "/roles", ROLES);
     }
 
     @Override
-    public List<Map<String, Object>> users(String tenantId, String username) {
+    public List<IdpUser> users(String tenantId, String username) {
         String query = username == null || username.isBlank() ? "?max=100"
                 : "?exact=false&username=" + username;
-        return getList(tenantId, "/users" + query);
+        return getList(tenantId, "/users" + query, USERS);
     }
 
     @Override
-    public List<Map<String, Object>> userRoles(String tenantId, String userId) {
+    public List<IdpRole> userRoles(String tenantId, String userId) {
         try {
-            return getList(tenantId, "/users/" + userId + "/role-mappings/realm");
+            return getList(tenantId, "/users/" + userId + "/role-mappings/realm", ROLES);
         } catch (HttpClientErrorException.NotFound e) {
             throw NotFoundException.forResource("User", userId);
         }
@@ -111,18 +122,18 @@ public class KeycloakAdminClient implements IdpAdminClient {
                 .retrieve().toBodilessEntity();
     }
 
-    private Map<String, Object> roleByName(String tenantId, String roleName) {
+    private IdpRole roleByName(String tenantId, String roleName) {
         return realmRoles(tenantId).stream()
-                .filter(r -> roleName.equals(r.get("name")))
+                .filter(r -> roleName.equals(r.name()))
                 .findFirst()
                 .orElseThrow(() -> new BadRequestException("no such role: '" + roleName + "'"));
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> getList(String tenantId, String path) {
-        return withFreshTokenOn401(tenantId, () -> rest.get().uri(adminBase(tenantId) + path)
+    private <T> List<T> getList(String tenantId, String path, ParameterizedTypeReference<List<T>> type) {
+        List<T> rows = withFreshTokenOn401(tenantId, () -> rest.get().uri(adminBase(tenantId) + path)
                 .header("Authorization", "Bearer " + tokenFor(tenantId))
-                .retrieve().body(List.class));
+                .retrieve().body(type));
+        return rows == null ? List.of() : rows;
     }
 
     private String adminBase(String tenantId) {

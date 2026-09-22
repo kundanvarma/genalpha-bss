@@ -3,6 +3,7 @@ package com.bss.policy.exception;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -19,6 +20,18 @@ public class GlobalExceptionHandler {
                 ex.getMessage(),
                 "404");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
+    }
+
+    /** A body a record refuses (a word where a number is, a list where an object is) is a 400 with a reason. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException ex) {
+        String message = ex.getMostSpecificCause() == null ? ex.getMessage() : ex.getMostSpecificCause().getMessage();
+        ErrorResponse body = new ErrorResponse(
+                "400",
+                "Bad Request",
+                "malformed request body: " + message,
+                "400");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

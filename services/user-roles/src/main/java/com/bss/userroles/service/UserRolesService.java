@@ -1,13 +1,16 @@
 package com.bss.userroles.service;
 
+import com.bss.userroles.dto.CreateUserRequest;
+import com.bss.userroles.dto.GrantRequest;
+import com.bss.userroles.dto.PermissionView;
+import com.bss.userroles.dto.RoleView;
+import com.bss.userroles.dto.UserView;
 import com.bss.userroles.exception.BadRequestException;
 import com.bss.userroles.security.TenantScope;
 import org.springframework.stereotype.Service;
 
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -32,26 +35,18 @@ public class UserRolesService {
         this.tenantScope = tenantScope;
     }
 
-    public List<Map<String, Object>> roles() {
+    public List<RoleView> roles() {
         return idp.realmRoles(tenantScope.currentTenantId()).stream()
-                .filter(r -> !isInternal(String.valueOf(r.get("name"))))
-                .map(r -> roleMap(String.valueOf(r.get("name")), r.get("description")))
+                .filter(r -> !isInternal(String.valueOf(r.name())))
+                .map(RoleView::of)
                 .toList();
     }
 
-    public List<Map<String, Object>> users(String username) {
+    public List<UserView> users(String username) {
         return idp.users(tenantScope.currentTenantId(), username).stream()
-                .filter(u -> !String.valueOf(u.get("username")).startsWith("service-account-"))
-                .map(u -> {
-                    Map<String, Object> map = new LinkedHashMap<>();
-                    map.put("id", u.get("id"));
-                    map.put("username", u.get("username"));
-                    if (u.get("email") != null) map.put("email", u.get("email"));
-                    if (u.get("firstName") != null) map.put("givenName", u.get("firstName"));
-                    if (u.get("lastName") != null) map.put("familyName", u.get("lastName"));
-                    map.put("@type", "User");
-                    return map;
-                }).toList();
+                .filter(u -> !String.valueOf(u.username()).startsWith("service-account-"))
+                .map(UserView::of)
+                .toList();
     }
 
     /**
@@ -61,10 +56,10 @@ public class UserRolesService {
      * can never mint privileged accounts through it. The generated password
      * is returned exactly once, for hand-over.
      */
-    public Map<String, Object> createUser(Map<String, Object> dto) {
-        String email = str(dto.get("email"));
-        String givenName = str(dto.get("givenName"));
-        String familyName = str(dto.get("familyName"));
+    public UserView createUser(CreateUserRequest dto) {
+        String email = str(dto.email());
+        String givenName = str(dto.givenName());
+        String familyName = str(dto.familyName());
         if (email == null || !email.contains("@")) {
             throw new BadRequestException("a valid email is required");
         }
@@ -75,15 +70,7 @@ public class UserRolesService {
         String tenantId = tenantScope.currentTenantId();
         String userId = idp.createUser(tenantId, email, givenName, familyName, password);
         idp.grant(tenantId, userId, "customer");
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", userId);
-        map.put("username", email);
-        map.put("email", email);
-        map.put("givenName", givenName);
-        map.put("familyName", familyName);
-        map.put("temporaryPassword", password);
-        map.put("@type", "User");
-        return map;
+        return UserView.created(userId, email, givenName, familyName, password);
     }
 
     private static String generatePassword() {
@@ -93,25 +80,31 @@ public class UserRolesService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private static String str(Object value) {
+    private static String str(String value) {
         if (value == null) return null;
-        String s = String.valueOf(value).trim();
+        String s = value.trim();
         return s.isEmpty() ? null : s;
     }
 
-    public List<Map<String, Object>> permissionsOf(String userId) {
+    public List<PermissionView> permissionsOf(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new BadRequestException("userId is required");
         }
         return idp.userRoles(tenantScope.currentTenantId(), userId).stream()
-                .filter(r -> !isInternal(String.valueOf(r.get("name"))))
-                .map(r -> permissionMap(userId, String.valueOf(r.get("name"))))
+                .filter(r -> !isInternal(String.valueOf(r.name())))
+                .map(r -> PermissionView.of(userId, String.valueOf(r.name())))
                 .toList();
     }
 
-    public Map<String, Object> grant(Map<String, Object> dto) {
-        String userId = refId(dto.get("user"));
-        String roleName = refName(dto.get("userRole"));
+    public PermissionView grant(GrantRequest dto) {
+        if (dto.user() == null || dto.user().id() == null) {
+            throw new BadRequestException("user.id is required");
+        }
+        if (dto.userRole() == null || dto.userRole().name() == null) {
+            throw new BadRequestException("userRole.name is required");
+        }
+        String userId = dto.user().id();
+        String roleName = dto.userRole().name();
         if (isInternal(roleName)) {
             throw new BadRequestException("role '" + roleName + "' is not grantable");
         }
@@ -124,11 +117,11 @@ public class UserRolesService {
             // own — so the hire sheds those defaults. Firing (revoking the
             // badge) does NOT restore them: an ex-worker keeps no persona.
             idp.userRoles(tenantId, userId).stream()
-                    .map(r -> String.valueOf(r.get("name")))
+                    .map(r -> String.valueOf(r.name()))
                     .filter(n -> n.startsWith("default-roles-") || "customer".equals(n))
                     .forEach(n -> idp.revoke(tenantId, userId, n));
         }
-        return permissionMap(userId, roleName);
+        return PermissionView.of(userId, roleName);
     }
 
     public void revoke(String permissionId) {
@@ -142,38 +135,5 @@ public class UserRolesService {
 
     private boolean isInternal(String name) {
         return INTERNAL_ROLES.contains(name) || name.startsWith("default-roles-");
-    }
-
-    private Map<String, Object> roleMap(String name, Object description) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("name", name);
-        if (description != null) map.put("description", description);
-        map.put("@type", "UserRole");
-        return map;
-    }
-
-    private Map<String, Object> permissionMap(String userId, String roleName) {
-        String id = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString((userId + "~" + roleName).getBytes());
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", id);
-        map.put("user", Map.of("id", userId, "@referredType", "User"));
-        map.put("userRole", Map.of("name", roleName, "@referredType", "UserRole"));
-        map.put("@type", "Permission");
-        return map;
-    }
-
-    private String refId(Object ref) {
-        if (ref instanceof Map<?, ?> map && map.get("id") != null) {
-            return String.valueOf(map.get("id"));
-        }
-        throw new BadRequestException("user.id is required");
-    }
-
-    private String refName(Object ref) {
-        if (ref instanceof Map<?, ?> map && map.get("name") != null) {
-            return String.valueOf(map.get("name"));
-        }
-        throw new BadRequestException("userRole.name is required");
     }
 }

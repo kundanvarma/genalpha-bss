@@ -1,6 +1,10 @@
 package com.bss.cart.privacy;
 
+import com.bss.cart.dto.EraseReceipt;
+import com.bss.cart.dto.EraseRequest;
+import com.bss.cart.dto.PrivacyExport;
 import com.bss.cart.entity.ShoppingCart;
+import com.bss.cart.exception.BadRequestException;
 import com.bss.cart.repository.ShoppingCartRepository;
 import com.bss.cart.security.TenantScope;
 import org.springframework.http.HttpStatus;
@@ -15,7 +19,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The GDPR corner of this service. EXPORT rides the caller's OWN token —
@@ -38,25 +41,29 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
         List<ShoppingCart> items = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", CATEGORY, "count", items.size(), "items", items);
+        return new PrivacyExport(CATEGORY, items.size(), items);
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
-        List<ShoppingCart> rows = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
+        // a nameless erasure must never reach the guest carts (owner null)
+        if (request.partyId() == null || request.partyId().isBlank()) {
+            throw new BadRequestException("partyId is required");
+        }
+        List<ShoppingCart> rows = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(),
+                request.partyId());
         repository.deleteAll(rows);
-        return Map.of("category", CATEGORY, "deleted", rows.size(), "retained", 0);
+        return new EraseReceipt(CATEGORY, rows.size(), 0);
     }
 
     private String subject() {

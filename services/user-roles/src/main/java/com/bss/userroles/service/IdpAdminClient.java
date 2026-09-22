@@ -1,12 +1,17 @@
 package com.bss.userroles.service;
 
+import com.bss.userroles.dto.IdpRole;
+import com.bss.userroles.dto.IdpUser;
+
 import java.util.List;
-import java.util.Map;
 
 /**
  * The slice of an IdP's admin API this component needs. One implementation
  * per IdP family; dev ships Keycloak. The tenant is decided by the CALLER's
  * verified issuer — a tenant admin can only ever manage their own realm.
+ * The answers are the house projections ({@link IdpRole}, {@link IdpUser}):
+ * each adapter maps its vendor's document into them, nothing above the
+ * seam sees a vendor shape.
  */
 public interface IdpAdminClient {
 
@@ -15,9 +20,9 @@ public interface IdpAdminClient {
     default void evictTokens(String tenantId) {
     }
 
-    List<Map<String, Object>> realmRoles(String tenantId);
+    List<IdpRole> realmRoles(String tenantId);
 
-    List<Map<String, Object>> users(String tenantId, String username);
+    List<IdpUser> users(String tenantId, String username);
 
     /**
      * Create a login in the tenant's realm and return its IdP-assigned id
@@ -26,7 +31,7 @@ public interface IdpAdminClient {
      */
     String createUser(String tenantId, String email, String firstName, String lastName, String password);
 
-    List<Map<String, Object>> userRoles(String tenantId, String userId);
+    List<IdpRole> userRoles(String tenantId, String userId);
 
     void grant(String tenantId, String userId, String roleName);
 

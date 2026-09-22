@@ -1,5 +1,7 @@
 package com.bss.userroles;
 
+import com.bss.userroles.dto.IdpRole;
+import com.bss.userroles.dto.IdpUser;
 import com.bss.userroles.service.IdpAdminClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +15,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
-import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -50,9 +51,9 @@ class UserRolesApiTest {
     @Test
     void internalIdpRolesAreNeitherListedNorGrantable() throws Exception {
         given(idp.realmRoles("genalpha")).willReturn(List.of(
-                Map.of("id", "r1", "name", "agent"),
-                Map.of("id", "r2", "name", "offline_access"),
-                Map.of("id", "r3", "name", "default-roles-bss")));
+                new IdpRole("r1", "agent", null),
+                new IdpRole("r2", "offline_access", null),
+                new IdpRole("r3", "default-roles-bss", null)));
 
         mockMvc.perform(get(BASE + "/userRole").with(admin()))
                 .andExpect(status().isOk())
@@ -93,8 +94,8 @@ class UserRolesApiTest {
     @Test
     void serviceAccountsAreHiddenFromUserLists() throws Exception {
         given(idp.users(any(), any())).willReturn(List.of(
-                Map.of("id", "u1", "username", "agent-anna", "firstName", "Anna"),
-                Map.of("id", "u2", "username", "service-account-bss-ordering")));
+                new IdpUser("u1", "agent-anna", null, "Anna", null),
+                new IdpUser("u2", "service-account-bss-ordering", null, null, null)));
         mockMvc.perform(get(BASE + "/user").with(admin()))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].username").value("agent-anna"));

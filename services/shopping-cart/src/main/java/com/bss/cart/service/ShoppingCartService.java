@@ -3,6 +3,11 @@ package com.bss.cart.service;
 import com.bss.cart.api.ApiConstants;
 import com.bss.cart.api.OffsetPageRequest;
 import com.bss.cart.api.PagedResult;
+import com.bss.cart.dto.CartItem;
+import com.bss.cart.dto.CartPatch;
+import com.bss.cart.dto.CartRequest;
+import com.bss.cart.dto.CartView;
+import com.bss.cart.dto.EntityRef;
 import com.bss.cart.entity.ShoppingCart;
 import com.bss.cart.events.DomainEventPublisher;
 import com.bss.cart.exception.BadRequestException;
@@ -14,6 +19,7 @@ import com.bss.cart.security.TenantContext;
 import com.bss.cart.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Example;
@@ -26,7 +32,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,7 +48,9 @@ import java.util.UUID;
 public class ShoppingCartService {
 
     private static final String RESOURCE = "ShoppingCart";
-    private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
+    private static final TypeReference<List<CartItem>> CART_ITEMS = new TypeReference<>() {
+    };
+    private static final TypeReference<List<EntityRef>> ENTITY_REFS = new TypeReference<>() {
     };
 
     private final ShoppingCartRepository repository;
@@ -68,7 +75,7 @@ public class ShoppingCartService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public CartView create(CartRequest dto) {
         ShoppingCart entity = new ShoppingCart();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
@@ -77,25 +84,25 @@ public class ShoppingCartService {
         entity.setHref(ApiConstants.BASE_PATH + "/shoppingCart/" + id);
         entity.setStatus(ShoppingCart.ACTIVE);
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
-        entity.setCartItemJson(writeJson(dto == null ? null : dto.get("cartItem")));
+        entity.setCartItemJson(writeJson(dto == null ? null : dto.cartItem()));
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
+        CartView created = view(repository.save(entity));
         events.publish("ShoppingCartCreateEvent", "shoppingCart", created);
         return created;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public CartView findById(String id) {
         ShoppingCart entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireAccess(entity);
-        return toMap(entity);
+        return view(entity);
     }
 
     /** Listing requires identity: customers see their carts, staff/agents filter by party. */
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<CartView> findAll(int offset, int limit, Map<String, String> filters) {
         if (isAnonymous()) {
             throw new BadRequestException("listing carts requires identity; guests fetch by cart id");
         }
@@ -114,7 +121,7 @@ public class ShoppingCartService {
         }
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<ShoppingCart> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::view).toList(), page.getTotalElements());
     }
 
     /**
@@ -122,7 +129,7 @@ public class ShoppingCartService {
      * or transition to checkedOut (with the order ref). Active carts only.
      */
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public CartView patch(String id, CartPatch patch) {
         // The claim-on-login lookup carries the tenant predicate too: a
         // customer can only claim a cart inside their own tenant.
         ShoppingCart entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
@@ -136,19 +143,19 @@ public class ShoppingCartService {
         if (entity.getOwnerPartyId() == null) {
             partyScope.scopedPartyId().ifPresent(entity::setOwnerPartyId);
         }
-        if (patch.containsKey("cartItem")) {
-            entity.setCartItemJson(writeJson(patch.get("cartItem")));
+        // absent leaves the lines alone; an explicit null clears them
+        if (patch.cartItem() != null) {
+            entity.setCartItemJson(patch.cartItem().isNull() ? null : writeJson(cartItems(patch.cartItem())));
         }
-        if (patch.get("status") != null) {
-            String target = String.valueOf(patch.get("status"));
-            if (!ShoppingCart.CHECKED_OUT.equals(target)) {
+        if (patch.status() != null) {
+            if (!ShoppingCart.CHECKED_OUT.equals(patch.status())) {
                 throw new BadRequestException("the only supported transition is status: 'checkedOut'");
             }
             entity.setStatus(ShoppingCart.CHECKED_OUT);
-            entity.setRelatedEntityJson(writeJson(patch.get("relatedEntity")));
+            entity.setRelatedEntityJson(writeJson(patch.relatedEntity()));
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> updated = toMap(repository.save(entity));
+        CartView updated = view(repository.save(entity));
         events.publish(ShoppingCart.CHECKED_OUT.equals(entity.getStatus())
                 ? "ShoppingCartCheckedOutEvent" : "ShoppingCartChangeEvent", "shoppingCart", updated);
         return updated;
@@ -183,7 +190,7 @@ public class ShoppingCartService {
             for (ShoppingCart cart : idle) {
                 cart.setStatus(ShoppingCart.ABANDONED);
                 cart.setLastUpdate(OffsetDateTime.now());
-                events.publish("ShoppingCartAbandonedEvent", "shoppingCart", toMap(cart), cart.getTenantId());
+                events.publish("ShoppingCartAbandonedEvent", "shoppingCart", view(cart), cart.getTenantId());
             }
             repository.saveAll(idle);
             return idle.size();
@@ -214,24 +221,21 @@ public class ShoppingCartService {
         return auth == null || auth instanceof AnonymousAuthenticationToken;
     }
 
-    private Map<String, Object> toMap(ShoppingCart entity) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        map.put("status", entity.getStatus());
-        if (entity.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of(
-                    "id", entity.getOwnerPartyId(), "role", "customer", "@referredType", "Individual")));
+    private CartView view(ShoppingCart entity) {
+        return CartView.of(entity, readList(entity.getCartItemJson(), CART_ITEMS, List.of()),
+                readList(entity.getRelatedEntityJson(), ENTITY_REFS, null));
+    }
+
+    /** The posted lines as a typed list — a body that is not a list of lines is refused, not stored. */
+    private List<CartItem> cartItems(JsonNode node) {
+        if (!node.isArray()) {
+            throw new BadRequestException("cartItem must be a list of cart lines");
         }
-        map.put("cartItem", readJsonArray(entity.getCartItemJson()));
-        Object related = readJson(entity.getRelatedEntityJson());
-        if (related != null) {
-            map.put("relatedEntity", related);
+        try {
+            return objectMapper.convertValue(node, CART_ITEMS);
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("cartItem is not a list of cart lines: " + e.getMessage());
         }
-        map.put("creationDate", entity.getCreatedAt());
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "ShoppingCart");
-        return map;
     }
 
     private String writeJson(Object value) {
@@ -242,19 +246,11 @@ public class ShoppingCartService {
         }
     }
 
-    private Object readJson(String json) {
+    private <T> List<T> readList(String json, TypeReference<List<T>> type, List<T> whenAbsent) {
         try {
-            return json == null ? null : objectMapper.readValue(json, Object.class);
+            return json == null ? whenAbsent : objectMapper.readValue(json, type);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON value is unreadable", e);
-        }
-    }
-
-    private List<Map<String, Object>> readJsonArray(String json) {
-        try {
-            return json == null ? List.of() : objectMapper.readValue(json, JSON_ARRAY);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }
 }

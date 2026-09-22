@@ -1,6 +1,24 @@
 package com.bss.cart.service;
 
 import com.bss.cart.client.AcpCommerceClients;
+import com.bss.cart.dto.AcpFeedItem;
+import com.bss.cart.dto.AcpMoney;
+import com.bss.cart.dto.CartItem;
+import com.bss.cart.dto.CartPatch;
+import com.bss.cart.dto.CartRequest;
+import com.bss.cart.dto.CartView;
+import com.bss.cart.dto.CheckoutSessionRequest;
+import com.bss.cart.dto.CheckoutSessionRequest.RequestedItem;
+import com.bss.cart.dto.CheckoutSessionView;
+import com.bss.cart.dto.CheckoutSessionView.OrderRef;
+import com.bss.cart.dto.CompleteRequest;
+import com.bss.cart.dto.EntityRef;
+import com.bss.cart.dto.LineItem;
+import com.bss.cart.dto.PartyRef;
+import com.bss.cart.dto.PaymentRequest;
+import com.bss.cart.dto.ProductOrderRequest;
+import com.bss.cart.dto.ProductOrderRequest.OrderItem;
+import com.bss.cart.dto.ProductOrderRequest.Product;
 import com.bss.cart.entity.AcpSession;
 import com.bss.cart.exception.BadRequestException;
 import com.bss.cart.exception.ConflictException;
@@ -9,7 +27,11 @@ import com.bss.cart.repository.AcpSessionRepository;
 import com.bss.cart.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.NullNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -22,10 +44,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 /**
  * The Agentic Commerce Protocol checkout lifecycle, mapped onto the commerce
@@ -41,7 +62,7 @@ import java.util.UUID;
 @Service
 public class AcpCheckoutService {
 
-    private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
+    private static final TypeReference<List<LineItem>> LINES = new TypeReference<>() {
     };
 
     private final AcpSessionRepository sessions;
@@ -60,30 +81,25 @@ public class AcpCheckoutService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> request) {
-        List<Map<String, Object>> items = requestedItems(request);
-        List<Map<String, Object>> lines = priceLines(items);
+    public CheckoutSessionView create(CheckoutSessionRequest request) {
+        List<RequestedItem> items = requestedItems(request);
+        List<LineItem> lines = priceLines(items);
 
         // The session rides a real TMF663 cart: agent baskets sit in the same
         // funnel (and the same abandonment analytics) as every human basket.
-        Map<String, Object> cart = carts.create(Map.of("cartItem", lines.stream()
-                .map(l -> Map.of(
-                        "action", "add",
-                        "quantity", l.get("quantity"),
-                        "productOffering", Map.of(
-                                "id", ((Map<?, ?>) l.get("item")).get("id"),
-                                "name", ((Map<?, ?>) l.get("item")).get("title"))))
+        CartView cart = carts.create(new CartRequest(lines.stream()
+                .map(l -> CartItem.add(l.quantity(), EntityRef.of(l.item().id(), l.item().title())))
                 .toList()));
 
         AcpSession session = new AcpSession();
         session.setId("acp_" + UUID.randomUUID());
         session.setTenantId(tenantScope.currentTenantId());
-        session.setCartId(String.valueOf(cart.get("id")));
+        session.setCartId(cart.id());
         session.setStatus(AcpSession.READY);
         session.setCurrency(currencyOf(lines));
         session.setLineItemJson(writeJson(lines));
-        if (request.get("buyer") != null) {
-            session.setBuyerJson(writeJson(request.get("buyer")));
+        if (present(request.buyer())) {
+            session.setBuyerJson(writeJson(request.buyer()));
         }
         session.setCreatedAt(OffsetDateTime.now());
         session.setLastUpdate(OffsetDateTime.now());
@@ -91,21 +107,21 @@ public class AcpCheckoutService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String id) {
+    public CheckoutSessionView get(String id) {
         return view(find(id));
     }
 
     @Transactional
-    public Map<String, Object> update(String id, Map<String, Object> request) {
+    public CheckoutSessionView update(String id, CheckoutSessionRequest request) {
         AcpSession session = find(id);
         requireOpen(session);
-        if (request.get("items") != null) {
-            List<Map<String, Object>> lines = priceLines(requestedItems(request));
+        if (request.items() != null) {
+            List<LineItem> lines = priceLines(requestedItems(request));
             session.setLineItemJson(writeJson(lines));
             session.setCurrency(currencyOf(lines));
         }
-        if (request.get("buyer") != null) {
-            session.setBuyerJson(writeJson(request.get("buyer")));
+        if (present(request.buyer())) {
+            session.setBuyerJson(writeJson(request.buyer()));
         }
         session.setLastUpdate(OffsetDateTime.now());
         return view(sessions.save(session));
@@ -118,7 +134,7 @@ public class AcpCheckoutService {
      * order; a different key against a completed session is refused.
      */
     @Transactional
-    public Map<String, Object> complete(String id, Map<String, Object> request,
+    public CheckoutSessionView complete(String id, CompleteRequest request,
             String idempotencyKey, String authorization) {
         AcpSession session = find(id);
         if (AcpSession.COMPLETED.equals(session.getStatus())) {
@@ -132,7 +148,7 @@ public class AcpCheckoutService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
                     "completing a checkout needs the buyer's delegated token");
         }
-        List<Map<String, Object>> lines = readLines(session);
+        List<LineItem> lines = readLines(session);
         if (lines.isEmpty()) {
             throw new BadRequestException("the session has no items");
         }
@@ -140,25 +156,19 @@ public class AcpCheckoutService {
 
         String paymentId = null;
         if (dueNow.signum() > 0) {
-            Object paymentData = request == null ? null : request.get("payment_data");
-            Object token = paymentData instanceof Map<?, ?> pd ? pd.get("token") : null;
+            String token = request.token();
             if (token == null) {
                 throw new BadRequestException("payment_data.token is required — the delegated "
                         + "payment token that authorizes exactly this cart");
             }
-            Map<String, Object> payment = createPayment(session, dueNow, String.valueOf(token),
-                    authorization);
-            paymentId = String.valueOf(payment.get("id"));
+            paymentId = createPayment(session, dueNow, token, authorization).path("id").asText(null);
         }
 
-        Map<String, Object> order = createOrder(session, lines, paymentId, authorization);
-        String orderId = String.valueOf(order.get("id"));
+        String orderId = createOrder(session, lines, paymentId, authorization).path("id").asText(null);
 
         // The cart retires exactly as a human checkout retires it.
-        carts.patch(session.getCartId(), Map.of(
-                "status", "checkedOut",
-                "relatedEntity", List.of(Map.of(
-                        "id", orderId, "name", "productOrder", "@referredType", "ProductOrder"))));
+        carts.patch(session.getCartId(), new CartPatch(null, "checkedOut",
+                List.of(EntityRef.of(orderId, "productOrder", "ProductOrder"))));
 
         session.setStatus(AcpSession.COMPLETED);
         session.setCompletedOrderId(orderId);
@@ -169,7 +179,7 @@ public class AcpCheckoutService {
     }
 
     @Transactional
-    public Map<String, Object> cancel(String id) {
+    public CheckoutSessionView cancel(String id) {
         AcpSession session = find(id);
         if (AcpSession.COMPLETED.equals(session.getStatus())) {
             throw new ConflictException("a completed session cannot be canceled");
@@ -181,29 +191,24 @@ public class AcpCheckoutService {
 
     /* ---------- pricing ---------- */
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> requestedItems(Map<String, Object> request) {
-        Object raw = request == null ? null : request.get("items");
-        if (!(raw instanceof List<?> list) || list.isEmpty()) {
+    private List<RequestedItem> requestedItems(CheckoutSessionRequest request) {
+        List<RequestedItem> raw = request == null ? null : request.items();
+        if (raw == null || raw.isEmpty()) {
             throw new BadRequestException("items is required: [{id, quantity}]");
         }
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (Object entry : list) {
-            if (entry instanceof Map<?, ?> m && m.get("id") != null) {
-                int quantity = m.get("quantity") == null ? 1
-                        : Integer.parseInt(String.valueOf(m.get("quantity")));
-                if (quantity < 1) {
-                    throw new BadRequestException("quantity must be at least 1");
-                }
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", String.valueOf(m.get("id")));
-                item.put("quantity", quantity);
-                // a configured bundle: picks ride the item, TMF760-shaped
-                if (m.get("configuration") instanceof Map<?, ?> config) {
-                    item.put("configuration", (Map<String, Object>) config);
-                }
-                items.add(item);
+        List<RequestedItem> items = new ArrayList<>();
+        for (RequestedItem entry : raw) {
+            if (entry == null || entry.id() == null) {
+                continue;
             }
+            int quantity = entry.quantity() == null ? 1 : entry.quantity();
+            if (quantity < 1) {
+                throw new BadRequestException("quantity must be at least 1");
+            }
+            // a configured bundle: picks ride the item, TMF760-shaped
+            JsonNode configuration = entry.configuration() != null && entry.configuration().isObject()
+                    ? entry.configuration() : null;
+            items.add(new RequestedItem(entry.id(), quantity, configuration));
         }
         if (items.isEmpty()) {
             throw new BadRequestException("items is required: [{id, quantity}]");
@@ -213,42 +218,29 @@ public class AcpCheckoutService {
 
     /** Resolve every requested offering against the tenant's own feed — the
      * agent buys at the price every other channel sees, or not at all. */
-    private List<Map<String, Object>> priceLines(List<Map<String, Object>> items) {
+    private List<LineItem> priceLines(List<RequestedItem> items) {
         String tenantId = tenantScope.currentTenantId();
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<LineItem> lines = new ArrayList<>();
         int n = 1;
-        for (Map<String, Object> item : items) {
-            String offeringId = String.valueOf(item.get("id"));
-            if (item.get("configuration") instanceof Map<?, ?>) {
+        for (RequestedItem item : items) {
+            if (item.configuration() != null) {
                 lines.add(configuredLine(item, "li_" + n++, tenantId));
                 continue;
             }
-            Map<String, Object> feedItem = clients.feedItem(offeringId, tenantId);
+            AcpFeedItem feedItem = clients.feedItem(item.id(), tenantId);
             if (feedItem == null) {
-                throw new BadRequestException("offering '" + offeringId
+                throw new BadRequestException("offering '" + item.id()
                         + "' is not available to agents (unknown, retired, or unpriced)");
             }
-            int quantity = (int) item.get("quantity");
-            Map<?, ?> price = (Map<?, ?>) feedItem.get("price");
-            BigDecimal unit = new BigDecimal(String.valueOf(price.get("amount")));
-            boolean oneTime = "oneTime".equals(feedItem.get("price_type"));
-            BigDecimal lineDue = oneTime ? unit.multiply(BigDecimal.valueOf(quantity)) : BigDecimal.ZERO;
-
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("id", "li_" + n++);
-            line.put("item", Map.of(
-                    "id", offeringId, "title", String.valueOf(feedItem.get("title"))));
-            line.put("quantity", quantity);
-            line.put("unit_price", Map.of(
-                    "amount", unit.toPlainString(), "currency", price.get("currency")));
-            line.put("price_type", feedItem.get("price_type"));
-            if (feedItem.get("recurring_period") != null) {
-                line.put("recurring_period", feedItem.get("recurring_period"));
-            }
+            int quantity = item.quantity();
+            BigDecimal unit = feedItem.price().decimal();
+            boolean oneTime = "oneTime".equals(feedItem.priceType());
             // due now = one-time charges; recurring bills on the first invoice
-            line.put("due_now", Map.of(
-                    "amount", lineDue.toPlainString(), "currency", price.get("currency")));
-            lines.add(line);
+            BigDecimal lineDue = oneTime ? unit.multiply(BigDecimal.valueOf(quantity)) : BigDecimal.ZERO;
+            String currency = feedItem.price().currency();
+            lines.add(LineItem.plain("li_" + n++, new LineItem.Item(item.id(), feedItem.title()), quantity,
+                    AcpMoney.of(unit, currency), feedItem.priceType(), feedItem.recurringPeriod(),
+                    AcpMoney.of(lineDue, currency)));
         }
         return lines;
     }
@@ -261,126 +253,99 @@ public class AcpCheckoutService {
      * rejected configuration surfaces the configurator's own messages, so
      * the agent learns exactly what a human shopper would.
      */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> configuredLine(Map<String, Object> item, String lineId,
-            String tenantId) {
-        Map<String, Object> config = new LinkedHashMap<>(
-                (Map<String, Object>) item.get("configuration"));
-        config.put("productOffering", Map.of("id", String.valueOf(item.get("id"))));
-        Map<String, Object> checked;
+    private LineItem configuredLine(RequestedItem item, String lineId, String tenantId) {
+        ObjectNode config = item.configuration().deepCopy();
+        config.set("productOffering", objectMapper.createObjectNode().put("id", item.id()));
+        JsonNode checked;
         try {
             checked = clients.checkConfiguration(config, tenantId);
         } catch (RestClientResponseException e) {
             throw new BadRequestException("the configurator refused the request: "
                     + e.getResponseBodyAsString());
         }
-        List<?> checkedItems = checked == null ? List.of()
-                : (List<?>) checked.getOrDefault("checkProductConfigurationItem", List.of());
-        if (checkedItems.isEmpty() || !(checkedItems.get(0) instanceof Map<?, ?> result)) {
+        JsonNode result = checked == null ? null : checked.path("checkProductConfigurationItem").path(0);
+        if (result == null || !result.isObject()) {
             throw new BadRequestException("the configurator returned no verdict");
         }
-        if (!"approved".equals(result.get("state"))) {
-            Object messages = result.get("message");
+        if (!"approved".equals(result.path("state").asText())) {
+            JsonNode messages = result.path("message");
             throw new BadRequestException("the configuration was rejected: "
-                    + (messages instanceof List<?> l ? String.join("; ",
-                            l.stream().map(String::valueOf).toList()) : String.valueOf(messages)));
+                    + (messages.isArray() ? String.join("; ",
+                            StreamSupport.stream(messages.spliterator(), false).map(JsonNode::asText).toList())
+                            : messages.asText()));
         }
-        Map<String, Object> price = (Map<String, Object>) result.get("configurationPrice");
-        Map<String, Object> monthly = (Map<String, Object>) price.get("monthlyTotal");
-        Map<String, Object> oneTime = (Map<String, Object>) price.get("oneTimeTotal");
-        Map<String, Object> orderReady = (Map<String, Object>) result.get("productConfiguration");
-        int quantity = (int) item.get("quantity");
-        String currency = String.valueOf(monthly.get("unit"));
-        BigDecimal dueNow = new BigDecimal(String.valueOf(oneTime.get("value")))
+        JsonNode price = result.path("configurationPrice");
+        JsonNode monthly = price.path("monthlyTotal");
+        JsonNode oneTime = price.path("oneTimeTotal");
+        JsonNode orderReady = result.path("productConfiguration");
+        int quantity = item.quantity();
+        String currency = monthly.path("unit").asText();
+        BigDecimal dueNow = new BigDecimal(oneTime.path("value").asText())
                 .multiply(BigDecimal.valueOf(quantity));
 
-        Map<String, Object> line = new LinkedHashMap<>();
-        line.put("id", lineId);
-        line.put("item", Map.of(
-                "id", String.valueOf(item.get("id")),
-                "title", String.valueOf(((Map<?, ?>) orderReady.get("productOffering")).get("name"))));
-        line.put("quantity", quantity);
         // the recurring side of the configuration; one-time charges are due now
-        line.put("unit_price", Map.of(
-                "amount", String.valueOf(monthly.get("value")), "currency", currency));
-        line.put("price_type", "recurring");
-        line.put("recurring_period", "month");
-        line.put("due_now", Map.of("amount", dueNow.toPlainString(), "currency", currency));
-        line.put("configuration", orderReady);
-        line.put("price_line", price.get("priceLine"));
-        return line;
+        return LineItem.configured(lineId,
+                new LineItem.Item(item.id(), orderReady.path("productOffering").path("name").asText()),
+                quantity, new AcpMoney(monthly.path("value").asText(), currency), AcpMoney.of(dueNow, currency),
+                orderReady, price.path("priceLine"));
     }
 
-    private BigDecimal dueNowTotal(List<Map<String, Object>> lines) {
+    private BigDecimal dueNowTotal(List<LineItem> lines) {
         BigDecimal total = BigDecimal.ZERO;
-        for (Map<String, Object> line : lines) {
-            Map<?, ?> due = (Map<?, ?>) line.get("due_now");
-            total = total.add(new BigDecimal(String.valueOf(due.get("amount"))));
+        for (LineItem line : lines) {
+            total = total.add(line.dueNow().decimal());
         }
         return total;
     }
 
-    private String currencyOf(List<Map<String, Object>> lines) {
-        return lines.stream()
-                .map(l -> String.valueOf(((Map<?, ?>) l.get("unit_price")).get("currency")))
-                .findFirst().orElse(null);
+    private String currencyOf(List<LineItem> lines) {
+        return lines.stream().map(l -> l.unitPrice().currency()).findFirst().orElse(null);
     }
 
     /* ---------- downstream, as the caller ---------- */
 
-    private Map<String, Object> createPayment(AcpSession session, BigDecimal dueNow,
-            String paymentToken, String authorization) {
+    private JsonNode createPayment(AcpSession session, BigDecimal dueNow, String paymentToken,
+            String authorization) {
         try {
-            return clients.createPayment(Map.of(
-                    "description", "Agentic checkout " + session.getId(),
-                    "amount", Map.of("unit", session.getCurrency(), "value", dueNow),
-                    // The ACP delegated payment token IS the PSP-scoped token:
-                    // it authorizes exactly this cart, this amount.
-                    "paymentMethod", Map.of("@type", "sharedPaymentToken", "token", paymentToken),
+            return clients.createPayment(new PaymentRequest(
+                    "Agentic checkout " + session.getId(),
+                    new PaymentRequest.Money(session.getCurrency(), dueNow),
+                    PaymentRequest.PaymentMethod.sharedPaymentToken(paymentToken),
                     // the payment correlator is the session's UUID (the column
                     // is 36 chars); one session, one authorization, ever
-                    "correlatorId", session.getId().replaceFirst("^acp_", "")), authorization);
+                    session.getId().replaceFirst("^acp_", "")), authorization);
         } catch (RestClientResponseException e) {
             throw new ConflictException("payment was refused: " + e.getResponseBodyAsString());
         }
     }
 
-    private Map<String, Object> createOrder(AcpSession session, List<Map<String, Object>> lines,
-            String paymentId, String authorization) {
-        List<Map<String, Object>> orderItems = new ArrayList<>();
+    private JsonNode createOrder(AcpSession session, List<LineItem> lines, String paymentId,
+            String authorization) {
+        List<OrderItem> orderItems = new ArrayList<>();
         int n = 1;
-        for (Map<String, Object> line : lines) {
-            Map<?, ?> item = (Map<?, ?>) line.get("item");
-            Map<String, Object> orderItem = new LinkedHashMap<>();
-            orderItem.put("id", String.valueOf(n));
-            orderItem.put("action", "add");
-            orderItem.put("quantity", line.get("quantity"));
-            orderItem.put("productOffering", Map.of(
-                    "id", item.get("id"), "name", item.get("title"),
-                    "@referredType", "ProductOffering"));
+        for (LineItem line : lines) {
+            OrderItem orderItem = new OrderItem(String.valueOf(n), "add", line.quantity(),
+                    EntityRef.of(line.item().id(), line.item().title(), "ProductOffering"), null, null);
             // a configured bundle: the configurator's order-ready echo becomes
             // nested TMF622 items — the same shape the storefront submits, so
             // ordering's cardinality gate sees a channel it already trusts
-            if (line.get("configuration") instanceof Map<?, ?> config) {
-                addConfiguredChildren(orderItem, (Map<String, Object>) config,
-                        String.valueOf(n), line.get("quantity"));
+            if (line.configuration() != null && line.configuration().isObject()) {
+                orderItem = withConfiguredChildren(orderItem, line.configuration(), String.valueOf(n),
+                        line.quantity());
             }
             orderItems.add(orderItem);
             n++;
         }
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("description", "Agentic checkout (ACP session " + session.getId() + ")");
-        // The channel marker: which AI bought what is answerable from the
-        // order record itself, tenant-walled like everything else.
-        body.put("category", "agenticCommerce");
-        body.put("productOrderItem", orderItems);
-        // The buyer is the delegated token's subject — the customer the
-        // agent acts FOR, bound the same way assisted channels bind it.
-        body.put("relatedParty", List.of(Map.of(
-                "id", callerSubject(), "role", "customer", "@referredType", "Individual")));
-        if (paymentId != null) {
-            body.put("payment", List.of(Map.of("id", paymentId, "@referredType", "Payment")));
-        }
+        ProductOrderRequest body = new ProductOrderRequest(
+                "Agentic checkout (ACP session " + session.getId() + ")",
+                // The channel marker: which AI bought what is answerable from the
+                // order record itself, tenant-walled like everything else.
+                "agenticCommerce",
+                orderItems,
+                // The buyer is the delegated token's subject — the customer the
+                // agent acts FOR, bound the same way assisted channels bind it.
+                List.of(PartyRef.customer(callerSubject())),
+                paymentId == null ? null : List.of(EntityRef.of(paymentId, null, "Payment")));
         try {
             return clients.createOrder(body, authorization);
         } catch (RestClientResponseException e) {
@@ -391,36 +356,25 @@ public class AcpCheckoutService {
     /** The nested children of a configured bundle item, with each option's
      * own picks as product.productCharacteristic — billing rates the
      * configuration from exactly these, like every other channel's order. */
-    @SuppressWarnings("unchecked")
-    private void addConfiguredChildren(Map<String, Object> orderItem,
-            Map<String, Object> config, String parentId, Object quantity) {
-        Object rawOptions = config.get("selectedOption");
-        if (!(rawOptions instanceof List<?> options) || options.isEmpty()) {
-            return;
+    private OrderItem withConfiguredChildren(OrderItem orderItem, JsonNode config, String parentId,
+            int quantity) {
+        JsonNode options = config.path("selectedOption");
+        if (!options.isArray() || options.isEmpty()) {
+            return orderItem;
         }
-        List<Map<String, Object>> children = new ArrayList<>();
+        List<OrderItem> children = new ArrayList<>();
         int j = 1;
-        for (Object entry : options) {
-            if (!(entry instanceof Map<?, ?> option)) {
+        for (JsonNode option : options) {
+            if (!option.isObject()) {
                 continue;
             }
-            Map<String, Object> child = new LinkedHashMap<>();
-            child.put("id", parentId + "." + j++);
-            child.put("action", "add");
-            child.put("quantity", quantity);
-            child.put("productOffering", Map.of(
-                    "id", String.valueOf(option.get("id")),
-                    "name", String.valueOf(option.get("name")),
-                    "@referredType", "ProductOffering"));
-            if (option.get("characteristic") instanceof List<?> picks && !picks.isEmpty()) {
-                child.put("product", Map.of("productCharacteristic", picks));
-            }
-            children.add(child);
+            JsonNode picks = option.path("characteristic");
+            children.add(new OrderItem(parentId + "." + j++, "add", quantity,
+                    EntityRef.of(option.path("id").asText(), option.path("name").asText(), "ProductOffering"),
+                    picks.isArray() && !picks.isEmpty() ? new Product(picks) : null, null));
         }
-        orderItem.put("productOrderItem", children);
-        if (config.get("configurationCharacteristic") instanceof List<?> own && !own.isEmpty()) {
-            orderItem.put("product", Map.of("productCharacteristic", own));
-        }
+        JsonNode own = config.path("configurationCharacteristic");
+        return orderItem.withChildren(children, own.isArray() && !own.isEmpty() ? new Product(own) : null);
     }
 
     /* ---------- plumbing ---------- */
@@ -446,36 +400,26 @@ public class AcpCheckoutService {
         return auth == null ? null : auth.getName();
     }
 
-    private Map<String, Object> view(AcpSession session) {
-        List<Map<String, Object>> lines = readLines(session);
-        BigDecimal dueNow = dueNowTotal(lines);
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", session.getId());
-        view.put("status", session.getStatus());
-        view.put("currency", session.getCurrency());
-        view.put("line_items", lines);
-        view.put("totals", List.of(
-                Map.of("type", "items_due_now",
-                        "amount", dueNow.toPlainString(), "currency", session.getCurrency()),
-                Map.of("type", "total",
-                        "amount", dueNow.toPlainString(), "currency", session.getCurrency())));
-        if (session.getBuyerJson() != null) {
-            view.put("buyer", readJson(session.getBuyerJson()));
-        }
-        if (session.getCompletedOrderId() != null) {
-            view.put("order", Map.of(
-                    "id", session.getCompletedOrderId(),
-                    "checkout_session_id", session.getId(),
-                    "permalink_url", "/tmf-api/productOrderingManagement/v4/productOrder/"
-                            + session.getCompletedOrderId()));
-        }
-        return view;
+    /** A posted block counts as present when it is there and not JSON null. */
+    private static boolean present(JsonNode node) {
+        return node != null && !(node instanceof NullNode) && !node.isMissingNode();
     }
 
-    private List<Map<String, Object>> readLines(AcpSession session) {
+    private CheckoutSessionView view(AcpSession session) {
+        List<LineItem> lines = readLines(session);
+        BigDecimal dueNow = dueNowTotal(lines);
+        return new CheckoutSessionView(session.getId(), session.getStatus(), session.getCurrency(), lines,
+                CheckoutSessionView.totalsOf(dueNow, session.getCurrency()),
+                session.getBuyerJson() == null ? null : readTree(session.getBuyerJson()),
+                session.getCompletedOrderId() == null ? null : new OrderRef(
+                        session.getCompletedOrderId(), session.getId(),
+                        "/tmf-api/productOrderingManagement/v4/productOrder/" + session.getCompletedOrderId()));
+    }
+
+    private List<LineItem> readLines(AcpSession session) {
         try {
             return session.getLineItemJson() == null ? List.of()
-                    : objectMapper.readValue(session.getLineItemJson(), JSON_ARRAY);
+                    : objectMapper.readValue(session.getLineItemJson(), LINES);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored line items are unreadable", e);
         }
@@ -489,11 +433,11 @@ public class AcpCheckoutService {
         }
     }
 
-    private Object readJson(String json) {
+    private JsonNode readTree(String json) {
         try {
-            return objectMapper.readValue(json, Object.class);
+            return objectMapper.readTree(json);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("stored JSON value is unreadable", e);
+            return new TextNode(json); // degrade as the map read degraded: the raw text, never a 500
         }
     }
 }

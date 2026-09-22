@@ -2,7 +2,18 @@ package com.bss.policy.controller;
 
 import com.bss.policy.api.ApiConstants;
 import com.bss.policy.api.PagedResult;
+import com.bss.policy.dto.DecisionRequest;
+import com.bss.policy.dto.DecisionView;
+import com.bss.policy.dto.ExperienceView;
+import com.bss.policy.dto.PolicyRulePatch;
+import com.bss.policy.dto.PolicyRuleRequest;
+import com.bss.policy.dto.PolicyRuleView;
+import com.bss.policy.dto.PriceResult;
+import com.bss.policy.dto.Teaser;
 import com.bss.policy.service.PolicyService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,34 +33,39 @@ import java.util.Map;
 @RequestMapping(ApiConstants.BASE_PATH)
 public class PolicyController {
 
-    private final PolicyService service;
+    private static final TypeReference<Map<String, Object>> CONTEXT = new TypeReference<>() {
+    };
 
-    public PolicyController(PolicyService service) {
+    private final PolicyService service;
+    private final ObjectMapper objectMapper;
+
+    public PolicyController(PolicyService service, ObjectMapper objectMapper) {
         this.service = service;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/policyRule")
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<PolicyRuleView>> list(
             @RequestParam(defaultValue = "0") long offset,
             @RequestParam(defaultValue = "20") int limit) {
-        PagedResult<Map<String, Object>> page = service.list(offset, limit);
+        PagedResult<PolicyRuleView> page = service.list(offset, limit);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(page.totalCount()))
                 .body(page.items());
     }
 
     @GetMapping("/policyRule/{id}")
-    public Map<String, Object> get(@PathVariable String id) {
+    public PolicyRuleView get(@PathVariable String id) {
         return service.get(id);
     }
 
     @PostMapping("/policyRule")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<PolicyRuleView> create(@RequestBody PolicyRuleRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(body));
     }
 
     @PatchMapping("/policyRule/{id}")
-    public Map<String, Object> patch(@PathVariable String id, @RequestBody Map<String, Object> body) {
+    public PolicyRuleView patch(@PathVariable String id, @RequestBody PolicyRulePatch body) {
         return service.patch(id, body);
     }
 
@@ -59,27 +75,39 @@ public class PolicyController {
         return ResponseEntity.noContent().build();
     }
 
+    /** The personalization decision: the insight component asks, the
+     * operator's experience rules (data, not code) answer. */
+    @PostMapping("/personalization/experience")
+    public ExperienceView experience(@RequestBody DecisionRequest body) {
+        return service.experienceFor(context(body.context()));
+    }
+
     /**
      * Decision endpoint the order pipeline calls: given a domain and a request
      * context, allow or deny. Returns 200 always (the decision is in the body);
      * a deny carries the rule id/name and the customer-facing message.
      */
-    /** The personalization decision: the insight component asks, the
-     * operator's experience rules (data, not code) answer. */
-    @PostMapping("/personalization/experience")
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> experience(@RequestBody Map<String, Object> body) {
-        Object ctx = body.get("context");
-        return service.experienceFor(ctx instanceof Map ? (Map<String, Object>) ctx : Map.of());
+    @PostMapping("/evaluate")
+    public DecisionView evaluate(@RequestBody DecisionRequest body) {
+        String domain = body.domain() == null ? "order" : body.domain();
+        return service.evaluate(domain, context(body.context())).view();
     }
 
-    @PostMapping("/evaluate")
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> evaluate(@RequestBody Map<String, Object> body) {
-        String domain = body.get("domain") == null ? "order" : String.valueOf(body.get("domain"));
-        Object ctx = body.get("context");
-        Map<String, Object> context = ctx instanceof Map ? (Map<String, Object>) ctx : Map.of();
-        return service.evaluate(domain, context).toMap();
+    /** The anonymous shop window for rules: what deals mention this offering. */
+    @GetMapping("/price/teaser")
+    public List<Teaser> teasers(@RequestParam String offeringId) {
+        return service.teasers(offeringId);
+    }
+
+    /**
+     * Anonymous indicative pricing: public deals only, labelled as such. The
+     * body is the pricing context itself, or {@code {context: …}} — an open
+     * document either way, so it arrives as a tree.
+     */
+    @PostMapping("/price/indicative")
+    public PriceResult indicative(@RequestBody JsonNode body) {
+        JsonNode context = body.path("context").isObject() ? body.get("context") : body;
+        return service.indicative(context(context));
     }
 
     /**
@@ -87,28 +115,13 @@ public class PolicyController {
      * enabled pricing rules and return the adjustments plus the adjusted total.
      * Called at cart/quote/bill time — the price reflects rules authored as data.
      */
-    /** The anonymous shop window for rules: what deals mention this offering. */
-    @GetMapping("/price/teaser")
-    public List<Map<String, Object>> teasers(@RequestParam String offeringId) {
-        return service.teasers(offeringId);
-    }
-
-    /** Anonymous indicative pricing: public deals only, labelled as such. */
-    @PostMapping("/price/indicative")
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> indicative(@RequestBody Map<String, Object> body) {
-        Map<String, Object> context = body.get("context") instanceof Map
-                ? (Map<String, Object>) body.get("context") : body;
-        Map<String, Object> result = service.indicative(context).toMap();
-        result.put("indicative", true);
-        return result;
-    }
-
     @PostMapping("/price")
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> price(@RequestBody Map<String, Object> body) {
-        Object ctx = body.get("context");
-        Map<String, Object> context = ctx instanceof Map ? (Map<String, Object>) ctx : Map.of();
-        return service.price(context).toMap();
+    public PriceResult price(@RequestBody DecisionRequest body) {
+        return service.price(context(body.context()));
+    }
+
+    /** The JSON-logic context is the caller's open document; anything but an object counts as empty. */
+    private Map<String, Object> context(JsonNode node) {
+        return node != null && node.isObject() ? objectMapper.convertValue(node, CONTEXT) : Map.of();
     }
 }
