@@ -2,6 +2,8 @@ package com.bss.ordering;
 
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.StockClient;
+import org.junit.jupiter.api.BeforeEach;
+import static org.mockito.ArgumentMatchers.any;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -42,6 +44,15 @@ class StockOrchestrationTest {
 
     @MockBean
     private StockClient stockClient;
+
+    /** The order service reserves through the variant-aware overload; a mock stubs default methods too, so
+     *  route it to the real default, which delegates to the 4-arg stubs the tests set (or the reserved default). */
+    @BeforeEach
+    void stockReservesByDefault() {
+        given(stockClient.reserve(anyString(), anyString(), anyInt(), anyString(), any())).willCallRealMethod();
+        given(stockClient.reserve(anyString(), anyString(), anyInt(), anyString()))
+                .willReturn(StockClient.ReserveOutcome.reserved());
+    }
 
     @MockBean
     private InventoryClient inventoryClient;

@@ -57,7 +57,7 @@ class GatewayRoutingTest {
         assertThat(ids).containsExactlyInAnyOrder(
                 "geo-bot-offering", "geo-well-known", "acp-product-feed", "acp-checkout", "legacy-estate",
                 "workforce-runtime", "product-catalog", "service-catalog", "product-configurator",
-                "product-ordering", "product-inventory", "party-account", "product-stock", "payment",
+                "som-service-activation", "product-ordering", "product-inventory", "party-account", "product-stock", "payment",
                 "billing", "bank-remittance", "distribution-response", "qualification", "appointment",
                 "trouble-ticket", "party-interaction", "communication", "communication-esp", "shopping-cart",
                 "usage", "loyalty", "agreement", "promotion", "campaign", "intelligence", "revenue",
