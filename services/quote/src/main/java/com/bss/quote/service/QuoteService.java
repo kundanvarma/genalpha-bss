@@ -2,17 +2,53 @@ package com.bss.quote.service;
 
 import com.bss.quote.api.ApiConstants;
 import com.bss.quote.client.DownstreamClients;
+import com.bss.quote.dto.ConfigRuleView;
+import com.bss.quote.dto.ConfigurationCheck;
+import com.bss.quote.dto.ConfigurationCheck.RuleViolation;
+import com.bss.quote.dto.EntityRef;
+import com.bss.quote.dto.GuidedSelling;
+import com.bss.quote.dto.GuidedSelling.Recommendation;
+import com.bss.quote.dto.HandoffBodies.AgreementItem;
+import com.bss.quote.dto.HandoffBodies.AgreementRequest;
+import com.bss.quote.dto.HandoffBodies.NameValue;
+import com.bss.quote.dto.HandoffBodies.NarrativeContext;
+import com.bss.quote.dto.HandoffBodies.OrderItem;
+import com.bss.quote.dto.HandoffBodies.ProductOrderRequest;
+import com.bss.quote.dto.LeadSignal;
+import com.bss.quote.dto.LineItem;
+import com.bss.quote.dto.Money;
+import com.bss.quote.dto.PricingRuleView;
+import com.bss.quote.dto.QuoteItem;
+import com.bss.quote.dto.QuoteRequests.ConfigRuleRequest;
+import com.bss.quote.dto.QuoteRequests.GuidedQuestionRequest;
+import com.bss.quote.dto.QuoteRequests.GuidedRecommendationRequest;
+import com.bss.quote.dto.QuoteRequests.PricingRuleRequest;
+import com.bss.quote.dto.QuoteRequests.QuotePatch;
+import com.bss.quote.dto.QuoteRequests.QuoteRequest;
+import com.bss.quote.dto.QuoteRequests.SignRequest;
+import com.bss.quote.dto.QuoteView;
+import com.bss.quote.dto.RelatedPartyRef;
+import com.bss.quote.entity.GuidedQuestion;
+import com.bss.quote.entity.GuidedRecommendation;
 import com.bss.quote.entity.Quote;
+import com.bss.quote.entity.QuoteConfigRule;
+import com.bss.quote.entity.QuotePricingRule;
 import com.bss.quote.events.DomainEventPublisher;
 import com.bss.quote.exception.BadRequestException;
 import com.bss.quote.exception.ConflictException;
 import com.bss.quote.exception.NotFoundException;
+import com.bss.quote.repository.GuidedQuestionRepository;
+import com.bss.quote.repository.GuidedRecommendationRepository;
+import com.bss.quote.repository.QuoteConfigRuleRepository;
+import com.bss.quote.repository.QuotePricingRuleRepository;
 import com.bss.quote.repository.QuoteRepository;
 import com.bss.quote.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
@@ -23,6 +59,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -38,29 +75,28 @@ public class QuoteService {
 
     private static final Logger log = LoggerFactory.getLogger(QuoteService.class);
 
-    private static final TypeReference<List<Map<String, Object>>> ITEMS = new TypeReference<>() {
+    private static final TypeReference<List<QuoteItem>> ITEMS = new TypeReference<>() {
     };
 
     private final QuoteRepository quotes;
-    private final com.bss.quote.repository.QuoteConfigRuleRepository configRules;
-    private final com.bss.quote.repository.GuidedQuestionRepository guidedQuestions;
-    private final com.bss.quote.repository.GuidedRecommendationRepository guidedRecos;
-    private final com.bss.quote.repository.QuotePricingRuleRepository pricingRules;
+    private final QuoteConfigRuleRepository configRules;
+    private final GuidedQuestionRepository guidedQuestions;
+    private final GuidedRecommendationRepository guidedRecos;
+    private final QuotePricingRuleRepository pricingRules;
     private final DownstreamClients downstream;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
-    private final java.math.BigDecimal discountThreshold;
+    private final BigDecimal discountThreshold;
 
     public QuoteService(QuoteRepository quotes,
-            com.bss.quote.repository.QuoteConfigRuleRepository configRules,
-            com.bss.quote.repository.GuidedQuestionRepository guidedQuestions,
-            com.bss.quote.repository.GuidedRecommendationRepository guidedRecos,
-            com.bss.quote.repository.QuotePricingRuleRepository pricingRules,
+            QuoteConfigRuleRepository configRules,
+            GuidedQuestionRepository guidedQuestions,
+            GuidedRecommendationRepository guidedRecos,
+            QuotePricingRuleRepository pricingRules,
             DownstreamClients downstream, DomainEventPublisher events, TenantScope tenantScope,
             ObjectMapper objectMapper,
-            @org.springframework.beans.factory.annotation.Value(
-                    "${bss.quote.discount-approval-threshold:20}") String threshold) {
+            @Value("${bss.quote.discount-approval-threshold:20}") String threshold) {
         this.quotes = quotes;
         this.configRules = configRules;
         this.guidedQuestions = guidedQuestions;
@@ -70,93 +106,88 @@ public class QuoteService {
         this.events = events;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
-        this.discountThreshold = new java.math.BigDecimal(threshold);
+        this.discountThreshold = new BigDecimal(threshold);
     }
 
     @Transactional
-    public Map<String, Object> createFromIntent(Map<String, Object> dto) {
-        if (dto.get("intentId") == null) {
+    public QuoteView createFromIntent(QuoteRequest dto) {
+        if (dto.intentId() == null) {
             throw new BadRequestException("intentId is required — quotes are born from intents here");
         }
-        Map<String, Object> intent = downstream.intent(String.valueOf(dto.get("intentId")));
-        if (!(intent.get("intentReport") instanceof Map<?, ?> report)
-                || !Boolean.TRUE.equals(report.get("feasible"))) {
+        JsonNode intent = downstream.intent(dto.intentId());
+        JsonNode report = intent.path("intentReport");
+        if (!report.isObject() || !report.path("feasible").asBoolean(false)) {
             throw new ConflictException("the intent is not feasibility-checked; nothing to quote");
         }
 
-        Map<String, Map<String, Object>> catalog = new LinkedHashMap<>();
-        for (Map<String, Object> offering : downstream.offerings()) {
+        Map<String, JsonNode> catalog = new LinkedHashMap<>();
+        for (JsonNode offering : downstream.offerings()) {
             // only sellable lifecycles — a retired offering must fail fast at
             // quote time, not survive to be refused at order accept
-            String lifecycle = String.valueOf(offering.get("lifecycleStatus"));
+            String lifecycle = text(offering.path("lifecycleStatus"));
             if (!"Active".equals(lifecycle) && !"Launched".equals(lifecycle)) continue;
-            catalog.put(String.valueOf(offering.get("name")), offering);
+            catalog.put(offering.path("name").asText(), offering);
         }
-        List<Map<String, Object>> allowances = downstream.allowances();
+        JsonNode allowances = downstream.allowances();
 
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<QuoteItem> items = new ArrayList<>();
         BigDecimal monthly = BigDecimal.ZERO;
         String currency = "EUR";
-        for (Object proposedObj : (List<?>) report.get("proposedItems")) {
-            Map<?, ?> proposed = (Map<?, ?>) proposedObj;
-            Map<String, Object> offering = catalog.get(String.valueOf(proposed.get("offeringName")));
+        for (JsonNode proposed : report.path("proposedItems")) {
+            String offeringName = proposed.path("offeringName").asText();
+            JsonNode offering = catalog.get(offeringName);
             if (offering == null) {
-                throw new ConflictException("proposed offering '" + proposed.get("offeringName")
-                        + "' is not in the catalog");
+                throw new ConflictException("proposed offering '" + offeringName + "' is not in the catalog");
             }
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("offering", Map.of("id", offering.get("id"), "name", offering.get("name")));
-            item.put("reason", proposed.get("reason"));
-            if (offering.get("productOfferingPrice") instanceof List<?> priceRefs
-                    && !priceRefs.isEmpty() && priceRefs.get(0) instanceof Map<?, ?> priceRef) {
-                Map<String, Object> price = downstream.offeringPrice(String.valueOf(priceRef.get("id")));
-                if (price.get("price") instanceof Map<?, ?> money && money.get("value") != null) {
-                    BigDecimal value = new BigDecimal(String.valueOf(money.get("value")));
-                    currency = String.valueOf(money.get("unit"));
-                    item.put("unitPrice", Map.of("value", value, "unit", currency,
-                            "period", price.get("recurringChargePeriodType")));
-                    if ("month".equals(price.get("recurringChargePeriodType"))) {
+            String offeringId = offering.path("id").asText();
+            Money unitPrice = null;
+            JsonNode priceRefs = offering.path("productOfferingPrice");
+            if (priceRefs.isArray() && priceRefs.size() > 0 && priceRefs.get(0).isObject()) {
+                JsonNode price = downstream.offeringPrice(priceRefs.get(0).path("id").asText());
+                JsonNode money = price.path("price");
+                if (money.isObject() && money.hasNonNull("value")) {
+                    BigDecimal value = new BigDecimal(money.get("value").asText());
+                    currency = money.path("unit").asText();
+                    String period = text(price.path("recurringChargePeriodType"));
+                    unitPrice = new Money(value, currency, period);
+                    if ("month".equals(period)) {
                         monthly = monthly.add(value);
                     }
                 }
             }
             // Token economics on the line item: what is included, what overage costs.
-            for (Map<String, Object> allowance : allowances) {
-                if (allowance.get("productOffering") instanceof Map<?, ?> ref
-                        && String.valueOf(offering.get("id")).equals(String.valueOf(ref.get("id")))) {
-                    item.put("allowance", Map.of(
-                            "usageType", allowance.get("usageType"),
-                            "included", allowance.get("allowance"),
-                            "overagePrice", allowance.get("overagePrice")));
+            QuoteItem.Allowance allowance = null;
+            for (JsonNode a : allowances) {
+                JsonNode ref = a.path("productOffering");
+                if (ref.isObject() && offeringId.equals(ref.path("id").asText())) {
+                    allowance = new QuoteItem.Allowance(text(a.path("usageType")),
+                            a.get("allowance"), a.get("overagePrice"));
                 }
             }
-            items.add(item);
+            items.add(QuoteItem.proposed(EntityRef.of(offeringId, offering.path("name").asText()),
+                    text(proposed.path("reason")), unitPrice, allowance));
         }
 
         Quote quote = new Quote();
         quote.setId(UUID.randomUUID().toString());
         quote.setTenantId(tenantScope.currentTenantId());
         quote.setHref(ApiConstants.BASE_PATH + "/quote/" + quote.getId());
-        quote.setDescription(dto.get("description") == null
-                ? String.valueOf(intent.get("name")) : String.valueOf(dto.get("description")));
+        quote.setDescription(dto.description() == null ? intent.path("name").asText() : dto.description());
         quote.setState(Quote.IN_PROGRESS);
-        quote.setIntentId(String.valueOf(dto.get("intentId")));
-        if (intent.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party) {
-            quote.setOwnerPartyId(String.valueOf(party.get("id")));
+        quote.setIntentId(dto.intentId());
+        JsonNode parties = intent.path("relatedParty");
+        if (parties.isArray() && parties.size() > 0 && parties.get(0).isObject()) {
+            quote.setOwnerPartyId(parties.get(0).path("id").asText());
         }
         writeItems(quote, items);
         quote.setMonthlyTotal(monthly);
         quote.setCurrency(currency);
-        quote.setNarrative(downstream.quoteNarrative(Map.of(
-                "description", quote.getDescription(),
-                "items", items,
-                "monthlyTotal", monthly,
-                "currency", currency)));
+        quote.setNarrative(downstream.quoteNarrative(
+                new NarrativeContext(quote.getDescription(), items, monthly, currency)));
         quote.setCreatedAt(OffsetDateTime.now());
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = QuoteView.of(quote, items);
         events.publish("QuoteCreateEvent", "quote", result);
         return result;
     }
@@ -167,39 +198,35 @@ public class QuoteService {
      * lines, one-off from the rest. State opens at inProgress like any quote.
      */
     @Transactional
-    public Map<String, Object> createFromLineItems(String description, String ownerPartyId,
-            String currency, List<Map<String, Object>> lineItems) {
+    public QuoteView createFromLineItems(String description, String ownerPartyId,
+            String currency, List<LineItem> lineItems) {
         // The configuration rules gate the build: a quote that violates
         // requires/excludes/min/max cannot be created.
-        Map<String, Object> check = validate(lineItems);
-        if (!Boolean.TRUE.equals(check.get("valid"))) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> vs = (List<Map<String, Object>>) check.get("violations");
-            String msgs = vs.stream().map(v -> String.valueOf(v.get("message")))
+        ConfigurationCheck check = validate(lineItems);
+        if (!check.valid()) {
+            String msgs = check.violations().stream().map(RuleViolation::message)
                     .reduce((x, y) -> x + "; " + y).orElse("configuration invalid");
             throw new ConflictException("configuration rules violated: " + msgs);
         }
         String cur = currency == null ? "USD" : currency;
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<QuoteItem> items = new ArrayList<>();
         BigDecimal monthly = BigDecimal.ZERO;
         BigDecimal oneTime = BigDecimal.ZERO;
-        List<com.bss.quote.entity.QuotePricingRule> tiers =
-                pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId());
+        List<QuotePricingRule> tiers = pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId());
         // The buyer's CDP segments (resolved once) — the same governed segment
         // definition marketing targets on. Fail-soft: no CDP → list/volume only.
-        java.util.Set<String> buyerSegments = tiers.stream().anyMatch(t -> t.getSegment() != null)
-                ? downstream.partySegments(ownerPartyId) : java.util.Set.of();
-        for (Map<String, Object> li : lineItems) {
-            boolean recurring = !Boolean.FALSE.equals(li.get("recurring"));
-            int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
-            BigDecimal listUnit = li.get("unitPrice") == null ? BigDecimal.ZERO
-                    : new BigDecimal(String.valueOf(li.get("unitPrice")));
-            String offeringName = String.valueOf(li.get("offeringName"));
+        Set<String> buyerSegments = tiers.stream().anyMatch(t -> t.getSegment() != null)
+                ? downstream.partySegments(ownerPartyId) : Set.of();
+        for (LineItem li : lineItems) {
+            boolean recurring = li.isRecurring();
+            int qty = li.quantityOrOne();
+            BigDecimal listUnit = li.unitPriceOrZero();
+            String offeringName = String.valueOf(li.offeringName());
             // Most-specific-wins: a matching SEGMENT price beats a volume tier.
             BigDecimal segmentDiscount = BigDecimal.ZERO;
             BigDecimal volumeDiscount = BigDecimal.ZERO;
             String segmentApplied = null;
-            for (com.bss.quote.entity.QuotePricingRule t : tiers) {
+            for (QuotePricingRule t : tiers) {
                 if (!t.getOfferingName().equalsIgnoreCase(offeringName) || qty < t.getMinQuantity()) continue;
                 if (t.getSegment() != null) {
                     if (buyerSegments.contains(t.getSegment())
@@ -217,24 +244,16 @@ public class QuoteService {
                     ? listUnit.multiply(BigDecimal.ONE.subtract(discount.movePointLeft(2)))
                     : listUnit;
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("offering", Map.of(
-                    "id", li.get("offeringId") == null ? "" : li.get("offeringId"),
-                    "name", li.get("offeringName")));
-            item.put("quantity", qty);
-            item.put("unitPrice", Map.of("value", unit, "unit", cur,
-                    "period", recurring ? "month" : "oneTime"));
-            if (discount.signum() > 0) {
-                item.put("listUnitPrice", listUnit);
-                if (bySegment) {
-                    item.put("segmentDiscountPercent", discount);
-                    item.put("pricedBy", "segment:" + segmentApplied);
-                } else {
-                    item.put("volumeDiscountPercent", discount);
-                    item.put("pricedBy", "volume");
-                }
+            EntityRef offering = EntityRef.of(li.offeringId() == null ? "" : li.offeringId(), li.offeringName());
+            Money unitPrice = recurring ? Money.monthly(unit, cur) : Money.oneTime(unit, cur);
+            QuoteItem item;
+            if (discount.signum() <= 0) {
+                item = QuoteItem.priced(offering, qty, unitPrice, recurring);
+            } else if (bySegment) {
+                item = QuoteItem.bySegment(offering, qty, unitPrice, listUnit, discount, segmentApplied, recurring);
+            } else {
+                item = QuoteItem.byVolume(offering, qty, unitPrice, listUnit, discount, recurring);
             }
-            item.put("recurring", recurring);
             items.add(item);
             if (recurring) monthly = monthly.add(lineTotal); else oneTime = oneTime.add(lineTotal);
         }
@@ -252,7 +271,7 @@ public class QuoteService {
         quote.setCreatedAt(OffsetDateTime.now());
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = QuoteView.of(quote, items);
         events.publish("QuoteCreateEvent", "quote", result);
         return result;
     }
@@ -260,34 +279,32 @@ public class QuoteService {
     // ---------------- CPQ C2: configuration rules ----------------
 
     @Transactional
-    public Map<String, Object> createRule(Map<String, Object> dto) {
-        String type = String.valueOf(dto.get("ruleType"));
-        if (!List.of(com.bss.quote.entity.QuoteConfigRule.REQUIRES,
-                com.bss.quote.entity.QuoteConfigRule.EXCLUDES,
-                com.bss.quote.entity.QuoteConfigRule.MIN_QTY,
-                com.bss.quote.entity.QuoteConfigRule.MAX_QTY).contains(type)) {
+    public ConfigRuleView createRule(ConfigRuleRequest dto) {
+        String type = dto.ruleType();
+        if (!List.of(QuoteConfigRule.REQUIRES, QuoteConfigRule.EXCLUDES,
+                QuoteConfigRule.MIN_QTY, QuoteConfigRule.MAX_QTY).contains(type)) {
             throw new BadRequestException("ruleType must be requires/excludes/minQty/maxQty");
         }
-        if (dto.get("subjectOffering") == null) {
+        if (dto.subjectOffering() == null) {
             throw new BadRequestException("subjectOffering is required");
         }
-        com.bss.quote.entity.QuoteConfigRule r = new com.bss.quote.entity.QuoteConfigRule();
+        QuoteConfigRule r = new QuoteConfigRule();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
         r.setRuleType(type);
-        r.setSubjectOffering(String.valueOf(dto.get("subjectOffering")));
-        r.setObjectOffering(dto.get("objectOffering") == null ? null : String.valueOf(dto.get("objectOffering")));
-        r.setQty(dto.get("qty") == null ? null : ((Number) dto.get("qty")).intValue());
-        r.setMessage(dto.get("message") == null ? defaultRuleMessage(r) : String.valueOf(dto.get("message")));
+        r.setSubjectOffering(dto.subjectOffering());
+        r.setObjectOffering(dto.objectOffering());
+        r.setQty(dto.qty());
+        r.setMessage(dto.message() == null ? defaultRuleMessage(r) : dto.message());
         r.setCreatedAt(OffsetDateTime.now());
         configRules.save(r);
-        return ruleToMap(r);
+        return ConfigRuleView.of(r);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listRules() {
+    public List<ConfigRuleView> listRules() {
         return configRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
-                .stream().map(this::ruleToMap).toList();
+                .stream().map(ConfigRuleView::of).toList();
     }
 
     /**
@@ -296,50 +313,37 @@ public class QuoteService {
      * the quote builder) calls this before committing a configuration.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> validate(List<Map<String, Object>> lineItems) {
+    public ConfigurationCheck validate(List<LineItem> lineItems) {
         Map<String, Integer> qtyByName = new LinkedHashMap<>();
-        for (Map<String, Object> li : lineItems) {
-            String name = String.valueOf(li.get("offeringName"));
-            int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
-            qtyByName.merge(name, qty, Integer::sum);
+        for (LineItem li : lineItems) {
+            qtyByName.merge(String.valueOf(li.offeringName()), li.quantityOrOne(), Integer::sum);
         }
-        List<Map<String, Object>> violations = new ArrayList<>();
-        for (com.bss.quote.entity.QuoteConfigRule r
-                : configRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
+        List<RuleViolation> violations = new ArrayList<>();
+        for (QuoteConfigRule r : configRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
             if (!qtyByName.containsKey(r.getSubjectOffering())) continue; // rule's subject not on the deal
             boolean ok = switch (r.getRuleType()) {
-                case com.bss.quote.entity.QuoteConfigRule.REQUIRES -> qtyByName.containsKey(r.getObjectOffering());
-                case com.bss.quote.entity.QuoteConfigRule.EXCLUDES -> !qtyByName.containsKey(r.getObjectOffering());
-                case com.bss.quote.entity.QuoteConfigRule.MIN_QTY -> r.getQty() == null
+                case QuoteConfigRule.REQUIRES -> qtyByName.containsKey(r.getObjectOffering());
+                case QuoteConfigRule.EXCLUDES -> !qtyByName.containsKey(r.getObjectOffering());
+                case QuoteConfigRule.MIN_QTY -> r.getQty() == null
                         || qtyByName.get(r.getSubjectOffering()) >= r.getQty();
-                case com.bss.quote.entity.QuoteConfigRule.MAX_QTY -> r.getQty() == null
+                case QuoteConfigRule.MAX_QTY -> r.getQty() == null
                         || qtyByName.get(r.getSubjectOffering()) <= r.getQty();
                 default -> true;
             };
-            if (!ok) {
-                Map<String, Object> v = new LinkedHashMap<>();
-                v.put("ruleType", r.getRuleType());
-                v.put("subject", r.getSubjectOffering());
-                if (r.getObjectOffering() != null) v.put("object", r.getObjectOffering());
-                v.put("message", r.getMessage());
-                violations.add(v);
-            }
+            if (!ok) violations.add(RuleViolation.of(r));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("valid", violations.isEmpty());
-        out.put("violations", violations);
-        return out;
+        return ConfigurationCheck.of(violations);
     }
 
     /** The CDP's lead signal for an email — used by lead scoring. */
     @Transactional(readOnly = true)
-    public Map<String, Object> leadSignal(String email) {
-        return email == null ? Map.of() : downstream.leadSignal(email);
+    public LeadSignal leadSignal(String email) {
+        return email == null ? LeadSignal.NONE : downstream.leadSignal(email);
     }
 
     /** Approve a pending discount so the quote can proceed (the human gate). */
     @Transactional
-    public Map<String, Object> approveDiscount(String id) {
+    public QuoteView approveDiscount(String id) {
         Quote quote = own(id);
         if (!Quote.APPR_PENDING.equals(quote.getApprovalStatus())) {
             throw new ConflictException("this quote has no discount pending approval");
@@ -347,7 +351,7 @@ public class QuoteService {
         quote.setApprovalStatus(Quote.APPR_APPROVED);
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = toView(quote);
         events.publish("QuoteStateChangeEvent", "quote", result);
         return result;
     }
@@ -355,176 +359,127 @@ public class QuoteService {
     // ---------------- CPQ C2: guided selling ----------------
 
     @Transactional
-    public Map<String, Object> createGuidedQuestion(Map<String, Object> dto) {
-        if (dto.get("questionKey") == null || dto.get("prompt") == null) {
+    public GuidedSelling.QuestionView createGuidedQuestion(GuidedQuestionRequest dto) {
+        if (dto.questionKey() == null || dto.prompt() == null) {
             throw new BadRequestException("questionKey and prompt are required");
         }
-        com.bss.quote.entity.GuidedQuestion q = new com.bss.quote.entity.GuidedQuestion();
+        GuidedQuestion q = new GuidedQuestion();
         q.setId(UUID.randomUUID().toString());
         q.setTenantId(tenantScope.currentTenantId());
-        q.setQuestionKey(String.valueOf(dto.get("questionKey")));
-        q.setPrompt(String.valueOf(dto.get("prompt")));
-        q.setSortOrder(dto.get("sortOrder") == null ? 0 : ((Number) dto.get("sortOrder")).intValue());
+        q.setQuestionKey(dto.questionKey());
+        q.setPrompt(dto.prompt());
+        q.setSortOrder(dto.sortOrder() == null ? 0 : dto.sortOrder());
         q.setCreatedAt(OffsetDateTime.now());
         guidedQuestions.save(q);
-        return Map.of("id", q.getId(), "questionKey", q.getQuestionKey(),
-                "prompt", q.getPrompt(), "sortOrder", q.getSortOrder());
+        return GuidedSelling.QuestionView.of(q);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listGuidedQuestions() {
+    public List<GuidedSelling.QuestionView> listGuidedQuestions() {
         return guidedQuestions.findByTenantIdOrderBySortOrderAscCreatedAtAsc(tenantScope.currentTenantId())
-                .stream().map(q -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("id", q.getId());
-                    m.put("questionKey", q.getQuestionKey());
-                    m.put("prompt", q.getPrompt());
-                    m.put("sortOrder", q.getSortOrder());
-                    return m;
-                }).toList();
+                .stream().map(GuidedSelling.QuestionView::of).toList();
     }
 
     @Transactional
-    public Map<String, Object> createGuidedRecommendation(Map<String, Object> dto) {
-        if (dto.get("questionKey") == null || dto.get("answerValue") == null
-                || dto.get("offeringName") == null) {
+    public GuidedSelling.RecommendationRuleView createGuidedRecommendation(GuidedRecommendationRequest dto) {
+        if (dto.questionKey() == null || dto.answerValue() == null || dto.offeringName() == null) {
             throw new BadRequestException("questionKey, answerValue and offeringName are required");
         }
-        com.bss.quote.entity.GuidedRecommendation r = new com.bss.quote.entity.GuidedRecommendation();
+        GuidedRecommendation r = new GuidedRecommendation();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
-        r.setQuestionKey(String.valueOf(dto.get("questionKey")));
-        r.setAnswerValue(String.valueOf(dto.get("answerValue")));
-        r.setOfferingName(String.valueOf(dto.get("offeringName")));
-        r.setQuantity(dto.get("quantity") == null ? 1 : Math.max(1, ((Number) dto.get("quantity")).intValue()));
+        r.setQuestionKey(dto.questionKey());
+        r.setAnswerValue(dto.answerValue());
+        r.setOfferingName(dto.offeringName());
+        r.setQuantity(dto.quantity() == null ? 1 : Math.max(1, dto.quantity()));
         r.setCreatedAt(OffsetDateTime.now());
         guidedRecos.save(r);
-        return recoToMap(r);
+        return GuidedSelling.RecommendationRuleView.of(r);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listGuidedRecommendations() {
+    public List<GuidedSelling.RecommendationRuleView> listGuidedRecommendations() {
         return guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
-                .stream().map(this::recoToMap).toList();
+                .stream().map(GuidedSelling.RecommendationRuleView::of).toList();
     }
 
     /**
      * The guided-selling decision (pure, no mutation): given answers, return the
      * recommended offerings. Agent-callable — an LLM can drive the questionnaire
-     * and get a configuration back.
+     * and get a configuration back. The answers are an open document keyed by
+     * question, either flat or under {@code answers}.
      */
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> recommend(Map<String, Object> answers) {
-        Map<String, Object> answerMap = answers.get("answers") instanceof Map<?, ?> m
-                ? (Map<String, Object>) m : answers;
+    public GuidedSelling.Recommendations recommend(JsonNode answers) {
+        JsonNode answerMap = answers == null ? objectMapper.createObjectNode()
+                : answers.path("answers").isObject() ? answers.get("answers") : answers;
         // Merge duplicate offerings by summing the recommended quantity.
         Map<String, Integer> byOffering = new LinkedHashMap<>();
         Map<String, String> because = new LinkedHashMap<>();
-        for (com.bss.quote.entity.GuidedRecommendation r
-                : guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
-            Object given = answerMap.get(r.getQuestionKey());
-            if (given != null && r.getAnswerValue().equalsIgnoreCase(String.valueOf(given))) {
+        for (GuidedRecommendation r : guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
+            JsonNode given = answerMap.get(r.getQuestionKey());
+            if (given != null && !given.isNull() && r.getAnswerValue().equalsIgnoreCase(given.asText())) {
                 byOffering.merge(r.getOfferingName(), r.getQuantity(), Integer::sum);
                 because.putIfAbsent(r.getOfferingName(), r.getQuestionKey() + "=" + r.getAnswerValue());
             }
         }
-        List<Map<String, Object>> recommendations = new ArrayList<>();
+        List<Recommendation> recommendations = new ArrayList<>();
         for (Map.Entry<String, Integer> e : byOffering.entrySet()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("offeringName", e.getKey());
-            m.put("quantity", e.getValue());
-            m.put("because", because.get(e.getKey()));
-            recommendations.add(m);
+            recommendations.add(new Recommendation(e.getKey(), e.getValue(), because.get(e.getKey())));
         }
-        return Map.of("recommendations", recommendations);
+        return new GuidedSelling.Recommendations(recommendations);
     }
 
     // ---------------- CPQ: volume pricing rules ----------------
 
     @Transactional
-    public Map<String, Object> createPricingRule(Map<String, Object> dto) {
-        if (dto.get("offeringName") == null || dto.get("discountPercent") == null) {
+    public PricingRuleView createPricingRule(PricingRuleRequest dto) {
+        if (dto.offeringName() == null || dto.discountPercent() == null) {
             throw new BadRequestException("offeringName and discountPercent are required");
         }
-        com.bss.quote.entity.QuotePricingRule r = new com.bss.quote.entity.QuotePricingRule();
+        QuotePricingRule r = new QuotePricingRule();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
-        r.setOfferingName(String.valueOf(dto.get("offeringName")));
-        r.setMinQuantity(dto.get("minQuantity") == null ? 1 : Math.max(1, ((Number) dto.get("minQuantity")).intValue()));
-        r.setSegment(dto.get("segment") == null ? null : String.valueOf(dto.get("segment")));
-        r.setDiscountPercent(new BigDecimal(String.valueOf(dto.get("discountPercent"))));
+        r.setOfferingName(dto.offeringName());
+        r.setMinQuantity(dto.minQuantity() == null ? 1 : Math.max(1, dto.minQuantity()));
+        r.setSegment(dto.segment());
+        r.setDiscountPercent(dto.discountPercent());
         r.setCreatedAt(OffsetDateTime.now());
         pricingRules.save(r);
-        return pricingRuleToMap(r);
+        return PricingRuleView.of(r);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listPricingRules() {
+    public List<PricingRuleView> listPricingRules() {
         return pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
-                .stream().map(this::pricingRuleToMap).toList();
-    }
-
-    private Map<String, Object> pricingRuleToMap(com.bss.quote.entity.QuotePricingRule r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("offeringName", r.getOfferingName());
-        m.put("minQuantity", r.getMinQuantity());
-        if (r.getSegment() != null) m.put("segment", r.getSegment());
-        m.put("discountPercent", r.getDiscountPercent());
-        return m;
+                .stream().map(PricingRuleView::of).toList();
     }
 
     // ---------------- CPQ: e-signature ----------------
 
     /** The e-sign callback: the customer signed the quote document. */
     @Transactional
-    public Map<String, Object> sign(String id, Map<String, Object> dto) {
+    public QuoteView sign(String id, SignRequest dto) {
         Quote quote = own(id);
-        if (dto.get("signedBy") == null) throw new BadRequestException("signedBy is required");
+        if (dto.signedBy() == null) throw new BadRequestException("signedBy is required");
         quote.setSignatureStatus("signed");
-        quote.setSignedBy(String.valueOf(dto.get("signedBy")));
+        quote.setSignedBy(dto.signedBy());
         quote.setSignedAt(OffsetDateTime.now());
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = toView(quote);
         events.publish("QuoteStateChangeEvent", "quote", result);
         return result;
     }
 
-    private Map<String, Object> recoToMap(com.bss.quote.entity.GuidedRecommendation r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("questionKey", r.getQuestionKey());
-        m.put("answerValue", r.getAnswerValue());
-        m.put("offeringName", r.getOfferingName());
-        m.put("quantity", r.getQuantity());
-        return m;
-    }
-
-    private String defaultRuleMessage(com.bss.quote.entity.QuoteConfigRule r) {
+    private String defaultRuleMessage(QuoteConfigRule r) {
         return switch (r.getRuleType()) {
-            case com.bss.quote.entity.QuoteConfigRule.REQUIRES ->
-                    r.getSubjectOffering() + " requires " + r.getObjectOffering();
-            case com.bss.quote.entity.QuoteConfigRule.EXCLUDES ->
-                    r.getSubjectOffering() + " cannot be sold with " + r.getObjectOffering();
-            case com.bss.quote.entity.QuoteConfigRule.MIN_QTY ->
-                    r.getSubjectOffering() + " needs a quantity of at least " + r.getQty();
-            case com.bss.quote.entity.QuoteConfigRule.MAX_QTY ->
-                    r.getSubjectOffering() + " allows at most " + r.getQty();
+            case QuoteConfigRule.REQUIRES -> r.getSubjectOffering() + " requires " + r.getObjectOffering();
+            case QuoteConfigRule.EXCLUDES -> r.getSubjectOffering() + " cannot be sold with " + r.getObjectOffering();
+            case QuoteConfigRule.MIN_QTY -> r.getSubjectOffering() + " needs a quantity of at least " + r.getQty();
+            case QuoteConfigRule.MAX_QTY -> r.getSubjectOffering() + " allows at most " + r.getQty();
             default -> "configuration rule violated";
         };
-    }
-
-    private Map<String, Object> ruleToMap(com.bss.quote.entity.QuoteConfigRule r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("ruleType", r.getRuleType());
-        m.put("subjectOffering", r.getSubjectOffering());
-        if (r.getObjectOffering() != null) m.put("objectOffering", r.getObjectOffering());
-        if (r.getQty() != null) m.put("qty", r.getQty());
-        m.put("message", r.getMessage());
-        return m;
     }
 
     /** A branded, printable quote document (HTML) the rep can send. */
@@ -532,13 +487,11 @@ public class QuoteService {
     public String renderDocument(String id) {
         Quote quote = own(id);
         StringBuilder rows = new StringBuilder();
-        for (Map<String, Object> item : readItems(quote)) {
-            Object off = item.get("offering");
-            String name = off instanceof Map<?, ?> m ? String.valueOf(m.get("name")) : "—";
-            Object up = item.get("unitPrice");
-            String price = up instanceof Map<?, ?> m
-                    ? m.get("value") + " " + m.get("unit") + "/" + m.get("period") : "—";
-            String qty = String.valueOf(item.getOrDefault("quantity", 1));
+        for (QuoteItem item : readItems(quote)) {
+            String name = item.offering() != null ? String.valueOf(item.offering().name()) : "—";
+            Money up = item.unitPrice();
+            String price = up != null ? up.value() + " " + up.unit() + "/" + up.period() : "—";
+            String qty = String.valueOf(item.quantity() == null ? 1 : item.quantity());
             rows.append("<tr><td>").append(esc(name)).append("</td><td style=\"text-align:right\">")
                     .append(esc(qty)).append("</td><td style=\"text-align:right\">")
                     .append(esc(price)).append("</td></tr>");
@@ -571,29 +524,29 @@ public class QuoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<QuoteView> findAll() {
         return quotes.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(own(id));
+    public QuoteView findById(String id) {
+        return toView(own(id));
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public QuoteView patch(String id, QuotePatch patch) {
         Quote quote = own(id);
         // A discount over the threshold needs manager approval before the quote
         // can advance — the human gate on a (possibly agent-proposed) discount.
-        if (patch.get("discountPercent") != null) {
-            BigDecimal disc = new BigDecimal(String.valueOf(patch.get("discountPercent")));
+        if (patch.discountPercent() != null) {
+            BigDecimal disc = patch.discountPercent();
             quote.setDiscountPercent(disc);
             quote.setApprovalStatus(disc.compareTo(discountThreshold) > 0
                     ? Quote.APPR_PENDING : Quote.APPR_NOT_REQUIRED);
         }
-        if (patch.get("state") != null) {
-            String target = String.valueOf(patch.get("state"));
+        if (patch.state() != null) {
+            String target = patch.state();
             if (!List.of(Quote.APPROVED, Quote.REJECTED).contains(target)
                     || !Quote.IN_PROGRESS.equals(quote.getState())) {
                 throw new ConflictException("only inProgress quotes move to approved/rejected");
@@ -606,7 +559,7 @@ public class QuoteService {
         }
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = toView(quote);
         events.publish("QuoteStateChangeEvent", "quote", result);
         return result;
     }
@@ -614,37 +567,32 @@ public class QuoteService {
     /** The handoff: an approved quote becomes a product order AND a contract
      *  (TMF651 agreement), linked back here — atomically once. */
     @Transactional
-    public Map<String, Object> accept(String id) {
+    public QuoteView accept(String id) {
         Quote quote = own(id);
         if (!Quote.APPROVED.equals(quote.getState())) {
             throw new ConflictException("only approved quotes can be accepted");
         }
         String party = quote.getOwnerPartyId() == null ? "unknown" : quote.getOwnerPartyId();
-        List<Map<String, Object>> orderItems = new ArrayList<>();
-        List<Map<String, Object>> agreementItems = new ArrayList<>();
-        for (Map<String, Object> item : readItems(quote)) {
-            Map<?, ?> offering = (Map<?, ?>) item.get("offering");
-            orderItems.add(Map.of("action", "add",
-                    "productOffering", Map.of("id", offering.get("id"), "name", offering.get("name"))));
-            agreementItems.add(Map.of("productOffering",
-                    Map.of("id", offering.get("id"), "name", offering.get("name"))));
+        List<OrderItem> orderItems = new ArrayList<>();
+        List<AgreementItem> agreementItems = new ArrayList<>();
+        for (QuoteItem item : readItems(quote)) {
+            EntityRef offering = EntityRef.of(item.offering().id(), item.offering().name());
+            orderItems.add(OrderItem.add(offering));
+            agreementItems.add(new AgreementItem(offering));
         }
-        Map<String, Object> order = downstream.placeOrder(Map.of(
-                "productOrderItem", orderItems,
-                "relatedParty", List.of(Map.of("id", party, "role", "customer"))));
-        quote.setProductOrderId(String.valueOf(order.get("id")));
+        JsonNode order = downstream.placeOrder(new ProductOrderRequest(orderItems,
+                List.of(RelatedPartyRef.customer(party))));
+        quote.setProductOrderId(text(order.path("id")));
         // The contract: a TMF651 agreement for the same party + items, tagged
         // with the quote it came from.
         try {
-            Map<String, Object> agreement = downstream.createAgreement(Map.of(
-                    "name", "Agreement — " + quote.getDescription(),
-                    "agreementType", "commercial",
-                    "status", "active",
-                    "engagedParty", List.of(Map.of("id", party, "role", "customer")),
-                    "agreementItem", agreementItems,
-                    "characteristic", List.of(Map.of("name", "quoteId", "value", quote.getId()))));
-            if (agreement.get("id") != null) {
-                quote.setAgreementId(String.valueOf(agreement.get("id")));
+            JsonNode agreement = downstream.createAgreement(new AgreementRequest(
+                    "Agreement — " + quote.getDescription(), "commercial", "active",
+                    List.of(RelatedPartyRef.customer(party)), agreementItems,
+                    List.of(new NameValue("quoteId", quote.getId()))));
+            String agreementId = text(agreement.path("id"));
+            if (agreementId != null) {
+                quote.setAgreementId(agreementId);
             }
         } catch (RestClientException e) {
             // Fail-soft: the order stands; the contract can be reconciled. Do
@@ -654,7 +602,7 @@ public class QuoteService {
         quote.setState(Quote.ACCEPTED);
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
-        Map<String, Object> result = toMap(quote);
+        QuoteView result = toView(quote);
         events.publish("QuoteStateChangeEvent", "quote", result);
         return result;
     }
@@ -664,7 +612,7 @@ public class QuoteService {
                 .orElseThrow(() -> NotFoundException.forResource("Quote", id));
     }
 
-    private void writeItems(Quote quote, List<Map<String, Object>> items) {
+    private void writeItems(Quote quote, List<QuoteItem> items) {
         try {
             quote.setItems(objectMapper.writeValueAsString(items));
         } catch (Exception e) {
@@ -672,7 +620,8 @@ public class QuoteService {
         }
     }
 
-    private List<Map<String, Object>> readItems(Quote quote) {
+    /** The stored lines, as written: money keeps the scale it was stored with. */
+    private List<QuoteItem> readItems(Quote quote) {
         try {
             return objectMapper.readValue(quote.getItems(), ITEMS);
         } catch (Exception e) {
@@ -680,44 +629,12 @@ public class QuoteService {
         }
     }
 
-    private Map<String, Object> toMap(Quote quote) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", quote.getId());
-        map.put("href", quote.getHref());
-        map.put("description", quote.getDescription());
-        map.put("state", quote.getState());
-        if (quote.getIntentId() != null) {
-            map.put("intent", Map.of("id", quote.getIntentId()));
-        }
-        if (quote.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", quote.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("quoteItem", readItems(quote));
-        map.put("quoteTotalPrice", Map.of("value", quote.getMonthlyTotal(),
-                "unit", quote.getCurrency(), "period", "month"));
-        if (quote.getOneTimeTotal() != null && quote.getOneTimeTotal().signum() != 0) {
-            map.put("quoteOneTimePrice", Map.of("value", quote.getOneTimeTotal(),
-                    "unit", quote.getCurrency(), "period", "oneTime"));
-        }
-        if (quote.getDiscountPercent() != null && quote.getDiscountPercent().signum() != 0) {
-            map.put("discountPercent", quote.getDiscountPercent());
-            BigDecimal factor = BigDecimal.ONE.subtract(
-                    quote.getDiscountPercent().movePointLeft(2));
-            map.put("netMonthlyTotal", quote.getMonthlyTotal().multiply(factor));
-        }
-        map.put("approvalStatus", quote.getApprovalStatus());
-        if (quote.getNarrative() != null) map.put("narrative", quote.getNarrative());
-        if (quote.getProductOrderId() != null) {
-            map.put("productOrder", Map.of("id", quote.getProductOrderId()));
-        }
-        if (quote.getAgreementId() != null) {
-            map.put("agreement", Map.of("id", quote.getAgreementId(),
-                    "href", "/tmf-api/agreementManagement/v4/agreement/" + quote.getAgreementId()));
-        }
-        map.put("signatureStatus", quote.getSignatureStatus());
-        if (quote.getSignedBy() != null) map.put("signedBy", quote.getSignedBy());
-        if (quote.getSignedAt() != null) map.put("signedAt", quote.getSignedAt());
-        map.put("@type", "Quote");
-        return map;
+    private QuoteView toView(Quote quote) {
+        return QuoteView.of(quote, readItems(quote));
+    }
+
+    /** A node's text, or null when it is absent or JSON null. */
+    private static String text(JsonNode node) {
+        return node == null || node.isMissingNode() || node.isNull() ? null : node.asText();
     }
 }
