@@ -170,3 +170,15 @@ long menu. Built the same evening:
 Not yet: a Catalog & Pricing *Overview* page (the advisor's recommendations
 belong on it), and the local left navigation the paper prefers long-term,
 which waits for the Product Offering workspace. Suite `console_nav_test.js`.
+
+### Split into files, 22 Sep
+
+`app.js` (8,483 lines) is now 49 classic scripts under `core/`, `resources/` and `desks/`, none over 300 lines
+(the ratchet's rule), still one shared global scope — no modules, no renames, no behaviour change.
+`core/` holds constants, navigation, state, form controls, the editor, drawers, help, KPIs and the list engine;
+`resources/` holds the RESOURCES entries department by department (`catalog.js` declares the array with Home first,
+the others `push` in the same order as before); `desks/` holds one file per custom renderer.
+Load-order rule (index.html): constants and helpers → resources → frame and list engine → desks → `core/boot.js`,
+then `home.js` and `palette.js` last as before. A file may use an earlier file's `const`/`let` at load time, but never a later one's;
+functions are hoisted only within their own file, so `main()` lives in boot and runs last. Three functions over 300 lines
+(loadList, renderIntegrations, renderWorkforce) were split into helpers with their bodies moved verbatim.

@@ -1,6 +1,5 @@
 {
  "frontendFiles": {
-  "apps/admin-console/site/app.js": 8483,
   "apps/admin-console/site/home.js": 310,
   "apps/business-console/site/app.js": 609,
   "apps/csr-console/src/api.js": 791,

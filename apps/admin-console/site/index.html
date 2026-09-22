@@ -64,7 +64,58 @@
 <!-- Which tenant's IdP this host logs in against; served by the gateway. -->
 <script src="/console/tenant-config.js"></script>
 <script src="auth.js?v=98"></script>
-<script src="app.js?v=109"></script>
+<!-- One classic script per concern, sharing one global scope — order matters: constants and
+     helpers, then the RESOURCES entries (department by department, Home first), then the
+     frame and the list engine, then one file per desk, then boot. home.js and palette.js stay last. -->
+<script src="core/config.js?v=1"></script>
+<script src="resources/catalog.js?v=1"></script>
+<script src="resources/money.js?v=1"></script>
+<script src="resources/ops.js?v=1"></script>
+<script src="resources/marketing.js?v=1"></script>
+<script src="resources/tenant.js?v=1"></script>
+<script src="resources/simulators.js?v=1"></script>
+<script src="resources/sales.js?v=1"></script>
+<script src="resources/policy.js?v=1"></script>
+<script src="resources/panels.js?v=1"></script>
+<script src="core/nav.js?v=1"></script>
+<script src="core/state.js?v=1"></script>
+<script src="core/controls.js?v=1"></script>
+<script src="core/message-tokens.js?v=1"></script>
+<script src="core/step-builder.js?v=1"></script>
+<script src="core/composer.js?v=1"></script>
+<script src="core/editor.js?v=1"></script>
+<script src="core/rules-tester.js?v=1"></script>
+<script src="core/drawers.js?v=1"></script>
+<script src="core/help.js?v=1"></script>
+<script src="core/page.js?v=1"></script>
+<script src="core/kpis.js?v=1"></script>
+<script src="core/list-dispatch.js?v=1"></script>
+<script src="core/list-rows.js?v=1"></script>
+<script src="core/list.js?v=1"></script>
+<script src="desks/staff.js?v=1"></script>
+<script src="desks/product-copilot.js?v=1"></script>
+<script src="desks/product-copilot-execute.js?v=1"></script>
+<script src="desks/product-copilot-card.js?v=1"></script>
+<script src="desks/growth.js?v=1"></script>
+<script src="desks/audience-builder.js?v=1"></script>
+<script src="desks/social.js?v=1"></script>
+<script src="desks/ai-flows.js?v=1"></script>
+<script src="desks/decisions.js?v=1"></script>
+<script src="desks/learning-contracts.js?v=1"></script>
+<script src="desks/device-entitlements.js?v=1"></script>
+<script src="desks/reporting.js?v=1"></script>
+<script src="desks/integrations.js?v=1"></script>
+<script src="desks/integrations-parts.js?v=1"></script>
+<script src="desks/workforce.js?v=1"></script>
+<script src="desks/workforce-parts.js?v=1"></script>
+<script src="desks/wholesale.js?v=1"></script>
+<script src="desks/mobile-wholesale.js?v=1"></script>
+<script src="desks/pipeline.js?v=1"></script>
+<script src="desks/desk-learning.js?v=1"></script>
+<script src="desks/approvals.js?v=1"></script>
+<script src="desks/envelopes.js?v=1"></script>
+<script src="desks/ontology.js?v=1"></script>
+<script src="core/boot.js?v=1"></script>
 <script src="home.js?v=2"></script>
 <script src="palette.js?v=1"></script>
 </body>
