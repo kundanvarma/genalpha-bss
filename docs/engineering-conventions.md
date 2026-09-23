@@ -178,6 +178,7 @@ with its suites green.
 |---|---|
 | Anything vendor- or country-specific sits behind a seam: one interface, one adapter per vendor, a stand-in in the fleet, selection per tenant in `tenants.yml`. | Every seam has a `mock-*` container and a suite that runs against it. |
 | Fail soft on a seam: a quiet vendor never blocks the customer's action; the gap is logged and reconciled later. | Suite asserts the action completes with the stand-in down where that is the contract. |
+| A vendor calling **in** is signed, and the signature is **fresh**. Signing the timestamp is not the same as checking it: a signed timestamp cannot be edited, but nothing expires unless something compares it to the clock, so one captured request replays forever. Both directions of the window are refused, so a capture cannot be post-dated to extend its own life. | `PaymentWebhookFreshnessTest` — a webhook signed now is accepted, the same bytes replayed past the window are 401, a post-dated one is 401, and moving the timestamp forward breaks the signature it was sent with. Tolerance is clock skew, not policy: `bss.payment.webhook.tolerance-millis`, five minutes. |
 
 ## 7. Documents and proof
 

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -33,10 +34,14 @@ public class PaymentWebhookService {
     private final PspConfigService configs;
     private final PaymentService payments;
     private final ObjectMapper mapper = new ObjectMapper();
+    /** How far a webhook's signed timestamp may sit from our clock, either way. */
+    private final long toleranceMillis;
 
-    public PaymentWebhookService(PspConfigService configs, PaymentService payments) {
+    public PaymentWebhookService(PspConfigService configs, PaymentService payments,
+            @Value("${bss.payment.webhook.tolerance-millis:300000}") long toleranceMillis) {
         this.configs = configs;
         this.payments = payments;
+        this.toleranceMillis = toleranceMillis;
     }
 
     public WebhookReceipt handle(String provider, String tenantId, byte[] rawBody, String signatureHeader) {
@@ -58,7 +63,21 @@ public class PaymentWebhookService {
         }
     }
 
-    /** Signature: header "t=<ms>,v1=<base64url>", sig = HMAC-SHA256(secret, "<t>.<body>"). */
+    /** Signature: header "t=<ms>,v1=<base64url>", sig = HMAC-SHA256(secret, "<t>.<body>").
+     *
+     * The timestamp is signed, so it cannot be edited without the secret — but a
+     * signature stays valid forever unless someone looks at how old it is. Anyone
+     * who captured one confirmed webhook could replay it: the same body, the same
+     * signature, accepted again. Confirm is idempotent, so a replay of the SAME
+     * session books nothing twice; what it buys an attacker is the right to keep
+     * a confirmation alive indefinitely, and to replay it in a different order
+     * than the PSP sent it. A signature older than the tolerance is refused.
+     *
+     * Future timestamps are refused by the same window, so a captured signature
+     * cannot be post-dated to extend its own life. The window is the clock skew
+     * we tolerate between the PSP and us, not a business setting: five minutes
+     * is the same figure the major PSPs use for their own verifiers.
+     */
     private void verify(byte[] body, String header, String secret) {
         if (header == null || header.isBlank()) {
             throw unauthorized("missing signature");
@@ -78,6 +97,19 @@ public class PaymentWebhookService {
         }
         if (ts == null || provided == null) {
             throw unauthorized("malformed signature");
+        }
+        long sent;
+        try {
+            sent = Long.parseLong(ts.trim());
+        } catch (NumberFormatException e) {
+            throw unauthorized("malformed signature");
+        }
+        long age = Math.abs(System.currentTimeMillis() - sent);
+        if (age > toleranceMillis) {
+            // Deliberately vague to the caller; the reason goes to the log only.
+            log.warn("psp webhook signature outside the freshness window: {} ms old (tolerance {} ms)",
+                    age, toleranceMillis);
+            throw unauthorized("stale signature");
         }
         String expected = hmac(secret, ts + "." + new String(body, StandardCharsets.UTF_8));
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), provided.getBytes(StandardCharsets.UTF_8))) {
