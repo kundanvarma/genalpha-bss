@@ -87,7 +87,7 @@ async function renderAccessProduct() {
     authFetch(`${SERVICE_CATALOG_BASE}/serviceSpecification?serviceType=CFS&limit=100`).then((r) => r.json()).catch(() => []),
   ]);
   const wholesale = (offerings || []).filter((o) => (o.category || []).some((c) => c.name === 'Wholesale access'));
-  const cfsOptions = (specs || []).map((s) => `<option value="${esc(s.id)}|${esc(s.name)}">${esc(s.name)}</option>`).join('');
+  const cfsOptionsHtml = (specs || []).map((s) => `<option value="${esc(s.id)}|${esc(s.name)}">${esc(s.name)}</option>`).join('');
   let html = '<div class="editor"><h2>Access products</h2>'
     + '<p class="dim small">Publish an L2/L3 wholesale access SKU. It lands in the “Wholesale access” '
     + 'category (hidden from the retail shop) and appears in the partner portal for access seekers to order. '
@@ -99,7 +99,7 @@ async function renderAccessProduct() {
     + '<option value="L3-activated">L3-activated</option><option value="L2-VULA">L2-VULA</option></select></label>'
     + '<label class="field"><span>Bandwidth (Mbit/s) *</span><input id="wp-bw" type="number" placeholder="1000"></label>'
     + `<label class="field"><span>Wholesale price / line / month (${esc(tenantCurrency())}) *</span><input id="wp-price" type="number" placeholder="24"></label>`
-    + `<label class="field"><span>Realised by CFS (TMF633, optional)</span><select id="wp-cfs"><option value="">— none —</option>${cfsOptions}</select></label>`
+    + `<label class="field"><span>Realised by CFS (TMF633, optional)</span><select id="wp-cfs"><option value="">— none —</option>${cfsOptionsHtml}</select></label>`
     + '</div><div class="actions"><button class="primary" id="wp-create">Publish access product</button>'
     + '<span id="wp-msg" class="dim"></span></div>'
     + '<h2 style="margin-top:1.5rem">Published wholesale access products</h2>';

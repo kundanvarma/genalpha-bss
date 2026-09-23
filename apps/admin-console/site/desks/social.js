@@ -46,7 +46,7 @@ async function renderSocialListening() {
       const col = { positive: '#2e7d32', negative: '#c62828', neutral: '#607d8b' }[m.sentiment] || '#607d8b';
       const meta = document.createElement('div'); meta.style.cssText = 'font-size:12px;margin-bottom:2px';
       // col is one of the three literals above — never a value off the wire.
-      meta.innerHTML = `<span style="color:${col};font-weight:600">${esc(m.sentiment || 'neutral')}</span> · `
+      meta.innerHTML = `<span style="color:${esc(col)};font-weight:600">${esc(m.sentiment || 'neutral')}</span> · `
         + `<span class="dim">${esc(m.platform || '')} · @${esc(m.author || '')}</span>`;
       const txt = document.createElement('div'); txt.textContent = m.text || ''; txt.style.fontSize = '13px';
       card.append(meta, txt); feed.append(card);
@@ -138,7 +138,7 @@ async function renderSocialCare() {
       const col = { positive: '#2e7d32', negative: '#c62828', neutral: '#607d8b' }[m.sentiment] || '#607d8b';
       const meta = document.createElement('div'); meta.style.cssText = 'font-size:12px;margin-bottom:2px';
       // col is one of the three literals above — never a value off the wire.
-      meta.innerHTML = `<span style="color:${col};font-weight:600">${esc(m.sentiment || 'neutral')}</span> · `
+      meta.innerHTML = `<span style="color:${esc(col)};font-weight:600">${esc(m.sentiment || 'neutral')}</span> · `
         + `<span class="dim">${esc(m.platform || '')} · ${esc(m.handle || ('@' + (m.author || '')))}</span>`
         + (m.ticketRequested ? ' · <span style="color:#c62828;font-weight:600">ticket opened</span>'
           : (m.needsCare ? ' · <span class="dim">needs care</span>' : ''));

@@ -54,7 +54,7 @@ async function renderPipelineBoard() {
     html += `<div class="pl-col" data-stage="${st.key}" data-testid="pl-col-${st.key}" `
       + 'style="background:var(--panel,#8881);border:1px solid var(--line,#3333);border-radius:0.6rem;padding:0.5rem;min-height:8rem">'
       + `<div class="pl-col-head" style="display:flex;justify-content:space-between;font-weight:600;padding:0.25rem 0.4rem 0.5rem">`
-      + `<span>${esc(st.label)}</span><span class="dim" data-testid="pl-count-${st.key}">${cards.length} · ${esc(money(stageTotal(st.key)))}</span></div>`;
+      + `<span>${esc(st.label)}</span><span class="dim" data-testid="pl-count-${esc(st.key)}">${cards.length} · ${esc(money(stageTotal(st.key)))}</span></div>`;
     for (const o of cards) {
       const owner = (o.owner && o.owner.name) ? o.owner.name : '—';
       html += `<div class="pl-card" draggable="true" data-id="${esc(o.id)}" data-testid="pl-card" `
@@ -70,7 +70,7 @@ async function renderPipelineBoard() {
   html += '</div>';
   // Funnel analytics strip — conversion, win rate, cycle; and the copilot-ready line.
   if (funnel && Array.isArray(funnel.stageConversion)) {
-    const conv = funnel.stageConversion
+    const convHtml = funnel.stageConversion
       .map((c) => `${esc(c.from)}→${esc(c.to)} <b>${esc(c.conversionPct)}%</b>`).join(' · ');
     html += '<div class="pipeline-funnel" data-testid="pl-funnel" style="margin-top:1.25rem;'
       + 'padding:0.75rem 1rem;border:1px solid var(--line,#3333);border-radius:0.6rem">'
@@ -78,7 +78,7 @@ async function renderPipelineBoard() {
       + `<b>${esc(funnel.winRatePct)}%</b></div><div><span class="dim">Avg cycle</span> `
       + `<b>${esc(funnel.avgCycleDays)} days</b></div><div><span class="dim">Closed</span> `
       + `<b>${esc(funnel.wonCount)} won / ${esc(funnel.lostCount)} lost</b></div></div>`
-      + `<div class="dim" style="margin-top:0.4rem;font-size:0.85rem">Stage conversion: ${conv}</div>`
+      + `<div class="dim" style="margin-top:0.4rem;font-size:0.85rem">Stage conversion: ${convHtml}</div>`
       + `<div class="dim" style="margin-top:0.4rem;font-style:italic">${esc(funnel.summary || '')}</div>`
       + '</div>';
   }

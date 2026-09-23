@@ -230,14 +230,14 @@ async function renderAudienceBuilder() {
   sbar.append(pauseBtn, resumeBtn, runBtn);
   const paintSched = (s) => {
     if (!s) { sstat.textContent = 'status unavailable'; return; }
-    const badge = s.enabled
+    const badgeHtml = s.enabled
       ? '<span data-testid="scheduler-enabled" style="color:#2e7d32;font-weight:600">● running</span>'
       : '<span data-testid="scheduler-enabled" style="color:#c62828;font-weight:600">● paused</span>';
     const last = s.lastRunAt ? new Date(s.lastRunAt).toLocaleTimeString() : '—';
     // badge and last are built above from literals and a formatted clock; the
     // counters come off the wire, so they are escaped like any other value.
-    sstat.innerHTML = `${badge} · every ${Math.round((s.intervalMs || 0) / 1000)}s · cap ${esc(s.maxPerRun)}/run<br>`
-      + `runs ${esc(s.totalRuns)} · refreshed ${esc(s.totalRefreshed)} · errors ${esc(s.totalErrors)} · last ${last} (${esc(s.lastDurationMs)}ms)<br>`
+    sstat.innerHTML = `${badgeHtml} · every ${Math.round((s.intervalMs || 0) / 1000)}s · cap ${esc(s.maxPerRun)}/run<br>`
+      + `runs ${esc(s.totalRuns)} · refreshed ${esc(s.totalRefreshed)} · errors ${esc(s.totalErrors)} · last ${esc(last)} (${esc(s.lastDurationMs)}ms)<br>`
       + `<span class="dim">JVM heap ${esc(s.heapUsedMb)} / ${esc(s.heapMaxMb)} MB — watch this against runs to spot a memory climb</span>`;
     pauseBtn.disabled = !s.enabled; resumeBtn.disabled = s.enabled;
   };

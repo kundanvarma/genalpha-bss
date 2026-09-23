@@ -34,7 +34,7 @@ async function renderMobileWholesale(periodStart, periodEnd) {
   if (!lines.length) {
     html += '<p class="dim">Nothing rated for this period yet — press “Rate this period”.</p>';
   } else {
-    const badge = s.reconciled
+    const badgeHtml = s.reconciled
       ? '<span style="color:var(--teal)">✓ reconciled</span>'
       : '<span style="color:var(--danger,#b64a3a)">⚠ a late CDR is unreconciled</span>';
     html += '<div class="table-wrap"><table><thead><tr><th>Usage type</th><th>Rated units</th>'
@@ -44,7 +44,7 @@ async function renderMobileWholesale(periodStart, periodEnd) {
         + `<td>${esc(l.liveUnits)} ${esc(l.unit)}</td><td>${esc(l.wholesaleRate)}</td>`
         + `<td>${esc(l.amount)} ${esc(l.currency)}</td><td>${l.reconciled ? '✓' : '⚠'}</td></tr>`;
     }
-    html += `</tbody></table></div><p><b>Total owed: ${esc(s.totalOwed)} ${esc(s.currency)}</b> · ${badge}</p>`;
+    html += `</tbody></table></div><p><b>Total owed: ${esc(s.totalOwed)} ${esc(s.currency)}</b> · ${badgeHtml}</p>`;
   }
   // rate card
   html += '<h2 style="font-size:1rem;margin-top:1.5rem">Wholesale rate card</h2>';
@@ -139,7 +139,7 @@ async function renderMobileWholesaleProvider(periodStart) {
     authFetch(`${USAGE_BASE_C}/mobileWholesaleProviderSettlement?periodStart=${periodStart}`)
       .then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
-  const orgOpts = (orgs || []).map((o) => `<option value="${esc(o.id)}|${esc(o.name)}">${esc(o.name)}</option>`).join('');
+  const orgOptsHtml = (orgs || []).map((o) => `<option value="${esc(o.id)}|${esc(o.name)}">${esc(o.name)}</option>`).join('');
   const mvnos = (s && s.mvno) || [];
   let html = '<div class="editor"><h2>Mobile wholesale — host (provider)</h2>'
     + '<p class="dim small">As the host MNE we bill external MVNOs (who run their own BSS) for the '
@@ -147,7 +147,7 @@ async function renderMobileWholesaleProvider(periodStart) {
     + 'MVNO pays more than a budget one for the same usage.</p>'
     // rate card form
     + '<div class="fields">'
-    + `<label class="field"><span>MVNO (blank = default rate for all)</span><select id="pr-mvno"><option value="">— default —</option>${orgOpts}</select></label>`
+    + `<label class="field"><span>MVNO (blank = default rate for all)</span><select id="pr-mvno"><option value="">— default —</option>${orgOptsHtml}</select></label>`
     + '<label class="field"><span>Usage type *</span><input id="pr-spec" placeholder="Mobile data"></label>'
     + '<label class="field"><span>Rate *</span><input id="pr-rate" type="number" step="0.001" placeholder="2.50"></label>'
     + '<label class="field"><span>Unit</span><input id="pr-unit" placeholder="GB"></label>'

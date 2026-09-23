@@ -20,16 +20,7 @@
   "apps/storefront/src/pages/Shop.jsx": 628,
   "apps/storefront/src/pages/UsageControls.jsx": 310
  },
- "htmlInterpolations": {
-  "apps/admin-console/site/desks/audience-builder.js": 2,
-  "apps/admin-console/site/desks/integrations-parts.js": 2,
-  "apps/admin-console/site/desks/mobile-wholesale.js": 2,
-  "apps/admin-console/site/desks/pipeline.js": 2,
-  "apps/admin-console/site/desks/social.js": 2,
-  "apps/admin-console/site/desks/wholesale.js": 1,
-  "apps/admin-console/site/resources/marketing.js": 1,
-  "apps/business-console/site/app.js": 8
- },
+ "htmlInterpolations": {},
  "mapReturns": {},
  "nullIdGuards": {
   "agreement": 1,
