@@ -51,6 +51,11 @@
         "composite": false
       },
       {
+        "name": "payment:admin",
+        "description": "Configure the operator payment provider menu - base URL, provider, secret ref. Back office only: a customer holds payment:write to pay, and that must not be enough to redirect the operator payment traffic.",
+        "composite": false
+      },
+      {
         "name": "billing:read"
       },
       {
@@ -954,7 +959,8 @@
         "migration:read",
         "migration:admin",
         "catalog:approve",
-        "payment:refund"
+        "payment:refund",
+        "payment:admin"
       ],
       "id": "69eb7c8c-9c3e-4254-87e2-2fceed188668"
     },

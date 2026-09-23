@@ -51,6 +51,22 @@ public class SecurityConfig {
      * failed device order.
      */
     private static final String REFUND = "payment:refund";
+    /**
+     * The provider menu: which PSP this operator charges through, at what base
+     * URL, against which secret. Its own comment calls it the operator's menu,
+     * but it was guarded by payment:write — the authority a customer needs in
+     * order to pay for anything. So any logged-in customer could rewrite their
+     * operator's payment configuration for every other customer of that
+     * operator: point the base URL at a host they control and the component
+     * sends the tenant's payment traffic there. The reachability probe on the
+     * same path would fetch whatever address they named, from inside the
+     * network.
+     *
+     * Configuring a provider is a back-office act, so it takes a back-office
+     * authority. Nothing else calls this: the admin console does, seeds and
+     * suites do as staff, and no component does.
+     */
+    private static final String ADMIN = "payment:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -64,6 +80,9 @@ public class SecurityConfig {
                         // guest checkout reads the method picker; PSP webhooks are HMAC-verified inside
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/payment/methods").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/webhook/**").permitAll()
+                        // the provider menu, every verb, before the generic rules below
+                        .requestMatchers(ApiConstants.BASE_PATH + "/paymentProvider",
+                                ApiConstants.BASE_PATH + "/paymentProvider/**").hasAuthority(ADMIN)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
                         // before the general POST rule, or WRITE would answer it
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/payment/*/refund")

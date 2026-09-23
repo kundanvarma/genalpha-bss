@@ -119,4 +119,55 @@ class RefundPermissionTest {
         // the new authority must not have made paying harder
         aPaymentMadeBy(customer("paula"));
     }
+
+    /* ---------- the provider menu is back office, not checkout ---------- */
+
+    private static final String PROVIDER_MENU = "/tmf-api/paymentManagement/v4/paymentProvider";
+
+    /** Back office: the only identity that configures where money is sent. */
+    private static RequestPostProcessor operator() {
+        return jwt().authorities(
+                new SimpleGrantedAuthority("payment:read"),
+                new SimpleGrantedAuthority("payment:write"),
+                new SimpleGrantedAuthority("payment:admin"));
+    }
+
+    @Test
+    void aCustomerCannotRepointTheirOperatorsPaymentProvider() throws Exception {
+        // the whole attack in one request: send this operator's payment traffic
+        // somewhere else, for every customer of it, not just the caller
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put(PROVIDER_MENU).with(customer("paula"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"provider": "stripe", "enabled": true,
+                                 "baseUrl": "https://collector.attacker.example"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aCustomerCannotReadTheProviderMenuOrProbeAnAddressWithIt() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(PROVIDER_MENU).with(customer("paula")))
+                .andExpect(status().isForbidden());
+        // the reachability probe fetches whatever address the menu names, from
+        // inside the network — it belongs to the same authority
+        mockMvc.perform(post(PROVIDER_MENU + "/stripe/test").with(customer("paula")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aCareAgentCannotConfigureTheProviderEither() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(PROVIDER_MENU).with(careAgent()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void theBackOfficeStillConfiguresIt() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get(PROVIDER_MENU).with(operator()))
+                .andExpect(status().isOk());
+    }
 }
