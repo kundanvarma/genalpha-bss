@@ -32,6 +32,8 @@ import org.springframework.web.client.RestClient;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,6 +56,11 @@ public class TenantOnboardingService {
     private static final Logger log = LoggerFactory.getLogger(TenantOnboardingService.class);
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern SAFE_ID = Pattern.compile("[a-z][a-z0-9]{2,20}");
+    private static final SecureRandom RANDOM = new SecureRandom();
+    /** The template's staff login is re-minted, never imported: same
+     * username and dev password, a credential of this realm's own making. */
+    private static final String STAFF_USERNAME = "demo";
+    private static final String STAFF_PASSWORD = "demo";
 
     private final RestClient rest;
     private final String keycloakBase;
@@ -128,9 +135,13 @@ public class TenantOnboardingService {
         long t0 = System.currentTimeMillis();
 
         String adminToken = masterAdminToken();
+        // THIS operator's own machine credential — never the template's.
+        // Generated here, written only into the realm and this tenant's
+        // registry block; it is never logged and never returned.
+        String machineSecret = newMachineSecret();
         // build the clone BEFORE deleting the old realm — a bad/stale
         // template must never destroy a serving realm
-        String realmJson = realmClone(id, name);
+        String realmJson = realmClone(id, name, machineSecret);
         // idempotent: a re-onboard replaces the realm and the block
         try {
             rest.delete().uri(keycloakBase + "/admin/realms/" + id)
@@ -144,10 +155,15 @@ public class TenantOnboardingService {
                 .body(realmJson)
                 .retrieve().toBodilessEntity();
         log.info("realm '{}' created from the template", id);
+        // the template's USERS never travel — its role BINDINGS do: each
+        // client's own service account is re-granted the scopes the
+        // template recorded for it, and a fresh staff login is minted.
+        applyServiceAccountRoles(adminToken, id);
+        mintStaffUser(adminToken, id);
 
         // the realm was replaced: any cached machine token for it is now a lie
         idp.evictTokens(id);
-        appendTenantBlock(id, name, locale, currency, color);
+        appendTenantBlock(id, name, locale, currency, color, machineSecret);
         // this service joins its own fleet immediately; the rest follow
         // within one refresh interval
         refresher.refresh();
@@ -298,9 +314,30 @@ public class TenantOnboardingService {
         return String.valueOf(res.get("access_token"));
     }
 
-    /** nova's realm shape with this operator's identity: personas dropped,
-     * hosts re-pointed, object ids stripped so the clone mints its own. */
-    String realmClone(String id, String name) throws Exception {
+    /**
+     * A NEW OPERATOR'S CREDENTIAL IS ITS OWN. 48 bytes from a
+     * {@link SecureRandom}, URL-safe base64 so it survives a YAML scalar
+     * and the registry's {@code ${ENV:default}} placeholder grammar
+     * (which ends the default at the first '}').
+     */
+    private static String newMachineSecret() {
+        byte[] bytes = new byte[48];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * nova's realm SHAPE with this operator's identity — and nothing of
+     * nova's that is a credential. Hosts re-pointed, object ids stripped
+     * so the clone mints its own, every confidential client's template
+     * {@code secret} replaced by THIS tenant's freshly generated one, and
+     * the template's users dropped whole: no persona, no password hash and
+     * no service-account record crosses a tenant boundary. The role
+     * bindings those user entries carried are re-applied against the new
+     * realm's own accounts after the import (see
+     * {@link #applyServiceAccountRoles} and {@link #mintStaffUser}).
+     */
+    String realmClone(String id, String name, String machineSecret) throws Exception {
         String raw = Files.readString(Path.of(templatePath));
         for (String channel : List.of("shop", "csr", "console", "biz")) {
             raw = raw.replace(channel + ".nova.localhost", channel + "." + id + ".localhost");
@@ -308,16 +345,213 @@ public class TenantOnboardingService {
         ObjectNode realm = (ObjectNode) JSON.readTree(raw);
         realm.put("realm", id);
         realm.put("displayName", name);
-        ArrayNode users = JSON.createArrayNode();
-        for (JsonNode u : realm.withArray("users")) {
-            String username = u.path("username").asText();
-            if ("demo".equals(username) || username.startsWith("service-account-")) {
-                users.add(u);
+        for (JsonNode c : realm.withArray("clients")) {
+            ObjectNode client = (ObjectNode) c;
+            if (client.path("publicClient").asBoolean(false)) {
+                client.remove("secret");
+            } else {
+                client.put("secret", machineSecret);
             }
         }
-        realm.set("users", users);
+        realm.set("users", JSON.createArrayNode());
         stripIds(realm);
-        return JSON.writeValueAsString(realm);
+        String json = JSON.writeValueAsString(realm);
+        assertNoInheritedCredentials(realm, machineSecret);
+        return json;
+    }
+
+    /** The invariant both onboarding paths owe the threat model: a clone
+     *  leaves here with no template secret and no template user. */
+    private void assertNoInheritedCredentials(ObjectNode realm, String machineSecret) throws Exception {
+        ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
+        java.util.Set<String> templateSecrets = new java.util.HashSet<>();
+        for (JsonNode c : template.withArray("clients")) {
+            if (c.hasNonNull("secret")) {
+                templateSecrets.add(c.get("secret").asText());
+            }
+        }
+        for (JsonNode c : realm.withArray("clients")) {
+            String secret = c.path("secret").asText(null);
+            if (secret != null && !secret.equals(machineSecret)) {
+                throw new IllegalStateException("clone kept a template secret on client "
+                        + c.path("clientId").asText());
+            }
+            if (secret != null && templateSecrets.contains(secret)) {
+                throw new IllegalStateException("generated secret collides with the template's");
+            }
+        }
+        if (!realm.withArray("users").isEmpty()) {
+            throw new IllegalStateException("clone carries template users");
+        }
+    }
+
+    /**
+     * Each client's service account is created by Keycloak with the client;
+     * only its SCOPES have to be restored. The template's user entries are
+     * read here as configuration — which realm roles a given
+     * {@code serviceAccountClientId} needs — never imported as accounts.
+     */
+    private void applyServiceAccountRoles(String adminToken, String id) throws Exception {
+        ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
+        Map<String, JsonNode> realmRoles = rolesByName(adminToken, id, "/roles");
+        int bound = 0;
+        for (JsonNode u : template.withArray("users")) {
+            String clientId = u.path("serviceAccountClientId").asText(null);
+            if (clientId == null) {
+                continue;
+            }
+            String clientUuid = clientUuid(adminToken, id, clientId);
+            if (clientUuid == null) {
+                continue;
+            }
+            JsonNode account = adminGet(adminToken,
+                    "/admin/realms/" + id + "/clients/" + clientUuid + "/service-account-user");
+            if (account == null || account.path("id").asText(null) == null) {
+                continue;
+            }
+            String userId = account.get("id").asText();
+            // THE DEFAULT-ROLES TRAP: a realm IMPORT gives a service account
+            // exactly the roles its user entry lists; an account Keycloak
+            // creates itself also carries default-roles-<realm>, whose
+            // composite includes `customer`. A machine token with `customer`
+            // is scoped to a party it does not have, and every callback the
+            // fleet makes for that tenant comes back 404. Match the import.
+            JsonNode defaults = realmRoles.get("default-roles-" + id);
+            if (defaults != null) {
+                adminDelete(adminToken, "/admin/realms/" + id + "/users/" + userId
+                        + "/role-mappings/realm", JSON.createArrayNode().add(defaults));
+            }
+            grantRealmRoles(adminToken, id, userId, u.path("realmRoles"), realmRoles);
+            JsonNode clientRoles = u.path("clientRoles");
+            Iterator<String> owners = clientRoles.fieldNames();
+            while (owners.hasNext()) {
+                String owner = owners.next();
+                String ownerUuid = clientUuid(adminToken, id, owner);
+                if (ownerUuid == null) {
+                    continue;
+                }
+                Map<String, JsonNode> ownerRoles = rolesByName(adminToken, id,
+                        "/clients/" + ownerUuid + "/roles");
+                ArrayNode wanted = JSON.createArrayNode();
+                for (JsonNode role : clientRoles.get(owner)) {
+                    JsonNode rep = ownerRoles.get(role.asText());
+                    if (rep != null) {
+                        wanted.add(rep);
+                    }
+                }
+                if (!wanted.isEmpty()) {
+                    adminPost(adminToken, "/admin/realms/" + id + "/users/" + userId
+                            + "/role-mappings/clients/" + ownerUuid, wanted);
+                }
+            }
+            bound++;
+        }
+        log.info("realm '{}': {} service accounts re-scoped from the template's role bindings", id, bound);
+    }
+
+    /**
+     * The operator's first staff login, MINTED for this realm — same
+     * username and dev password the fleet expects, a credential this
+     * realm made rather than one inherited with another tenant's hash.
+     * Goes through partialImport because the admin user endpoint and the
+     * realm import disagree about {@code registrationEmailAsUsername}.
+     */
+    private void mintStaffUser(String adminToken, String id) throws Exception {
+        ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
+        ArrayNode roles = JSON.createArrayNode();
+        for (JsonNode u : template.withArray("users")) {
+            if (STAFF_USERNAME.equals(u.path("username").asText())) {
+                for (JsonNode role : u.path("realmRoles")) {
+                    roles.add(role.asText());
+                }
+            }
+        }
+        ObjectNode staff = JSON.createObjectNode();
+        staff.put("username", STAFF_USERNAME);
+        staff.put("enabled", true);
+        staff.put("email", "demo@bss.local");
+        staff.put("emailVerified", true);
+        staff.put("firstName", "Demo");
+        staff.put("lastName", "User");
+        staff.set("requiredActions", JSON.createArrayNode());
+        ObjectNode credential = JSON.createObjectNode();
+        credential.put("type", "password");
+        credential.put("value", STAFF_PASSWORD);
+        credential.put("temporary", false);
+        staff.set("credentials", JSON.createArrayNode().add(credential));
+        staff.set("realmRoles", roles);
+        ObjectNode body = JSON.createObjectNode();
+        body.put("ifResourceExists", "OVERWRITE");
+        body.set("users", JSON.createArrayNode().add(staff));
+        adminPost(adminToken, "/admin/realms/" + id + "/partialImport", body);
+        log.info("realm '{}': staff login minted with {} roles", id, roles.size());
+    }
+
+    private Map<String, JsonNode> rolesByName(String adminToken, String id, String path) {
+        Map<String, JsonNode> byName = new LinkedHashMap<>();
+        JsonNode roles = adminGet(adminToken,
+                "/admin/realms/" + id + path + "?briefRepresentation=true&max=2000");
+        if (roles != null) {
+            for (JsonNode r : roles) {
+                ObjectNode rep = JSON.createObjectNode();
+                rep.put("id", r.path("id").asText());
+                rep.put("name", r.path("name").asText());
+                byName.put(r.path("name").asText(), rep);
+            }
+        }
+        return byName;
+    }
+
+    private void grantRealmRoles(String adminToken, String id, String userId, JsonNode wantedNames,
+            Map<String, JsonNode> realmRoles) {
+        ArrayNode wanted = JSON.createArrayNode();
+        for (JsonNode role : wantedNames) {
+            JsonNode rep = realmRoles.get(role.asText());
+            if (rep != null) {
+                wanted.add(rep);
+            }
+        }
+        if (!wanted.isEmpty()) {
+            adminPost(adminToken, "/admin/realms/" + id + "/users/" + userId + "/role-mappings/realm", wanted);
+        }
+    }
+
+    private String clientUuid(String adminToken, String id, String clientId) {
+        JsonNode found = adminGet(adminToken, "/admin/realms/" + id + "/clients?clientId=" + clientId);
+        return found != null && !found.isEmpty() ? found.get(0).path("id").asText(null) : null;
+    }
+
+    private JsonNode adminGet(String adminToken, String path) {
+        try {
+            return rest.get().uri(keycloakBase + path)
+                    .header("Authorization", "Bearer " + adminToken)
+                    .retrieve().body(JsonNode.class);
+        } catch (Exception e) {
+            log.warn("admin GET {} failed: {}", path, e.getMessage());
+            return null;
+        }
+    }
+
+    private void adminDelete(String adminToken, String path, JsonNode body) {
+        try {
+            rest.method(org.springframework.http.HttpMethod.DELETE).uri(keycloakBase + path)
+                    .header("Authorization", "Bearer " + adminToken)
+                    .header("Content-Type", "application/json")
+                    .body(body).retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("admin DELETE {} failed: {}", path, e.getMessage());
+        }
+    }
+
+    private void adminPost(String adminToken, String path, JsonNode body) {
+        try {
+            rest.post().uri(keycloakBase + path)
+                    .header("Authorization", "Bearer " + adminToken)
+                    .header("Content-Type", "application/json")
+                    .body(body).retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("admin POST {} failed: {}", path, e.getMessage());
+        }
     }
 
     private void stripIds(JsonNode node) {
@@ -336,9 +570,12 @@ public class TenantOnboardingService {
     }
 
     /** The same block transform the shell script does — nova's union
-     * entry re-suffixed for the newborn, backchannel pinned in-network. */
+     * entry re-suffixed for the newborn, backchannel pinned in-network,
+     * and THIS tenant's own machine credential in place of the shared
+     * {@code ${OIDC_CLIENT_SECRET:...}} every service resolves from its
+     * own env (which is what made every realm's clients interchangeable). */
     void appendTenantBlock(String id, String name, String locale, String currency,
-            String color) throws Exception {
+            String color, String machineSecret) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
         yml = yml.replaceAll("(?m)^      - id: " + id + "\\n(        .*\\n)*", "");
         Matcher m = Pattern.compile("(      - id: nova\\n(?:        .*\\n)*)").matcher(yml);
@@ -363,7 +600,14 @@ public class TenantOnboardingService {
                 // opts in — being shopped by agents is a choice, not a default
                 .replaceAll("agent-commerce: .*", "agent-commerce: \"off\"")
                 // newborns are conservative to crawlers too
-                .replaceAll("ai-visibility: .*", "ai-visibility: \"search-only\"");
+                .replaceAll("ai-visibility: .*", "ai-visibility: \"search-only\"")
+                // the credential wall: this operator's clients answer to a
+                // secret no other operator's realm has ever seen. The env
+                // name lets a deployment move it to a secret store without
+                // editing the file.
+                .replaceAll("machine-client-secret: .*", Matcher.quoteReplacement(
+                        "machine-client-secret: ${OIDC_CLIENT_SECRET_" + id.toUpperCase()
+                                + ":" + machineSecret + "}"));
         Files.writeString(Path.of(tenantsFile), yml + block);
         log.info("tenant block '{}' appended to {}", id, tenantsFile);
     }

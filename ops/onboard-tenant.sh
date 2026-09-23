@@ -1,116 +1,79 @@
 #!/usr/bin/env bash
 # THE THIRD OPERATOR IN AN AFTERNOON: stand up a NEW operator (an MVNO)
-# on the running deployment — a realm, a tenant block, a restart, a seed.
-# No image is rebuilt. Usage: ops/onboard-tenant.sh <id> "<Brand Name>" <locale> <currency> [#color]
+# on the running deployment — a realm, a tenant block, a seeded catalog.
+# No image is rebuilt, and since 2026-09-23 no fleet restart either.
+#
+# ONE IMPLEMENTATION, TWO DOORS. This script used to clone the template
+# realm itself, in inline python, beside a second copy of the same logic in
+# user-roles' TenantOnboardingService. The two drifted, and the drift was a
+# security hole: the script's clone kept the template's 24 literal client
+# secrets, so every onboarded operator held valid machine credentials in
+# every other operator's realm. The script now asks the service to do the
+# work the console's operator form does — same clone, same freshly
+# generated per-tenant client secret, same "no template user travels"
+# rule — so there is nothing left to drift.
+#
+# Usage: ops/onboard-tenant.sh <id> "<Brand Name>" <locale> <currency> [#color]
 set -euo pipefail
 export PATH="/opt/homebrew/bin:$PATH"
 ID="$1"; NAME="$2"; LOCALE="${3:-en}"; CURRENCY="${4:-EUR}"; COLOR="${5:-#B85C38}"
 cd "$(dirname "$0")/.."
-DOCKER=${DOCKER:-docker}
 
-echo "== 1/4 realm: cloning nova's realm shape as '$ID' (clients, roles, service accounts)"
-python3 - "$ID" "$NAME" <<'EOF'
+GATEWAY="${GATEWAY_BASE:-http://localhost:8080}"
+KEYCLOAK="${KEYCLOAK_BASE:-http://localhost:8085}"
+# the HOST operator mints operators; a hosted one runs only its own
+HOST_REALM="${HOST_REALM:-bss}"
+HOST_USER="${HOST_USER:-demo}"
+HOST_PASSWORD="${HOST_PASSWORD:-demo}"
+
+echo "== 1/3 host operator: a staff token with roles:admin from realm '$HOST_REALM'"
+TOK=$(curl -sS -X POST "$KEYCLOAK/realms/$HOST_REALM/protocol/openid-connect/token" \
+  -d "grant_type=password&client_id=bss-demo&username=$HOST_USER&password=$HOST_PASSWORD" \
+  | python3 -c "import json,sys;print(json.load(sys.stdin).get('access_token',''))")
+[ -n "$TOK" ] || { echo "no host-operator token from realm '$HOST_REALM' — is Keycloak up?"; exit 1; }
+
+echo "== 2/3 operator: realm with its OWN client secrets, registry block, starter catalog"
+BODY=$(python3 -c "
 import json, sys
-tid, name = sys.argv[1], sys.argv[2]
-raw = open('infra/keycloak/nova-realm.json').read()
-d = json.loads(raw)
-# keep the operator's staff login + every machine service account; drop personas
-d['users'] = [u for u in d.get('users', []) if u['username'] == 'demo'
-              or u['username'].startswith('service-account-')]
-out = json.dumps(d)
-out = out.replace('shop.nova.localhost', f'shop.{tid}.localhost') \
-         .replace('csr.nova.localhost', f'csr.{tid}.localhost') \
-         .replace('console.nova.localhost', f'console.{tid}.localhost') \
-         .replace('biz.nova.localhost', f'biz.{tid}.localhost')
-d = json.loads(out)
-d['realm'] = tid
-d['displayName'] = name
-# nova's export carries ITS object UUIDs — a clone must mint its own
-def strip_ids(node):
-    if isinstance(node, dict):
-        node.pop('id', None)
-        node.pop('containerId', None)
-        for v in node.values():
-            strip_ids(v)
-    elif isinstance(node, list):
-        for v in node:
-            strip_ids(v)
-strip_ids(d)
-json.dump(d, open(f'/tmp/{tid}-realm.json', 'w'))
-print(f"   realm json ready: /tmp/{tid}-realm.json ({len(d['clients'])} clients)")
-EOF
-$DOCKER cp "/tmp/$ID-realm.json" bss-keycloak:/tmp/realm.json
-$DOCKER exec bss-keycloak /opt/keycloak/bin/kcadm.sh config credentials \
-  --server http://localhost:8080 --realm master --user admin --password admin >/dev/null
-$DOCKER exec bss-keycloak /opt/keycloak/bin/kcadm.sh delete "realms/$ID" >/dev/null 2>&1 || true
-$DOCKER exec bss-keycloak /opt/keycloak/bin/kcadm.sh create realms -f /tmp/realm.json
-echo "   realm '$ID' created"
+print(json.dumps({'id': sys.argv[1], 'name': sys.argv[2], 'locale': sys.argv[3],
+                  'currency': sys.argv[4], 'color': sys.argv[5]}))" \
+  "$ID" "$NAME" "$LOCALE" "$CURRENCY" "$COLOR")
+RECEIPT=$(curl -sS -X POST "$GATEWAY/onboarding/v1/operator" \
+  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" -d "$BODY")
+echo "$RECEIPT" | python3 -c "
+import json, sys
+try:
+    r = json.load(sys.stdin)
+except Exception:
+    print('   onboarding refused — is user-roles up on the gateway?'); sys.exit(1)
+if not r.get('id'):
+    print('   onboarding refused: ' + json.dumps(r)[:400]); sys.exit(1)
+print(f\"   realm, registry block and starter catalog for '{r['id']}' in {r.get('seconds', '?')}s\")"
 
-echo "== 2/4 registry: appending the tenant block to infra/tenants/tenants.yml"
-python3 - "$ID" "$NAME" "$LOCALE" "$CURRENCY" "$COLOR" <<'EOF'
-import re, sys
-tid, name, locale, currency, color = sys.argv[1:6]
-f = 'infra/tenants/tenants.yml'
-s = open(f).read()
-# idempotent rerun: strip a previous block for this id
-s = re.sub(rf'      - id: {tid}\n(?:        .*\n)*', '', s)
-m = re.search(r'(      - id: nova\n(?:        .*\n)*)', s)
-block = m.group(1)
-block = block.replace('- id: nova', f'- id: {tid}')
-block = block.replace('realms/nova', f'realms/{tid}')
-block = re.sub(r'\$\{(\w+)_NOVA:([^}]*)\}', rf'${{\1_{tid.upper()}:\2}}', block)
-# backchannel endpoints must be container-reachable (keycloak:8080),
-# exactly what compose env gives the built-in tenants
-block = re.sub(r'jwks-uri: \$\{[^}]*\}',
-               f'jwks-uri: http://keycloak:8080/realms/{tid}/protocol/openid-connect/certs', block)
-block = re.sub(r'token-uri: \$\{[^}]*\}',
-               f'token-uri: http://keycloak:8080/realms/{tid}/protocol/openid-connect/token', block)
-block = re.sub(r'brand-name: .*', f'brand-name: {name}', block)
-block = re.sub(r'brand-color: .*', f'brand-color: "{color}"', block)
-block = re.sub(r'agent-commerce: .*', f'agent-commerce: ${{AGENT_COMMERCE_{tid.upper()}:off}}', block)
-block = re.sub(r'ai-visibility: .*', f'ai-visibility: ${{AI_VISIBILITY_{tid.upper()}:dark}}', block)
-block = re.sub(r'locale: .*', f'locale: "{locale}"', block)
-block = re.sub(r'currency: .*', f'currency: {currency}', block)
-block = re.sub(r'hosts: .*', f'hosts: [shop.{tid}.localhost, csr.{tid}.localhost, '
-                             f'console.{tid}.localhost, biz.{tid}.localhost]', block)
-# fresh operators start with quiet defaults on the outbound seams
-block = block.replace(':ehf}', ':peppol}').replace(':einvoice}', ':einvoice}')
-s += block
-open(f, 'w').write(s)
-print(f'   tenant block for {tid} appended ({currency}, {locale})')
-EOF
-
-echo "== 3/4 fleet: restarting onto the new registry (config only — nothing rebuilt)"
-$DOCKER compose restart $($DOCKER compose config --services | grep -vE 'postgres|kafka|keycloak|mock-|console|storefront|mobile-app|csr-console|business-console|dealer-console') >/dev/null
-# the newborn tenant's first order rides the whole chain — gate on it, not
-# just the front door (an 80+-container fleet boots for minutes)
-for p in 8080 8081 8082 8083 8084 8100 8104 8088; do  # gateway catalog ordering inventory party user-roles som billing
-  until curl -sf -o /dev/null "http://localhost:$p/actuator/health"; do sleep 3; done
-done
-sleep 15  # SOM's Kafka consumer re-joins ~20s after health
-
-echo "== 4/4 seed: staff token, starter catalog"
-TOK=""
-for i in $(seq 1 30); do
-  TOK=$(curl -s -X POST "http://localhost:8085/realms/$ID/protocol/openid-connect/token" \
+echo "== 3/3 fleet: the rest of the components adopt the newborn on their refresh tick"
+# the onboarding service refreshes its own registry immediately; every other
+# component re-reads the shared file within BSS_TENANTS_REFRESH_MS (15s)
+for i in $(seq 1 20); do
+  STAFF=$(curl -sS -X POST "$KEYCLOAK/realms/$ID/protocol/openid-connect/token" \
     -d "grant_type=password&client_id=bss-demo&username=demo&password=demo" \
     | python3 -c "import json,sys;print(json.load(sys.stdin).get('access_token',''))" || true)
-  [ -n "$TOK" ] && break
-  sleep 3
+  if [ -n "$STAFF" ] && curl -sf -o /dev/null -H "Authorization: Bearer $STAFF" \
+      "$GATEWAY/tmf-api/productCatalogManagement/v4/productOffering?limit=1"; then
+    break
+  fi
+  sleep 5
 done
-[ -n "$TOK" ] || { echo "no staff token from realm $ID"; exit 1; }
-CAT=http://localhost:8080/tmf-api/productCatalogManagement/v4
-PRICE=$(curl -s -X POST "$CAT/productOfferingPrice" -H "Authorization: Bearer $TOK" \
-  -H "Content-Type: application/json" -d "{\"name\":\"$NAME Mobile M monthly\",
-   \"priceType\":\"recurring\",\"recurringChargePeriodType\":\"month\",
-   \"recurringChargePeriodLength\":1,\"lifecycleStatus\":\"Active\",
-   \"price\":{\"unit\":\"$CURRENCY\",\"value\":249.0}}" \
-  | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
-OFFER=$(curl -s -X POST "$CAT/productOffering" -H "Authorization: Bearer $TOK" \
-  -H "Content-Type: application/json" -d "{\"name\":\"$NAME Mobile M\",
-   \"lifecycleStatus\":\"Active\",\"isBundle\":false,
-   \"productOfferingPrice\":[{\"id\":\"$PRICE\",\"name\":\"$NAME Mobile M monthly\"}]}" \
-  | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
-echo "   seeded offering: $OFFER"
+[ -n "${STAFF:-}" ] || { echo "the newborn realm never issued a staff token"; exit 1; }
+echo "   '$ID' serves its own catalog through the gateway"
+# The read path above only needs the tenant in the registry. The MACHINE
+# path needs its SECRET too, and a re-onboard of an existing id rotates
+# that secret out from under every component's cached registry entry and
+# cached token. Both heal on the next refresh tick — outwait it rather
+# than hand back an operator whose first order 502s.
+SETTLE=$(( ${BSS_TENANTS_REFRESH_MS:-15000} / 1000 + 6 ))
+echo "   waiting ${SETTLE}s for every component to re-read the registry"
+sleep "$SETTLE"
 echo ""
 echo "OPERATOR '$NAME' ($ID) IS LIVE — realm, registry, catalog. Storefront host: shop.$ID.localhost"
+echo "Its machine clients answer to a secret generated for THIS operator alone; the value"
+echo "lives in this operator's infra/tenants/tenants.yml block and is printed nowhere."
