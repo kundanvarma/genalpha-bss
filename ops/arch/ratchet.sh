@@ -5,6 +5,8 @@
 #   3. PATCH/PUT handlers that accept a raw Map<String, Object> body (mass-assignment surface; a record cannot carry a field it does not declare)
 #   4. String.valueOf(x.get("...id...")) on an identifier — a missing value becomes the text "null",
 #      which as a write mints a fake reference and as a lookup or delete matches IS NULL (six real bugs)
+#   5. unescaped interpolations into innerHTML in a front end — operator or customer text
+#      reaching the DOM as markup is cross-site scripting with a care agent's session
 # Usage: ops/arch/ratchet.sh            compare against ops/arch/baseline.json, exit 2 on regression
 #        ops/arch/ratchet.sh --baseline  rewrite the baseline from the current tree (deliberate, reviewed)
 #        ops/arch/ratchet.sh --quick <f> check only the service/app that owns file <f> (edit hook)
@@ -19,7 +21,8 @@ current() {
   python3 - "$MAX_FE_LINES" <<'PY'
 import json, os, re, subprocess, sys
 mx = int(sys.argv[1])
-out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {}}
+out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {},
+       "htmlInterpolations": {}}
 pat = re.compile(r'public .*Map<String, ?Object> [a-zA-Z_]+\(')
 write = re.compile(r'@(Patch|Put|Post)Mapping[^\n]*\n(?:[^\n]*\n){0,3}?[^\n]*@RequestBody\s+(?:final\s+)?Map<String, ?Object>')
 # an identifier KEY: exactly id/ref/…, or ending in Id/Ref, or a known owner-ish name.
@@ -27,6 +30,184 @@ write = re.compile(r'@(Patch|Put|Post)Mapping[^\n]*\n(?:[^\n]*\n){0,3}?[^\n]*@Re
 nullid = re.compile(r'String\.valueOf\(\s*[A-Za-z_][A-Za-z0-9_]*\.get\(\s*"'
                     r'(?:id|ref|uuid|key|[A-Za-z]+(?:Id|Ref|Uuid)'
                     r'|party|tenant|owner|subject|customer|account|msisdn|iccid|imei)"\s*\)')
+
+# --- rule 5: a value reaching innerHTML as markup instead of as text -----------
+# Counted: every dynamic piece of a string that carries an HTML tag, in a file that
+# uses innerHTML. Not counted (the code produced the value itself): a number it
+# formatted, a .length it counted, a variable already named …Html, a pick between
+# two literals, and anything already passed through esc(). Known blind spot: a
+# .jsx file that starts using innerHTML — an apostrophe in JSX text desynchronises
+# the scanner, so React files are gated out by the innerHTML check above.
+TAG = re.compile(r'<[a-zA-Z/!][^<>]*>')
+SAFEV = re.compile(r'^(?:[\d.]+|(?:Math|Number|JSON)[.(].*|[\w.?\[\]]+\.length'
+                   r'|[A-Za-z_$][\w$]*(?:[Hh]tml|HTML))$')
+PICK = re.compile(r'^[^?@]*\?\s*@[SH]@\s*:\s*@[SH]@$')
+REGEX_OK = set('(,=:[!&|?{};+-*%~^<>') | {''}
+
+def blank(src):
+    """Blank comments and regex literals in place (offsets kept), so a /[<>"]/
+    cannot desynchronise the quote and backtick scanners below."""
+    out_ = list(src); n = len(src); i = 0; prev = ''
+    def wipe(a, b):
+        for k in range(a, min(b, n)):
+            if src[k] != '\n': out_[k] = ' '
+    while i < n:
+        c = src[i]
+        if c == '/' and src.startswith('//', i):
+            j = src.find('\n', i); j = n if j < 0 else j
+            wipe(i, j); i = j; prev = ''; continue
+        if c == '/' and src.startswith('/*', i):
+            j = src.find('*/', i); j = n if j < 0 else j + 2
+            wipe(i, j); i = j; prev = ''; continue
+        if c == '/' and prev in REGEX_OK:
+            j = i + 1; cls = False; ok = False
+            while j < n:
+                d = src[j]
+                if d == '\\': j += 2; continue
+                if d == '\n': break
+                if d == '[': cls = True
+                elif d == ']': cls = False
+                elif d == '/' and not cls: ok = True; break
+                j += 1
+            if ok:
+                wipe(i, j + 1); i = j + 1; prev = 'x'; continue
+        if c in '\'"':
+            q = c; j = i + 1
+            while j < n:
+                if src[j] == '\\': j += 2; continue
+                if src[j] == q: break
+                j += 1
+            i = j + 1; prev = q; continue
+        if c == '`':
+            j = i + 1
+            while j < n and src[j] != '`':
+                if src[j] == '\\': j += 2; continue
+                if src.startswith('${', j):            # a placeholder is code too
+                    d = 0; k = j + 1
+                    while k < n:
+                        if src[k] == '{': d += 1
+                        elif src[k] == '}':
+                            d -= 1
+                            if d == 0: break
+                        k += 1
+                    out_[j + 2:k] = list(blank(''.join(out_[j + 2:k])))
+                    j = k + 1; continue
+                j += 1
+            i = j + 1; prev = '`'; continue
+        if not c.isspace(): prev = c
+        i += 1
+    return ''.join(out_)
+
+def templates(src):
+    """Every template literal as (static text, [placeholder expressions])."""
+    res = []; i = 0; n = len(src)
+    while i < n:
+        c = src[i]
+        if c in '\'"':
+            q = c; i += 1
+            while i < n and src[i] != q: i += 2 if src[i] == '\\' else 1
+            i += 1; continue
+        if c == '`':
+            i += 1; static = []; holes = []
+            while i < n and src[i] != '`':
+                if src[i] == '\\': i += 2; continue
+                if src.startswith('${', i):
+                    d = 0; j = i + 1
+                    while j < n:
+                        if src[j] == '{': d += 1
+                        elif src[j] == '}':
+                            d -= 1
+                            if d == 0: break
+                        j += 1
+                    holes.append(src[i + 2:j]); res.extend(templates(src[i + 2:j]))
+                    i = j + 1; continue
+                static.append(src[i]); i += 1
+            i += 1; res.append((''.join(static), holes)); continue
+        i += 1
+    return res
+
+def mask(expr):
+    """Every string literal becomes @S@, or @H@ when it carries a tag."""
+    res = []; i = 0; n = len(expr)
+    while i < n:
+        c = expr[i]
+        if c in '\'"`':
+            q = c; i += 1; body = []
+            while i < n and expr[i] != q:
+                if expr[i] == '\\': body.append(expr[i:i + 2]); i += 2; continue
+                if q == '`' and expr.startswith('${', i):
+                    d = 0; j = i + 1
+                    while j < n:
+                        if expr[j] == '{': d += 1
+                        elif expr[j] == '}':
+                            d -= 1
+                            if d == 0: break
+                        j += 1
+                    i = j + 1; continue
+                body.append(expr[i]); i += 1
+            i += 1; res.append('@H@' if TAG.search(''.join(body)) else '@S@'); continue
+        res.append(c); i += 1
+    return ''.join(res)
+
+def statement(src, i):
+    """The one expression assigned to innerHTML, from i to its ; or line end."""
+    depth = 0; n = len(src); res = []
+    while i < n:
+        c = src[i]
+        if c in '([{': depth += 1
+        elif c in ')]}':
+            if depth == 0: break
+            depth -= 1
+        elif c in '\'"`':
+            q = c; res.append(c); i += 1
+            while i < n:
+                if src[i] == '\\': res.append(src[i:i + 2]); i += 2; continue
+                if q == '`' and src.startswith('${', i):
+                    d = 0; j = i + 1
+                    while j < n:
+                        if src[j] == '{': d += 1
+                        elif src[j] == '}':
+                            d -= 1
+                            if d == 0: j += 1; break
+                        j += 1
+                    res.append(src[i:j]); i = j; continue
+                res.append(src[i])
+                if src[i] == q: i += 1; break
+                i += 1
+            continue
+        elif c == ';' and depth == 0: break
+        elif c == '\n' and depth == 0:
+            if not ''.join(res).rstrip().endswith(('+', '(', ',', '?', ':', '=', '&&', '||')): break
+        res.append(c); i += 1
+    return ''.join(res)
+
+def risky(exprs):
+    bad = []
+    for e in exprs:
+        s = ' '.join(e.split())
+        if not s or 'esc(' in s or 'escapeHtml(' in s or 'map(esc)' in s: continue
+        if SAFEV.match(s) or PICK.match(' '.join(mask(s).split())): continue
+        bad.append(s)
+    return bad
+
+def html_holes(src):
+    src = blank(src); bad = []
+    for static, holes in templates(src):
+        if TAG.search(static): bad += risky(holes)
+    for m in re.finditer(r'\.innerHTML\s*\+?=\s*', src):
+        st = mask(statement(src, m.end()))
+        if '@H@' not in st: continue
+        parts = []; depth = 0; cur = ''
+        for ch in st:
+            if ch in '([{': depth += 1
+            elif ch in ')]}': depth -= 1
+            if ch == '+' and depth == 0: parts.append(cur); cur = ''; continue
+            cur += ch
+        parts.append(cur)
+        ops = [o.strip().strip('()').strip() for o in parts]
+        bad += risky([o for o in ops if o and '@S@' not in o and '@H@' not in o])
+    return len(bad)
+
 for svc in sorted(os.listdir('services')):
     root = os.path.join('services', svc, 'src', 'main', 'java')
     if not os.path.isdir(root): continue
@@ -48,8 +229,12 @@ for app in sorted(os.listdir('apps')):
             for f in fs:
                 if f.endswith(('.js', '.jsx', '.ts', '.tsx')) and not f.endswith('.min.js'):
                     p = os.path.join(dp, f)
-                    with open(p, errors='ignore') as fh: n = sum(1 for _ in fh)
+                    with open(p, errors='ignore') as fh: src = fh.read()
+                    n = src.count('\n') + (0 if src.endswith('\n') or not src else 1)
                     if n > mx: out["frontendFiles"][p] = n
+                    if 'innerHTML' in src:
+                        h = html_holes(src)
+                        if h: out["htmlInterpolations"][p] = h
 print(json.dumps(out, indent=1, sort_keys=True))
 PY
 }
@@ -78,6 +263,10 @@ for p, n in now["frontendFiles"].items():
     if quick and f and not f.endswith(p): continue
     b = base["frontendFiles"].get(p, 0)
     if n > b: bad.append(f"{p}: {n} lines, baseline {b} — split before adding, see docs/engineering-conventions.md §2")
+for p, n in now.get("htmlInterpolations", {}).items():
+    if quick and f and not f.endswith(p): continue
+    b = base.get("htmlInterpolations", {}).get(p, 0)
+    if n > b: bad.append(f"{p}: {n} unescaped interpolations into innerHTML, baseline {b} — a name or a message off the wire reaches the DOM as markup; wrap it in esc(…), or build the node with createElement + textContent, see docs/engineering-conventions.md §4")
 for p in base["frontendFiles"]:
     pass
 if bad:
@@ -85,5 +274,6 @@ if bad:
 tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
 tw = sum(now.get("rawMapWrites", {}).values()); twb = sum(base.get("rawMapWrites", {}).values())
 tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards", {}).values())
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])})")
+th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])})")
 PY

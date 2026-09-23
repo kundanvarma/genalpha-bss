@@ -161,7 +161,8 @@ async function renderLearningContracts() {
       if (!r.ok) { out.textContent = d.message || 'the dry run failed'; return; }
       const capped = (d.constraints || []).find((x) => /capped at/.test(x));
       const removed = (d.constraints || []).filter((x) => !/capped at/.test(x)).map(constraintWords);
-      const s1 = document.createElement('div'); s1.innerHTML = `This customer would get <strong>${actionWords(d)}</strong>${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance` : ''}${d.fallback ? ' (the fallback answered)' : ''}.`;
+      // actionWords() can carry a variant name the campaign service supplied; pct() is Math.round.
+      const s1 = document.createElement('div'); s1.innerHTML = `This customer would get <strong>${esc(actionWords(d))}</strong>${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance` : ''}${d.fallback ? ' (the fallback answered)' : ''}.`;
       const s2 = document.createElement('div'); s2.className = 'dim';
       s2.textContent = `${capped ? 'The control group was ' + capped.replace(/^learning-contract: holdout /, '') + '. ' : ''}${removed.length ? 'Not allowed: ' + removed.join('; ') + '. ' : ''}${d.contract ? `Under learning contract version ${String(d.contract).split('@')[1]}.` : 'Under the default rules.'}`;
       out.replaceChildren(s1, s2);

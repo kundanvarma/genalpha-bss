@@ -129,6 +129,13 @@ const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.la
 
 const el = (id) => document.getElementById(id);
 
+// Escape before any value reaches innerHTML. Operator and customer text is
+// data, never markup: a party named `<img src=x onerror=…>` must print, not run.
+// Prefer createElement + textContent where the surrounding code already builds
+// elements; this is for the places that assemble a string of HTML.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 // Cached party-name lookup — orders carry only a party id, but a back-office
 // agent needs the human's name. TMF632 individual → "Given Family".
 const PARTY_BASE = '/tmf-api/party/v4';

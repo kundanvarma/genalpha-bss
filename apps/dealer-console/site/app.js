@@ -13,6 +13,12 @@ const CATALOG = '/tmf-api/productCatalogManagement/v4';
 
 const el = (id) => document.getElementById(id);
 
+// Escape before any value reaches innerHTML. A prospect's name, a store label or
+// an offering name is data, never markup: a customer called `<img src=x onerror=…>`
+// on the dial list must print, not run with the clerk's session.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 async function json(res) {
   if (!res.ok) {
     const problem = await res.json().catch(() => ({}));
@@ -76,10 +82,10 @@ async function loadKits() {
     const row = document.createElement('div');
     row.className = 'row';
     row.dataset.testid = 'kit-row';
-    row.innerHTML = `<span class="code">${kit.activationCode}</span>`
-      + `<span class="dim">${kit.store || ''}</span>`
-      + `<span class="dim">SIM ${kit.iccid.slice(0, 8)}…</span>`
-      + `<span class="end"><span class="state ${kit.status}">${kit.status}</span></span>`;
+    row.innerHTML = `<span class="code">${esc(kit.activationCode)}</span>`
+      + `<span class="dim">${esc(kit.store || '')}</span>`
+      + `<span class="dim">SIM ${esc(kit.iccid.slice(0, 8))}…</span>`
+      + `<span class="end"><span class="state ${esc(kit.status)}">${esc(kit.status)}</span></span>`;
     el('kits').append(row);
   }
   if (!kits.length) {
@@ -93,8 +99,8 @@ async function loadCommission() {
   totals.innerHTML = '';
   for (const [status, sum] of Object.entries(money.totals || {})) {
     const cell = document.createElement('span');
-    cell.innerHTML = `${status}: <b data-testid="total-${status}">${Number(sum).toFixed(2)}`
-      + ` ${money.commissionPerActivation.unit}</b>`;
+    cell.innerHTML = `${esc(status)}: <b data-testid="total-${esc(status)}">${Number(sum).toFixed(2)}`
+      + ` ${esc(money.commissionPerActivation.unit)}</b>`;
     totals.append(cell);
   }
   el('commission').innerHTML = '';
@@ -102,11 +108,11 @@ async function loadCommission() {
     const row = document.createElement('div');
     row.className = 'row';
     row.dataset.testid = 'commission-row';
-    row.innerHTML = `<span>${entry.offeringName || 'activation'}</span>`
-      + `<span class="dim">${entry.store || ''}</span>`
-      + (entry.reason ? `<span class="dim">${entry.reason}</span>` : '')
-      + `<span class="end">${Number(entry.amount.value).toFixed(2)} ${entry.amount.unit}`
-      + ` <span class="state ${entry.status}">${entry.status}</span></span>`;
+    row.innerHTML = `<span>${esc(entry.offeringName || 'activation')}</span>`
+      + `<span class="dim">${esc(entry.store || '')}</span>`
+      + (entry.reason ? `<span class="dim">${esc(entry.reason)}</span>` : '')
+      + `<span class="end">${Number(entry.amount.value).toFixed(2)} ${esc(entry.amount.unit)}`
+      + ` <span class="state ${esc(entry.status)}">${esc(entry.status)}</span></span>`;
     el('commission').append(row);
   }
 }
@@ -124,8 +130,8 @@ async function pullDialList() {
       const row = document.createElement('div');
       row.className = 'row';
       row.dataset.testid = 'dial-row';
-      row.innerHTML = `<span>${entry.name}</span><span class="code">${entry.phone}</span>`
-        + `<span class="dim">${entry.consent}</span>`;
+      row.innerHTML = `<span>${esc(entry.name)}</span><span class="code">${esc(entry.phone)}</span>`
+        + `<span class="dim">${esc(entry.consent)}</span>`;
       el('dial-list').append(row);
     }
   } catch (e) { alert(e.message); }
@@ -167,9 +173,9 @@ async function loadPipeline() {
     const row = document.createElement('div');
     row.className = 'row';
     row.dataset.testid = 'ts-offer-row';
-    row.innerHTML = `<span>${offer.offeringName || 'offer'}</span>`
-      + `<span class="dim">${offer.campaign || ''}</span>`
-      + `<span class="end"><span class="state ${offer.status}">${offer.status}</span></span>`;
+    row.innerHTML = `<span>${esc(offer.offeringName || 'offer')}</span>`
+      + `<span class="dim">${esc(offer.campaign || '')}</span>`
+      + `<span class="end"><span class="state ${esc(offer.status)}">${esc(offer.status)}</span></span>`;
     el('ts-pipeline').append(row);
   }
 }
@@ -198,9 +204,9 @@ async function main() {
   el('dial-go').addEventListener('click', pullDialList);
   el('ts-go').addEventListener('click', recordOffer);
   await Promise.all([loadOfferings(), loadKits()]);
-  // the telesales offering picker shares the catalog the sell form loads
-  const sellOptions = el('sell-offering').innerHTML;
-  el('ts-offering').innerHTML = sellOptions;
+  // the telesales offering picker shares the catalog the sell form loads —
+  // cloned as nodes (data-name and all), never round-tripped through HTML text
+  el('ts-offering').replaceChildren(...[...el('sell-offering').options].map((o) => o.cloneNode(true)));
   loadPipeline();
   loadCommission();
   setInterval(loadCommission, 8000);

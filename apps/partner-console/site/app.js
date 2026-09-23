@@ -15,6 +15,11 @@ async function json(res) {
 const el = (id) => document.getElementById(id);
 const eur = (v) => (v == null ? '—' : Number(v).toFixed(2) + ' EUR');
 
+// Escape before any value reaches innerHTML. Owner names, layers and error text
+// are data, never markup: an owner named `<img src=x onerror=…>` must print, not run.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 async function main() {
   // OIDC redirect return
   const params = new URLSearchParams(location.search);
@@ -60,16 +65,16 @@ async function checkAddress() {
     const d = await json(r);
     const opts = d.accessOption || [];
     if (!opts.length) {
-      box.innerHTML = `<div class="dim">No open-access owner serves ${pc} — this would be our own network.</div>`;
+      box.innerHTML = `<div class="dim">No open-access owner serves ${esc(pc)} — this would be our own network.</div>`;
       return;
     }
     box.innerHTML = opts.map((o) => `<div class="row">
-      <span class="code">${o.accessOwner}</span>
-      <span class="layer">${o.accessLayer || ''}</span>
+      <span class="code">${esc(o.accessOwner)}</span>
+      <span class="layer">${esc(o.accessLayer || '')}</span>
       <span class="dim">fibre</span>
-      <span class="end">up to ${o.maxDownMbps} Mbit/s</span></div>`).join('');
+      <span class="end">up to ${esc(o.maxDownMbps)} Mbit/s</span></div>`).join('');
   } catch (e) {
-    box.innerHTML = `<div class="err">Could not check: ${e.message}</div>`;
+    box.innerHTML = `<div class="err">Could not check: ${esc(e.message)}</div>`;
   }
 }
 
@@ -94,12 +99,12 @@ async function loadCatalog() {
         const p = (o.productOfferingPrice || [])[0];
         if (p) { const pr = await json(await fetch(`${CAT}/productOfferingPrice/${p.id}`)); price = pr.price?.value; }
       } catch {}
-      return `<div class="row"><span class="code">${o.name}</span>
-        <span class="layer">${layer}</span><span class="dim">up to ${bw} Mbit/s</span>
-        <span class="end">${eur(price)}/line/mo</span></div>`;
+      return `<div class="row"><span class="code">${esc(o.name)}</span>
+        <span class="layer">${esc(layer)}</span><span class="dim">up to ${esc(bw)} Mbit/s</span>
+        <span class="end">${esc(eur(price))}/line/mo</span></div>`;
     }));
     box.innerHTML = rows.join('');
-  } catch (e) { box.innerHTML = `<div class="err">${e.message}</div>`; }
+  } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 
 // --- my access orders (what I have bought) ---
@@ -109,12 +114,12 @@ async function loadOrders() {
     const rows = await json(await authFetch(`${SO}/wholesaleAccessOrder`));
     if (!rows.length) { box.innerHTML = '<div class="dim">No access ordered yet.</div>'; return; }
     box.innerHTML = rows.slice(-20).reverse().map((w) => `<div class="row">
-      <span class="code">${w.accessOwner}</span>
-      <span class="layer">${w.accessLayer || ''}</span>
-      <span class="dim">${w.bandwidthMbps || ''} Mbit/s${w.postCode ? ' · ' + w.postCode : ''}</span>
-      <span class="end"><span class="state ${w.state}">${w.state}</span></span></div>`).join('');
+      <span class="code">${esc(w.accessOwner)}</span>
+      <span class="layer">${esc(w.accessLayer || '')}</span>
+      <span class="dim">${esc(w.bandwidthMbps || '')} Mbit/s${w.postCode ? ' · ' + esc(w.postCode) : ''}</span>
+      <span class="end"><span class="state ${esc(w.state)}">${esc(w.state)}</span></span></div>`).join('');
   } catch (e) {
-    box.innerHTML = `<div class="dim">Access orders need a staff/service:read sign-in (${e.message}).</div>`;
+    box.innerHTML = `<div class="dim">Access orders need a staff/service:read sign-in (${esc(e.message)}).</div>`;
   }
 }
 
@@ -126,15 +131,15 @@ async function loadSettlement() {
     const owners = s.owner || [];
     if (!owners.length) { box.innerHTML = '<div class="dim">Nothing owed yet.</div>'; return; }
     box.innerHTML =
-      `<div class="money"><span>Owed this month <b>${eur(s.totalMonthlyOwed)}</b></span>
-       <span>Retail margin <b>${eur(s.totalMonthlyMargin)}</b></span></div>` +
-      owners.map((o) => `<div class="row"><span class="code">${o.accessOwner}</span>
-        <span class="layer">${o.accessLayer || ''}</span>
-        <span class="dim">${o.activeLines} line(s) × ${eur(o.ratePerLine)}</span>
-        <span class="end">${eur(o.monthlyOwed)}${o.marginPerLine != null
-          ? ` · margin ${eur(o.marginPerLine)}/line` : ''}</span></div>`).join('');
+      `<div class="money"><span>Owed this month <b>${esc(eur(s.totalMonthlyOwed))}</b></span>
+       <span>Retail margin <b>${esc(eur(s.totalMonthlyMargin))}</b></span></div>` +
+      owners.map((o) => `<div class="row"><span class="code">${esc(o.accessOwner)}</span>
+        <span class="layer">${esc(o.accessLayer || '')}</span>
+        <span class="dim">${esc(o.activeLines)} line(s) × ${esc(eur(o.ratePerLine))}</span>
+        <span class="end">${esc(eur(o.monthlyOwed))}${o.marginPerLine != null
+          ? ` · margin ${esc(eur(o.marginPerLine))}/line` : ''}</span></div>`).join('');
   } catch (e) {
-    box.innerHTML = `<div class="dim">Settlement needs a staff/service:read sign-in (${e.message}).</div>`;
+    box.innerHTML = `<div class="dim">Settlement needs a staff/service:read sign-in (${esc(e.message)}).</div>`;
   }
 }
 

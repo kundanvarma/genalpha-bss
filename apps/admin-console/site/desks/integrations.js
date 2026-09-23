@@ -73,7 +73,7 @@ async function integrationsContent(grid, card, pill) {
     wrap.style.cssText = 'margin-top:0.7rem;display:flex;flex-direction:column;gap:0.5rem';
     const now = document.createElement('div');
     now.style.fontSize = '0.9rem';
-    now.innerHTML = 'Serving from: <b>' + label + '</b>';
+    now.innerHTML = 'Serving from: <b>' + esc(label) + '</b>';
     wrap.append(now);
 
     const sel = document.createElement('select');
@@ -169,7 +169,7 @@ async function integrationsLogistics(grid, card, pill) {
         const line = document.createElement('div');
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
-        label.innerHTML = `<b>${cr.displayName || cr.carrier}</b>${cr.postcodePrefix ? ' · ' + cr.postcodePrefix + '∗' : ''}${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
+        label.innerHTML = `<b>${esc(cr.displayName || cr.carrier)}</b>${cr.postcodePrefix ? ' · ' + esc(cr.postcodePrefix) + '∗' : ''}${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
         // Test = reachability probe of the provider's /health — never a booking
         const tst = document.createElement('button');
         tst.textContent = 'Test';

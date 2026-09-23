@@ -124,7 +124,9 @@ async function renderStaffUser(user, detail) {
       box.disabled = false;
     });
     const text = document.createElement('span');
-    text.innerHTML = `<b>${area.name}</b> <span class="dimhint">${area.hint}</span>`;
+    const areaName = document.createElement('b'); areaName.textContent = area.name;
+    const areaHint = document.createElement('span'); areaHint.className = 'dimhint'; areaHint.textContent = area.hint;
+    text.append(areaName, document.createTextNode(' '), areaHint);
     row.append(box, text);
     detail.append(row);
   }

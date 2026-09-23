@@ -66,7 +66,7 @@ async function loadMembers() {
     row.className = 'memberrow';
     row.dataset.member = m.id;
     const name = document.createElement('span');
-    name.innerHTML = `<b>${m.givenName || ''} ${m.familyName || ''}</b>`;
+    name.innerHTML = `<b>${esc(m.givenName || '')} ${esc(m.familyName || '')}</b>`;
     const mail = document.createElement('span');
     mail.className = 'mail';
     mail.textContent = emailOf(m);
@@ -87,7 +87,7 @@ async function loadMembers() {
         const active = (svcs || []).filter((sv) => sv.state === 'active');
         const nums = active.flatMap((sv) => (sv.supportingResource || []).map((r) => r.value)).filter(Boolean);
         lines.innerHTML = active.length
-          ? `${active.length} ${t(active.length > 1 ? 'lines' : 'line')} · <span class="msisdn">${nums.join(' · ')}</span>`
+          ? `${active.length} ${t(active.length > 1 ? 'lines' : 'line')} · <span class="msisdn">${esc(nums.join(' · '))}</span>`
           : t('no lines yet');
       })
       .catch(() => { lines.textContent = ''; });
@@ -128,7 +128,7 @@ async function addMember() {
     if (login) {
       // Shown once, for hand-over. The IdP never returns it again.
       status.innerHTML = `✓ added — they can sign in here with
-        <span data-testid="invite-credentials" style="font-family:ui-monospace,Menlo,monospace">${email} / ${login.temporaryPassword}</span>`;
+        <span data-testid="invite-credentials" style="font-family:ui-monospace,Menlo,monospace">${esc(email)} / ${esc(login.temporaryPassword)}</span>`;
     } else {
       status.textContent = '✓ added to your organization (no email — no sign-in)';
     }
@@ -182,7 +182,7 @@ async function loadPlans(orderable, memberCount) {
       .find((p) => p && p.price?.unit)?.price?.unit;
     const row = document.createElement('div');
     row.dataset.plan = o.id;
-    row.innerHTML = `${o.name} <span style="float:right" data-price>${fmtMoney(monthly, unit)}/${t('month')}</span>`;
+    row.innerHTML = `${esc(o.name)} <span style="float:right" data-price>${esc(fmtMoney(monthly, unit))}/${t('month')}</span>`;
     box.append(row);
     // negotiated price, fail-soft to list
     authFetch('/tmf-api/policyManagement/v4/price', {
@@ -198,9 +198,9 @@ async function loadPlans(orderable, memberCount) {
         if (!(r.adjustments || []).length) return;
         const label = r.adjustments.map((a) => a.label).join(', ');
         row.querySelector('[data-price]').innerHTML =
-          `<s style="opacity:.55">${fmtMoney(monthly, unit)}</s>
-           <b class="msisdn" data-testid="your-price">${fmtMoney(r.total, unit)}/${t('month')}</b>
-           <span style="opacity:.7">· ${label}</span>`;
+          `<s style="opacity:.55">${esc(fmtMoney(monthly, unit))}</s>
+           <b class="msisdn" data-testid="your-price">${esc(fmtMoney(r.total, unit))}/${t('month')}</b>
+           <span style="opacity:.7">· ${esc(label)}</span>`;
       })
       .catch(() => {});
   }
@@ -436,8 +436,8 @@ async function loadBills() {
   for (const b of bills) {
     const row = document.createElement('div');
     row.className = 'billrow';
-    row.innerHTML = `<b>${b.billNo}</b> · ${b.state}
-      <span class="amount">${fmtMoney(b.amountDue.value, b.amountDue.unit)}</span>`;
+    row.innerHTML = `<b>${esc(b.billNo)}</b> · ${esc(b.state)}
+      <span class="amount">${esc(fmtMoney(b.amountDue.value, b.amountDue.unit))}</span>`;
     const lines = document.createElement('div');
     lines.className = 'billlines';
     lines.textContent = 'loading lines…';
@@ -449,8 +449,8 @@ async function loadBills() {
         lines.replaceChildren(...rates.map((r) => {
           const d = document.createElement('div');
           const label = window._peopleById?.[r.forParty?.id];
-          const who = r.forParty?.id ? ` — <span data-for="${r.forParty.id}" class="linefor">${label || r.forParty.id.slice(0, 8) + '…'}</span>` : '';
-          d.innerHTML = `${r.name}${who} <span style="float:right">${fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit)}</span>`;
+          const who = r.forParty?.id ? ` — <span data-for="${esc(r.forParty.id)}" class="linefor">${esc(label || r.forParty.id.slice(0, 8) + '…')}</span>` : '';
+          d.innerHTML = `${esc(r.name)}${who} <span style="float:right">${esc(fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit))}</span>`;
           return d;
         }));
         resolveLineFor();
@@ -480,8 +480,8 @@ async function renderMemberView(orgName) {
         const row = document.createElement('div');
         row.className = 'billrow';
         row.dataset.personalBill = b.id;
-        row.innerHTML = `<b>${b.billNo}</b> · ${b.state}
-          <span class="amount">${fmtMoney(b.amountDue.value, b.amountDue.unit)}</span>`;
+        row.innerHTML = `<b>${esc(b.billNo)}</b> · ${esc(b.state)}
+          <span class="amount">${esc(fmtMoney(b.amountDue.value, b.amountDue.unit))}</span>`;
         const lines = document.createElement('div');
         lines.className = 'billlines';
         row.append(lines);
@@ -491,7 +491,7 @@ async function renderMemberView(orgName) {
           .then((billRates) => {
             lines.replaceChildren(...billRates.map((r) => {
               const d = document.createElement('div');
-              d.innerHTML = `${r.name} <span style="float:right">${fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit)}</span>`;
+              d.innerHTML = `${esc(r.name)} <span style="float:right">${esc(fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit))}</span>`;
               return d;
             }));
           })
@@ -510,11 +510,11 @@ async function renderMemberView(orgName) {
       row.className = 'memberrow';
       row.dataset.service = sv.id;
       const name = document.createElement('span');
-      name.innerHTML = `<b>${sv.name || 'Service'}</b>`;
+      name.innerHTML = `<b>${esc(sv.name || 'Service')}</b>`;
       const num = document.createElement('span');
       num.className = 'lines';
       const msisdns = (sv.supportingResource || []).map((r) => r.value).filter(Boolean);
-      num.innerHTML = `${sv.state} ${msisdns.length ? `· <span class="msisdn">${msisdns.join(' · ')}</span>` : ''}`;
+      num.innerHTML = `${esc(sv.state)} ${msisdns.length ? `· <span class="msisdn">${esc(msisdns.join(' · '))}</span>` : ''}`;
       row.append(name, num);
       box.append(row);
     }
@@ -527,7 +527,7 @@ async function renderMemberView(orgName) {
         simRow.className = 'billlines';
         simRow.style.margin = '2px 0 8px 14px';
         simRow.dataset.simFor = sid;
-        simRow.innerHTML = `SIM <span class="msisdn">${sim.iccid}</span>
+        simRow.innerHTML = `SIM <span class="msisdn">${esc(sim.iccid)}</span>
           <button class="ghost" data-puk style="margin-left:8px">${t('Show PUK')}</button>
           <input data-pin placeholder="${t('New PIN')}" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
           <button class="ghost" data-reset>${t('Reset PIN')}</button> <span data-sim-status></span>`;
@@ -558,7 +558,7 @@ async function renderMemberView(orgName) {
       const usage = el('member-usage');
       usage.replaceChildren(...(report.bucket || []).map((b) => {
         const d = document.createElement('div');
-        d.innerHTML = `${b.name} <span style="float:right">${b.usedValue}${b.allowedValue != null ? ` / ${b.allowedValue}` : ''} ${b.units || ''}</span>`;
+        d.innerHTML = `${esc(b.name)} <span style="float:right">${esc(b.usedValue)}${b.allowedValue != null ? ` / ${esc(b.allowedValue)}` : ''} ${esc(b.units || '')}</span>`;
         return d;
       }));
       if (!usage.children.length) usage.textContent = t('No usage yet.');

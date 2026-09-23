@@ -50,7 +50,9 @@ function attachTokenAutocomplete(el) {
     dd.style.minWidth = Math.max(180, r.width) + 'px';
     matches.forEach((t) => {
       const it = document.createElement('div'); it.className = 'tokenitem'; it.dataset.testid = 'tokenopt-' + t.token;
-      it.innerHTML = '<code>{{' + t.token + '}}</code><span>' + t.label + '</span>';
+      const code = document.createElement('code'); code.textContent = '{{' + t.token + '}}';
+      const lbl = document.createElement('span'); lbl.textContent = t.label;
+      it.append(code, lbl);
       it.addEventListener('mousedown', (ev) => {
         ev.preventDefault();
         const start = before.lastIndexOf('{{');

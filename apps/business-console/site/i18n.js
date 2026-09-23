@@ -133,6 +133,12 @@ function t(s) {
   return (I18N_BUNDLES[LOCALE] || {})[s] || s;
 }
 
+// Escape before any value reaches innerHTML. Member names, numbers and offering
+// names are data, never markup: a colleague named `<img src=x onerror=…>` must
+// print, not run. t() reads a literal bundle, so it needs no escaping.
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 /** "kr 299,00" in Norway; English keeps "299.00 EUR". */
 const TENANT_COUNTRY = (window.BSS_BIZ_CONFIG || {}).country || '';
 const PRICE_DECIMALS = (window.BSS_BIZ_CONFIG || {}).priceDecimals;

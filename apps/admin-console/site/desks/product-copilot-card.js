@@ -50,17 +50,20 @@ function copilotProposalCard(reply, context, log) {
   // arrives pre-scored by the commercial simulator; the owner approves a
   // number, not a vibe. Absence is visible (no forecast line), never blocking.
   const fc = reply.forecast;
+  // Everything below is model-authored (names, banners, assumptions) or comes
+  // from the simulator — plain text in every case, so it is escaped on the way
+  // into the card. Only the markup this file writes itself stays live.
   const forecastHtml = fc && fc.lines ? `<p class="copilot-forecast" data-testid="copilot-forecast">
       📊 <b>Forecast</b>: ${(fc.lines || []).map((l) =>
-        `${l.offeringName}: ${l.subscribers} subs, ${l.currentMonthly}→${l.proposedMonthly} = `
-        + `${l.annualRevenueDelta > 0 ? '+' : ''}${l.annualRevenueDelta} ${fc.currency || ''}/yr`
-        + (l.subscribersAtChurnRisk ? ` (${l.subscribersAtChurnRisk} at churn risk)` : '')).join(' · ')}
-      <span class="dim" style="font-size:11px"> — ${(fc.assumptions || [])[0] || ''}</span></p>` : '';
+        `${esc(l.offeringName)}: ${esc(l.subscribers)} subs, ${esc(l.currentMonthly)}→${esc(l.proposedMonthly)} = `
+        + `${l.annualRevenueDelta > 0 ? '+' : ''}${esc(l.annualRevenueDelta)} ${esc(fc.currency || '')}/yr`
+        + (l.subscribersAtChurnRisk ? ` (${esc(l.subscribersAtChurnRisk)} at churn risk)` : '')).join(' · ')}
+      <span class="dim" style="font-size:11px"> — ${esc((fc.assumptions || [])[0] || '')}</span></p>` : '';
   card.innerHTML = `<b>The copilot will create:</b>
-    <ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>
+    <ul>${rows.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
     ${forecastHtml}
-    ${repairs.length ? `<p class="dim" style="font-size:12px">auto-repaired: ${repairs.join('; ')}</p>` : ''}
-    ${problems.length ? `<p class="copilot-warn">${problems.join('<br>')}</p>` : ''}`;
+    ${repairs.length ? `<p class="dim" style="font-size:12px">auto-repaired: ${repairs.map(esc).join('; ')}</p>` : ''}
+    ${problems.length ? `<p class="copilot-warn">${problems.map(esc).join('<br>')}</p>` : ''}`;
   const actions = document.createElement('div');
   const create = document.createElement('button');
   create.className = 'primary';
@@ -80,7 +83,7 @@ function copilotProposalCard(reply, context, log) {
       done.dataset.testid = 'copilot-created';
       done.innerHTML = `✓ Created ${made.length + (proposal.specs || []).length + (proposal.prices || []).length}
         catalog resources. ${made.map((o) =>
-          `<a href="/shop/offering/${o.id}" target="_blank">${o.name} — see it in the shop</a>`).join(' · ')}`;
+          `<a href="/shop/offering/${esc(o.id)}" target="_blank">${esc(o.name)} — see it in the shop</a>`).join(' · ')}`;
       for (const v of made.verdicts || []) {
         const line = document.createElement('div'); line.dataset.testid = 'copilot-governance'; line.style.cssText = 'margin-top:4px;font-size:13px';
         line.textContent = `Launch governance: ${v}`; done.append(line);

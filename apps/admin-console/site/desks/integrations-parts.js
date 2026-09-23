@@ -28,9 +28,9 @@ async function integrationsInstallers(grid, card, pill) {
     }
     // the calendar: where the customer's install windows come from
     const cal = document.createElement('div');
-    cal.innerHTML = `<b>${cfg.timezone}</b> · ${cfg.workingDays.join(' ')} · windows ${cfg.slotStarts.join(', ')} (${cfg.slotHours}h) · ${cfg.daysAhead} days ahead · `
-      + (cfg.capacityMode === 'provider' ? `calendar answered by <b>${cfg.provider}</b> at ${cfg.providerUrl || '?'}`
-        : cfg.capacityMode === 'roster' ? `capacity from <b>${cfg.rosterSize}</b> active technician${cfg.rosterSize === 1 ? '' : 's'}` : `flat capacity <b>${cfg.defaultCapacity}</b> per window (no roster yet)`);
+    cal.innerHTML = `<b>${esc(cfg.timezone)}</b> · ${esc(cfg.workingDays.join(' '))} · windows ${esc(cfg.slotStarts.join(', '))} (${esc(cfg.slotHours)}h) · ${esc(cfg.daysAhead)} days ahead · `
+      + (cfg.capacityMode === 'provider' ? `calendar answered by <b>${esc(cfg.provider)}</b> at ${esc(cfg.providerUrl || '?')}`
+        : cfg.capacityMode === 'roster' ? `capacity from <b>${esc(cfg.rosterSize)}</b> active technician${cfg.rosterSize === 1 ? '' : 's'}` : `flat capacity <b>${esc(cfg.defaultCapacity)}</b> per window (no roster yet)`);
     wrap.append(cal);
 
     // the field-service seam: who answers "when can an installer come?"
@@ -104,7 +104,7 @@ async function integrationsInstallers(grid, card, pill) {
       const line = document.createElement('div');
       line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem';
       const label = document.createElement('span');
-      label.innerHTML = `<b>${t.name}</b>${t.zone ? ' · ' + t.zone : ''} · ${t.workingDays.join(' ')} ${t.startTime}–${t.endTime}${(t.skills || []).length ? ' · ' + t.skills.join('/') : ''}${t.active ? '' : ' · <i>off duty</i>'}`;
+      label.innerHTML = `<b>${esc(t.name)}</b>${t.zone ? ' · ' + esc(t.zone) : ''} · ${esc(t.workingDays.join(' '))} ${esc(t.startTime)}–${esc(t.endTime)}${(t.skills || []).length ? ' · ' + esc(t.skills.join('/')) : ''}${t.active ? '' : ' · <i>off duty</i>'}`;
       const tog = document.createElement('button');
       tog.textContent = t.active ? 'Off duty' : 'On duty';
       tog.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
@@ -183,8 +183,8 @@ async function integrationsSlices(grid, card, pill) {
       const line = document.createElement('div');
       line.style.cssText = 'display:flex;justify-content:space-between;gap:0.5rem';
       const who = (sv.relatedParty || []).find((r) => r.role === 'customer')?.id || '';
-      line.innerHTML = `<span><b>${(sv.supportingResource || [{}])[0].value || sv.name}</b> · ${sv.name}${who ? ' · ' + who.slice(0, 8) : ''}</span>`
-        + `<span>⚡ ${ch.sliceProfile}${ch.sliceUntil ? ' · until ' + new Date(ch.sliceUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', ...(tenantCfg.timezone ? { timeZone: tenantCfg.timezone } : {}) }) : ' · open-ended'}</span>`;
+      line.innerHTML = `<span><b>${esc((sv.supportingResource || [{}])[0].value || sv.name)}</b> · ${esc(sv.name)}${who ? ' · ' + esc(who.slice(0, 8)) : ''}</span>`
+        + `<span>⚡ ${esc(ch.sliceProfile)}${ch.sliceUntil ? ' · until ' + esc(new Date(ch.sliceUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', ...(tenantCfg.timezone ? { timeZone: tenantCfg.timezone } : {}) })) : ' · open-ended'}</span>`;
       wrap.append(line);
     }
     sliceC.append(wrap);
@@ -219,9 +219,9 @@ async function integrationsPayment(grid, card, pill) {
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
         // routing facts on the line: priority orders the card pool, currencies scope it
-        const curr = ps.currencies ? ` · ${String(ps.currencies).replace(/[\[\]"]/g, '')}` : '';
-        const prio = ps.priority != null && ps.priority !== 100 ? ` · prio ${ps.priority}` : '';
-        label.innerHTML = `<b>${ps.displayName || ps.provider}</b>${ps.isDefault ? ' · default' : ''}${prio}${curr}${ps.enabled === false ? ' · off' : ''}`;
+        const curr = ps.currencies ? ` · ${esc(String(ps.currencies).replace(/[\[\]"]/g, ''))}` : '';
+        const prio = ps.priority != null && ps.priority !== 100 ? ` · prio ${esc(ps.priority)}` : '';
+        label.innerHTML = `<b>${esc(ps.displayName || ps.provider)}</b>${ps.isDefault ? ' · default' : ''}${prio}${curr}${ps.enabled === false ? ' · off' : ''}`;
         // Test = reachability probe of the PSP's /health — never a payment
         const tst = document.createElement('button');
         tst.textContent = 'Test';

@@ -94,7 +94,7 @@ RESOURCES.push(
       const waitLabel = (st) => ['days', 'hours', 'minutes', 'seconds']
         .filter((u) => st[u]).map((u) => `${st[u]} ${u}`).join(' ') || 'a while';
       const labelOf = (st) => st.type === 'message' ? esc(st.subject || 'message')
-        : st.type === 'wait' ? `wait ${waitLabel(st)}`
+        : st.type === 'wait' ? `wait ${esc(waitLabel(st))}`
         : st.type === 'waitForEvent' ? `wait for ${esc(st.event || 'event')}`
         : (st.type === 'branch' || st.type === 'decision') ? `decision: ${esc(st.inSegment || '')}`
         : st.type === 'exit' ? 'exit' : esc(st.type || 'step');
@@ -107,7 +107,7 @@ RESOURCES.push(
         node.innerHTML = `<div class="jtype">${esc(st.type || '')}</div>`
           + (st.stage ? `<span class="jstage">${esc(st.stage)}</span>` : '')
           + `<div class="jlabel">${labelOf(st)}</div>`
-          + (sends ? `<span class="jcount" data-testid="canvas-count">reached ${f.reached ?? 0} · active ${f.active ?? 0}</span>` : '');
+          + (sends ? `<span class="jcount" data-testid="canvas-count">reached ${esc(f.reached ?? 0)} · active ${esc(f.active ?? 0)}</span>` : '');
         wrap.append(node);
         if (i < steps.length - 1) {
           const arrow = document.createElement('div');

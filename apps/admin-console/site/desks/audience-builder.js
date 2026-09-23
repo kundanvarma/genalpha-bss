@@ -234,9 +234,11 @@ async function renderAudienceBuilder() {
       ? '<span data-testid="scheduler-enabled" style="color:#2e7d32;font-weight:600">● running</span>'
       : '<span data-testid="scheduler-enabled" style="color:#c62828;font-weight:600">● paused</span>';
     const last = s.lastRunAt ? new Date(s.lastRunAt).toLocaleTimeString() : '—';
-    sstat.innerHTML = `${badge} · every ${Math.round((s.intervalMs || 0) / 1000)}s · cap ${s.maxPerRun}/run<br>`
-      + `runs ${s.totalRuns} · refreshed ${s.totalRefreshed} · errors ${s.totalErrors} · last ${last} (${s.lastDurationMs}ms)<br>`
-      + `<span class="dim">JVM heap ${s.heapUsedMb} / ${s.heapMaxMb} MB — watch this against runs to spot a memory climb</span>`;
+    // badge and last are built above from literals and a formatted clock; the
+    // counters come off the wire, so they are escaped like any other value.
+    sstat.innerHTML = `${badge} · every ${Math.round((s.intervalMs || 0) / 1000)}s · cap ${esc(s.maxPerRun)}/run<br>`
+      + `runs ${esc(s.totalRuns)} · refreshed ${esc(s.totalRefreshed)} · errors ${esc(s.totalErrors)} · last ${last} (${esc(s.lastDurationMs)}ms)<br>`
+      + `<span class="dim">JVM heap ${esc(s.heapUsedMb)} / ${esc(s.heapMaxMb)} MB — watch this against runs to spot a memory climb</span>`;
     pauseBtn.disabled = !s.enabled; resumeBtn.disabled = s.enabled;
   };
   const loadSched = async () => { try { const r = await authFetch('/insight/v1/refresh/status'); paintSched(r.ok ? await r.json() : null); } catch { paintSched(null); } };

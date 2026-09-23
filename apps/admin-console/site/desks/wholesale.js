@@ -2,8 +2,7 @@
 
 /* ---------------- Wholesale panes (fixed wholesale console) ---------------- */
 
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+/* esc() lives in core/config.js — one escape helper for the whole console. */
 
 function downloadCsv(rows, filename) {
   const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
@@ -99,7 +98,7 @@ async function renderAccessProduct() {
     + '<label class="field"><span>Access layer *</span><select id="wp-layer">'
     + '<option value="L3-activated">L3-activated</option><option value="L2-VULA">L2-VULA</option></select></label>'
     + '<label class="field"><span>Bandwidth (Mbit/s) *</span><input id="wp-bw" type="number" placeholder="1000"></label>'
-    + `<label class="field"><span>Wholesale price / line / month (${tenantCurrency()}) *</span><input id="wp-price" type="number" placeholder="24"></label>`
+    + `<label class="field"><span>Wholesale price / line / month (${esc(tenantCurrency())}) *</span><input id="wp-price" type="number" placeholder="24"></label>`
     + `<label class="field"><span>Realised by CFS (TMF633, optional)</span><select id="wp-cfs"><option value="">— none —</option>${cfsOptions}</select></label>`
     + '</div><div class="actions"><button class="primary" id="wp-create">Publish access product</button>'
     + '<span id="wp-msg" class="dim"></span></div>'
