@@ -4,6 +4,9 @@ spring:
   # thread until something kills it.
   http:
     client:
+      # the JDK client, which several clients here used to select by hand to get
+      # PATCH; selecting it here means they inherit these timeouts instead
+      factory: jdk
       connect-timeout: 5s
       read-timeout: 120s
   application:

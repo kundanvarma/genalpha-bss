@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -179,8 +178,7 @@ public class Tmf646ScheduleProvider implements ScheduleProvider {
     }
 
     private RestClient client(ScheduleConfig cfg) {
-        RestClient.Builder b = builder.clone().baseUrl(cfg.getProviderUrl())
-                .requestFactory(new JdkClientHttpRequestFactory());
+        RestClient.Builder b = builder.clone().baseUrl(cfg.getProviderUrl());
         String key = cfg.getProviderSecretRef() == null || cfg.getProviderSecretRef().isBlank()
                 ? null : System.getenv(cfg.getProviderSecretRef());
         if (key != null && !key.isBlank()) {

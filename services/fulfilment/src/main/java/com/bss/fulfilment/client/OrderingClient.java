@@ -17,7 +17,6 @@ public class OrderingClient {
     public OrderingClient(RestClient.Builder builder, MachineTokenInterceptor machineToken,
             @Value("${bss.downstream.ordering-base-url}") String orderingBase) {
         this.ordering = builder.baseUrl(orderingBase)
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory())
                 .requestInterceptor(machineToken).build();
     }
 

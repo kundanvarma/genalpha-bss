@@ -30,7 +30,6 @@ public class RestLogisticsClient implements LogisticsClient {
         this.enabled = baseUrl != null && !baseUrl.isBlank();
         this.carrier = carrier;
         this.http = enabled ? builder.baseUrl(baseUrl)
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory())
                 .build() : null;
         log.info("logistics seam {} (carrier={})", enabled ? "ENABLED" : "disabled (no base url)", carrier);
     }

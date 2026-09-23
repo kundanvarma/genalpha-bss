@@ -35,8 +35,7 @@ public class HelthjemCarrierAdapter implements CarrierAdapter {
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
             return null;
         }
-        RestClient http = builder.baseUrl(cfg.getBaseUrl())
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory()).build();
+        RestClient http = builder.baseUrl(cfg.getBaseUrl()).build();
         Map<String, Object> resp = http.post().uri("/shipments")
                 .header("Content-Type", "application/json")
                 .body(Map.of(

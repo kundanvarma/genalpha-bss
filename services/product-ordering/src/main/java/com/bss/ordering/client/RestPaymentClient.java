@@ -3,7 +3,6 @@ package com.bss.ordering.client;
 import com.bss.ordering.exception.DownstreamException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -25,7 +24,6 @@ public class RestPaymentClient implements PaymentClient {
         // The default HttpURLConnection factory cannot send PATCH, which this
         // client needs for capture/void — the JDK HttpClient factory can.
         this.restClient = builder.baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory())
                 .requestInterceptor(tokenInterceptor)
                 .build();
     }

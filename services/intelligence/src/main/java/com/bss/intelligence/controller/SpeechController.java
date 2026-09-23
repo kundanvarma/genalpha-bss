@@ -77,7 +77,6 @@ public class SpeechController {
             });
             form.add("model", "whisper-1");
             RestClient.RequestBodySpec req = builder
-                    .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory())
                     .build().post()
                     .uri(t.getSpeechUrl() + "/v1/audio/transcriptions")
                     .contentType(MediaType.MULTIPART_FORM_DATA);

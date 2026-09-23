@@ -15,7 +15,6 @@ public class RestInventoryClient implements InventoryClient {
             @Value("${bss.downstream.inventory-base-url}") String baseUrl) {
         // JDK factory: HttpURLConnection cannot send PATCH (plan changes).
         this.restClient = builder.baseUrl(baseUrl)
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory())
                 .requestInterceptor(tokenInterceptor).build();
     }
 

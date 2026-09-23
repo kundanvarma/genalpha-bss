@@ -123,8 +123,7 @@ public class HttpCarrierAdapter implements CarrierAdapter {
     }
 
     private RestClient client(CarrierConfig cfg, JsonNode c) {
-        RestClient.Builder b = builder.baseUrl(cfg.getBaseUrl())
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
+        RestClient.Builder b = builder.baseUrl(cfg.getBaseUrl());
         String key = cfg.getSecretRef() == null ? null : System.getenv(cfg.getSecretRef());
         if (key != null && !key.isBlank()) {
             b = b.defaultHeader(text(c, "authHeader", "Authorization"),
