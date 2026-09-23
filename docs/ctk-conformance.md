@@ -28,7 +28,7 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **agreement (partnership type)** | **TMF668** | **164/164, 0 failures** |
 | **agreement** | **TMF651** | **532/532, 0 failures** |
 | **service-orchestration (inventory)** | **TMF638** | **5836/5836, 0 failures** |
-| **service-orchestration (service test)** | **TMF653** | **915/915, 0 failures** |
+| **service-orchestration (service test)** | **TMF653** | **915/915 when certified; see the note below — 54 failures on this laptop's grown dataset as of 23 Sep** |
 | **service-orchestration (ordering)** | **TMF641** | **220/220, 0 failures** |
 | **assurance (service problem)** | **TMF656** | **5548/5548, 0 failures** |
 | **trouble-ticket** | **TMF621** | **488/488, 0 failures** |
@@ -77,6 +77,21 @@ newest-first (the proof run's pagination lesson, applied before it bit), and
 the gateway finally forwards `X-Forwarded-*` (SCG 4.2 trusted-proxies) so
 Location headers match the URL the client actually called.
 
+### A note on drift, 23 September
+
+Assertion counts on this page are the numbers from the day each kit was
+certified. Several kits assert over the **whole** list, so the totals grow as a
+tenant accumulates data: TMF638 read 5836 then and 5850 now, TMF639 2809 then
+and 3425 now, TMF641 220 and 350, TMF687 124 and 168, TMF640 R18.5 1187 and
+1697 — all still at zero failures.
+
+**TMF653 is the honest exception.** On this laptop it now fails 54 assertions
+of 2058. The pre-change image fails the same 54, so it is not a regression from
+the typing work; it is the same lesson TMF683 taught — the kit audits every
+service-test row in the history, and rows written by months of suite runs lack
+fields the kit demands. It is recorded here rather than quietly re-certified.
+Re-run it on fresh demo data to reproduce the certified result.
+
 ## Measured, not yet zero
 
 None. The last amber row (party-interaction, long stuck at 624/786) went to
@@ -96,7 +111,7 @@ the BSS. Making them CTK-green would mean *removing* protections we chose to add
 | Component | CTK | Baseline | The intentional gap |
 |---|---|---|---|
 | payment | TMF676 | 102/168 | Creating a payment **is** a PSP authorization: it requires a positive `amount` and an idempotency correlator (so a retry can't double-charge). The CTK posts an empty `totalAmount` and expects a bare resource create. We keep authorization + idempotency. |
-| communication | TMF681 | 184/279 | A message requires a **recipient** (a `customer` relatedParty) — it's the customer-notification delivery seam. The CTK posts an empty receiver and expects 201. We keep the recipient requirement. |
+| communication | TMF681 | 167/279 (23 Sep; the count moves with this laptop's message history — the gap itself is deliberate) | A message requires a **recipient** (a `customer` relatedParty) — it's the customer-notification delivery seam. The CTK posts an empty receiver and expects 201. We keep the recipient requirement. |
 
 To flip either to CTK-green, decouple "create the resource" from "run the
 business action" (authorize / deliver) and relax the required fields — a
