@@ -47,6 +47,41 @@ async function token(ctx, realm, user, pass) {
   console.log(`OK BORN: realm + registry + catalog in ${Math.round((Date.now() - t0) / 1000)}s —`
     + ' and fjord\'s catalog holds ONLY fjord\'s plan');
 
+  /* ---------- 1b. the new realm's machine credentials are its own ----------
+   * Onboarding used to clone the template realm verbatim, so every tenant
+   * carried the same machine client secrets: knowing one operator's billing
+   * secret minted a machine token in any other operator's realm. The walls
+   * below are checked on data; this one is checked on credentials.
+   */
+  const machine = async (realm, clientId, secret) => (await ctx.post(
+    `http://localhost:8085/realms/${realm}/protocol/openid-connect/token`,
+    { form: { grant_type: 'client_credentials', client_id: clientId, client_secret: secret } })).status();
+
+  const yml = require('fs').readFileSync(`${__dirname}/../../infra/tenants/tenants.yml`, 'utf8');
+  const minted = /OIDC_CLIENT_SECRET_FJORD:([^}]+)}/.exec(yml);
+  if (!minted) fail('fjord\'s block carries no per-tenant machine secret');
+  const fjordSecret = minted[1].trim();
+  if (/^[a-z]+-secret$/.test(fjordSecret)) {
+    fail(`fjord inherited the template machine secret "${fjordSecret}"`);
+  }
+
+  /* the secret every component ships with in compose, and the template's own */
+  for (const [client, shipped] of [['bss-catalog', 'catalog-secret'],
+                                   ['bss-billing', 'billing-secret'],
+                                   ['bss-assurance', 'assurance-secret']]) {
+    if (await machine('fjord', client, shipped) !== 401) {
+      fail(`${client}'s shipped secret still mints a machine token in fjord's realm`);
+    }
+  }
+  if (await machine('fjord', 'bss-catalog', fjordSecret) !== 200) {
+    fail('fjord\'s own machine secret does not work — onboarding minted a realm nothing can call');
+  }
+  if (await machine('bss', 'bss-catalog', fjordSecret) !== 401) {
+    fail('fjord\'s machine secret is accepted in the genalpha realm');
+  }
+  console.log('OK CREDENTIALS: fjord\'s machine secrets are its own —'
+    + ' three shipped secrets refused, fjord\'s own works here and nowhere else');
+
   /* ---------- 2. a customer lives a whole life on the new operator ---------- */
   const email = `first-${run}@fjord.example`;
   const login = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,

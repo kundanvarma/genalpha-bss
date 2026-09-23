@@ -265,15 +265,24 @@ decision of when to fire it is Kundan's.
   production onboarding must set a per-tenant staff password and hand it
   back once on the receipt — the shape already exists
   (`UserView.temporaryPassword`). Not done here.
-- **No suite asserts the secret yet.** `ops/e2e/third_operator_test.js`
-  exercises the fixed script end to end and passed on a throwaway copy
-  (operator born, customer activated, 66.40 DKK prorated bill, walls hold
-  both ways), but it never looks at a credential. The threat model's
-  proposed check — nova's `bss-catalog` secret refused by a new realm —
-  is still owed, as a step in `tenant_test.js`. The rest of the
-  verification was by hand against the running fleet: a throwaway realm
-  onboarded, proven (24 of 24 confidential clients differ from nova;
-  nova's, genalpha's, enet's and taranga's `bss-billing` secrets each get
-  401; 1 inherited user, namely none) and deleted.
+- **A suite asserts the secret.** `ops/e2e/third_operator_test.js` gained a
+  credentials step between "born" and "a whole life": it reads the minted
+  secret out of the new operator's registry block, refuses to accept a
+  `<component>-secret` literal there, then proves the three secrets every
+  component ships with in compose are each answered 401 by the new realm,
+  that the operator's own secret works there, and that the same secret is
+  401 in the genalpha realm. The step is not vacuous — the identical probe
+  against `nova`, which has not been rotated, still answers **200**, so the
+  check distinguishes a fixed realm from an inherited one rather than
+  passing on a missing client. The rest of the verification was by hand
+  against the running fleet: a throwaway realm onboarded, proven (24 of 24
+  confidential clients differ from nova; nova's, genalpha's, enet's and
+  taranga's `bss-billing` secrets each get 401; 1 inherited user, namely
+  none) and deleted.
+- **A suite run rewrites the registry with a live secret.** Onboarding
+  writes the generated value as the default in `infra/tenants/tenants.yml`,
+  so after running this suite that file holds a real machine secret for
+  `fjord`. Restore it (`git checkout infra/tenants/tenants.yml`) before
+  committing; do not commit the run's version.
 - **Existing realms are untouched.** Said again because it is the thing
   that will bite: this fix protects operators onboarded from now on.
