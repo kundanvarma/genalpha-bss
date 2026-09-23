@@ -4,7 +4,6 @@ import com.bss.billing.exception.DownstreamException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,7 +19,6 @@ public class RestDownstreamClients {
     private RestClient client(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor, String baseUrl) {
         // JDK HttpClient factory: HttpURLConnection cannot send PATCH.
         return builder.baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory())
                 .requestInterceptor(tokenInterceptor)
                 .build();
     }
@@ -500,8 +498,7 @@ public class RestDownstreamClients {
     @Bean
     DownstreamClients.AliasLookupClient aliasLookupClient(RestClient.Builder builder,
             @Value("${bss.downstream.einvoice-rail-base-url:http://localhost:8147}") String baseUrl) {
-        RestClient rest = builder.baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory()).build();
+        RestClient rest = builder.baseUrl(baseUrl).build();
         return party -> {
             try {
                 @SuppressWarnings("unchecked")
@@ -525,8 +522,7 @@ public class RestDownstreamClients {
     @Bean
     DownstreamClients.DirectDebitClient directDebitClient(RestClient.Builder builder,
             @Value("${bss.downstream.directdebit-rail-base-url:http://localhost:8149}") String baseUrl) {
-        RestClient rest = builder.baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory()).build();
+        RestClient rest = builder.baseUrl(baseUrl).build();
         return claim -> rest.post().uri("/claims")
                 .header("Content-Type", "application/json")
                 .body(claim).retrieve().toBodilessEntity();

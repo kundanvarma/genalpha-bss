@@ -33,6 +33,18 @@ public class SecurityConfig {
 
     private static final String READ = "communication:read";
     private static final String WRITE = "communication:write";
+    /**
+     * The operator's message templates — the copy every customer notification
+     * is rendered from. They sat behind communication:write, which a customer
+     * holds so that their own actions can send them mail. So a customer could
+     * add or rewrite the templates their operator sends to everyone else:
+     * put their own words, and their own links, in a message that arrives with
+     * the operator's name on it.
+     *
+     * Writing the operator's copy is a back-office act. Only the back office
+     * and its suites use this path; no channel and no component does.
+     */
+    private static final String ADMIN = "communication:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -52,6 +64,9 @@ public class SecurityConfig {
                         // marketing preference is the CUSTOMER's own self-service setting
                         // (party-scoped) — a signed-in customer, not a communication:write scope
                         .requestMatchers(ApiConstants.BASE_PATH + "/marketingPreference").authenticated()
+                        // the operator's own copy, every verb, before the generic rules
+                        .requestMatchers(ApiConstants.BASE_PATH + "/messageTemplate",
+                                ApiConstants.BASE_PATH + "/messageTemplate/**").hasAuthority(ADMIN)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

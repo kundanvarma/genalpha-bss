@@ -1,7 +1,6 @@
 package com.bss.som.client;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -19,7 +18,6 @@ public class RestOrderingClient implements OrderingClient {
             @Value("${bss.downstream.ordering-base-url:http://localhost:8082}") String baseUrl) {
         // JDK factory: HttpURLConnection cannot send PATCH.
         this.restClient = builder.baseUrl(baseUrl)
-                .requestFactory(new JdkClientHttpRequestFactory())
                 .requestInterceptor(tokenInterceptor).build();
     }
 

@@ -95,6 +95,11 @@
         "name": "communication:write"
       },
       {
+        "name": "communication:admin",
+        "description": "Write the operator message templates - the copy every customer notification is rendered from. Back office only: a customer holds communication:write so their own actions can send them mail, and that must not be enough to rewrite what the operator sends to everyone else.",
+        "composite": false
+      },
+      {
         "name": "customer",
         "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
         "composite": true,
@@ -960,7 +965,8 @@
         "migration:admin",
         "catalog:approve",
         "payment:refund",
-        "payment:admin"
+        "payment:admin",
+        "communication:admin"
       ],
       "id": "69eb7c8c-9c3e-4254-87e2-2fceed188668"
     },

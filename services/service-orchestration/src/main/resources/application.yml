@@ -1,4 +1,14 @@
 spring:
+  # Outbound HTTP has an end. The JDK client waits forever by default, so a
+  # dependency that accepts the connection and then goes quiet holds a request
+  # thread until something kills it.
+  http:
+    client:
+      # the JDK client, which clients here used to select by hand to get PATCH;
+      # selecting it here means they inherit these timeouts instead
+      factory: jdk
+      connect-timeout: 5s
+      read-timeout: 30s
   application:
     name: service-orchestration
   datasource:
