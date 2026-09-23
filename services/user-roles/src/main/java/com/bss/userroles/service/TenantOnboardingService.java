@@ -669,6 +669,12 @@ public class TenantOnboardingService {
                 .replaceAll("agent-commerce: .*", "agent-commerce: \"off\"")
                 // newborns are conservative to crawlers too
                 .replaceAll("ai-visibility: .*", "ai-visibility: \"search-only\"")
+                // and a newborn's prompts are REDACTED before they leave the
+                // process. The template said raw exposure is opt-in and never
+                // assumed; the clone copied the template's own "true" anyway,
+                // so every operator born from this form has been sending
+                // unredacted customer data to its model provider.
+                .replaceAll("ai-raw-exposure: .*", "ai-raw-exposure: false")
                 // the credential wall: this operator's clients answer to a
                 // secret no other operator's realm has ever seen. The env
                 // name lets a deployment move it to a secret store without
