@@ -101,9 +101,15 @@ stay stable within the call, so the model can still say "reply to
 it. What is NOT recognised: personal names (signals are twinned by
 insight's PII firewall before they reach a model; a copilot prompt that
 names a customer sends the name) and free-text addresses without a label.
-A tenant that sets `ai-raw-exposure: true` in `tenants.yml` sends the raw
-prompt instead; every demo tenant does, and the ledger row then says
-`rawExposure: true`. The ledger (`ai_audit`) keeps the redacted prompt and
+A tenant that sets `ai-raw-exposure: true` sends the raw prompt instead,
+and the ledger row then says `rawExposure: true`. **No tenant that ships
+in this repository does** — `ops/arch/claims.sh` refuses a literal `true`
+in `tenants.yml`, so turning it on is an environment variable an operator
+sets deliberately. This sentence used to read "every demo tenant does",
+which was wrong in both directions: eleven of twelve were already
+redacted, and the twelfth was `taranga` — the one tenant that is publicly
+reachable on the hosted box *and* wired to a real model key. Corrected
+2026-09-23, along with the tenant. The ledger (`ai_audit`) keeps the redacted prompt and
 response either way and records `redactedFields`. No retention sweep
 deletes AI ledger rows, so stored (redacted) prompts are kept until
 someone removes them, and neither `ai_audit` nor the decision log is yet

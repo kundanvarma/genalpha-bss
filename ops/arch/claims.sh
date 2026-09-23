@@ -54,6 +54,12 @@ done
 # Capabilities that must be DARK unless an operator asks. The application
 # default is the production default: a deployment that forgets the variable
 # must get the safe answer. Demo opt-in belongs in docker-compose.yml only.
+# Raw exposure sends the UNREDACTED prompt to an external model. No tenant may
+# carry a literal `true` in a file that ships: an operator who wants it sets the
+# environment variable, deliberately, and the AI ledger records that they did.
+RAW=$(grep -n '^\s*ai-raw-exposure:\s*true\s*$' infra/tenants/tenants.yml 2>/dev/null || true)
+[ -z "$RAW" ] || fail "a tenant ships ai-raw-exposure: true — unredacted prompts leave the process" "$RAW"
+
 for key in agent-commerce; do
   BAD=$(grep -rn "^\s*${key}: \${[A-Z_]*:\(full\|discovery\|on\|true\)}" \
         services/gateway/src/main/resources/application.yml infra/tenants/tenants.yml 2>/dev/null || true)
