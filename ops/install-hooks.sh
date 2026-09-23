@@ -8,7 +8,8 @@ cat > "$HOOK" <<'EOF'
 #!/bin/bash
 R="$(git rev-parse --show-toplevel)"
 "$R/ops/scan-secrets.sh" || exit $?
-exec "$R/ops/arch/ratchet.sh"
+"$R/ops/arch/ratchet.sh" || exit $?
+exec "$R/ops/arch/claims.sh"
 EOF
 chmod +x "$HOOK"
-echo "install-hooks: pre-commit now runs ops/scan-secrets.sh and ops/arch/ratchet.sh on every commit"
+echo "install-hooks: pre-commit now runs ops/scan-secrets.sh, ops/arch/ratchet.sh and ops/arch/claims.sh on every commit"

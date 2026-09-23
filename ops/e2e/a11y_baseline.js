@@ -58,7 +58,9 @@ const TARGETS = [
   const browser = await chromium.launch();
   const results = [];
   for (const t of TARGETS) {
-    const ctx = await browser.newContext();
+    // see a11y_test.js: axe is injected as inline script, which the gateway's
+    // content policy refuses. This relaxes the SCANNER, never the app.
+    const ctx = await browser.newContext({ bypassCSP: true });
     const page = await ctx.newPage();
     try {
       await t.open(page);

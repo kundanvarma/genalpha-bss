@@ -23,6 +23,7 @@ docker compose build <x> && docker compose up -d --no-deps --force-recreate <x>
 cd ops/e2e && node <suite>_test.js                        # one suite at a time on the laptop
 bash ops/run-all-suites.sh                                # ~40 min, writes ops/e2e/.proof-run/
 ops/arch/ratchet.sh                                       # architecture ratchet (also a pre-commit + edit hook)
+ops/arch/claims.sh                                        # claims gate: the prose must match the code
 ```
 
 - The **Testcontainers** tests (`PostgresMigrationTest`, 29 components — the only ones that meet real Postgres) skip silently on this laptop unless Colima is spelled out. They pass in CI, where Docker is native:
@@ -45,7 +46,7 @@ DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLE
 2. `docs/<arc>.md` says what was built, in operator language, and ends with **Honest limits**.
 3. README rows and diagrams updated when components or suites change; the capability map when a capability lands.
 4. Any domain-event change updates insight, campaign and bss-bridge consumers, then the martech sweep is rerun.
-5. The architecture ratchet is green: no new untyped public returns, no front-end file grew.
+5. The architecture ratchet is green: no new untyped public returns, no front-end file grew. The claims gate is green: every number and every "enforced" in the README is still true.
 6. Screens speak operator language — names, never keys or UUIDs — and you looked at a screenshot before handing over.
 7. Nothing goes to the hosted box without being asked; the deploy recipe is in `ops/cloud/aws-demo/README.md`.
 
@@ -59,6 +60,8 @@ DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLE
 - **AI proposes, a human decides.** Copilots return a card; Create is a click. Agents act only through registered ontology actions with a receipt.
 - **UI**: React with components under 300 lines for channels; no new vanilla-JS files; the vanilla consoles shrink desk by desk (see conventions). Vanilla consoles build DOM with `createElement`: true for admin-console (40 `innerHTML` uses remain); partner-console still renders with `innerHTML` in 14 places — a follow-up.
 - **Prices are positive; discounts are rules.** Laws are data a tenant cannot undercut.
+- **A claim is a promise the code keeps, or it is not written.** Every number in a document (suite counts, component counts, stack versions) is generated or checked, never typed from memory; every "off by default" is the *application* default, with demo opt-in in `docker-compose.yml` only; every "enforced in CI" names a workflow step that exists. `ops/arch/claims.sh` checks these and fails the build. Adding a fact to the README means adding its check. This rule exists because an outside review found five stale claims at once — none of them a bug, and together worth more than a bug, because a claim that turns out to be stale makes every other claim suspect.
+- **A gate you have never seen fail is not a gate.** Before trusting any check, break something on purpose and watch it go red. A script that prints failures and exits 0 reads exactly like a pass to everything downstream.
 
 ## Security with teeth
 
