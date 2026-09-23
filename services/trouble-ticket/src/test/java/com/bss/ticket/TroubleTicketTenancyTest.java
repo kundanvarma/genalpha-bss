@@ -60,7 +60,7 @@ class TroubleTicketTenancyTest {
     private String customerTicket(String issuer, String sub, String name) throws Exception {
         MvcResult result = mockMvc.perform(post(BASE).with(customerOf(issuer, sub))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"%s\"}".formatted(name)))
+                        .content("{\"name\": \"%s\", \"ticketType\": \"support\"}".formatted(name)))
                 .andExpect(status().isCreated())
                 .andReturn();
         return JsonPath.read(result.getResponse().getContentAsString(), "$.id");

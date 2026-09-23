@@ -1,6 +1,7 @@
 package com.bss.interaction.privacy;
 
 import com.bss.interaction.entity.PartyInteraction;
+import com.bss.interaction.exception.BadRequestException;
 import com.bss.interaction.repository.PartyInteractionRepository;
 import com.bss.interaction.security.TenantScope;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The GDPR corner of this service. EXPORT rides the caller's OWN token —
@@ -38,25 +38,31 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
-        List<PartyInteraction> items = repository.findByTenantIdAndCustomerPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", CATEGORY, "count", items.size(), "items", items);
+        return PrivacyExport.of(CATEGORY,
+                repository.findByTenantIdAndCustomerPartyId(tenantScope.currentTenantId(), target));
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
-        List<PartyInteraction> rows = repository.findByTenantIdAndCustomerPartyId(tenantScope.currentTenantId(), target);
+        if (request.partyId() == null) {
+            // A nameless erasure is the 400 this door always meant. The map
+            // path looked up the literal "null" and deleted nothing by luck;
+            // an honest null here would render as customer_party_id IS NULL.
+            throw new BadRequestException("partyId is required — an erasure names the person");
+        }
+        List<PartyInteraction> rows = repository.findByTenantIdAndCustomerPartyId(
+                tenantScope.currentTenantId(), request.partyId());
         repository.deleteAll(rows);
-        return Map.of("category", CATEGORY, "deleted", rows.size(), "retained", 0);
+        return new EraseReceipt(rows.size(), CATEGORY, 0);
     }
 
     private String subject() {

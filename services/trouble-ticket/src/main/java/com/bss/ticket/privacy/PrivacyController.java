@@ -1,6 +1,7 @@
 package com.bss.ticket.privacy;
 
 import com.bss.ticket.entity.TroubleTicket;
+import com.bss.ticket.exception.BadRequestException;
 import com.bss.ticket.repository.TroubleTicketRepository;
 import com.bss.ticket.security.TenantScope;
 import org.springframework.http.HttpStatus;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The GDPR corner of this service. EXPORT rides the caller's OWN token —
@@ -38,25 +38,32 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
-        List<TroubleTicket> items = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", CATEGORY, "count", items.size(), "items", items);
+        return PrivacyExport.of(CATEGORY,
+                repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target));
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
-        List<TroubleTicket> rows = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
+        if (request.partyId() == null) {
+            // A nameless erasure is the 400 this door always meant. The map
+            // path looked up the literal "null" and deleted nothing by luck;
+            // an honest null here would render as owner_party_id IS NULL and
+            // take every ownerless ticket (social care opens 149 of them).
+            throw new BadRequestException("partyId is required — an erasure names the person");
+        }
+        List<TroubleTicket> rows = repository.findByTenantIdAndOwnerPartyId(
+                tenantScope.currentTenantId(), request.partyId());
         repository.deleteAll(rows);
-        return Map.of("category", CATEGORY, "deleted", rows.size(), "retained", 0);
+        return new EraseReceipt(CATEGORY, rows.size(), 0);
     }
 
     private String subject() {

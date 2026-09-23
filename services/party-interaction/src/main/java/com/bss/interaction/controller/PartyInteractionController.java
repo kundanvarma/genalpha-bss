@@ -2,7 +2,9 @@ package com.bss.interaction.controller;
 
 import com.bss.interaction.api.ApiConstants;
 import com.bss.interaction.api.PagedResult;
+import com.bss.interaction.dto.InteractionView;
 import com.bss.interaction.service.PartyInteractionService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
@@ -33,14 +35,14 @@ public class PartyInteractionController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<InteractionView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
+        PagedResult<InteractionView> result = service.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -48,19 +50,22 @@ public class PartyInteractionController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<InteractionView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<InteractionView> create(@RequestBody ObjectNode dto) {
+        // The body is the caller's TMF683 document: stored whole so every
+        // spec field round-trips, and an object — never a list — as the map
+        // binding always insisted.
+        InteractionView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<InteractionView> patch(@PathVariable("id") String id,
+            @RequestBody ObjectNode dto) {
         return ResponseEntity.ok(service.patch(id, dto));
     }
 }

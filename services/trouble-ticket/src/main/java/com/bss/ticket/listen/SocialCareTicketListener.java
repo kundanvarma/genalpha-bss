@@ -1,5 +1,7 @@
 package com.bss.ticket.listen;
 
+import com.bss.ticket.dto.TicketView;
+import com.bss.ticket.dto.TroubleTicketCreateRequest;
 import com.bss.ticket.repository.TroubleTicketRepository;
 import com.bss.ticket.security.TenantContext;
 import com.bss.ticket.service.TroubleTicketService;
@@ -89,8 +91,12 @@ public class SocialCareTicketListener {
                 dto.put("note", List.of(Map.of("text",
                         "Opened from social care. Sentiment: " + sentiment + "; reason: " + reason + ".")));
 
-                Map<String, Object> created = tickets.create(dto);
-                log.info("opened social-care ticket {} for {} ({})", created.get("id"), sourceId, reason);
+                // The listener keeps building the request as an open document —
+                // the DM's blocks are the caller's, and converting the map to
+                // the request record preserves them key for key.
+                TicketView created = tickets.create(
+                        objectMapper.convertValue(dto, TroubleTicketCreateRequest.class));
+                log.info("opened social-care ticket {} for {} ({})", created.id(), sourceId, reason);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable social-care event: {}", e.getMessage());

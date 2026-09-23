@@ -47,7 +47,7 @@ class TroubleTicketApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name": "%s", "description": "no internet",
-                                 "severity": "major",
+                                 "ticketType": "incident", "severity": "major",
                                  "note": [{"text": "router blinking red"}]}
                                 """.formatted(name)))
                 .andExpect(status().isCreated())
@@ -118,7 +118,7 @@ class TroubleTicketApiTest {
         mockMvc.perform(post(BASE).with(agent("partner-paul", "partner-north"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"name": "Router replacement",
+                                {"name": "Router replacement", "ticketType": "device",
                                  "relatedParty": [{"id": "cust-t3", "role": "customer"}]}
                                 """))
                 .andExpect(status().isCreated())

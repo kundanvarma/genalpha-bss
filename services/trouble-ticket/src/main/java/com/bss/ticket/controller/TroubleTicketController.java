@@ -2,7 +2,13 @@ package com.bss.ticket.controller;
 
 import com.bss.ticket.api.ApiConstants;
 import com.bss.ticket.api.PagedResult;
+import com.bss.ticket.dto.TicketView;
+import com.bss.ticket.dto.TroubleTicketCreateRequest;
+import com.bss.ticket.dto.TroubleTicketPatchRequest;
 import com.bss.ticket.service.TroubleTicketService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
@@ -28,13 +34,15 @@ import java.util.Map;
 public class TroubleTicketController {
 
     private final TroubleTicketService service;
+    private final ObjectMapper objectMapper;
 
-    public TroubleTicketController(TroubleTicketService service) {
+    public TroubleTicketController(TroubleTicketService service, ObjectMapper objectMapper) {
         this.service = service;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<TicketView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam Map<String, String> allParams) {
@@ -42,7 +50,7 @@ public class TroubleTicketController {
         filters.remove("offset");
         filters.remove("limit");
         filters.remove("fields");
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
+        PagedResult<TicketView> result = service.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -50,32 +58,36 @@ public class TroubleTicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id,
+    public ResponseEntity<Object> getById(@PathVariable("id") String id,
             @RequestParam(name = "fields", required = false) String fields) {
-        Map<String, Object> full = service.findById(id);
+        TicketView full = service.findById(id);
         if (fields == null || fields.isBlank()) {
             return ResponseEntity.ok(full);
         }
-        // TMF630 attribute selection, strict: exactly the asked-for fields
-        Map<String, Object> slim = new java.util.LinkedHashMap<>();
+        // TMF630 attribute selection, strict: exactly the asked-for fields, in
+        // the order asked for. The projection walks the record's own tree, so
+        // a key the view leaves off (relatedParty, relatedEntity) is missing
+        // here too, exactly as the map's containsKey used to decide.
+        JsonNode tree = objectMapper.valueToTree(full);
+        ObjectNode slim = objectMapper.createObjectNode();
         for (String f : fields.split(",")) {
             String key = f.trim();
-            if (full.containsKey(key)) {
-                slim.put(key, full.get(key));
+            if (tree.has(key)) {
+                slim.set(key, tree.get(key));
             }
         }
         return ResponseEntity.ok(slim);
     }
 
     @PostMapping({"", "/"})
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<TicketView> create(@RequestBody TroubleTicketCreateRequest dto) {
+        TicketView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                     @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<TicketView> patch(@PathVariable("id") String id,
+                                            @RequestBody TroubleTicketPatchRequest patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 }

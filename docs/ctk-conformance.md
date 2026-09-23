@@ -83,7 +83,7 @@ Assertion counts on this page are the numbers from the day each kit was
 certified. Several kits assert over the **whole** list, so the totals grow as a
 tenant accumulates data: TMF638 read 5836 then and 5850 now, TMF639 2809 then
 and 3425 now, TMF641 220 and 350, TMF687 124 and 168, TMF640 R18.5 1187 and
-1697 — all still at zero failures.
+1697, TMF621 488 and 986 for TMF683 — all still at zero failures. Two kits append rows that later runs then assert over, so their totals climb by a fixed step every run (TMF621 +12, TMF683 +80, TMF642 +68): compare requests and failures and the step, not the total.
 
 **TMF653 is the honest exception.** On this laptop it now fails 54 assertions
 of 2058. The pre-change image fails the same 54, so it is not a regression from

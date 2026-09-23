@@ -1,6 +1,8 @@
 package com.bss.knowledge.controller;
 
 import com.bss.knowledge.api.ApiConstants;
+import com.bss.knowledge.dto.ArticleRequest;
+import com.bss.knowledge.dto.ArticleView;
 import com.bss.knowledge.service.ArticleService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
@@ -29,7 +30,7 @@ public class ArticleController {
     }
 
     @GetMapping("/article")
-    public ResponseEntity<List<Map<String, Object>>> find(
+    public ResponseEntity<List<ArticleView>> find(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String audience,
@@ -38,19 +39,19 @@ public class ArticleController {
     }
 
     @GetMapping("/article/{id}")
-    public ResponseEntity<Map<String, Object>> findById(@PathVariable String id) {
+    public ResponseEntity<ArticleView> findById(@PathVariable String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping("/article")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<ArticleView> create(@RequestBody ArticleRequest dto) {
+        ArticleView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @PatchMapping("/article/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ArticleView> patch(@PathVariable String id,
+            @RequestBody ArticleRequest dto) {
         return ResponseEntity.ok(service.patch(id, dto));
     }
 

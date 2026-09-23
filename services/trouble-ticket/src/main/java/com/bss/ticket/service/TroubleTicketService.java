@@ -1,8 +1,15 @@
 package com.bss.ticket.service;
 
 import com.bss.ticket.api.ApiConstants;
+import com.bss.ticket.api.Json;
 import com.bss.ticket.api.OffsetPageRequest;
 import com.bss.ticket.api.PagedResult;
+import com.bss.ticket.dto.OrgRef;
+import com.bss.ticket.dto.PartyRef;
+import com.bss.ticket.dto.TicketNote;
+import com.bss.ticket.dto.TicketView;
+import com.bss.ticket.dto.TroubleTicketCreateRequest;
+import com.bss.ticket.dto.TroubleTicketPatchRequest;
 import com.bss.ticket.entity.TroubleTicket;
 import com.bss.ticket.events.DomainEventPublisher;
 import com.bss.ticket.exception.BadRequestException;
@@ -14,7 +21,10 @@ import com.bss.ticket.security.PartyScope;
 import com.bss.ticket.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -24,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +48,7 @@ import java.util.UUID;
 public class TroubleTicketService {
 
     private static final String RESOURCE = "TroubleTicket";
-    private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
+    private static final TypeReference<List<TicketNote>> NOTES = new TypeReference<>() {
     };
     private static final Map<String, Set<String>> TRANSITIONS = Map.of(
             TroubleTicket.ACKNOWLEDGED, Set.of(TroubleTicket.IN_PROGRESS, TroubleTicket.RESOLVED),
@@ -67,7 +76,7 @@ public class TroubleTicketService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<TicketView> findAll(int offset, int limit, Map<String, String> filters) {
         TroubleTicket probe = new TroubleTicket();
         probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
@@ -86,53 +95,52 @@ public class TroubleTicketService {
         // when the history has thousands (the proof run's pagination lesson)
         Page<TroubleTicket> page = repository.findAll(Example.of(probe), new OffsetPageRequest(
                 offset, limit, org.springframework.data.domain.Sort.by("creationDate").descending()));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::toView).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public TicketView findById(String id) {
         TroubleTicket entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireVisible(entity);
-        return toMap(entity);
+        return toView(entity);
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public TicketView create(TroubleTicketCreateRequest dto) {
         // TMF621: description and ticketType are the spec's mandatory pair;
         // name is optional and falls back to the description
-        if (dto.get("description") == null && dto.get("name") == null) {
+        if (!Json.present(dto.description()) && !Json.present(dto.name())) {
             throw new BadRequestException("description is required");
         }
-        if (dto.get("ticketType") == null || String.valueOf(dto.get("ticketType")).isBlank()) {
+        if (!Json.present(dto.ticketType()) || Json.valueOfLike(dto.ticketType()).isBlank()) {
             throw new BadRequestException("ticketType is required — a ticket declares its kind");
         }
-        if (dto.get("note") instanceof Map<?, ?> lone && lone.get("text") == null) {
+        if (dto.note() != null && dto.note().isObject() && !Json.present(dto.note().get("text"))) {
             throw new BadRequestException("a note IS its text — text is required");
         }
         TroubleTicket entity = new TroubleTicket();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/troubleTicket/" + id);
-        entity.setName(String.valueOf(dto.get("name") != null ? dto.get("name") : dto.get("description")));
-        entity.setDescription(dto.get("description") == null ? null : String.valueOf(dto.get("description")));
-        entity.setTicketType(String.valueOf(dto.get("ticketType")));
-        entity.setSeverity(dto.get("severity") == null ? "minor" : String.valueOf(dto.get("severity")));
+        entity.setName(Json.valueOfLike(Json.present(dto.name()) ? dto.name() : dto.description()));
+        entity.setDescription(Json.present(dto.description()) ? Json.valueOfLike(dto.description()) : null);
+        entity.setTicketType(Json.valueOfLike(dto.ticketType()));
+        entity.setSeverity(Json.present(dto.severity()) ? Json.valueOfLike(dto.severity()) : "minor");
         entity.setStatus(TroubleTicket.ACKNOWLEDGED);
         // Customer tickets belong to the customer and the operator's default
         // org; agent-raised tickets belong to the named customer and the
         // agent's own org.
-        String customerParty = partyScope.scopedPartyId().orElseGet(() -> customerIn(dto));
+        String customerParty = partyScope.scopedPartyId().orElseGet(dto::customerPartyId);
         entity.setOwnerPartyId(customerParty);
         entity.setOrgId(orgScope.scopedOrgId().orElse(defaultOrg));
         entity.setTenantId(tenantScope.currentTenantId());
-        entity.setRelatedEntityJson(writeJson(dto.get("relatedEntity")));
-        entity.setNoteJson(writeJson(normalizeNotes(dto.get("note"))));
+        entity.setRelatedEntityJson(Json.present(dto.relatedEntity()) ? writeJson(dto.relatedEntity()) : null);
+        entity.setNoteJson(writeJson(normalizeNotes(dto.note())));
         entity.setCreationDate(OffsetDateTime.now());
         entity.setStatusChangeDate(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
+        TicketView created = toView(repository.save(entity));
         events.publish("TroubleTicketCreateEvent", "troubleTicket", created);
         return created;
     }
@@ -143,15 +151,13 @@ public class TroubleTicketService {
      * ticket; agents and back-office drive the rest.
      */
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public TicketView patch(String id, TroubleTicketPatchRequest patch) {
         TroubleTicket entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireVisible(entity);
 
-        Object newStatus = patch.get("status");
-        if (newStatus != null && !String.valueOf(newStatus).equals(entity.getStatus())) {
-            String target = String.valueOf(newStatus);
+        if (Json.present(patch.status()) && !Json.valueOfLike(patch.status()).equals(entity.getStatus())) {
+            String target = Json.valueOfLike(patch.status());
             if (partyScope.scopedPartyId().isPresent() && !TroubleTicket.CLOSED.equals(target)) {
                 throw new BadRequestException("customers may only close a resolved ticket");
             }
@@ -163,44 +169,35 @@ public class TroubleTicketService {
             entity.setStatus(target);
             entity.setStatusChangeDate(OffsetDateTime.now());
         }
-        if (patch.get("note") != null) {
-            List<Map<String, Object>> notes = readJsonArray(entity.getNoteJson());
-            notes.addAll((List<Map<String, Object>>) normalizeNotes(patch.get("note")));
+        if (Json.present(patch.note())) {
+            List<TicketNote> notes = readNotes(entity.getNoteJson());
+            notes.addAll(normalizeNotes(patch.note()));
             entity.setNoteJson(writeJson(notes));
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> updated = toMap(repository.save(entity));
+        TicketView updated = toView(repository.save(entity));
         events.publish("TroubleTicketStateChangeEvent", "troubleTicket", updated);
         return updated;
     }
 
     /** Notes get their author and timestamp stamped server-side. */
-    @SuppressWarnings("unchecked")
-    private Object normalizeNotes(Object note) {
-        if (note == null) {
-            return new ArrayList<Map<String, Object>>();
+    private List<TicketNote> normalizeNotes(JsonNode note) {
+        List<TicketNote> normalized = new ArrayList<>();
+        if (!Json.present(note)) {
+            return normalized;
         }
         String author = SecurityContextHolder.getContext().getAuthentication() == null ? "system"
                 : SecurityContextHolder.getContext().getAuthentication().getName();
-        List<Map<String, Object>> normalized = new ArrayList<>();
-        for (Map<String, Object> n : (List<Map<String, Object>>) note) {
-            normalized.add(Map.of(
-                    "text", String.valueOf(n.getOrDefault("text", "")),
-                    "author", author,
-                    "date", OffsetDateTime.now().toString()));
+        // A note block that is not a list of objects is the 500 the cast has
+        // always answered; typing is not the moment to improve a refusal.
+        for (JsonNode element : (ArrayNode) note) {
+            ObjectNode n = (ObjectNode) element;
+            normalized.add(new TicketNote(
+                    OffsetDateTime.now().toString(),
+                    author,
+                    n.has("text") ? Json.valueOfLike(n.get("text")) : ""));
         }
         return normalized;
-    }
-
-    private String customerIn(Map<String, Object> dto) {
-        if (dto.get("relatedParty") instanceof List<?> parties) {
-            for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return String.valueOf(ref.get("id"));
-                }
-            }
-        }
-        return null;
     }
 
     /** Customers: own tickets only. Agents: own org only. Both 404, never 403. */
@@ -217,31 +214,22 @@ public class TroubleTicketService {
         });
     }
 
-    private Map<String, Object> toMap(TroubleTicket entity) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        map.put("name", entity.getName());
-        map.put("description", entity.getDescription() == null
-                ? entity.getName() : entity.getDescription());
-        map.put("severity", entity.getSeverity());
-        map.put("ticketType", entity.getTicketType() == null ? "support" : entity.getTicketType());
-        map.put("status", entity.getStatus());
-        if (entity.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of(
-                    "id", entity.getOwnerPartyId(), "role", "customer", "@referredType", "Individual")));
-        }
-        map.put("organization", Map.of("id", entity.getOrgId(), "@referredType", "Organization"));
-        Object related = readJson(entity.getRelatedEntityJson());
-        if (related != null) {
-            map.put("relatedEntity", related);
-        }
-        map.put("note", readJsonArray(entity.getNoteJson()));
-        map.put("creationDate", entity.getCreationDate());
-        map.put("statusChangeDate", entity.getStatusChangeDate());
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "TroubleTicket");
-        return map;
+    private TicketView toView(TroubleTicket entity) {
+        return new TicketView(
+                entity.getId(),
+                entity.getHref(),
+                entity.getName(),
+                entity.getDescription() == null ? entity.getName() : entity.getDescription(),
+                entity.getSeverity(),
+                entity.getTicketType() == null ? "support" : entity.getTicketType(),
+                entity.getStatus(),
+                entity.getOwnerPartyId() == null ? null : List.of(PartyRef.customer(entity.getOwnerPartyId())),
+                OrgRef.of(entity.getOrgId()),
+                readJson(entity.getRelatedEntityJson()),
+                readNotes(entity.getNoteJson()),
+                entity.getCreationDate(),
+                entity.getStatusChangeDate(),
+                entity.getLastUpdate());
     }
 
     private String writeJson(Object value) {
@@ -252,17 +240,21 @@ public class TroubleTicketService {
         }
     }
 
-    private Object readJson(String json) {
+    private JsonNode readJson(String json) {
         try {
-            return json == null ? null : objectMapper.readValue(json, Object.class);
+            if (json == null) {
+                return null;
+            }
+            JsonNode node = objectMapper.readTree(json);
+            return node == null || node.isNull() ? null : node;
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON value is unreadable", e);
         }
     }
 
-    private List<Map<String, Object>> readJsonArray(String json) {
+    private List<TicketNote> readNotes(String json) {
         try {
-            return json == null ? new ArrayList<>() : objectMapper.readValue(json, JSON_ARRAY);
+            return json == null ? new ArrayList<>() : objectMapper.readValue(json, NOTES);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }

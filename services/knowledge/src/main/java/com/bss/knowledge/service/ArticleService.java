@@ -1,6 +1,9 @@
 package com.bss.knowledge.service;
 
 import com.bss.knowledge.api.ApiConstants;
+import com.bss.knowledge.api.Json;
+import com.bss.knowledge.dto.ArticleRequest;
+import com.bss.knowledge.dto.ArticleView;
 import com.bss.knowledge.entity.Article;
 import com.bss.knowledge.events.DomainEventPublisher;
 import com.bss.knowledge.exception.BadRequestException;
@@ -13,9 +16,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -30,8 +32,13 @@ import java.util.UUID;
 public class ArticleService {
 
     private static final String RESOURCE = "Article";
-    private static final Set<String> AUDIENCES =
-            Set.of("customer", "csr", "sales", "productOwner", "all");
+    /**
+     * The shelves. This table is PRINTED in the refusal a bad audience gets,
+     * so the order is the one the wire already has — a {@code Set.of} was
+     * re-salting it on every JVM start.
+     */
+    private static final Set<String> AUDIENCES = new LinkedHashSet<>(
+            List.of("customer", "csr", "productOwner", "all", "sales"));
 
     private final ArticleRepository repository;
     private final TenantScope tenantScope;
@@ -51,14 +58,14 @@ public class ArticleService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> find(String q, String category, String audience) {
+    public List<ArticleView> find(String q, String category, String audience) {
         return find(q, category, audience, null);
     }
 
     /** With a context TAG (e.g. "pane:approvals", "csr:tickets", "shop:bills"): the shelf for
      *  one screen — the audience gate still applies, a customer never sees a product how-to. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> find(String q, String category, String audience, String tag) {
+    public List<ArticleView> find(String q, String category, String audience, String tag) {
         String tenantId = tenantScope.currentTenantId();
         List<Article> hits = (q == null || q.isBlank())
                 ? repository.findByTenantIdOrderByLastUpdateDesc(tenantId)
@@ -82,7 +89,7 @@ public class ArticleService {
                 .filter(a -> category == null || category.equals(a.getCategory()))
                 .filter(a -> audience == null || audience.equals(a.getAudience()))
                 .filter(a -> tag == null || hasTag(a, tag))
-                .map(this::toMap)
+                .map(this::toView)
                 .toList();
     }
 
@@ -99,21 +106,21 @@ public class ArticleService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public ArticleView findById(String id) {
         Article a = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         if (!readableAudiences().contains(a.getAudience())
                 || (!isAuthor() && !"published".equals(a.getStatus()))) {
             throw NotFoundException.forResource(RESOURCE, id);
         }
-        return toMap(a);
+        return toView(a);
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public ArticleView create(ArticleRequest dto) {
         Article a = new Article();
-        String id = dto.get("id") != null && !String.valueOf(dto.get("id")).isBlank()
-                ? String.valueOf(dto.get("id")) : UUID.randomUUID().toString();
+        String id = Json.present(dto.id()) && !Json.valueOfLike(dto.id()).isBlank()
+                ? Json.valueOfLike(dto.id()) : UUID.randomUUID().toString();
         a.setId(id);
         a.setTenantId(tenantScope.currentTenantId());
         a.setHref(ApiConstants.BASE_PATH + "/article/" + id);
@@ -130,19 +137,19 @@ public class ArticleService {
         }
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(a));
+        ArticleView created = toView(repository.save(a));
         embedQuietly(a);
         events.publish("ArticleCreateEvent", "article", created);
         return created;
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+    public ArticleView patch(String id, ArticleRequest dto) {
         Article a = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         apply(dto, a);
         a.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> updated = toMap(repository.save(a));
+        ArticleView updated = toView(repository.save(a));
         embedQuietly(a);
         events.publish("ArticleAttributeValueChangeEvent", "article", updated);
         return updated;
@@ -153,31 +160,32 @@ public class ArticleService {
         Article a = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         repository.delete(a);
-        events.publish("ArticleDeleteEvent", "article", toMap(a));
+        events.publish("ArticleDeleteEvent", "article", toView(a));
     }
 
-    private void apply(Map<String, Object> dto, Article a) {
-        if (dto.get("title") != null) {
-            a.setTitle(String.valueOf(dto.get("title")));
+    /** A key the caller did not send — and a key they sent as null — leaves the article alone. */
+    private void apply(ArticleRequest dto, Article a) {
+        if (Json.present(dto.title())) {
+            a.setTitle(Json.valueOfLike(dto.title()));
         }
-        if (dto.get("body") != null) {
-            a.setBody(String.valueOf(dto.get("body")));
+        if (Json.present(dto.body())) {
+            a.setBody(Json.valueOfLike(dto.body()));
         }
-        if (dto.get("tags") != null) {
-            a.setTags(String.valueOf(dto.get("tags")));
+        if (Json.present(dto.tags())) {
+            a.setTags(Json.valueOfLike(dto.tags()));
         }
-        if (dto.get("category") != null) {
-            a.setCategory(String.valueOf(dto.get("category")));
+        if (Json.present(dto.category())) {
+            a.setCategory(Json.valueOfLike(dto.category()));
         }
-        if (dto.get("audience") != null) {
-            String audience = String.valueOf(dto.get("audience"));
+        if (Json.present(dto.audience())) {
+            String audience = Json.valueOfLike(dto.audience());
             if (!AUDIENCES.contains(audience)) {
                 throw new BadRequestException("audience must be one of " + AUDIENCES);
             }
             a.setAudience(audience);
         }
-        if (dto.get("status") != null) {
-            a.setStatus(String.valueOf(dto.get("status")));
+        if (Json.present(dto.status())) {
+            a.setStatus(Json.valueOfLike(dto.status()));
         }
     }
 
@@ -223,19 +231,9 @@ public class ArticleService {
         return out;
     }
 
-    private Map<String, Object> toMap(Article a) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", a.getId());
-        m.put("href", a.getHref());
-        m.put("title", a.getTitle());
-        m.put("body", a.getBody());
-        m.put("tags", a.getTags());
-        m.put("category", a.getCategory());
-        m.put("audience", a.getAudience());
-        m.put("status", a.getStatus());
-        m.put("lastUpdate", a.getLastUpdate());
-        m.put("@type", "Article");
-        return m;
+    private ArticleView toView(Article a) {
+        return new ArticleView(a.getId(), a.getHref(), a.getTitle(), a.getBody(), a.getTags(),
+                a.getCategory(), a.getAudience(), a.getStatus(), a.getLastUpdate());
     }
 
     /** The tenant's language picks the stemmer — Norwegian articles are
