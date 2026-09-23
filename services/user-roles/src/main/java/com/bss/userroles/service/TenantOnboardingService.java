@@ -189,7 +189,7 @@ public class TenantOnboardingService {
             throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
         }
         String block = m.group(1);
-        return new BrandView(id, firstGroup(block, "brand-name: (.*)"),
+        return new BrandView(id, strip(firstGroup(block, "brand-name: (.*)")),
                 strip(firstGroup(block, "brand-color: (.*)")), strip(firstGroup(block, "tagline: (.*)")));
     }
 
@@ -208,8 +208,74 @@ public class TenantOnboardingService {
     }
 
     private static String strip(String v) {
-        return v != null && v.length() > 1 && v.startsWith("\"") && v.endsWith("\"")
-                ? v.substring(1, v.length() - 1) : v;
+        if (v == null || v.length() < 2 || !v.startsWith("\"") || !v.endsWith("\"")) {
+            return v;
+        }
+        // undo the escaping yamlScalar applies, so a brand name reads back as typed
+        return v.substring(1, v.length() - 1).replace("\\\"", "\"").replace("\\\\", "\\");
+    }
+
+    /* ---------- writing operator-supplied text into the shared registry ----------
+     *
+     * tenants.yml is ONE file describing EVERY operator: issuers, JWKS URIs,
+     * machine credentials, seam URLs. A brand name typed into a form is written
+     * into it. Written raw, a value carrying a newline does not set a brand name
+     * -- it adds registry lines of the caller's choosing, and enough of them
+     * close the caller's own block and open somebody else's. A tenant's own
+     * marketing team can reach the brand fields (mutateOwn), so raw interpolation
+     * turns "edit your storefront name" into "edit the fleet's trust settings".
+     *
+     * Two rules, applied at every point where form text reaches the file:
+     * the value is checked against what that field can legitimately hold, and
+     * it is emitted as a quoted YAML scalar rather than pasted in. Both are
+     * needed: quoting alone still lets a control character through, and
+     * validation alone would break the first brand name containing a colon.
+     */
+
+    /** A double-quoted YAML scalar. Refuses anything that could leave the line. */
+    private static String yamlScalar(String field, String value, int maxLength) {
+        String v = value == null ? "" : value.trim();
+        if (v.isEmpty()) {
+            throw new com.bss.userroles.exception.BadRequestException(field + " must not be empty");
+        }
+        for (int i = 0; i < v.length(); i++) {
+            char c = v.charAt(i);
+            // C0 controls (newline and carriage return among them) and DEL:
+            // the only characters that can end the line this value sits on.
+            // Checked before the length so that an injection attempt is told
+            // what is actually wrong with it, and so a long payload cannot be
+            // reported as merely too long.
+            if (c < 0x20 || c == 0x7F) {
+                throw new com.bss.userroles.exception.BadRequestException(
+                        field + " must not contain control characters or line breaks");
+            }
+        }
+        if (v.length() > maxLength) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    field + " must be " + maxLength + " characters or fewer");
+        }
+        return "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    /** A value drawn from a fixed alphabet: emitted bare, so it must be exact. */
+    private static String checked(String field, String value, Pattern allowed, String describe) {
+        String v = value == null ? "" : value.trim();
+        if (!allowed.matcher(v).matches()) {
+            throw new com.bss.userroles.exception.BadRequestException(field + " must be " + describe);
+        }
+        return v;
+    }
+
+    private static final Pattern SAFE_LOCALE = Pattern.compile("[a-z]{2}(-[A-Za-z0-9]{2,8})?");
+    private static final Pattern SAFE_CURRENCY = Pattern.compile("[A-Z]{3}");
+    private static final Pattern SAFE_COLOR = Pattern.compile("#[0-9a-fA-F]{6}");
+    private static final int MAX_BRAND_NAME = 60;
+    private static final int MAX_TAGLINE = 200;
+
+    /** Replace a registry line's value, with the replacement taken literally. */
+    private static String setLine(String block, String key, String value) {
+        return block.replaceAll(key + ": .*",
+                Matcher.quoteReplacement(key + ": " + value));
     }
 
     public MutateReceipt mutate(String id, OperatorPatch dto) throws Exception {
@@ -230,16 +296,19 @@ public class TenantOnboardingService {
         }
         String block = m.group(1);
         if (dto.name() != null) {
-            block = block.replaceAll("brand-name: .*", "brand-name: " + dto.name());
+            block = setLine(block, "brand-name", yamlScalar("name", dto.name(), MAX_BRAND_NAME));
         }
         if (dto.color() != null) {
-            block = block.replaceAll("brand-color: .*", "brand-color: \"" + dto.color() + "\"");
+            block = setLine(block, "brand-color",
+                    "\"" + checked("color", dto.color(), SAFE_COLOR, "a hex colour like #B85C38") + "\"");
         }
         if (dto.locale() != null) {
-            block = block.replaceAll("locale: .*", "locale: \"" + dto.locale() + "\"");
+            block = setLine(block, "locale",
+                    "\"" + checked("locale", dto.locale(), SAFE_LOCALE, "a language tag like en or nb-NO") + "\"");
         }
         if (dto.currency() != null) {
-            block = block.replaceAll("currency: .*", "currency: " + dto.currency());
+            block = setLine(block, "currency",
+                    checked("currency", dto.currency(), SAFE_CURRENCY, "a three-letter ISO 4217 code"));
         }
         if (dto.catalogGovernance() != null) {
             String mode = dto.catalogGovernance().trim();
@@ -274,12 +343,7 @@ public class TenantOnboardingService {
         if (dto.tagline() != null) {
             // the storefront hero line — free text, so it rides YML double-quoted;
             // insert-if-absent because older tenant blocks predate the field
-            String tagline = dto.tagline().replace("\"", "'").trim();
-            if (tagline.length() > 200) {
-                throw new com.bss.userroles.exception.BadRequestException(
-                        "tagline must be 200 characters or fewer");
-            }
-            String line = "tagline: \"" + tagline + "\"";
+            String line = "tagline: " + yamlScalar("tagline", dto.tagline(), MAX_TAGLINE);
             if (block.contains("tagline: ")) {
                 block = block.replaceAll("tagline: .*", java.util.regex.Matcher.quoteReplacement(line));
             } else {
@@ -590,10 +654,14 @@ public class TenantOnboardingService {
                         + id + "/protocol/openid-connect/certs")
                 .replaceAll("token-uri: \\$\\{[^}]*\\}", "token-uri: http://keycloak:8080/realms/"
                         + id + "/protocol/openid-connect/token")
-                .replaceAll("brand-name: .*", "brand-name: " + name)
-                .replaceAll("brand-color: .*", "brand-color: \"" + color + "\"")
-                .replaceAll("locale: .*", "locale: \"" + locale + "\"")
-                .replaceAll("currency: .*", "currency: " + currency)
+                .replaceAll("brand-name: .*", Matcher.quoteReplacement(
+                        "brand-name: " + yamlScalar("name", name, MAX_BRAND_NAME)))
+                .replaceAll("brand-color: .*", "brand-color: \""
+                        + checked("color", color, SAFE_COLOR, "a hex colour like #B85C38") + "\"")
+                .replaceAll("locale: .*", "locale: \""
+                        + checked("locale", locale, SAFE_LOCALE, "a language tag like en or nb-NO") + "\"")
+                .replaceAll("currency: .*",
+                        "currency: " + checked("currency", currency, SAFE_CURRENCY, "a three-letter ISO 4217 code"))
                 .replaceAll("hosts: .*", "hosts: [shop." + id + ".localhost, csr." + id
                         + ".localhost, console." + id + ".localhost, biz." + id + ".localhost]")
                 // a newborn operator is DARK to AI shopping agents until it
