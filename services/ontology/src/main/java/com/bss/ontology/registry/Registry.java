@@ -42,8 +42,9 @@ public class Registry {
     private static final Logger log = LoggerFactory.getLogger(Registry.class);
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
     private static final ObjectMapper JSON = new ObjectMapper();
-    /** keys a tenant overlay may replace on a core action; preconditions are appended, everything else is core-owned */
-    private static final Set<String> OVERLAY_MAY_REPLACE = Set.of("meaning", "intent", "governance", "policy", "pages", "version", "introduced");
+    /** keys a tenant overlay may replace on a core action; preconditions are appended,
+     *  governance merges tighten-only, everything else is core-owned */
+    private static final Set<String> OVERLAY_MAY_REPLACE = Set.of("meaning", "intent", "pages", "version", "introduced");
 
     public record Layer(Map<String, JsonNode> concepts, Map<String, JsonNode> actions,
             Map<String, JsonNode> capabilities, Map<String, JsonNode> components, Map<String, JsonNode> agents) {
@@ -130,9 +131,16 @@ public class Registry {
         JsonNode schema = schemas.get(kind);
         if ("action".equals(kind) && label.startsWith("tenant") && !doc.has("executes")) {
             // a tenant overlay on a core action is partial by design: only the name is required,
-            // the shape of what it carries is still the action's
+            // the shape of what it carries is still the action's. Governance is partial for the
+            // same reason and with more force — an overlay should be able to lower one threshold
+            // without restating the block, because restating it is how a guard gets dropped by
+            // accident. What each key may be is still checked; whether it is present is not.
             ObjectNode partial = schema.deepCopy();
             partial.putArray("required").add("action");
+            JsonNode governance = partial.path("properties").path("governance");
+            if (governance.isObject()) {
+                ((ObjectNode) governance).remove("required");
+            }
             schema = partial;
         }
         List<String> errs = SchemaCheck.validate(schema, doc, label + "/" + file);
@@ -196,6 +204,9 @@ public class Registry {
                 if ("preconditions".equals(k)) {
                     ArrayNode pcs = (ArrayNode) m.withArray("preconditions");
                     f.getValue().forEach(pcs::add);
+                } else if ("governance".equals(k)) {
+                    m.set("governance", tightenGovernance(coreAction.path("governance"),
+                            f.getValue(), tenant, en.getKey()));
                 } else if (OVERLAY_MAY_REPLACE.contains(k)) {
                     m.set(k, f.getValue());
                 } else {
@@ -206,6 +217,121 @@ public class Registry {
             out.actions().put(en.getKey(), m);
         }
         return out;
+    }
+
+    /* ------------------------------------------------------------------ governance may only tighten */
+
+    /* An operator overlays the core ontology to make an action STRICTER for its
+     * own people -- that is the whole contract, and the shipped overlay says so
+     * in its own comment. Until now the merge took the overlay's governance
+     * block whole, so the contract was a convention rather than a rule: an
+     * overlay could drop the human approver from issuing a credit, or raise the
+     * amount above which one is needed. Preconditions were already append-only,
+     * so the hard ceilings held; what an overlay could remove was the second
+     * pair of eyes below them.
+     *
+     * Now each key merges on its own, a core key survives an overlay that omits
+     * it (silence cannot drop a guard), and a value that would loosen the action
+     * is a load-time problem -- which refuses to start the registry rather than
+     * serving a weaker rule than the core promises.
+     */
+
+    /** Least to most autonomous; an overlay may move down this list, never up. */
+    private static final List<String> AUTONOMY = List.of("none", "low", "medium", "high");
+    /** Least to most demanding; an overlay may move UP this list, never down. */
+    private static final List<String> APPROVAL = List.of("none", "human", "two-person");
+    private static final List<String> AUDIT = List.of("none", "optional", "mandatory");
+
+    private JsonNode tightenGovernance(JsonNode core, JsonNode overlay, String tenant, String action) {
+        ObjectNode out = core.isObject() ? core.deepCopy() : JSON.createObjectNode();
+        if (!overlay.isObject()) {
+            problems.add(said(tenant, action, "governance must be a block"));
+            return out;
+        }
+        overlay.fields().forEachRemaining(f -> {
+            String k = f.getKey();
+            JsonNode was = core.path(k);
+            JsonNode now = f.getValue();
+            switch (k) {
+                case "autonomy" -> rank(out, k, was, now, AUTONOMY, false, tenant, action);
+                case "approval" -> rank(out, k, was, now, APPROVAL, true, tenant, action);
+                case "audit" -> rank(out, k, was, now, AUDIT, true, tenant, action);
+                case "approverRole" -> {
+                    // an overlay may name its OWN approver, but not delete the gate
+                    if (now.isNull() || now.asText("").isBlank()) {
+                        problems.add(said(tenant, action, "may not remove approverRole \"" + was.asText() + "\""));
+                    } else {
+                        out.set(k, now);
+                    }
+                }
+                // "approve above 25" is tighter than "approve above 100": lower is stricter
+                case "approvalAbove" -> amount(out, k, was.path("amount"), now.path("amount"),
+                        now, false, tenant, action, "approvalAbove.amount");
+                case "limits" -> {
+                    ObjectNode limits = was.isObject() ? was.deepCopy() : JSON.createObjectNode();
+                    now.fields().forEachRemaining(l -> amount(limits, l.getKey(),
+                            was.path(l.getKey()), l.getValue(), l.getValue(), false,
+                            tenant, action, "limits." + l.getKey()));
+                    out.set(k, limits);
+                }
+                // anything else in the block is descriptive, not a control
+                default -> out.set(k, now);
+            }
+        });
+        return out;
+    }
+
+    /** A value from a known ladder. {@code higherIsStricter} says which way tightens. */
+    private void rank(ObjectNode out, String key, JsonNode was, JsonNode now, List<String> ladder,
+            boolean higherIsStricter, String tenant, String action) {
+        int before = ladder.indexOf(was.asText(""));
+        int after = ladder.indexOf(now.asText(""));
+        if (after < 0) {
+            problems.add(said(tenant, action, key + " \"" + now.asText() + "\" is not one of " + ladder));
+            return;
+        }
+        if (before >= 0 && (higherIsStricter ? after < before : after > before)) {
+            problems.add(said(tenant, action, "may not loosen " + key + " from \""
+                    + was.asText() + "\" to \"" + now.asText() + "\""));
+            return;
+        }
+        out.set(key, now);
+    }
+
+    /** A numeric ceiling or threshold. {@code higherIsStricter} says which way tightens. */
+    private void amount(ObjectNode out, String key, JsonNode was, JsonNode now, JsonNode whole,
+            boolean higherIsStricter, String tenant, String action, String label) {
+        java.math.BigDecimal before = decimal(was);
+        java.math.BigDecimal after = decimal(now);
+        if (after == null) {
+            problems.add(said(tenant, action, label + " must be a number"));
+            return;
+        }
+        if (before != null) {
+            int cmp = after.compareTo(before);
+            if (higherIsStricter ? cmp < 0 : cmp > 0) {
+                problems.add(said(tenant, action, "may not loosen " + label
+                        + " from " + before.toPlainString() + " to " + after.toPlainString()));
+                return;
+            }
+        }
+        out.set(key, whole);
+    }
+
+    private static java.math.BigDecimal decimal(JsonNode n) {
+        if (n == null || n.isMissingNode() || n.isNull()) {
+            return null;
+        }
+        try {
+            return new java.math.BigDecimal(n.asText());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String said(String tenant, String action, String what) {
+        return "tenant " + tenant + ": action \"" + action + "\" " + what
+                + " — a tenant overlay may tighten an action, never loosen it";
     }
 
     /* ------------------------------------------------------------------ referential integrity */

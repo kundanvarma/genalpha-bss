@@ -108,6 +108,89 @@ class RegistryLoadTest {
         assertThat(r.core().actions().get("oldChangePlan").path("supersededBy").asText()).isEqualTo("upgradeSubscription");
     }
 
+    /* ---------- an overlay may tighten an action, never loosen it ----------
+     *
+     * Preconditions were always append-only, so the hard ceilings held. What an
+     * overlay could still do was take the governance block whole, and with it
+     * remove the human approver that stands between a care agent and a credit.
+     */
+
+    /** The repo ontology with one tenant overlay written over issueCredit. */
+    private static Path withCreditOverlay(String governance) throws IOException {
+        Path tmp = Files.createTempDirectory("ontology-overlay");
+        copy(Path.of(repoOntology()), tmp);
+        Path dir = tmp.resolve("tenants/taranga/actions");
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("issueCredit.yml"), """
+                action: issueCredit
+                governance:
+                %s
+                """.formatted(governance));
+        return tmp;
+    }
+
+    @Test
+    void anOverlayMayNotDropTheHumanApproverFromACredit() throws IOException {
+        Path tmp = withCreditOverlay("  approval: none");
+
+        assertThatThrownBy(() -> new Registry(tmp.toString()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("may not loosen approval")
+                .hasMessageContaining("never loosen it");
+    }
+
+    @Test
+    void anOverlayMayNotRaiseTheAmountAboveWhichAHumanDecides() throws IOException {
+        // core: a human decides above 25. An overlay asking for 45 buys a desk
+        // agent twenty more pounds of unreviewed goodwill per credit.
+        Path tmp = withCreditOverlay("  approvalAbove: { input: amount, amount: 45 }");
+
+        assertThatThrownBy(() -> new Registry(tmp.toString()))
+                .hasMessageContaining("may not loosen approvalAbove.amount from 25 to 45");
+    }
+
+    @Test
+    void anOverlayMayNotRemoveTheApproverOrWeakenTheAudit() throws IOException {
+        // An approver cannot be deleted: the merge starts from the core block,
+        // so omitting the key keeps it, and blanking it is refused by the
+        // schema's own pattern before the tightening rule is reached.
+        assertThatThrownBy(() -> new Registry(withCreditOverlay("  approverRole: \"\"").toString()))
+                .hasMessageContaining("approverRole");
+        assertThatThrownBy(() -> new Registry(withCreditOverlay("  audit: optional").toString()))
+                .hasMessageContaining("may not loosen audit");
+        assertThatThrownBy(() -> new Registry(withCreditOverlay("  autonomy: high").toString()))
+                .hasMessageContaining("may not loosen autonomy from \"low\" to \"high\"");
+        assertThatThrownBy(() -> new Registry(withCreditOverlay("  limits: { maxAmount: 5000 }").toString()))
+                .hasMessageContaining("may not loosen limits.maxAmount from 50 to 5000");
+    }
+
+    @Test
+    void anOverlayMayTightenAndSilenceNeverDropsACoreGuard() throws IOException {
+        // lower ceiling, lower approval threshold, and NOTHING said about the
+        // approver or the audit — both of which must survive the merge
+        Path tmp = withCreditOverlay("  approvalAbove: { input: amount, amount: 10 }\n  limits: { maxAmount: 30 }");
+
+        Registry r = new Registry(tmp.toString());
+        JsonNode g = r.forTenant("taranga").actions().get("issueCredit").path("governance");
+
+        assertThat(g.path("approvalAbove").path("amount").asInt()).isEqualTo(10);
+        assertThat(g.path("limits").path("maxAmount").asInt()).isEqualTo(30);
+        assertThat(g.path("approverRole").asText()).isEqualTo("billing:admin");
+        assertThat(g.path("approval").asText()).isEqualTo("human");
+        assertThat(g.path("audit").asText()).isEqualTo("mandatory");
+    }
+
+    @Test
+    void theShippedOverlayStillLoadsAndItsOwnLimitSurvives() throws IOException {
+        // the real taranga overlay tightens upgradeSubscription; it must not be
+        // collateral damage of the new rule
+        Registry r = new Registry(repoOntology());
+        JsonNode g = r.forTenant("taranga").actions().get("upgradeSubscription").path("governance");
+
+        assertThat(g.path("limits").path("maxMonthlyPriceNok").asInt()).isEqualTo(999);
+        assertThat(g.path("audit").asText()).isEqualTo("mandatory");
+    }
+
     private static void copy(Path from, Path to) throws IOException {
         try (var walk = Files.walk(from)) {
             for (Path p : walk.toList()) {

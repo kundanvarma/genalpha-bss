@@ -37,12 +37,20 @@ follows.
   actions and approval filing need, per action.
 - A tenant overlay may add and may tighten; it may never remove a core
   precondition or change `executes`, `inputs`, `permissions`, `emits`.
-  **Today** the loader (`Registry.OVERLAY_MAY_REPLACE`) refuses those four
-  keys and appends preconditions as intended, but lets an overlay replace
-  `governance` and `policy` wholesale — so an overlay can also loosen
-  autonomy, approval or a threshold. Follow-up: merge those two keys
-  tighten-only (autonomy may only fall, approval may only be added,
-  thresholds may only drop).
+  The loader (`Registry.OVERLAY_MAY_REPLACE`) refuses those four keys and
+  appends preconditions. **Since 23 September** `governance` merges key by
+  key and only ever tightens: autonomy may fall, approval and audit may
+  only strengthen, an approver may be renamed but not removed, and a
+  threshold or limit may only drop. A key the overlay does not mention
+  keeps the core's value, so silence cannot drop a guard — which also
+  means an overlay states only what it changes, and the overlay schema no
+  longer demands a whole governance block. `policy` is no longer
+  replaceable at all; no overlay used it. A loosening overlay is a
+  load-time problem, and a load-time problem refuses to start the
+  registry, so the fleet cannot serve a rule weaker than the core's.
+  The earlier gap was real but bounded: preconditions were already
+  append-only, so the hard ceilings (no credit above 50) always held —
+  what an overlay could remove was the second pair of eyes beneath them.
 - The same definitions generate the MCP tools, the TypeScript SDK, the
   console's "What the BSS can do", the ? drawer's explanations and each
   component's `/.well-known/genalpha-component.json`.
