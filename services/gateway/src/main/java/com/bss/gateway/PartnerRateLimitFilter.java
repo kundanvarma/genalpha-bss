@@ -37,6 +37,21 @@ public class PartnerRateLimitFilter implements GlobalFilter, Ordered {
     private final long windowMs;
     private final int globalCapacity;
     private final long globalWindowMs;
+    private final int probeCapacity;
+    private final long probeWindowMs;
+    /**
+     * Anonymous paths that answer a question about the operator's own data and
+     * can therefore be walked.
+     *
+     * The number offer is the one that prompted this: a shopper must see free
+     * numbers before signing in, so it cannot be closed — but every draw also
+     * says which candidates are NOT free, and a caller varying the shuffle can
+     * map an operator's issued MSISDNs a few hundred at a time. The wide ring
+     * covers it already at a fleet-wide ceiling, which is generous enough that
+     * a patient walker never notices it. This ring is sized for a human
+     * pressing shuffle, not for a program.
+     */
+    private final java.util.Set<String> probePaths;
     private final com.bss.gateway.ratelimit.RateLimitStore store;
 
     public PartnerRateLimitFilter(
@@ -44,11 +59,20 @@ public class PartnerRateLimitFilter implements GlobalFilter, Ordered {
             @Value("${bss.gateway.partner-rate.window-ms:60000}") long windowMs,
             @Value("${bss.gateway.global-rate.capacity:1200}") int globalCapacity,
             @Value("${bss.gateway.global-rate.window-ms:60000}") long globalWindowMs,
+            @Value("${bss.gateway.probe-rate.capacity:30}") int probeCapacity,
+            @Value("${bss.gateway.probe-rate.window-ms:60000}") long probeWindowMs,
+            @Value("${bss.gateway.probe-rate.paths:/tmf-api/resourcePoolManagement/v4/numberOffer}")
+                    String probePaths,
             @Value("${bss.gateway.redis-url:}") String redisUrl) {
         this.capacity = capacity;
         this.windowMs = windowMs;
         this.globalCapacity = globalCapacity;
         this.globalWindowMs = globalWindowMs;
+        this.probeCapacity = probeCapacity;
+        this.probeWindowMs = probeWindowMs;
+        this.probePaths = java.util.Arrays.stream(probePaths.split(","))
+                .map(String::trim).filter(p -> !p.isEmpty())
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
         // the seam: one gateway keeps its buckets in memory; replicas (or
         // anyone who wants restart-surviving windows) point REDIS_URL at
         // a shared store and every replica enforces the SAME ceiling
@@ -69,11 +93,19 @@ public class PartnerRateLimitFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         boolean dealerSurface = path.startsWith("/dealer/v1/");
-        // the strict ring for partners, the wide ring for everyone
-        String key = dealerSurface ? partnerKey(exchange) : "g:" + subjectKey(exchange);
-        long retryAfterSeconds = dealerSurface
-                ? tryAcquire(key, capacity, windowMs)
-                : tryAcquire(key, globalCapacity, globalWindowMs);
+        boolean probeSurface = probePaths.contains(path);
+        // the strict ring for partners, a tight ring for walkable anonymous
+        // lookups, the wide ring for everyone else
+        String key = dealerSurface ? partnerKey(exchange)
+                : (probeSurface ? "p:" + path + ":" + subjectKey(exchange) : "g:" + subjectKey(exchange));
+        long retryAfterSeconds;
+        if (dealerSurface) {
+            retryAfterSeconds = tryAcquire(key, capacity, windowMs);
+        } else if (probeSurface) {
+            retryAfterSeconds = tryAcquire(key, probeCapacity, probeWindowMs);
+        } else {
+            retryAfterSeconds = tryAcquire(key, globalCapacity, globalWindowMs);
+        }
         if (retryAfterSeconds == 0) {
             return chain.filter(exchange);
         }

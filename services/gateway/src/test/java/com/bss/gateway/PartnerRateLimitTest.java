@@ -14,7 +14,7 @@ class PartnerRateLimitTest {
 
     @Test
     void capacityAdmits_thenRefusesWithRetryAfter_perKey() throws Exception {
-        PartnerRateLimitFilter filter = new PartnerRateLimitFilter(3, 300, 1200, 60000, "");
+        PartnerRateLimitFilter filter = new PartnerRateLimitFilter(3, 300, 1200, 60000, 30, 60000, "/probe", "");
         assertThat(filter.tryAcquire("client:pos-a", 3, 300)).isZero();
         assertThat(filter.tryAcquire("client:pos-a", 3, 300)).isZero();
         assertThat(filter.tryAcquire("client:pos-a", 3, 300)).isZero();
@@ -27,7 +27,7 @@ class PartnerRateLimitTest {
 
     @Test
     void wideRing_hasItsOwnCeiling_perSubject() {
-        PartnerRateLimitFilter filter = new PartnerRateLimitFilter(3, 300, 2, 60000, "");
+        PartnerRateLimitFilter filter = new PartnerRateLimitFilter(3, 300, 2, 60000, 30, 60000, "/probe", "");
         // the wide ring: two knocks pass, the third waits — per subject
         assertThat(filter.tryAcquire("g:sub:alice", 2, 60000)).isZero();
         assertThat(filter.tryAcquire("g:sub:alice", 2, 60000)).isZero();
@@ -43,5 +43,31 @@ class PartnerRateLimitTest {
         InMemoryRateLimitStore store = new InMemoryRateLimitStore();
         assertThat(store.tryAcquire("k", 1, 60000)).isZero();
         assertThat(store.tryAcquire("k", 1, 60000)).isPositive();
+    }
+
+    @Test
+    void theWalkableLookupHasItsOwnTightCeiling() {
+        // The number offer must stay anonymous — a shopper picks a number
+        // before signing in — but every draw also says which candidates are
+        // NOT free, so a caller varying the shuffle can map an operator's
+        // issued numbers. The wide ring's 1200/min never notices that; this
+        // one is sized for a human pressing shuffle.
+        PartnerRateLimitFilter filter =
+                new PartnerRateLimitFilter(3, 300, 1200, 60000, 4, 60000,
+                        "/tmf-api/resourcePoolManagement/v4/numberOffer", "");
+
+        String key = "p:/tmf-api/resourcePoolManagement/v4/numberOffer:ip:1.2.3.4";
+        assertThat(filter.tryAcquire(key, 4, 60000)).isZero();
+        assertThat(filter.tryAcquire(key, 4, 60000)).isZero();
+        assertThat(filter.tryAcquire(key, 4, 60000)).isZero();
+        assertThat(filter.tryAcquire(key, 4, 60000)).isZero();
+        // the fifth draw in the window waits
+        assertThat(filter.tryAcquire(key, 4, 60000)).isPositive();
+
+        // and it is per caller: another shopper is unaffected
+        assertThat(filter.tryAcquire(
+                "p:/tmf-api/resourcePoolManagement/v4/numberOffer:ip:5.6.7.8", 4, 60000)).isZero();
+        // while ordinary browsing keeps the wide ring's room
+        assertThat(filter.tryAcquire("g:ip:1.2.3.4", 1200, 60000)).isZero();
     }
 }
