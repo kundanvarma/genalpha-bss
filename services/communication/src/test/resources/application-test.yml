@@ -30,9 +30,14 @@ bss:
       - id: genalpha
         issuer: https://idp.genalpha.test/realms/bss
         esp-api-key: ""
+        # every operator signs its own unsubscribe links; a deployment that
+        # configures none cannot send marketing mail, which is the point
+        unsubscribe-secret: test-unsub-genalpha
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
         esp-api-key: test-esp-key-a
+        unsubscribe-secret: test-unsub-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
         esp-api-key: test-esp-key-b
+        unsubscribe-secret: test-unsub-b

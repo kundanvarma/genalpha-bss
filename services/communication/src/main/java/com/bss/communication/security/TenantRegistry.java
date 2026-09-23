@@ -74,6 +74,9 @@ public class TenantRegistry {
         private String espUrl;
         private String espApiKey;
         private String espFrom;
+        /** Signs this operator's one-click unsubscribe links. Per tenant, so one
+         *  operator's link can never be minted or honoured by another. */
+        private String unsubscribeSecret;
         /** WhatsApp Business (Meta Cloud API shape): base URL, the env var holding the token, the sender's phone-number id. */
         private String whatsappUrl;
         private String whatsappTokenRef;
@@ -181,6 +184,14 @@ public class TenantRegistry {
 
         public void setEspApiKey(String espApiKey) {
             this.espApiKey = espApiKey;
+        }
+
+        public String getUnsubscribeSecret() {
+            return unsubscribeSecret;
+        }
+
+        public void setUnsubscribeSecret(String unsubscribeSecret) {
+            this.unsubscribeSecret = unsubscribeSecret;
         }
 
         public String getEspFrom() {

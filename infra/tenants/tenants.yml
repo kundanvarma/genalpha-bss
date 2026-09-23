@@ -41,6 +41,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER:internal}
         esp-url: ${ESP_URL:}
         esp-api-key: ${ESP_API_KEY:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET:unsub-genalpha-dev}
         esp-from: ${ESP_FROM:}
         # The AUC the device-entitlement server authenticates SIMs against
         # (EAP-AKA vectors): this operator's HSS/UDM adapter — mock-hss in dev.
@@ -143,6 +146,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_NOVA:internal}
         esp-url: ${ESP_URL_NOVA:}
         esp-api-key: ${ESP_API_KEY_NOVA:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_NOVA:unsub-nova-dev}
         esp-from: ${ESP_FROM_NOVA:}
         brand-name: MyNova
         brand-color: "#5B3FA8"
@@ -218,6 +224,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_CHILIMOBIL:internal}
         esp-url: ${ESP_URL_CHILIMOBIL:}
         esp-api-key: ${ESP_API_KEY_CHILIMOBIL:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_CHILIMOBIL:unsub-chilimobil-dev}
         esp-from: ${ESP_FROM_CHILIMOBIL:}
         tagline: "Mobil, hyttebredbånd og fiber — ærlige priser, ingen binding."
         brand-name: Chilimobil
@@ -294,6 +303,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_FJORDNETT:internal}
         esp-url: ${ESP_URL_FJORDNETT:}
         esp-api-key: ${ESP_API_KEY_FJORDNETT:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_FJORDNETT:unsub-fjordnett-dev}
         esp-from: ${ESP_FROM_FJORDNETT:}
         brand-name: Fjordnett
         brand-color: "#1E7A52"
@@ -369,6 +381,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_NORDLYS:internal}
         esp-url: ${ESP_URL_NORDLYS:}
         esp-api-key: ${ESP_API_KEY_NORDLYS:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_NORDLYS:unsub-nordlys-dev}
         esp-from: ${ESP_FROM_NORDLYS:}
         clock-offset-days: "90"
         sandbox: "true"
@@ -446,6 +461,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_SC229066:internal}
         esp-url: ${ESP_URL_SC229066:}
         esp-api-key: ${ESP_API_KEY_SC229066:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_SC229066:unsub-sc229066-dev}
         esp-from: ${ESP_FROM_SC229066:}
         sandbox: "true"
         brand-name: MyGenAlpha Sandbox
@@ -519,6 +537,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_IB249958:internal}
         esp-url: ${ESP_URL_IB249958:}
         esp-api-key: ${ESP_API_KEY_IB249958:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_IB249958:unsub-ib249958-dev}
         esp-from: ${ESP_FROM_IB249958:}
         brand-name: Import Probe
         brand-color: "#B85C38"
@@ -591,6 +612,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_PARITY148420:internal}
         esp-url: ${ESP_URL_PARITY148420:}
         esp-api-key: ${ESP_API_KEY_PARITY148420:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_PARITY148420:unsub-parity148420-dev}
         esp-from: ${ESP_FROM_PARITY148420:}
         brand-name: Parity Probe
         brand-color: "#B85C38"
@@ -663,6 +687,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_AURORA:internal}
         esp-url: ${ESP_URL_AURORA:}
         esp-api-key: ${ESP_API_KEY_AURORA:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_AURORA:unsub-aurora-dev}
         esp-from: ${ESP_FROM_AURORA:}
         brand-name: Aurora Tele Nord
         brand-color: "#AA3366"
@@ -738,6 +765,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_FJORD:internal}
         esp-url: ${ESP_URL_FJORD:}
         esp-api-key: ${ESP_API_KEY_FJORD:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_FJORD:unsub-fjord-dev}
         esp-from: ${ESP_FROM_FJORD:}
         brand-name: Fjord Mobil
         brand-color: "#1B6CA8"
@@ -813,6 +843,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_ENET:internal}
         esp-url: ${ESP_URL_ENET:}
         esp-api-key: ${ESP_API_KEY_ENET:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_ENET:unsub-enet-dev}
         esp-from: ${ESP_FROM_ENET:}
         brand-name: ENet
         brand-color: "#F78F1E"
@@ -923,6 +956,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_TARANGA:internal}
         esp-url: ${ESP_URL_TARANGA:}
         esp-api-key: ${ESP_API_KEY_TARANGA:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_TARANGA:unsub-taranga-dev}
         esp-from: ${ESP_FROM_TARANGA:}
         # This operator charges on a REAL OCS: SigScale OCS over its TM Forum
         # APIs (the bundled one in the fleet, or the operator's own — change the
