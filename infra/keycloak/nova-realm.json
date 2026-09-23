@@ -96,7 +96,7 @@
       },
       {
         "name": "communication:admin",
-        "description": "Write the operator message templates - the copy every customer notification is rendered from. Back office only: a customer holds communication:write so their own actions can send them mail, and that must not be enough to rewrite what the operator sends to everyone else.",
+        "description": "Write the operator message templates - the copy every customer notification is rendered from. Back office only: a customer holds communication:write so their own actions can mail them, which must not let them rewrite what the operator sends everyone.",
         "composite": false
       },
       {

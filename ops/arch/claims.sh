@@ -99,6 +99,29 @@ for gate in ops/run-all-suites.sh ops/scan-secrets.sh ops/arch/ratchet.sh ops/ar
     || fail "$gate has no non-zero exit path — it cannot fail, so it is not a gate"
 done
 
+# ------------------------------------------------- a fresh install works ----
+# Keycloak's KEYCLOAK_ROLE.DESCRIPTION is varchar(255). A longer one imports
+# fine on a laptop whose realm was imported months ago and never fails again —
+# and refuses to start on an EMPTY database, which is what a new contributor,
+# a fresh box and CI all have. `communication:admin` in nova sat at 270 chars
+# and broke the first CI run that ever booted Keycloak from nothing.
+python3 - <<'PY' || FAILED=$((FAILED + 1))
+import json, glob, sys
+bad = []
+for f in sorted(glob.glob('infra/keycloak/*realm*.json')):
+    d = json.load(open(f))
+    rs = d.get('roles', {}) or {}
+    groups = [rs.get('realm') or []] + list((rs.get('client') or {}).values())
+    for roles in groups:
+        for r in roles or []:
+            if len(r.get('description') or '') > 255:
+                bad.append(f"{f}: role '{r.get('name')}' description is "
+                           f"{len(r['description'])} chars (Keycloak's column is varchar(255))")
+for b in bad:
+    print(f"claims: DRIFT — {b}", file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
+
 # --------------------------------------------------- CI runs what we claim ---
 # If a document says a check is enforced in CI, a workflow must invoke it.
 while IFS='|' read -r phrase invocation; do
