@@ -9,7 +9,6 @@ import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,16 +42,15 @@ public class EventStreamListener {
             String tenant = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
 
-            Map<String, Object> move = new LinkedHashMap<>();
-            move.put("eventId", String.valueOf(envelope.getOrDefault("eventId", "")));
-            move.put("eventTime", String.valueOf(envelope.getOrDefault("eventTime", "")));
-            move.put("eventType", eventType);
-            move.put("source", source);
-            move.put("tenant", tenant);
-            move.put("reactors", Choreography.reactorsFor(eventType));
-            move.put("ref", referenceOf(envelope));
-            move.put("keys", correlationKeys(eventType, envelope));
-            broadcaster.broadcast(move);
+            broadcaster.broadcast(new FlowMove(
+                    String.valueOf(envelope.getOrDefault("eventId", "")),
+                    String.valueOf(envelope.getOrDefault("eventTime", "")),
+                    eventType,
+                    source,
+                    tenant,
+                    Choreography.reactorsFor(eventType),
+                    referenceOf(envelope),
+                    correlationKeys(eventType, envelope)));
         } catch (Exception e) {
             log.debug("skipping unparseable event on {}: {}", topic, e.getMessage());
         }
@@ -105,10 +103,10 @@ public class EventStreamListener {
      * the party — key intersection stitches them back together.
      */
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> correlationKeys(String eventType, Map<String, Object> envelope) {
-        Map<String, Object> keys = new LinkedHashMap<>();
+    private static FlowMove.CorrelationKeys correlationKeys(String eventType,
+            Map<String, Object> envelope) {
         if (!(envelope.get("event") instanceof Map<?, ?> event)) {
-            return keys;
+            return FlowMove.CorrelationKeys.NONE;
         }
         Map<String, Object> resource = null;
         for (Object value : ((Map<String, Object>) event).values()) {
@@ -118,39 +116,40 @@ public class EventStreamListener {
             }
         }
         if (resource == null) {
-            return keys;
+            return FlowMove.CorrelationKeys.NONE;
         }
         // party — the through-line across most events
         String party = partyOf(resource);
         if (party == null && resource.get("partyId") != null) {
             party = String.valueOf(resource.get("partyId"));
         }
-        if (party != null) keys.put("party", party);
         // order
+        String order = null;
         if (eventType.startsWith("ProductOrder") && resource.get("id") != null) {
-            keys.put("order", String.valueOf(resource.get("id")));
+            order = String.valueOf(resource.get("id"));
         } else if (resource.get("productOrderId") != null) {
-            keys.put("order", String.valueOf(resource.get("productOrderId")));
+            order = String.valueOf(resource.get("productOrderId"));
         } else if (resource.get("productOrder") instanceof Map<?, ?> po && po.get("id") != null) {
-            keys.put("order", String.valueOf(po.get("id")));
+            order = String.valueOf(po.get("id"));
         }
         // intent
+        String intent = null;
         if ("IntentCreateEvent".equals(eventType) && resource.get("id") != null) {
-            keys.put("intent", String.valueOf(resource.get("id")));
+            intent = String.valueOf(resource.get("id"));
         } else if (resource.get("intent") instanceof Map<?, ?> in && in.get("id") != null) {
-            keys.put("intent", String.valueOf(in.get("id")));
+            intent = String.valueOf(in.get("id"));
         }
         // quote
-        if (eventType.startsWith("Quote") && resource.get("id") != null) {
-            keys.put("quote", String.valueOf(resource.get("id")));
-        }
+        String quote = eventType.startsWith("Quote") && resource.get("id") != null
+                ? String.valueOf(resource.get("id")) : null;
         // network object (delivery path / affected object) for the assurance stages
+        String object = null;
         if (resource.get("affectedObject") != null) {
-            keys.put("object", String.valueOf(resource.get("affectedObject")));
+            object = String.valueOf(resource.get("affectedObject"));
         } else if (resource.get("from") != null) {
-            keys.put("object", String.valueOf(resource.get("from")));
+            object = String.valueOf(resource.get("from"));
         }
-        return keys;
+        return new FlowMove.CorrelationKeys(party, order, intent, quote, object);
     }
 
     @SuppressWarnings("unchecked")

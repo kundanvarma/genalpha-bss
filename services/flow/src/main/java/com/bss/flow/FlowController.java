@@ -5,9 +5,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.List;
-import java.util.Map;
-
 @RestController
 public class FlowController {
 
@@ -25,13 +22,7 @@ public class FlowController {
 
     /** The static choreography the page draws its graph from. */
     @GetMapping("/api/graph")
-    public Map<String, Object> graph() {
-        return Map.of(
-                "reactors", Choreography.REACTORS,
-                "aiAgents", Choreography.AI_AGENTS,
-                "producers", List.of("product-ordering", "billing", "trouble-ticket",
-                        "shopping-cart", "agreement", "appointment", "intelligence",
-                        "service-orchestration", "payment", "quote", "assurance"),
-                "consumers", List.of("communication", "campaign", "service-orchestration"));
+    public GraphView graph() {
+        return GraphView.current();
     }
 }

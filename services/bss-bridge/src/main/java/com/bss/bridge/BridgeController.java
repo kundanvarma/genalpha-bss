@@ -1,12 +1,11 @@
 package com.bss.bridge;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * The ingress a foreign BSS posts its own events to. In production the source
@@ -24,8 +23,8 @@ public class BridgeController {
     }
 
     @PostMapping("/bridge/v1/{source}/event")
-    public ResponseEntity<Map<String, Object>> event(@PathVariable String source,
-            @RequestBody Map<String, Object> foreignEvent) {
+    public ResponseEntity<BridgeReceipt> event(@PathVariable String source,
+            @RequestBody JsonNode foreignEvent) {
         return ResponseEntity.ok(service.ingest(source, foreignEvent));
     }
 }

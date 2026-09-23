@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
@@ -24,7 +23,7 @@ public class FlowBroadcaster {
     private static final int REPLAY = 40;
 
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
-    private final Deque<Map<String, Object>> recent = new ArrayDeque<>();
+    private final Deque<FlowMove> recent = new ArrayDeque<>();
     private final ObjectMapper objectMapper;
 
     public FlowBroadcaster(ObjectMapper objectMapper) {
@@ -39,14 +38,14 @@ public class FlowBroadcaster {
         emitters.add(emitter);
         // Replay the recent tail so the graph is populated immediately.
         synchronized (recent) {
-            for (Map<String, Object> event : recent) {
+            for (FlowMove event : recent) {
                 send(emitter, "flow", event);
             }
         }
         return emitter;
     }
 
-    public void broadcast(Map<String, Object> event) {
+    public void broadcast(FlowMove event) {
         synchronized (recent) {
             recent.addLast(event);
             while (recent.size() > REPLAY) {
@@ -58,7 +57,7 @@ public class FlowBroadcaster {
         }
     }
 
-    private void send(SseEmitter emitter, String name, Map<String, Object> event) {
+    private void send(SseEmitter emitter, String name, FlowMove event) {
         try {
             emitter.send(SseEmitter.event().name(name)
                     .data(objectMapper.writeValueAsString(event)));

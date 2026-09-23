@@ -1,5 +1,9 @@
 package com.bss.hub.service;
 
+import com.bss.hub.api.DeliveryView;
+import com.bss.hub.api.HubRequest;
+import com.bss.hub.api.HubView;
+import com.bss.hub.api.Json;
 import com.bss.hub.entity.HubDelivery;
 import com.bss.hub.entity.HubSubscription;
 import com.bss.hub.exception.BadRequestException;
@@ -7,6 +11,7 @@ import com.bss.hub.exception.NotFoundException;
 import com.bss.hub.repository.HubDeliveryRepository;
 import com.bss.hub.repository.HubSubscriptionRepository;
 import com.bss.hub.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,8 +47,8 @@ public class HubService {
     }
 
     @Transactional
-    public Map<String, Object> register(Map<String, Object> dto) {
-        String callback = dto.get("callback") == null ? null : String.valueOf(dto.get("callback"));
+    public HubView register(HubRequest dto) {
+        String callback = dto.callbackText();
         if (callback == null || !callback.startsWith("http")) {
             throw new BadRequestException("callback (http/https URL) is required");
         }
@@ -52,7 +56,8 @@ public class HubService {
         sub.setId(UUID.randomUUID().toString());
         sub.setTenantId(tenantScope.currentTenantId());
         sub.setCallback(callback);
-        if (dto.get("eventTypes") instanceof List<?> types && !types.isEmpty()) {
+        JsonNode types = dto.eventTypesOrNull();
+        if (types != null) {
             sub.setEventTypesJson(writeJson(types));
         }
         sub.setActive(true);
@@ -72,28 +77,18 @@ public class HubService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<HubView> list() {
         return subscriptions.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
                 .stream().map(this::view).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> deliveriesOf(String subscriptionId) {
+    public List<DeliveryView> deliveriesOf(String subscriptionId) {
         return deliveries.findTop100ByTenantIdAndSubscriptionIdOrderByCreatedAtDesc(
                 tenantScope.currentTenantId(), subscriptionId)
-                .stream().map(d -> {
-                    Map<String, Object> map = new LinkedHashMap<>();
-                    map.put("id", d.getId());
-                    map.put("eventType", d.getEventType());
-                    map.put("status", d.getStatus());
-                    map.put("attempts", d.getAttempts());
-                    if (d.getLastError() != null) {
-                        map.put("lastError", d.getLastError());
-                    }
-                    map.put("createdAt", d.getCreatedAt());
-                    map.put("@type", "HubDelivery");
-                    return map;
-                }).toList();
+                .stream().map(d -> DeliveryView.of(d.getId(), d.getEventType(), d.getStatus(),
+                        d.getAttempts(), d.getLastError(), d.getCreatedAt()))
+                .toList();
     }
 
     /** Ingestion (listener-called, acting as the EVENT's tenant): fan out
@@ -130,19 +125,29 @@ public class HubService {
         }
     }
 
-    private Map<String, Object> view(HubSubscription sub) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", sub.getId());
-        map.put("callback", sub.getCallback());
-        if (sub.getEventTypesJson() != null) {
-            try {
-                map.put("eventTypes", objectMapper.readValue(sub.getEventTypesJson(), List.class));
-            } catch (Exception ignored) { }
+    private HubView view(HubSubscription sub) {
+        return HubView.of(sub.getId(), sub.getCallback(), storedFilter(sub.getEventTypesJson()),
+                sub.isActive(), sub.getCreatedAt());
+    }
+
+    /**
+     * The stored filter as the partner posted it. The map path read the
+     * column with {@code readValue(json, List.class)}: a JSON array came
+     * back as a list, a literal {@code null} came back as a written null,
+     * and anything else threw and left the key OFF. A tree reproduces all
+     * three — nothing else may be admitted, or an unreadable column would
+     * start answering where it used to stay silent.
+     */
+    private JsonNode storedFilter(String json) {
+        if (json == null) {
+            return null;
         }
-        map.put("active", sub.isActive());
-        map.put("createdAt", sub.getCreatedAt());
-        map.put("@type", "Hub");
-        return map;
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            return node != null && (node.isArray() || node.isNull()) ? node : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String writeJson(Object o) {

@@ -1,5 +1,10 @@
 package com.bss.process.service;
 
+import com.bss.process.api.FlowView;
+import com.bss.process.api.Json;
+import com.bss.process.api.SpecRequest;
+import com.bss.process.api.SpecView;
+import com.bss.process.api.TaskPatchRequest;
 import com.bss.process.entity.ProcessEvent;
 import com.bss.process.entity.ProcessFlow;
 import com.bss.process.entity.ProcessFlowSpec;
@@ -13,6 +18,8 @@ import com.bss.process.repository.ProcessFlowSpecRepository;
 import com.bss.process.repository.TaskFlowRepository;
 import com.bss.process.security.PartyScope;
 import com.bss.process.security.TenantScope;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,17 +139,17 @@ public class ProcessFlowService {
         flow.setLastUpdate(OffsetDateTime.now());
         flows.save(flow);
         int seq = 0;
-        for (Map<String, Object> t : readTasks(spec.getTasksJson())) {
+        for (JsonNode t : readTasks(spec.getTasksJson())) {
             TaskFlow tf = new TaskFlow();
             tf.setId(UUID.randomUUID().toString());
             tf.setTenantId(tenant);
             tf.setProcessFlowId(flow.getId());
-            tf.setCode(String.valueOf(t.get("code")));
-            tf.setName(String.valueOf(t.get("name")));
+            tf.setCode(Json.valueOf(t.get("code")));
+            tf.setName(Json.valueOf(t.get("name")));
             tf.setSeq(seq++);
-            tf.setAllowanceSeconds(t.get("allowanceSeconds") == null ? null
-                    : Long.valueOf(String.valueOf(t.get("allowanceSeconds"))));
-            boolean first = "placed".equals(t.get("code"));
+            tf.setAllowanceSeconds(Json.absent(t.get("allowanceSeconds")) ? null
+                    : Long.valueOf(Json.valueOf(t.get("allowanceSeconds"))));
+            boolean first = "placed".equals(Json.textOrNull(t.get("code")));
             tf.setState(first ? TaskFlow.COMPLETED : tf.getSeq() == 1 ? TaskFlow.IN_PROGRESS : TaskFlow.PENDING);
             tf.setStartedAt(OffsetDateTime.now());
             if (first) {
@@ -411,33 +418,35 @@ public class ProcessFlowService {
     /* ---------- reads + the operator lever ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listSpecs() {
+    public List<SpecView> listSpecs() {
         String tenant = tenantScope.currentTenantId();
         seedIfEmpty(tenant);
         return specs.findAllByTenantIdOrderByCodeAsc(tenant).stream().map(this::specView).toList();
     }
 
     @Transactional
-    public Map<String, Object> upsertSpec(Map<String, Object> dto) {
+    public SpecView upsertSpec(SpecRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        if (dto.get("code") == null) {
+        String code = dto.codeText();
+        if (code == null) {
             throw new BadRequestException("code is required");
         }
-        ProcessFlowSpec spec = specs.findByTenantIdAndCode(tenant, String.valueOf(dto.get("code")))
+        ProcessFlowSpec spec = specs.findByTenantIdAndCode(tenant, code)
                 .orElseGet(() -> {
                     ProcessFlowSpec s = new ProcessFlowSpec();
                     s.setTenantId(tenant);
-                    s.setCode(String.valueOf(dto.get("code")));
+                    s.setCode(code);
                     return s;
                 });
-        if (dto.get("name") != null) {
-            spec.setName(String.valueOf(dto.get("name")));
+        if (dto.nameText() != null) {
+            spec.setName(dto.nameText());
         }
-        if (dto.get("description") != null) {
-            spec.setDescription(String.valueOf(dto.get("description")));
+        if (dto.descriptionText() != null) {
+            spec.setDescription(dto.descriptionText());
         }
-        if (dto.get("taskFlowSpecification") instanceof List<?> t) {
-            spec.setTasksJson(writeJson(t));
+        JsonNode authored = dto.taskListOrNull();
+        if (authored != null) {
+            spec.setTasksJson(writeJson(authored));
         }
         spec.setLastUpdate(OffsetDateTime.now());
         specs.save(spec);
@@ -445,7 +454,7 @@ public class ProcessFlowService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listFlows(String state, String correlationId) {
+    public List<FlowView> listFlows(String state, String correlationId) {
         String tenant = tenantScope.currentTenantId();
         List<ProcessFlow> found = correlationId != null
                 ? flows.findByTenantIdAndCorrelationId(tenant, correlationId).map(List::of).orElse(List.of())
@@ -460,7 +469,7 @@ public class ProcessFlowService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> flowById(String id) {
+    public FlowView flowById(String id) {
         ProcessFlow flow = flows.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("ProcessFlow", id));
         partyScope.scopedPartyId().ifPresent(own -> {
@@ -473,20 +482,19 @@ public class ProcessFlowService {
 
     /** TMF701's lever: PATCH a taskFlow — an operator completes/retries/cancels. */
     @Transactional
-    public Map<String, Object> patchTask(String flowId, String taskId, Map<String, Object> dto) {
+    public FlowView patchTask(String flowId, String taskId, TaskPatchRequest dto) {
         String tenant = tenantScope.currentTenantId();
         ProcessFlow flow = flows.findByIdAndTenantId(flowId, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("ProcessFlow", flowId));
         TaskFlow t = tasks.findByIdAndTenantId(taskId, tenant)
                 .filter(x -> x.getProcessFlowId().equals(flow.getId()))
                 .orElseThrow(() -> NotFoundException.forResource("TaskFlow", taskId));
-        String state = String.valueOf(dto.get("state"));
+        String state = dto.stateText();
         if (!List.of(TaskFlow.COMPLETED, TaskFlow.IN_PROGRESS, TaskFlow.FAILED).contains(state)) {
             throw new BadRequestException("state must be completed, inProgress or failed");
         }
         t.setState(state);
-        t.setMessage(dto.get("message") == null ? "operator decision"
-                : String.valueOf(dto.get("message")));
+        t.setMessage(dto.messageOrDefault());
         if (TaskFlow.COMPLETED.equals(state)) {
             t.setCompletedAt(OffsetDateTime.now());
         }
@@ -562,23 +570,18 @@ public class ProcessFlowService {
         return body;
     }
 
-    private Map<String, Object> specView(ProcessFlowSpec spec) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("code", spec.getCode());
-        map.put("name", spec.getName());
-        map.put("description", spec.getDescription());
-        map.put("taskFlowSpecification", readTasks(spec.getTasksJson()));
-        map.put("@type", "ProcessFlowSpecification");
-        return map;
+    private SpecView specView(ProcessFlowSpec spec) {
+        return SpecView.of(spec.getCode(), spec.getName(), spec.getDescription(),
+                readTasks(spec.getTasksJson()));
     }
 
     /** The order's status in one honest sentence — the CSR-call deflector. */
-    private Map<String, Object> summaryOf(String flowState, List<Map<String, Object>> tasks) {
+    private FlowView.Summary summaryOf(String flowState, List<FlowView.TaskView> tasks) {
         int done = 0;
-        Map<String, Object> firstPending = null;
-        Map<String, Object> failed = null;
-        for (Map<String, Object> t : tasks) {
-            String st = String.valueOf(t.get("state"));
+        FlowView.TaskView firstPending = null;
+        FlowView.TaskView failed = null;
+        for (FlowView.TaskView t : tasks) {
+            String st = String.valueOf(t.state());
             if ("completed".equals(st)) {
                 done++;
             } else if (("failed".equals(st) || "held".equals(st)) && failed == null) {
@@ -603,83 +606,64 @@ public class ProcessFlowService {
             // raw operator reason stays on the task for the agent.
             needsAttention = true;
             headline = "Taking longer than expected";
-            why = "\"" + failed.get("name") + "\" is taking longer than usual — we're on it, nothing needed from you.";
+            why = "\"" + failed.name() + "\" is taking longer than usual — we're on it, nothing needed from you.";
         } else {
-            Map<String, Object> at = firstPending != null ? firstPending
+            FlowView.TaskView at = firstPending != null ? firstPending
                     : (tasks.isEmpty() ? null : tasks.get(tasks.size() - 1));
             headline = "In progress — " + done + " of " + tasks.size() + " steps done";
             why = at == null ? "Working on it."
-                    : "Now: " + at.get("name")
-                        + (at.get("message") != null ? " — " + at.get("message") : ".");
+                    : "Now: " + at.name()
+                        + (at.message() != null ? " — " + at.message() : ".");
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("headline", headline);
-        out.put("why", why);
-        out.put("needsAttention", needsAttention);   // agent flag: overdue, may need a nudge
-        out.put("stepsDone", done);
-        out.put("stepsTotal", tasks.size());
-        return out;
+        return new FlowView.Summary(headline, why, needsAttention, done, tasks.size());
     }
 
-    private Map<String, Object> flowView(ProcessFlow flow, boolean full) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", flow.getId());
-        map.put("href", "/tmf-api/processFlowManagement/v4/processFlow/" + flow.getId());
-        map.put("specCode", flow.getSpecCode());
-        map.put(flow.getSpecCode() != null && flow.getSpecCode().startsWith("offer-") ? "productOfferingId" : "productOrderId",
-                flow.getCorrelationId());
-        map.put("state", flow.getState());
-        if (flow.getMessage() != null) {
-            map.put("message", flow.getMessage());
-        }
-        if (flow.getPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", flow.getPartyId(), "role", "customer")));
-        }
-        map.put("startedAt", flow.getStartedAt());
-        if (flow.getCompletedAt() != null) {
-            map.put("completedAt", flow.getCompletedAt());
-        }
-        List<Map<String, Object>> taskViews = new ArrayList<>();
+    private FlowView flowView(ProcessFlow flow, boolean full) {
+        boolean offer = flow.getSpecCode() != null && flow.getSpecCode().startsWith("offer-");
+        List<FlowView.TaskView> taskViews = new ArrayList<>();
         for (TaskFlow t : tasks.findAllByTenantIdAndProcessFlowIdOrderBySeqAsc(
                 flow.getTenantId(), flow.getId())) {
-            Map<String, Object> tv = new LinkedHashMap<>();
-            tv.put("id", t.getId());
-            tv.put("code", t.getCode());
-            tv.put("name", t.getName());
-            tv.put("state", t.getState());
-            if (t.getAllowanceSeconds() != null && t.getAllowanceSeconds() > 0) {
-                tv.put("allowanceSeconds", t.getAllowanceSeconds());
-            }
-            if (t.getMessage() != null) {
-                tv.put("message", t.getMessage());
-            }
-            tv.put("@type", "TaskFlow");
-            taskViews.add(tv);
+            taskViews.add(FlowView.TaskView.of(t.getId(), t.getCode(), t.getName(), t.getState(),
+                    t.getAllowanceSeconds(), t.getMessage()));
         }
-        map.put("taskFlow", taskViews);
+        List<FlowView.TimelineEntry> timeline = null;
+        if (full) {
+            timeline = new ArrayList<>();
+            for (ProcessEvent e : journal.findAllByTenantIdAndProcessFlowIdOrderByEventTimeAsc(
+                    flow.getTenantId(), flow.getId())) {
+                timeline.add(new FlowView.TimelineEntry(e.getEventTime(), e.getEventType(),
+                        String.valueOf(e.getSourceTopic()), String.valueOf(e.getDigest())));
+            }
+        }
         // A plain-language SUMMARY — the whole point for an agent or a customer:
         // what stage the order is at, and WHY it is not done yet. Computed from
         // the task states + their messages so both the console and the shop (and
         // the customer) read the same sentence and nobody has to phone the desk.
-        map.put("summary", summaryOf(flow.getState(), taskViews));
-        if (full) {
-            List<Map<String, Object>> timeline = new ArrayList<>();
-            for (ProcessEvent e : journal.findAllByTenantIdAndProcessFlowIdOrderByEventTimeAsc(
-                    flow.getTenantId(), flow.getId())) {
-                timeline.add(Map.of("eventType", e.getEventType(), "sourceTopic",
-                        String.valueOf(e.getSourceTopic()), "eventTime", e.getEventTime(),
-                        "digest", String.valueOf(e.getDigest())));
-            }
-            map.put("timeline", timeline);
-        }
-        map.put("@type", "ProcessFlow");
-        return map;
+        return new FlowView(
+                flow.getId(),
+                "/tmf-api/processFlowManagement/v4/processFlow/" + flow.getId(),
+                flow.getSpecCode(),
+                offer ? flow.getCorrelationId() : null,
+                offer ? null : flow.getCorrelationId(),
+                flow.getState(),
+                flow.getMessage(),
+                flow.getPartyId() == null ? null
+                        : List.of(FlowView.PartyRef.customer(flow.getPartyId())),
+                flow.getStartedAt(),
+                flow.getCompletedAt(),
+                taskViews,
+                summaryOf(flow.getState(), taskViews),
+                timeline,
+                "ProcessFlow");
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> readTasks(String json) {
+    private static final TypeReference<List<JsonNode>> TASK_LIST = new TypeReference<>() {
+    };
+
+    /** The authored task list, exactly as the column holds it. */
+    private List<JsonNode> readTasks(String json) {
         try {
-            return json == null ? List.of() : objectMapper.readValue(json, List.class);
+            return json == null ? List.of() : objectMapper.readValue(json, TASK_LIST);
         } catch (Exception e) {
             return List.of();
         }

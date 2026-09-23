@@ -1,6 +1,9 @@
 package com.bss.hub.controller;
 
 import com.bss.hub.api.ApiConstants;
+import com.bss.hub.api.DeliveryView;
+import com.bss.hub.api.HubRequest;
+import com.bss.hub.api.HubView;
 import com.bss.hub.service.HubService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /** TMF688's face: /hub registration, and the ledger behind each listener. */
 @RestController
@@ -27,12 +29,12 @@ public class HubController {
     }
 
     @PostMapping("/hub")
-    public ResponseEntity<Map<String, Object>> register(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<HubView> register(@RequestBody HubRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.register(dto));
     }
 
     @GetMapping("/hub")
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<HubView>> list() {
         return ResponseEntity.ok(service.list());
     }
 
@@ -43,7 +45,7 @@ public class HubController {
     }
 
     @GetMapping("/hub/{id}/delivery")
-    public ResponseEntity<List<Map<String, Object>>> deliveries(@PathVariable("id") String id) {
+    public ResponseEntity<List<DeliveryView>> deliveries(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.deliveriesOf(id));
     }
 }
