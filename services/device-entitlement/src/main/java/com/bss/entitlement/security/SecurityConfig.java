@@ -45,8 +45,16 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html", "/.well-known/genalpha-component.json").permitAll()
                         // the device door: EAP-AKA / ECS token, not a BSS login
                         .requestMatchers(ApiConstants.TS43_PATH, ApiConstants.TS43_PATH + "/**").permitAll()
-                        // the RCS client's configuration door (GSMA RCC.14): the SIM is the credential
-                        .requestMatchers("/rcs/**").permitAll()
+                        // The RCS client's configuration door (GSMA RCC.14): PUBLIC BY
+                        // DESIGN at the HTTP layer, because the credential is the SIM.
+                        // The handset runs EAP-AKA against the AUC through EcsService
+                        // (or presents a token this server issued); no BSS login exists
+                        // on a phone. Narrowed from the old "/rcs/**" for every method
+                        // to exactly the two paths that exist, so the next mapping
+                        // added under /rcs is authenticated by default rather than
+                        // anonymous by accident.
+                        .requestMatchers(HttpMethod.GET, "/rcs/autoconfig", "/rcs/autoconfig/").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/rcs/autoconfig", "/rcs/autoconfig/").permitAll()
                         .requestMatchers(HttpMethod.GET, BASE + "/**")
                                 .hasAnyAuthority("entitlement:read", "entitlement:write")
                         .requestMatchers(HttpMethod.POST, BASE + "/**").hasAuthority("entitlement:write")

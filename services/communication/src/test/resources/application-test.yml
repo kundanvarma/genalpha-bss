@@ -25,9 +25,14 @@ bss:
   tenants:
     default-tenant: genalpha
     registry:
+      # genalpha configures no esp-api-key on purpose: a tenant with no ESP
+      # relationship must have no receipt door (see EspReceiptDoorTest).
       - id: genalpha
         issuer: https://idp.genalpha.test/realms/bss
+        esp-api-key: ""
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
+        esp-api-key: test-esp-key-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
+        esp-api-key: test-esp-key-b

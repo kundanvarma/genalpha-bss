@@ -81,7 +81,15 @@ public class TenantRegistry {
         private String ocsBaseUrl;
         private String ocsUsername;
         private String ocsPassword;
+        /** The shared secret this tenant's OCS signs its northbound
+         * notifications with (tenants.yml `ocs-notify-secret`, a
+         * {@code ${ENV:default}} config ref like every other per-tenant
+         * credential). It authenticates the OCS → BSS door
+         * ({@code /internal/ocs/**}); absent means that tenant's door is shut. */
+        private String ocsNotifySecret;
 
+        public String getOcsNotifySecret() { return ocsNotifySecret; }
+        public void setOcsNotifySecret(String v) { this.ocsNotifySecret = v; }
         public String getOcsProvider() { return ocsProvider; }
         public void setOcsProvider(String v) { this.ocsProvider = v; }
         public String getOcsBaseUrl() { return ocsBaseUrl; }

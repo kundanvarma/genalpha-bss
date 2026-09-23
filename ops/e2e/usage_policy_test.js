@@ -20,9 +20,12 @@
  * seed_usage_policy.py).
  */
 const { chromium } = require('playwright');
+const crypto = require('crypto');
 
 const API = 'http://localhost:8080';
 const USAGE_DIRECT = 'http://localhost:8097';    // internal OCS door, not routed
+// genalpha's dev ocs-notify-secret (infra/tenants/tenants.yml); override with the env
+const OCS_SECRET = process.env.OCS_NOTIFY_SECRET_GENALPHA || 'ocs-notify-genalpha-dev';
 const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
 const U = `${API}/tmf-api/usageManagement/v4`;
 const C = `${API}/tmf-api/usageConsumption/v4`;
@@ -143,9 +146,23 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000);
   if (r.status() !== 200 || !(await r.json()).consentAt) fail('auto top-up enable failed');
   ok('AUTO TOP-UP: never default-on — consent refused/recorded correctly');
 
-  const breach = (windowId) => ctx.request.post(`${USAGE_DIRECT}/internal/ocs/usageThreshold`,
+  // The OCS door is signed: HMAC-SHA256(tenant secret, "<t>.<raw body>") in
+  // x-ocs-signature, exactly as a PSP signs a webhook. The dev secret is the
+  // one tenants.yml ships as genalpha's ocs-notify-secret default.
+  const breach = (windowId) => {
+    const body = JSON.stringify(
+      { tenantId: 'genalpha', partyId: at, percentUsed: 100, threshold: 100, windowId });
+    const t = Date.now();
+    const v1 = crypto.createHmac('sha256', OCS_SECRET).update(`${t}.${body}`).digest('base64url');
+    return ctx.request.post(`${USAGE_DIRECT}/internal/ocs/usageThreshold`,
+      { headers: { 'Content-Type': 'application/json', 'x-ocs-signature': `t=${t},v1=${v1}` }, data: body });
+  };
+  // the door refuses a caller with no credential at all — that is the wall
+  const unsigned = await ctx.request.post(`${USAGE_DIRECT}/internal/ocs/usageThreshold`,
     { headers: { 'Content-Type': 'application/json' },
-      data: { tenantId: 'genalpha', partyId: at, percentUsed: 100, threshold: 100, windowId } });
+      data: { tenantId: 'genalpha', partyId: at, percentUsed: 100, threshold: 100, windowId: 'w0' } });
+  if (unsigned.status() !== 401) fail(`the unsigned OCS door answered ${unsigned.status()}, expected 401`);
+  ok('OCS DOOR: an unsigned threshold notification is refused (401)');
   const allowed = async () => {
     const rep = await (await ctx.request.get(
       `${C}/queryUsageConsumption?relatedPartyId=${at}`, { headers: H })).json();

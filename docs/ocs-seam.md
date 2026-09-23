@@ -43,6 +43,13 @@ catalog and **provisions** it at activation:
   `OcsClient`. The OCS's own "running low" line arrives at
   `/internal/ocs/…` and becomes the tenant-stamped
   `UsageThresholdBreachedEvent` the growth engine listens for.
+- **The northbound door is signed.** An OCS holds no BSS token, so
+  `/internal/ocs/**` takes a per-tenant shared secret
+  (`ocs-notify-secret` in the tenant fleet file) the way a PSP webhook does:
+  `x-ocs-signature: t=<epoch ms>,v1=<base64url>` over `"<t>.<raw body>"`,
+  HMAC-SHA256, constant-time, refused outside a five-minute window. The
+  tenant the body names is believed *because* the body verifies against that
+  tenant's own secret; an operator with no secret has a shut door.
 
 **Routed per tenant.** Both services resolve the OCS from the tenant fleet
 file (`infra/tenants/tenants.yml`): `ocs-provider`, `ocs-base-url`,
@@ -68,7 +75,7 @@ tenant C on a vendor gateway. Two adapters ship:
 | top-up | `POST /balanceManagement/v1/product/{id}/balanceTopup` (octets) | |
 | plan change / transfer | new product on the new offering, service `product` re-pointed by JSON Patch, old product deleted | SigScale products are **never patched** — a patch rewrites the record and drops its bucket links (verified 3.4.73). Transfer carries the remaining octets onto the new product |
 | hold / resume | JSON Patch `isServiceEnabled` on the service | Gy refuses a disabled identity |
-| running low | usage subscribes each SigScale-bound tenant's **TMF654 balance hub** at boot (`callback` = `/internal/ocs/sigscale/{tenant}`, `query` = below `OCS_THRESHOLD_BYTES`) | SigScale posts `AccumulatedBalanceCreationNotification` while a product sits under the line; relayed once per low episode, re-armed when the balance climbs back |
+| running low | usage subscribes each SigScale-bound tenant's **TMF654 balance hub** at boot (`callback` = `/internal/ocs/sigscale/{tenant}/{token}` — a TMF hub registration is a bare URL with nowhere to put a header, so the credential is the last segment, derived from that tenant's `ocs-notify-secret` and never logged — `query` = below `OCS_THRESHOLD_BYTES`) | SigScale posts `AccumulatedBalanceCreationNotification` while a product sits under the line; relayed once per low episode, re-armed when the balance climbs back |
 
 **The bundled OCS.** `integrations/sigscale-ocs` builds SigScale OCS 3.4.x
 from the upstream release files on Debian's own Erlang/OTP packages — the

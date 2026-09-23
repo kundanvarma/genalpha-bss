@@ -17,10 +17,17 @@ import java.util.List;
 @Component
 public class OcsSettings {
 
-    /** Resolved settings for one tenant. */
-    public record Binding(String tenantId, String provider, String baseUrl, String username, String password) {
+    /** Resolved settings for one tenant. {@code notifySecret} is the credential
+     * on the northbound door ({@code /internal/ocs/**}) — the OCS signs its
+     * notifications with it; blank means that tenant's door is shut. */
+    public record Binding(String tenantId, String provider, String baseUrl, String username, String password,
+            String notifySecret) {
         public boolean enabled() {
             return baseUrl != null && !baseUrl.isBlank();
+        }
+
+        public boolean notificationsSigned() {
+            return notifySecret != null && !notifySecret.isBlank();
         }
     }
 
@@ -29,17 +36,20 @@ public class OcsSettings {
     private final String defaultBaseUrl;
     private final String defaultUsername;
     private final String defaultPassword;
+    private final String defaultNotifySecret;
 
     public OcsSettings(TenantRegistry tenants,
             @Value("${bss.downstream.ocs-provider:http}") String defaultProvider,
             @Value("${bss.downstream.ocs-base-url:}") String defaultBaseUrl,
             @Value("${bss.downstream.ocs-username:}") String defaultUsername,
-            @Value("${bss.downstream.ocs-password:}") String defaultPassword) {
+            @Value("${bss.downstream.ocs-password:}") String defaultPassword,
+            @Value("${bss.downstream.ocs-notify-secret:}") String defaultNotifySecret) {
         this.tenants = tenants;
         this.defaultProvider = blankTo(defaultProvider, "http");
         this.defaultBaseUrl = defaultBaseUrl == null ? "" : defaultBaseUrl.trim();
         this.defaultUsername = defaultUsername == null ? "" : defaultUsername;
         this.defaultPassword = defaultPassword == null ? "" : defaultPassword;
+        this.defaultNotifySecret = defaultNotifySecret == null ? "" : defaultNotifySecret.trim();
     }
 
     public Binding forTenant(String tenantId) {
@@ -49,11 +59,16 @@ public class OcsSettings {
         String user = t == null ? null : t.getOcsUsername();
         String pass = t == null ? null : t.getOcsPassword();
         boolean tenantOwn = baseUrl != null && !baseUrl.isBlank();
+        // A tenant nobody has registered has no inbound secret: the northbound
+        // door must not fall back to the deployment default for a name it has
+        // never heard of, or an unsigned caller could invent one.
+        String notify = t == null ? "" : blankTo(t.getOcsNotifySecret(), defaultNotifySecret);
         return new Binding(tenantId,
                 blankTo(provider, defaultProvider),
                 tenantOwn ? baseUrl.trim() : defaultBaseUrl,
                 tenantOwn ? nz(user) : defaultUsername,
-                tenantOwn ? nz(pass) : defaultPassword);
+                tenantOwn ? nz(pass) : defaultPassword,
+                notify);
     }
 
     /** Every tenant bound to the named provider (the default tenant included). */

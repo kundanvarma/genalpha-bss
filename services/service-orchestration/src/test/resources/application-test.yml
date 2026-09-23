@@ -25,9 +25,13 @@ bss:
   tenants:
     default-tenant: genalpha
     registry:
+      # genalpha sells no wholesale access here (no secret): its wholesale
+      # doors must be shut. tenant-a and tenant-b each have their own.
       - id: genalpha
         issuer: https://idp.genalpha.test/realms/bss
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
+        wholesale-order-secret: test-wholesale-secret-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
+        wholesale-order-secret: test-wholesale-secret-b

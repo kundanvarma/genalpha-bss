@@ -12,9 +12,32 @@
 'use strict';
 
 const http = require('http');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
+
+/* The BSS's northbound door is no longer anonymous: every notification is signed
+ * with the SUBSCRIBER'S OWN TENANT's shared secret, the same shape a PSP signs a
+ * webhook with — "x-ocs-signature: t=<epoch ms>,v1=<base64url(HMAC-SHA256(secret,
+ * `${t}.${body}`))>". A real OCS holds the operator's secret; this stand-in serves
+ * the whole demo fleet, so it holds one per tenant.
+ *   OCS_NOTIFY_SECRETS  JSON object {tenantId: secret} (dev defaults in compose)
+ *   OCS_NOTIFY_SECRET   fallback for a tenant the map does not name
+ * A tenant with no secret is simply not notified — the BSS would refuse it anyway. */
+let NOTIFY_SECRETS = {};
+try {
+  NOTIFY_SECRETS = JSON.parse(process.env.OCS_NOTIFY_SECRETS || '{}');
+} catch (e) {
+  console.error('mock-ocs: OCS_NOTIFY_SECRETS is not JSON —', e.message);
+}
+const NOTIFY_SECRET_FALLBACK = process.env.OCS_NOTIFY_SECRET || '';
+const secretFor = (tenantId) => NOTIFY_SECRETS[tenantId] || NOTIFY_SECRET_FALLBACK;
+function signature(secret, body) {
+  const t = Date.now();
+  const v1 = crypto.createHmac('sha256', secret).update(`${t}.${body}`).digest('base64url');
+  return `t=${t},v1=${v1}`;
+}
 
 /* Northbound notification: a real OCS tells the BSS when a subscriber crosses a
  * usage threshold ("running low"). Blank URL = no BSS to notify (standalone). */
@@ -27,12 +50,18 @@ const THRESHOLDS = (process.env.OCS_THRESHOLDS || '0.8')
  * decides what (if anything) to say to the customer, per brand. */
 function notifyBss(payload) {
   if (!NOTIFY_URL) return;
+  const secret = secretFor(payload.tenantId);
+  if (!secret) {
+    console.error('mock-ocs: no notification secret for tenant', payload.tenantId, '— not notifying');
+    return;
+  }
   try {
     const u = new URL(NOTIFY_URL);
     const body = JSON.stringify(payload);
     const req = http.request({
       hostname: u.hostname, port: u.port || 80, path: u.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body),
+        'x-ocs-signature': signature(secret, body) },
     });
     req.on('error', (e) => console.error('mock-ocs: BSS notify failed:', e.message));
     req.write(body);
@@ -47,10 +76,16 @@ function notifyBss(payload) {
  * priority slice so usage can rate the uplift line. Blank URL = nobody to tell. */
 const NOTIFY_PRIORITY_URL = process.env.OCS_NOTIFY_PRIORITY_URL || '';
 function notifyPriority(payload) {
+  const secret = secretFor(payload.tenantId);
+  if (!secret) {
+    console.error('mock-ocs: no notification secret for tenant', payload.tenantId, '— not notifying priority GB');
+    return;
+  }
   try {
     const u = new URL(NOTIFY_PRIORITY_URL); const body = JSON.stringify(payload);
     const req = http.request({ hostname: u.hostname, port: u.port || 80, path: u.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body),
+        'x-ocs-signature': signature(secret, body) } });
     req.on('error', (e) => console.error('mock-ocs: priority notify failed:', e.message)); req.write(body); req.end();
   } catch (e) { console.error('mock-ocs: bad OCS_NOTIFY_PRIORITY_URL:', e.message); }
 }

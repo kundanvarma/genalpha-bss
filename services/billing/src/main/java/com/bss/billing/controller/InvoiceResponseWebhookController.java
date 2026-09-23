@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.bss.billing.dto.WebhookRefused;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
 /**
  * The door the DISTRIBUTION PARTNER knocks on with the buyer's answer:
  * POST /distribution/v1/response takes a Peppol Invoice Response (UBL
@@ -43,15 +46,28 @@ public class InvoiceResponseWebhookController {
         }
     }
 
+    /**
+     * Which tenant's credential this is. A tenant that has configured no
+     * distribution token has no door at all — it is skipped rather than
+     * matched on a blank — and the comparison is constant time, so the door
+     * does not leak the token one character at a time.
+     */
     private TenantRegistry.TenantEntry tenantOf(String token) {
         if (token == null || token.isBlank()) {
             return null;
         }
+        byte[] presented = token.getBytes(StandardCharsets.UTF_8);
+        TenantRegistry.TenantEntry found = null;
         for (TenantRegistry.TenantEntry entry : tenants.getRegistry()) {
-            if (token.equals(entry.getBillDistributionToken())) {
-                return entry;
+            String configured = entry.getBillDistributionToken();
+            if (configured == null || configured.isBlank()) {
+                continue;
+            }
+            // no early exit: every configured tenant is compared, every time
+            if (MessageDigest.isEqual(presented, configured.getBytes(StandardCharsets.UTF_8)) && found == null) {
+                found = entry;
             }
         }
-        return null;
+        return found;
     }
 }

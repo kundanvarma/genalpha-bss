@@ -81,6 +81,15 @@ public class TenantRegistry {
         private String ocsUsername;
         private String ocsPassword;
 
+        /** The shared secret on this operator's WHOLESALE doors (tenants.yml
+         * `wholesale-order-secret`): an access seeker signs its MEF Sonata
+         * order with it, and the owner's activation callback carries a token
+         * derived from it. One credential per wholesale relationship; absent
+         * means this operator sells no wholesale access and its doors are shut. */
+        private String wholesaleOrderSecret;
+
+        public String getWholesaleOrderSecret() { return wholesaleOrderSecret; }
+        public void setWholesaleOrderSecret(String v) { this.wholesaleOrderSecret = v; }
         public String getOcsProvider() { return ocsProvider; }
         public void setOcsProvider(String v) { this.ocsProvider = v; }
         public String getOcsBaseUrl() { return ocsBaseUrl; }

@@ -22,9 +22,18 @@ bss:
   tenants:
     default-tenant: genalpha
     registry:
+      # ocs-notify-secret: the credential on the northbound OCS door. Distinct
+      # per tenant on purpose — the door believes the tenant a body names only
+      # because the body verifies against THAT tenant's secret.
       - id: genalpha
         issuer: https://idp.genalpha.test/realms/bss
+        ocs-notify-secret: test-ocs-secret-genalpha
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
+        ocs-notify-secret: test-ocs-secret-tenant-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
+        ocs-notify-secret: test-ocs-secret-tenant-b
+      # a registered tenant whose door is deliberately shut (no secret)
+      - id: tenant-c
+        issuer: https://idp.tenant-c.test/realms/bss

@@ -75,6 +75,23 @@ public class EspReceiptService {
         return accepted;
     }
 
+    /**
+     * The credential wall. A tenant that has configured NO ESP key has no
+     * receipt door at all — before this check, its configured key was the
+     * empty string and a caller sending an empty {@code X-Esp-Token} matched
+     * it, which opened every unconfigured tenant's suppression ledger to
+     * anyone who could reach the service. Blank on either side is a refusal,
+     * and the comparison is constant time.
+     */
+    private static boolean keyMatches(String configured, String presented) {
+        if (configured == null || configured.isBlank() || presented == null || presented.isBlank()) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+                configured.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                presented.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private boolean applyOne(Map<String, Object> event, String token) {
         if (!(event.get("custom_args") instanceof Map<?, ?> args)
                 || args.get("tenant") == null || args.get("messageId") == null) {
@@ -82,8 +99,7 @@ public class EspReceiptService {
         }
         String tenantId = String.valueOf(args.get("tenant"));
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
-        if (tenant == null || tenant.getEspApiKey() == null
-                || !tenant.getEspApiKey().equals(token)) {
+        if (tenant == null || !keyMatches(tenant.getEspApiKey(), token)) {
             log.warn("esp receipt rejected: wrong key for tenant '{}'", tenantId);
             return false;
         }

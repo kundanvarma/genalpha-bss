@@ -2050,6 +2050,18 @@ services:
       OCS_THRESHOLDS: "0.8"
       # Priority-slice GB (slice-aware charging): the BSS rates the uplift line
       OCS_NOTIFY_PRIORITY_URL: http://usage:8080/internal/ocs/priorityUsage
+      # The northbound door is signed (HMAC-SHA256 over "<t>.<body>", header
+      # x-ocs-signature), per tenant — a real OCS holds ONE operator's secret,
+      # this stand-in serves the whole demo fleet so it holds the map. These are
+      # the dev defaults from infra/tenants/tenants.yml (ocs-notify-secret);
+      # in a real deployment the operator's OCS gets its value from a secret store.
+      OCS_NOTIFY_SECRETS: >-
+        {"genalpha":"ocs-notify-genalpha-dev","nova":"ocs-notify-nova-dev",
+         "chilimobil":"ocs-notify-chilimobil-dev","fjordnett":"ocs-notify-fjordnett-dev",
+         "nordlys":"ocs-notify-nordlys-dev","sc229066":"ocs-notify-sc229066-dev",
+         "ib249958":"ocs-notify-ib249958-dev","parity148420":"ocs-notify-parity148420-dev",
+         "aurora":"ocs-notify-aurora-dev","fjord":"ocs-notify-fjord-dev",
+         "enet":"ocs-notify-enet-dev","taranga":"ocs-notify-taranga-dev"}
     ports:
       - "8115:8080"
 

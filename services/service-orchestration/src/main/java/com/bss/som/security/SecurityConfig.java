@@ -43,16 +43,24 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html", "/.well-known/genalpha-component.json").permitAll()
-                        // the shop's number picker: anonymous preview, nothing consumed
+                        // the shop's number picker: PUBLIC BY DESIGN. A shopper who
+                        // has not signed in must be able to see the numbers on offer
+                        // before choosing a plan; nothing is reserved or consumed by
+                        // looking, and the hand is capped at 12.
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/tmf-api/resourcePoolManagement/v4/numberOffer").permitAll()
                         // the fibre owner's OSS activation callback: an external
-                        // system, not a fleet identity; the order id is the correlation
+                        // system, not a fleet identity. Anonymous HERE and
+                        // credentialled inside — the callback URL we handed the owner
+                        // ends in a token bound to the order and derived from the
+                        // ordering tenant's wholesale secret (WholesaleDoorAuth).
                         .requestMatchers(HttpMethod.POST,
-                                "/tmf-api/serviceOrdering/v4/wholesaleAccessOrder/*/notification").permitAll()
+                                "/tmf-api/serviceOrdering/v4/wholesaleAccessOrder/*/notification/*").permitAll()
                         // our OWN Sonata provider face: a retailer's BSS places an
-                        // access-seeker order here. Anonymous; the tenant (which
-                        // owner we are) rides X-Tenant-Id, validated by the registry.
+                        // access-seeker order here. It holds no token of ours, so the
+                        // door is anonymous HERE and the body is HMAC-signed inside
+                        // with the wholesale secret of the operator X-Tenant-Id names
+                        // — which is what makes that header safe to believe.
                         .requestMatchers(HttpMethod.POST,
                                 "/mefApi/serviceOrdering/v1/serviceOrder").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()

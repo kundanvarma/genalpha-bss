@@ -9,7 +9,9 @@ import com.bss.som.dto.WholesaleDtos.WholesaleAccessOrderView;
 import com.bss.som.dto.WholesaleDtos.WholesaleSettlement;
 import com.bss.som.entity.WholesaleAccessOrder;
 import com.bss.som.repository.WholesaleAccessOrderRepository;
+import com.bss.som.security.TenantContext;
 import com.bss.som.security.TenantScope;
+import com.bss.som.security.WholesaleDoorAuth;
 import com.bss.som.service.OrchestrationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,23 +40,44 @@ public class WholesaleAccessController {
     private final TenantScope tenantScope;
     private final WholesaleRateCardClient rateCard;
     private final OrchestrationService orchestration;
+    private final WholesaleDoorAuth auth;
 
     public WholesaleAccessController(WholesaleAccessOrderRepository wholesaleOrders,
-            TenantScope tenantScope, WholesaleRateCardClient rateCard, OrchestrationService orchestration) {
+            TenantScope tenantScope, WholesaleRateCardClient rateCard, OrchestrationService orchestration,
+            WholesaleDoorAuth auth) {
         this.wholesaleOrders = wholesaleOrders;
         this.tenantScope = tenantScope;
         this.rateCard = rateCard;
         this.orchestration = orchestration;
+        this.auth = auth;
     }
 
     /**
      * The owner OSS's activation callback (MEF Sonata notification): the wholesale
      * access line is live. Anonymous — the owner is an external system, not a fleet
-     * identity; the order id in the path is the correlation. Idempotent.
+     * identity — but no longer unauthenticated: the order id alone used to be the
+     * whole credential, and a bare POST to a guessed or leaked UUID completed the
+     * retail order and booked wholesale COGS. The callback URL we hand the owner
+     * now ends in a token bound to that order and derived from the ordering
+     * tenant's wholesale secret; the owner posts to the URL it was given, exactly
+     * as before. Idempotent.
      */
-    @PostMapping(ApiConstants.ORDER_BASE + "/wholesaleAccessOrder/{id}/notification")
+    @PostMapping(ApiConstants.ORDER_BASE + "/wholesaleAccessOrder/{id}/notification/{token}")
     public ResponseEntity<NotificationReceipt> notify(@PathVariable("id") String id,
+            @PathVariable("token") String token,
             @RequestBody(required = false) SonataNotification body) {
+        // the order's own tenant issued the callback, so read it out of band first
+        String tenantId;
+        try (TenantContext ignored = TenantContext.actAsSystem()) {
+            tenantId = wholesaleOrders.findById(id).map(WholesaleAccessOrder::getTenantId).orElse(null);
+        }
+        if (tenantId == null) {
+            // an order nobody placed and a bad token are the same answer: the door
+            // must not become an oracle for which UUIDs exist
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "wholesale door not authorized");
+        }
+        auth.requireCallbackToken(tenantId, id, token);
         String sonataOrderId = body == null ? null : body.orderId();
         boolean activated = orchestration.activateWholesaleAccess(id, sonataOrderId);
         return ResponseEntity.ok(new NotificationReceipt(id, activated));

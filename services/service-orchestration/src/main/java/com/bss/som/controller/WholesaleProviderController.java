@@ -7,33 +7,51 @@ import com.bss.som.dto.WholesaleDtos.RetailerStatement;
 import com.bss.som.dto.WholesaleDtos.SonataOrderAck;
 import com.bss.som.dto.WholesaleDtos.SonataOrderRequest;
 import com.bss.som.entity.ProviderAccessOrder;
+import com.bss.som.security.TenantScope;
+import com.bss.som.security.WholesaleDoorAuth;
 import com.bss.som.service.WholesaleProviderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
  * Our MEF LSO Sonata Service Ordering face, as a fibre OWNER: retailers place
- * access-seeker orders here. Anonymous — the retailer is an external operator, not a
- * fleet identity; the tenant is carried on X-Tenant-Id (resolved and validated by
- * TenantScope, so a caller can only reach a tenant that exists). We record the
- * order, provision it on our own clock, and notify their callback.
+ * access-seeker orders here. Anonymous in the filter chain — the retailer is an
+ * external operator's BSS, not a fleet identity — and signed inside: the body
+ * carries an HMAC over itself made with the wholesale secret of the operator the
+ * X-Tenant-Id header names ({@link WholesaleDoorAuth}). That is what makes the
+ * header safe to believe: before, any caller on the private network could pick a
+ * tenant, name any buyerId as the party to wholesale-bill, and hand us an
+ * arbitrary callback URL to POST to. We record the order, provision it on our own
+ * clock, and notify their callback.
  */
 @RestController
 public class WholesaleProviderController {
 
     private final WholesaleProviderService provider;
+    private final WholesaleDoorAuth auth;
+    private final TenantScope tenantScope;
 
-    public WholesaleProviderController(WholesaleProviderService provider) {
+    public WholesaleProviderController(WholesaleProviderService provider, WholesaleDoorAuth auth,
+            TenantScope tenantScope) {
         this.provider = provider;
+        this.auth = auth;
+        this.tenantScope = tenantScope;
     }
 
     @PostMapping("/mefApi/serviceOrdering/v1/serviceOrder")
-    public ResponseEntity<SonataOrderAck> order(@RequestBody SonataOrderRequest body) {
+    public ResponseEntity<SonataOrderAck> order(
+            @RequestBody(required = false) byte[] raw,
+            @RequestHeader(value = WholesaleDoorAuth.SIGNATURE_HEADER, required = false) String signature) {
+        // the signature is verified against the named tenant's own secret, so the
+        // body is parsed into the record only once the seeker has proved itself
+        SonataOrderRequest body = auth.verifiedOrder(tenantScope.currentTenantId(), raw, signature,
+                SonataOrderRequest.class);
         String accessLayer = null, postCode = null;
         Integer bandwidth = null;
         for (Characteristic ch : body.characteristics()) {

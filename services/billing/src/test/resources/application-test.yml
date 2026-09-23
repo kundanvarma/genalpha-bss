@@ -26,5 +26,9 @@ bss:
         issuer: https://idp.genalpha.test/realms/bss
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
+        # the credential the distribution partner presents on
+        # POST /distribution/v1/response — one per relationship
+        bill-distribution-token: test-dist-token-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
+        bill-distribution-token: test-dist-token-b

@@ -14,6 +14,17 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_GENALPHA:ocs-notify-genalpha-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_GENALPHA:wholesale-genalpha-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN:}
@@ -105,6 +116,17 @@ bss:
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_NOVA:ocs-notify-nova-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_NOVA:wholesale-nova-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_NOVA:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_NOVA:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NOVA:}
@@ -169,6 +191,17 @@ bss:
         token-uri: http://keycloak:8080/realms/chilimobil/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_CHILIMOBIL:ocs-notify-chilimobil-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_CHILIMOBIL:wholesale-chilimobil-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_CHILIMOBIL:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_CHILIMOBIL:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_CHILIMOBIL:}
@@ -234,6 +267,17 @@ bss:
         token-uri: http://keycloak:8080/realms/fjordnett/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_FJORDNETT:ocs-notify-fjordnett-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_FJORDNETT:wholesale-fjordnett-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_FJORDNETT:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_FJORDNETT:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_FJORDNETT:}
@@ -298,6 +342,17 @@ bss:
         token-uri: http://keycloak:8080/realms/nordlys/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_NORDLYS:ocs-notify-nordlys-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_NORDLYS:wholesale-nordlys-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_NORDLYS:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_NORDLYS:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NORDLYS:}
@@ -364,6 +419,17 @@ bss:
         token-uri: http://keycloak:8080/realms/sc229066/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_SC229066:ocs-notify-sc229066-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_SC229066:wholesale-sc229066-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_SC229066:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_SC229066:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_SC229066:}
@@ -426,6 +492,17 @@ bss:
         token-uri: http://keycloak:8080/realms/ib249958/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_IB249958:ocs-notify-ib249958-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_IB249958:wholesale-ib249958-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_IB249958:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_IB249958:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_IB249958:}
@@ -487,6 +564,17 @@ bss:
         token-uri: http://keycloak:8080/realms/parity148420/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_PARITY148420:ocs-notify-parity148420-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_PARITY148420:wholesale-parity148420-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_PARITY148420:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_PARITY148420:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_PARITY148420:}
@@ -548,6 +636,17 @@ bss:
         token-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_AURORA:ocs-notify-aurora-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_AURORA:wholesale-aurora-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_AURORA:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_AURORA:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_AURORA:}
@@ -612,6 +711,17 @@ bss:
         token-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_FJORD:ocs-notify-fjord-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_FJORD:wholesale-fjord-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_FJORD:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_FJORD:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_FJORD:}
@@ -676,6 +786,17 @@ bss:
         token-uri: http://keycloak:8080/realms/enet/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_ENET:ocs-notify-enet-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_ENET:wholesale-enet-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_ENET:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_ENET:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_ENET:}
@@ -775,6 +896,17 @@ bss:
         token-uri: http://keycloak:8080/realms/taranga/protocol/openid-connect/token
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
         machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_TARANGA:ocs-notify-taranga-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_TARANGA:wholesale-taranga-dev}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_TARANGA:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_TARANGA:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_TARANGA:}

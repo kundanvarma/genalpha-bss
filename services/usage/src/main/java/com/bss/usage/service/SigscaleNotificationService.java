@@ -42,21 +42,34 @@ public class SigscaleNotificationService {
     private final SigscaleOcsClient sigscale;
     private final OcsSettings settings;
     private final UsageService usage;
+    private final OcsNotificationAuth auth;
     private final String notifyBaseUrl;
     private final long thresholdBytes;
     private final Set<String> told = ConcurrentHashMap.newKeySet();
 
     public SigscaleNotificationService(SigscaleOcsClient sigscale, OcsSettings settings, UsageService usage,
+            OcsNotificationAuth auth,
             @Value("${bss.ocs.notify-base-url:http://localhost:8080}") String notifyBaseUrl,
             @Value("${bss.ocs.sigscale-threshold-bytes:2000000000}") long thresholdBytes) {
         this.sigscale = sigscale;
         this.settings = settings;
         this.usage = usage;
+        this.auth = auth;
         this.notifyBaseUrl = notifyBaseUrl == null ? "" : notifyBaseUrl.replaceAll("/+$", "");
         this.thresholdBytes = thresholdBytes;
     }
 
+    /** Where this tenant's hub posts. A TMF654 hub registration is a bare URL
+     * with nowhere to put a credential header, so the credential is the last
+     * path segment: an opaque token derived from the tenant's OCS notification
+     * secret. Deterministic, so re-subscribing is idempotent. Never logged. */
     public String callbackFor(String tenantId) {
+        return callbackPrefix(tenantId) + "/" + auth.callbackToken(tenantId);
+    }
+
+    /** Everything before the token — used to recognise (and replace) a hub of
+     * ours that was registered with an older token. */
+    String callbackPrefix(String tenantId) {
         return notifyBaseUrl + "/internal/ocs/sigscale/" + tenantId;
     }
 
@@ -174,16 +187,29 @@ public class SigscaleNotificationService {
         if (c == null) {
             return true;
         }
-        String callback = callbackFor(tenantId);
+        String callback;
+        try {
+            callback = callbackFor(tenantId);
+        } catch (RuntimeException e) {
+            // no notification secret for this tenant: the door is shut, so there is
+            // nothing to subscribe. Say so once, without naming the credential.
+            log.warn("SigScale OCS: tenant {} has no ocs-notify-secret — its balance hub is not subscribed "
+                    + "and running-low events will not arrive", tenantId);
+            return true;
+        }
+        String prefix = callbackPrefix(tenantId) + "/";
         try {
             List<Map<String, Object>> hubs = c.get().uri(SigscaleOcsClient.BALANCE + "/hub").retrieve().body(List.class);
             if (hubs != null) {
                 for (Map<String, Object> h : hubs) {
-                    if (callback.equals(h.get("callback")) && hubQuery().equals(h.get("query"))) {
+                    Object registered = h.get("callback");
+                    if (callback.equals(registered) && hubQuery().equals(h.get("query"))) {
                         return true;
                     }
-                    if (callback.equals(h.get("callback"))) {
-                        // ours, but an older threshold: replace it
+                    // ours by tenant, but an older threshold OR an older callback
+                    // token (or none at all, before the door was closed): replace it
+                    if (registered instanceof String s && (s.equals(callback) || s.startsWith(prefix)
+                            || s.equals(callbackPrefix(tenantId)))) {
                         c.delete().uri(SigscaleOcsClient.BALANCE + "/hub/{id}", h.get("id")).retrieve().toBodilessEntity();
                     }
                 }
@@ -191,7 +217,9 @@ public class SigscaleNotificationService {
             c.post().uri(SigscaleOcsClient.BALANCE + "/hub").header("Content-Type", "application/json")
                     .body(Map.of("callback", callback, "query", hubQuery()))
                     .retrieve().toBodilessEntity();
-            log.info("SigScale OCS: balance hub subscribed for tenant {} → {} ({})", tenantId, callback, hubQuery());
+            // the callback carries this tenant's credential in its last segment — log the door, never the token
+            log.info("SigScale OCS: balance hub subscribed for tenant {} → {}/… ({})",
+                    tenantId, callbackPrefix(tenantId), hubQuery());
             return true;
         } catch (RuntimeException e) {
             log.info("SigScale OCS: hub subscription for tenant {} not yet possible ({}) — will retry", tenantId, e.getMessage());

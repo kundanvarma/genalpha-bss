@@ -2,6 +2,7 @@ package com.bss.usage;
 
 import com.bss.usage.repository.AllowanceBoostRepository;
 import com.bss.usage.security.TenantRegistry;
+import com.bss.usage.service.OcsNotificationAuth;
 import com.bss.usage.security.TenantScope;
 import com.bss.usage.service.TenantClock;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,17 @@ class UsagePolicyApiTest {
     @BeforeEach
     void resetClock() {
         FixedClockConfig.TODAY.set(LocalDate.now());
+    }
+
+    /** The OCS door is signed per tenant (see OcsNotificationDoorTest); a body
+     * that names no tenant is the default tenant's, so sign with its secret. */
+    private void ocsThreshold(String body) throws Exception {
+        mockMvc.perform(post("/internal/ocs/usageThreshold")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(OcsNotificationAuth.SIGNATURE_HEADER,
+                                OcsSignature.of("test-ocs-secret-genalpha", body))
+                        .content(body))
+                .andExpect(status().isAccepted());
     }
 
     private static RequestPostProcessor machine() {
@@ -313,13 +325,9 @@ class UsagePolicyApiTest {
         String breach = """
                 {"partyId": "at-cust", "percentUsed": 100, "threshold": 100, "windowId": "%s"}
                 """;
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w1")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w1"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(1);
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w1")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w1"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(1);
 
         // the boost shows on the meter: 10 base + 5 boost
@@ -327,20 +335,14 @@ class UsagePolicyApiTest {
                 .andExpect(jsonPath("$.bucket[0].allowedValue").value(15));
 
         // a new window buys the second; the third hits the per-cycle cap
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w2")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w2"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(2);
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w3")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w3"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(2);
 
         // next cycle (the injectable clock): the cap resets
         FixedClockConfig.TODAY.set(LocalDate.now().plusMonths(1).withDayOfMonth(3));
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w4")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w4"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(3);
         FixedClockConfig.TODAY.set(LocalDate.now());
 
@@ -349,9 +351,7 @@ class UsagePolicyApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"enabled\": false}"))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/internal/ocs/usageThreshold")
-                        .contentType(MediaType.APPLICATION_JSON).content(breach.formatted("w5")))
-                .andExpect(status().isAccepted());
+        ocsThreshold(breach.formatted("w5"));
         assertThat(autoTopupCount("at-cust")).isEqualTo(3);
     }
 

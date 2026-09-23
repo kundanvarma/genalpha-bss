@@ -43,8 +43,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        // OCS → BSS threshold notifications: internal-only, off the
-                        // gateway; the OCS reaches it by service name on the private net.
+                        // OCS → BSS threshold notifications. The caller is the
+                        // operator's Online Charging System — a foreign product that
+                        // holds no BSS token — so the door is anonymous HERE and
+                        // opens only to the tenant's own OCS notification secret,
+                        // HMAC-verified over the raw body inside
+                        // (OcsNotificationAuth), exactly as the PSP webhook is.
+                        // A tenant with no secret has a shut door.
                         .requestMatchers(HttpMethod.POST, "/internal/ocs/**").permitAll()
                         // TMF654: balances read like usage, top-ups write like usage
                         .requestMatchers(HttpMethod.GET, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:read")
