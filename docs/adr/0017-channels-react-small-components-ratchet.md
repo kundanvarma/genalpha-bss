@@ -25,6 +25,27 @@ context fill.
   mount React islands with `createRoot` into the existing element ids one
   desk at a time, deleting the old desk when the new one's suite is green.
   The Offering workspace goes first.
+
+**Narrowed 2026-09-23** after
+[console-framework-agent-era.md](../console-framework-agent-era.md). The
+split is done — 8,483 lines became 52 files under the ceiling — and that was
+the measured benefit. What remains unbought is typed props and a compile
+step, which is worth having on a complex desk and not on a two-file console.
+So: convert **desks, never whole consoles**.
+
+- The **Offering workspace** is built in React from the start — greenfield, so
+  a new-build choice rather than a rewrite.
+- The admin console's `desks/` migrate **opportunistically**, only where state
+  is complex enough to get wrong, and only when being changed anyway.
+- The admin console's `core/` (a list-and-drawer engine ~20 screens share) and
+  `resources/` (configuration, not UI code — React there turns a data change
+  back into a code change) **stay**.
+- **business-console, dealer-console and partner-console stay vanilla.** Ten to
+  forty-two kilobytes each; a React runtime is ~45 KB gzipped before any
+  application code.
+- A desk published as an **MCP App** is a separate small bundle, not the
+  console's React tree in a sandbox; that surface is framework-agnostic and
+  the official templates include vanilla JavaScript.
 - No business logic in a front end: pricing from the configurator,
   eligibility from policy, actions from the ontology (ADR 0009, 0011).
 - Every front end sends `X-Channel`; accessibility is keyboard operable,
