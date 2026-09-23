@@ -72,6 +72,13 @@ public class EspReceiptService {
                 log.warn("esp receipt skipped: {}", e.getMessage());
             }
         }
+        if (accepted == 0 && events != null && !events.isEmpty()) {
+            // the door answers 200 to everything on purpose (providers retry an
+            // error forever), so a wrong credential is otherwise invisible to
+            // both sides — this line is the only place it shows
+            log.warn("esp receipt batch of {} accepted NOTHING — wrong credential, unknown tenant "
+                    + "or events without custom_args", events.size());
+        }
         return accepted;
     }
 
@@ -83,6 +90,36 @@ public class EspReceiptService {
      * anyone who could reach the service. Blank on either side is a refusal,
      * and the comparison is constant time.
      */
+    /**
+     * What opens the receipt door.
+     *
+     * The inbound credential is the tenant's own webhook secret — what the
+     * provider signs receipts WITH — and it is deliberately not the sending
+     * key. An outbound API key that also opens an inbound door means anyone
+     * who learns it (a leak, a log, the provider's own staff) can write
+     * delivery events and permanent suppressions for that operator.
+     *
+     * A tenant that has not configured a webhook secret yet still opens on the
+     * sending key, so an existing integration keeps working across the change,
+     * and every such acceptance says so — that log line is how an operator
+     * knows there is still a step to take.
+     */
+    private boolean credentialAccepted(TenantRegistry.TenantEntry tenant, String tenantId, String token) {
+        String webhookSecret = tenant.getEspWebhookSecret();
+        if (webhookSecret != null && !webhookSecret.isBlank()) {
+            // once an operator has configured the inbound credential, the
+            // sending key stops opening this door — otherwise the split buys
+            // nothing and the old key lives on for ever
+            return keyMatches(webhookSecret, token);
+        }
+        if (keyMatches(tenant.getEspApiKey(), token)) {
+            log.warn("esp receipt for tenant '{}' accepted on the SENDING key: no esp-webhook-secret is "
+                    + "configured, so an outbound credential is opening an inbound door", tenantId);
+            return true;
+        }
+        return false;
+    }
+
     private static boolean keyMatches(String configured, String presented) {
         if (configured == null || configured.isBlank() || presented == null || presented.isBlank()) {
             return false;
@@ -99,8 +136,8 @@ public class EspReceiptService {
         }
         String tenantId = String.valueOf(args.get("tenant"));
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
-        if (tenant == null || !keyMatches(tenant.getEspApiKey(), token)) {
-            log.warn("esp receipt rejected: wrong key for tenant '{}'", tenantId);
+        if (tenant == null || !credentialAccepted(tenant, tenantId, token)) {
+            log.warn("esp receipt rejected: wrong credential for tenant '{}'", tenantId);
             return false;
         }
         String verdict = String.valueOf(event.get("event"));

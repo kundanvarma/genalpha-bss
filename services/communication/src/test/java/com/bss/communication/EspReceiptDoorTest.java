@@ -43,12 +43,47 @@ class EspReceiptDoorTest {
     }
 
     @Test
-    void theTenantsOwnEspKeyIsAccepted() throws Exception {
+    void theInboundWebhookSecretIsWhatOpensTheDoor() throws Exception {
+        // tenant-a has moved to a separate inbound credential
+        mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-webhook-a")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bounce("tenant-a", "webhook-secret@door.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(1));
+        assertThat(suppressions.existsByTenantIdAndEmail("tenant-a", "webhook-secret@door.test")).isTrue();
+    }
+
+    @Test
+    void oneTenantsWebhookSecretDoesNotOpenAnothersDoor() throws Exception {
+        mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-webhook-a")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bounce("tenant-b", "crossed@door.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(0));
+        assertThat(suppressions.existsByTenantIdAndEmail("tenant-b", "crossed@door.test")).isFalse();
+    }
+
+    @Test
+    void aTenantStillOnTheSendingKeyKeepsWorkingAcrossTheChange() throws Exception {
+        // tenant-b has no webhook secret yet: an existing integration must not
+        // break on upgrade, and the acceptance is logged as the outbound key
+        mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-key-b")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bounce("tenant-b", "legacy-path@door.test")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accepted").value(1));
+        assertThat(suppressions.existsByTenantIdAndEmail("tenant-b", "legacy-path@door.test")).isTrue();
+    }
+
+    @Test
+    void theSendingKeyStopsOpeningTheDoorOnceTheInboundOneIsSet() throws Exception {
+        // tenant-a has configured esp-webhook-secret, so its OUTBOUND key is no
+        // longer a way in — otherwise splitting the credentials buys nothing
         mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-key-a")
                         .contentType(MediaType.APPLICATION_JSON).content(bounce("tenant-a", "ok@door.test")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accepted").value(1));
-        assertThat(suppressions.existsByTenantIdAndEmail("tenant-a", "ok@door.test")).isTrue();
+                .andExpect(jsonPath("$.accepted").value(0));
+        assertThat(suppressions.existsByTenantIdAndEmail("tenant-a", "ok@door.test")).isFalse();
     }
 
     @Test
@@ -62,7 +97,7 @@ class EspReceiptDoorTest {
 
     @Test
     void tenantAsKeyCannotSuppressForTenantB() throws Exception {
-        mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-key-a")
+        mockMvc.perform(post("/esp/v1/event").header("X-Esp-Token", "test-esp-webhook-a")
                         .contentType(MediaType.APPLICATION_JSON).content(bounce("tenant-b", "cross@door.test")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accepted").value(0));

@@ -15,6 +15,10 @@ const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
 // where delivery receipts go (SendGrid's Event Webhook, in miniature)
+// What a real provider signs delivery receipts with: a secret configured in
+// the provider's own dashboard, per operator — NOT the sending key it receives.
+// Map of tenant -> webhook secret, so one stand-in can serve the whole fleet.
+const WEBHOOK_SECRETS = JSON.parse(process.env.ESP_WEBHOOK_SECRETS || '{}');
 const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
 
 /** [{to, from, subject, content, apiKey, receivedAt}] */
@@ -41,7 +45,9 @@ function report(mail) {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(body),
-        'X-Esp-Token': mail.apiKey,
+        // the tenant rides custom_args; sign with THAT operator's webhook
+        // secret, falling back to the sending key only when none is set
+        'X-Esp-Token': WEBHOOK_SECRETS[(mail.customArgs || {}).tenant] || mail.apiKey,
       },
     }, (res) => res.resume());
     req.on('error', () => {});

@@ -74,6 +74,11 @@ public class TenantRegistry {
         private String espUrl;
         private String espApiKey;
         private String espFrom;
+        /** The INBOUND credential the provider signs delivery receipts with.
+         *  Separate from espApiKey, which is what we send WITH: an outbound
+         *  sending key that also opens an inbound door means anyone who learns
+         *  it can write delivery events and suppressions. */
+        private String espWebhookSecret;
         /** Signs this operator's one-click unsubscribe links. Per tenant, so one
          *  operator's link can never be minted or honoured by another. */
         private String unsubscribeSecret;
@@ -184,6 +189,14 @@ public class TenantRegistry {
 
         public void setEspApiKey(String espApiKey) {
             this.espApiKey = espApiKey;
+        }
+
+        public String getEspWebhookSecret() {
+            return espWebhookSecret;
+        }
+
+        public void setEspWebhookSecret(String espWebhookSecret) {
+            this.espWebhookSecret = espWebhookSecret;
         }
 
         public String getUnsubscribeSecret() {

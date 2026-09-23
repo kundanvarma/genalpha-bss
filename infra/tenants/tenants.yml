@@ -41,6 +41,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER:internal}
         esp-url: ${ESP_URL:}
         esp-api-key: ${ESP_API_KEY:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET:unsub-genalpha-dev}
@@ -146,6 +149,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_NOVA:internal}
         esp-url: ${ESP_URL_NOVA:}
         esp-api-key: ${ESP_API_KEY_NOVA:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_NOVA:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_NOVA:unsub-nova-dev}
@@ -224,6 +230,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_CHILIMOBIL:internal}
         esp-url: ${ESP_URL_CHILIMOBIL:}
         esp-api-key: ${ESP_API_KEY_CHILIMOBIL:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_CHILIMOBIL:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_CHILIMOBIL:unsub-chilimobil-dev}
@@ -303,6 +312,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_FJORDNETT:internal}
         esp-url: ${ESP_URL_FJORDNETT:}
         esp-api-key: ${ESP_API_KEY_FJORDNETT:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_FJORDNETT:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_FJORDNETT:unsub-fjordnett-dev}
@@ -381,6 +393,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_NORDLYS:internal}
         esp-url: ${ESP_URL_NORDLYS:}
         esp-api-key: ${ESP_API_KEY_NORDLYS:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_NORDLYS:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_NORDLYS:unsub-nordlys-dev}
@@ -461,6 +476,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_SC229066:internal}
         esp-url: ${ESP_URL_SC229066:}
         esp-api-key: ${ESP_API_KEY_SC229066:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_SC229066:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_SC229066:unsub-sc229066-dev}
@@ -537,6 +555,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_IB249958:internal}
         esp-url: ${ESP_URL_IB249958:}
         esp-api-key: ${ESP_API_KEY_IB249958:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_IB249958:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_IB249958:unsub-ib249958-dev}
@@ -612,6 +633,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_PARITY148420:internal}
         esp-url: ${ESP_URL_PARITY148420:}
         esp-api-key: ${ESP_API_KEY_PARITY148420:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_PARITY148420:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_PARITY148420:unsub-parity148420-dev}
@@ -687,6 +711,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_AURORA:internal}
         esp-url: ${ESP_URL_AURORA:}
         esp-api-key: ${ESP_API_KEY_AURORA:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_AURORA:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_AURORA:unsub-aurora-dev}
@@ -765,6 +792,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_FJORD:internal}
         esp-url: ${ESP_URL_FJORD:}
         esp-api-key: ${ESP_API_KEY_FJORD:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_FJORD:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_FJORD:unsub-fjord-dev}
@@ -843,6 +873,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_ENET:internal}
         esp-url: ${ESP_URL_ENET:}
         esp-api-key: ${ESP_API_KEY_ENET:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_ENET:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_ENET:unsub-enet-dev}
@@ -956,6 +989,9 @@ bss:
         delivery-provider: ${DELIVERY_PROVIDER_TARANGA:internal}
         esp-url: ${ESP_URL_TARANGA:}
         esp-api-key: ${ESP_API_KEY_TARANGA:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_TARANGA:}
         # signs this operator's one-click unsubscribe links; per tenant so one
         # operator's link is never mintable or honourable by another
         unsubscribe-secret: ${UNSUBSCRIBE_SECRET_TARANGA:unsub-taranga-dev}

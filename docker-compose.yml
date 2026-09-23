@@ -1441,6 +1441,8 @@ services:
       DELIVERY_PROVIDER_NOVA: esp
       ESP_URL_NOVA: http://mock-esp:8080
       ESP_API_KEY_NOVA: nova-esp-key
+      # the INBOUND credential, separate from the sending key above
+      ESP_WEBHOOK_SECRET_NOVA: nova-esp-webhook-dev
       ESP_FROM_NOVA: no-reply@nova.example
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
@@ -1822,6 +1824,9 @@ services:
     environment:
       # delivery receipts knock on the communication component's door
       WEBHOOK_URL: http://communication:8080/esp/v1/event
+      # what this stand-in signs receipts WITH, per operator — a real provider
+      # keeps this in its own dashboard and it is never the sending key
+      ESP_WEBHOOK_SECRETS: '{"nova":"nova-esp-webhook-dev"}'
     ports:
       - "8121:8080"
 

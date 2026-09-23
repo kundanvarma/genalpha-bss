@@ -36,6 +36,8 @@ bss:
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
         esp-api-key: test-esp-key-a
+        # tenant-a has moved to a separate inbound credential
+        esp-webhook-secret: test-esp-webhook-a
         unsubscribe-secret: test-unsub-a
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
