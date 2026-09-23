@@ -98,9 +98,19 @@ personnummer shapes, plus generic 9–12-digit ids) and labelled address
 lines are replaced by typed placeholders (`<email#1>`, `<phone#1>` …) that
 stay stable within the call, so the model can still say "reply to
 <email#1>" and the answer is un-redacted for the caller before anyone sees
-it. What is NOT recognised: personal names (signals are twinned by
-insight's PII firewall before they reach a model; a copilot prompt that
-names a customer sends the name) and free-text addresses without a label.
+it. **Labelled personal names are redacted too** (since 2026-09-23): a
+person label followed by a value, in prose (`Customer: …`, `Contact
+person: …`, `Kunde: …`, `fornavn: …`) or in embedded JSON
+(`"givenName": "…"`, `"familyName": "…"`), becomes `<name#1>`, and the
+same person keeps the same placeholder wherever they recur in the call.
+Only PERSON labels count: `Product name`, `Campaign name` and
+`"productName"` are left alone, because a recogniser that ate them would
+degrade every prompt while protecting nobody.
+
+What is still NOT recognised: a name in free prose with no label in front
+of it ("spoke to Mira this morning"), and free-text addresses without a
+label. Signals are twinned by insight's PII firewall before they reach a
+model, so this residue is the copilot path, not the analytics path.
 A tenant that sets `ai-raw-exposure: true` sends the raw prompt instead,
 and the ledger row then says `rawExposure: true`. **No tenant that ships
 in this repository does** — `ops/arch/claims.sh` refuses a literal `true`
