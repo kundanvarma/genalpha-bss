@@ -1,6 +1,8 @@
 package com.bss.document.service;
 
 import com.bss.document.api.ApiConstants;
+import com.bss.document.dto.DocumentRequest;
+import com.bss.document.dto.DocumentView;
 import com.bss.document.entity.ContentProviderConfig;
 import com.bss.document.entity.StoredDocument;
 import com.bss.document.exception.BadRequestException;
@@ -19,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Base64;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,8 +40,9 @@ public class DocumentService {
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
 
     /** Channel media only — this is a brand asset store, not a file dump. */
-    private static final Set<String> IMAGE_TYPES = Set.of(
-            "image/svg+xml", "image/png", "image/jpeg", "image/webp");
+    /** Printed in the refusal, so the order is the wire's, not a hash's. */
+    private static final Set<String> IMAGE_TYPES = new LinkedHashSet<>(List.of(
+            "image/svg+xml", "image/png", "image/jpeg", "image/webp"));
     private static final int MAX_BYTES = 512 * 1024;
 
     /** Served when a referenced asset can't be resolved — never a broken image. */
@@ -66,17 +69,17 @@ public class DocumentService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || dto.get("mimeType") == null || dto.get("content") == null) {
+    public DocumentView create(DocumentRequest dto) {
+        if (dto.name() == null || dto.mimeType() == null || dto.content() == null) {
             throw new BadRequestException("name, mimeType and content (base64) are required");
         }
-        String mimeType = String.valueOf(dto.get("mimeType"));
+        String mimeType = dto.mimeType();
         if (!IMAGE_TYPES.contains(mimeType)) {
             throw new BadRequestException("mimeType must be one of " + IMAGE_TYPES);
         }
         byte[] bytes;
         try {
-            bytes = Base64.getDecoder().decode(String.valueOf(dto.get("content")));
+            bytes = Base64.getDecoder().decode(dto.content());
         } catch (IllegalArgumentException e) {
             throw new BadRequestException("content is not valid base64");
         }
@@ -88,10 +91,10 @@ public class DocumentService {
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/document/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setCategory(dto.get("category") == null ? null : String.valueOf(dto.get("category")));
-        entity.setDescription(dto.get("description") == null ? null : String.valueOf(dto.get("description")));
-        entity.setLink(dto.get("link") == null ? null : String.valueOf(dto.get("link")));
+        entity.setName(dto.name());
+        entity.setCategory(dto.category());
+        entity.setDescription(dto.description());
+        entity.setLink(dto.link());
         entity.setContentType(mimeType);
         // Reference mode: a tenant bound to an external CMS uploads THERE and the
         // row keeps only a ref:<provider>:<assetId> key. Otherwise the hosted
@@ -112,16 +115,16 @@ public class DocumentService {
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(entity));
+        return DocumentView.of(repository.save(entity));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String category) {
+    public List<DocumentView> findAll(String category) {
         String tenant = tenantScope.currentTenantId();
         List<StoredDocument> rows = category != null
                 ? repository.findByTenantIdAndCategory(tenant, category)
                 : repository.findByTenantId(tenant);
-        return rows.stream().map(this::toMap).toList();
+        return rows.stream().map(DocumentView::of).toList();
     }
 
     /** Stable brand asset: the newest 'brand' document of the request's tenant. */
@@ -199,21 +202,11 @@ public class DocumentService {
 
     /** The shop window's creative: this tenant's available 'banner' documents (guests see these). */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<Map<String, Object>> banners() {
-        return findAll("banner").stream().filter(m -> !Boolean.FALSE.equals(m.get("available"))).toList();
+    public List<DocumentView> banners() {
+        // The map this replaces never carried an `available` key, so the
+        // filter that read it excluded nothing. Hiding an unavailable banner
+        // would be a behaviour change, not a consequence of typing the view.
+        return findAll("banner");
     }
 
-    private Map<String, Object> toMap(StoredDocument d) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", d.getId());
-        map.put("href", d.getHref());
-        map.put("name", d.getName());
-        if (d.getCategory() != null) map.put("category", d.getCategory());
-        map.put("mimeType", d.getContentType());
-        if (d.getDescription() != null) map.put("description", d.getDescription());
-        if (d.getLink() != null) map.put("link", d.getLink());
-        map.put("attachmentUrl", d.getHref() + "/content");
-        map.put("@type", "Document");
-        return map;
-    }
 }

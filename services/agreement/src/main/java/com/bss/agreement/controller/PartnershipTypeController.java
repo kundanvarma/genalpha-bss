@@ -1,5 +1,7 @@
 package com.bss.agreement.controller;
 
+import com.bss.agreement.dto.PartnershipTypeRequest;
+import com.bss.agreement.dto.PartnershipTypeView;
 import com.bss.agreement.service.PartnershipTypeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF668 Partnership Type Management: the vocabulary for a fleet full of
@@ -31,19 +32,19 @@ public class PartnershipTypeController {
     }
 
     @GetMapping({"/partnershipType", "/partnershipType/"})
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<PartnershipTypeView>> list() {
         return ResponseEntity.ok(service.findAll());
     }
 
     @GetMapping("/partnershipType/{id}")
-    public ResponseEntity<Map<String, Object>> byId(@PathVariable("id") String id) {
+    public ResponseEntity<PartnershipTypeView> byId(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping({"/partnershipType", "/partnershipType/"})
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto,
+    public ResponseEntity<PartnershipTypeView> create(@RequestBody PartnershipTypeRequest dto,
             jakarta.servlet.http.HttpServletRequest request) {
-        Map<String, Object> created = service.create(dto);
+        PartnershipTypeView created = service.create(dto);
         // Location = the URL the CLIENT posted to, plus the new id — rebuilt
         // from the gateway's X-Forwarded headers so it matches their view
         String host = request.getHeader("X-Forwarded-Host");
@@ -51,8 +52,8 @@ public class PartnershipTypeController {
         String location = host != null
                 ? (proto == null ? "http" : proto.split(",")[0].trim()) + "://"
                         + host.split(",")[0].trim() + request.getRequestURI()
-                        + (request.getRequestURI().endsWith("/") ? "" : "/") + created.get("id")
-                : String.valueOf(created.get("href"));
+                        + (request.getRequestURI().endsWith("/") ? "" : "/") + created.id()
+                : created.href();
         return ResponseEntity.created(URI.create(location)).body(created);
     }
 

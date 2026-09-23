@@ -3,6 +3,12 @@ package com.bss.address.service;
 import com.bss.address.api.ApiConstants;
 import com.bss.address.api.OffsetPageRequest;
 import com.bss.address.api.PagedResult;
+import com.bss.address.dto.AddressValidationRequest;
+import com.bss.address.dto.AddressValidationResult;
+import com.bss.address.dto.GeographicAddressRequest;
+import com.bss.address.dto.GeographicAddressView;
+import com.bss.address.dto.RegistryMatch;
+import com.bss.address.dto.StandardizedAddress;
 import com.bss.address.entity.GeographicAddress;
 import com.bss.address.exception.BadRequestException;
 import com.bss.address.exception.NotFoundException;
@@ -76,8 +82,8 @@ public class GeographicAddressService {
     }
 
     /** Anonymous: normalize + judge. Returns the TMF673 validation shape. */
-    public Map<String, Object> validate(Map<String, Object> request) {
-        if (!(request.get("submittedGeographicAddress") instanceof Map<?, ?> submittedRaw)) {
+    public AddressValidationResult validate(AddressValidationRequest request) {
+        if (!(request.submittedGeographicAddress() instanceof Map<?, ?> submittedRaw)) {
             throw new BadRequestException("submittedGeographicAddress is required");
         }
         @SuppressWarnings("unchecked")
@@ -112,20 +118,25 @@ public class GeographicAddressService {
             }
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", UUID.randomUUID().toString());
-        result.put("@type", "GeographicAddressValidation");
-        result.put("submittedGeographicAddress", submitted);
-        if (problem.isEmpty()) {
-            result.put("validationResult", "success");
-            standardized.put("@type", "GeographicAddress");
-            result.put("standardizedGeographicAddress", standardized);
-            registryMatch(request, standardized).ifPresent(m -> result.put("registryMatch", m));
-        } else {
-            result.put("validationResult", "failed");
-            result.put("validationReason", problem.toString());
+        String id = UUID.randomUUID().toString();
+        if (!problem.isEmpty()) {
+            return AddressValidationResult.failed(id, submitted, problem.toString());
         }
-        return result;
+        AddressValidationResult result = AddressValidationResult.success(id, submitted,
+                standardOf(standardized).withType());
+        return registryMatch(request, standardized).map(result::withRegistryMatch).orElse(result);
+    }
+
+    /** The normalised fields, still in the order the loop wrote them. */
+    private static StandardizedAddress standardOf(Map<String, Object> standardized) {
+        return new StandardizedAddress(str(standardized.get("street1")),
+                str(standardized.get("street2")), str(standardized.get("postCode")),
+                str(standardized.get("city")), str(standardized.get("stateOrProvince")),
+                str(standardized.get("country")), null);
+    }
+
+    private static String str(Object v) {
+        return v == null ? null : String.valueOf(v);
     }
 
     /**
@@ -137,9 +148,9 @@ public class GeographicAddressService {
      * degrade the risk seam reads); no party context = pure postal wash,
      * no registryMatch part at all.
      */
-    private java.util.Optional<Map<String, Object>> registryMatch(
-            Map<String, Object> request, Map<String, Object> standardized) {
-        if (!(request.get("relatedParty") instanceof Map<?, ?> partyRaw)) {
+    private java.util.Optional<RegistryMatch> registryMatch(
+            AddressValidationRequest request, Map<String, Object> standardized) {
+        if (!(request.relatedParty() instanceof Map<?, ?> partyRaw)) {
             return java.util.Optional.empty();
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -167,47 +178,41 @@ public class GeographicAddressService {
         return java.util.Optional.of(registryRouter
                 .match(tenantScope.currentTenantId(), country,
                         new RegistryAdapter.Person(name, birthDate), claimed, callerSub, partyId)
-                .orElseGet(() -> {
-                    Map<String, Object> none = new LinkedHashMap<>();
-                    none.put("country", country);
-                    none.put("outcome", "unavailable");
-                    none.put("reason", "no registry bound for " + country);
-                    return none;
-                }));
+                .map(RegistryMatch.class::cast)
+                .orElseGet(() -> RegistryMatch.Unavailable.noRegistry(country)));
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        Map<String, Object> validation = validate(Map.of("submittedGeographicAddress", dto));
-        if (!"success".equals(validation.get("validationResult"))) {
-            throw new BadRequestException(String.valueOf(validation.get("validationReason")));
+    public GeographicAddressView create(GeographicAddressRequest dto) {
+        AddressValidationResult validation = validate(AddressValidationRequest.of(dto));
+        if (!validation.isSuccess()) {
+            throw new BadRequestException(validation.validationReason());
         }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> std = (Map<String, Object>) validation.get("standardizedGeographicAddress");
+        StandardizedAddress std = validation.standardizedGeographicAddress();
         GeographicAddress entity = new GeographicAddress();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/geographicAddress/" + id);
-        entity.setStreet1((String) std.get("street1"));
-        entity.setStreet2((String) std.get("street2"));
-        entity.setPostCode((String) std.get("postCode"));
-        entity.setCity((String) std.get("city"));
-        entity.setStateOrProvince((String) std.get("stateOrProvince"));
-        entity.setCountry((String) std.get("country"));
+        entity.setStreet1(std.street1());
+        entity.setStreet2(std.street2());
+        entity.setPostCode(std.postCode());
+        entity.setCity(std.city());
+        entity.setStateOrProvince(std.stateOrProvince());
+        entity.setCountry(std.country());
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(entity));
+        return GeographicAddressView.of(repository.save(entity));
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public GeographicAddressView findById(String id) {
+        return GeographicAddressView.of(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("GeographicAddress", id)));
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<GeographicAddressView> findAll(int offset, int limit, Map<String, String> filters) {
         GeographicAddress probe = new GeographicAddress();
         probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
@@ -219,7 +224,8 @@ public class GeographicAddressService {
             }
         }
         Page<GeographicAddress> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(GeographicAddressView::of).toList(),
+                page.getTotalElements());
     }
 
     private String titleCase(String value) {
@@ -232,17 +238,4 @@ public class GeographicAddressService {
         return out.toString();
     }
 
-    private Map<String, Object> toMap(GeographicAddress a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("href", a.getHref());
-        if (a.getStreet1() != null) map.put("street1", a.getStreet1());
-        if (a.getStreet2() != null) map.put("street2", a.getStreet2());
-        if (a.getPostCode() != null) map.put("postCode", a.getPostCode());
-        if (a.getCity() != null) map.put("city", a.getCity());
-        if (a.getStateOrProvince() != null) map.put("stateOrProvince", a.getStateOrProvince());
-        if (a.getCountry() != null) map.put("country", a.getCountry());
-        map.put("@type", "GeographicAddress");
-        return map;
-    }
 }

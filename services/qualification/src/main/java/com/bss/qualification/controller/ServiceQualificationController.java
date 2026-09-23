@@ -1,5 +1,11 @@
 package com.bss.qualification.controller;
 
+import com.bss.qualification.dto.AccessOptionsResult;
+import com.bss.qualification.dto.CheckServiceQualificationView;
+import com.bss.qualification.dto.CoverageMapRequest;
+import com.bss.qualification.dto.CoverageMapView;
+import com.bss.qualification.dto.QueryServiceQualificationResult;
+import com.bss.qualification.dto.ServiceQualificationRequest;
 import com.bss.qualification.service.CoverageMapService;
 import com.bss.qualification.service.ServiceQualificationService;
 import org.springframework.http.HttpStatus;
@@ -14,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF645 Service Qualification: the technical shop window. The two task
@@ -39,45 +44,48 @@ public class ServiceQualificationController {
 
     /** "Can you deliver THIS here?" — verdicts kept, alternative proposed. */
     @PostMapping("/checkServiceQualification")
-    public ResponseEntity<Map<String, Object>> check(@RequestBody Map<String, Object> request) {
-        Map<String, Object> created = qualification.check(request);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<CheckServiceQualificationView> check(
+            @RequestBody ServiceQualificationRequest request) {
+        CheckServiceQualificationView created = qualification.check(request);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping("/checkServiceQualification/{id}")
-    public ResponseEntity<Map<String, Object>> findCheck(@PathVariable("id") String id) {
+    public ResponseEntity<CheckServiceQualificationView> findCheck(@PathVariable("id") String id) {
         return ResponseEntity.ok(qualification.findCheck(id));
     }
 
     @GetMapping("/checkServiceQualification")
-    public ResponseEntity<List<Map<String, Object>>> listChecks() {
+    public ResponseEntity<List<CheckServiceQualificationView>> listChecks() {
         return ResponseEntity.ok(qualification.listChecks());
     }
 
     /** "What CAN you deliver here?" — the footprint, answered per place. */
     @PostMapping("/queryServiceQualification")
-    public ResponseEntity<Map<String, Object>> query(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<QueryServiceQualificationResult> query(
+            @RequestBody ServiceQualificationRequest request) {
         return ResponseEntity.ok(qualification.query(request));
     }
 
     /** Open access: "which fibre OWNERS can serve this address, at what layer and
      * bandwidth?" — the wholesale shortlist a retail ISP buys from. */
     @PostMapping("/queryAccessOptions")
-    public ResponseEntity<Map<String, Object>> accessOptions(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<AccessOptionsResult> accessOptions(
+            @RequestBody ServiceQualificationRequest request) {
         return ResponseEntity.ok(qualification.accessOptions(request));
     }
 
     /* ---- the footprint as data: operator CRUD ---- */
 
     @GetMapping("/coverageMap")
-    public ResponseEntity<List<Map<String, Object>>> listCoverage() {
+    public ResponseEntity<List<CoverageMapView>> listCoverage() {
         return ResponseEntity.ok(coverage.findAll());
     }
 
     @PostMapping("/coverageMap")
-    public ResponseEntity<Map<String, Object>> createCoverage(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = coverage.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<CoverageMapView> createCoverage(@RequestBody CoverageMapRequest dto) {
+        CoverageMapView created = coverage.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @DeleteMapping("/coverageMap/{id}")

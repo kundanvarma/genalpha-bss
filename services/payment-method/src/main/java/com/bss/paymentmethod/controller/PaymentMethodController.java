@@ -1,6 +1,8 @@
 package com.bss.paymentmethod.controller;
 
 import com.bss.paymentmethod.api.ApiConstants;
+import com.bss.paymentmethod.dto.PaymentMethodRequest;
+import com.bss.paymentmethod.dto.PaymentMethodView;
 import com.bss.paymentmethod.service.PaymentMethodService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH + "/paymentMethod")
@@ -27,19 +28,19 @@ public class PaymentMethodController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<PaymentMethodView> create(@RequestBody PaymentMethodRequest dto) {
+        PaymentMethodView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> mine(
+    public ResponseEntity<List<PaymentMethodView>> mine(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(service.mine(relatedPartyId));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> resolve(@PathVariable String id) {
+    public ResponseEntity<PaymentMethodView> resolve(@PathVariable String id) {
         return ResponseEntity.ok(service.resolve(id));
     }
 

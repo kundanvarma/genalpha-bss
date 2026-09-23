@@ -1,6 +1,10 @@
 package com.bss.paymentmethod.service;
 
 import com.bss.paymentmethod.api.ApiConstants;
+import com.bss.paymentmethod.dto.CardDetails;
+import com.bss.paymentmethod.dto.PartyRef;
+import com.bss.paymentmethod.dto.PaymentMethodRequest;
+import com.bss.paymentmethod.dto.PaymentMethodView;
 import com.bss.paymentmethod.entity.PaymentMethod;
 import com.bss.paymentmethod.events.DomainEventPublisher;
 import com.bss.paymentmethod.exception.BadRequestException;
@@ -12,9 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -44,21 +46,12 @@ public class PaymentMethodService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        String owner = partyScope.scopedPartyId().orElseGet(() -> {
-            if (dto.get("relatedParty") instanceof List<?> parties) {
-                for (Object p : parties) {
-                    if (p instanceof Map<?, ?> ref && ref.get("id") != null) {
-                        return String.valueOf(ref.get("id"));
-                    }
-                }
-            }
-            return null;
-        });
+    public PaymentMethodView create(PaymentMethodRequest dto) {
+        String owner = partyScope.scopedPartyId().orElseGet(dto::firstPartyId);
         if (owner == null) {
             throw new BadRequestException("relatedParty is required for unscoped callers");
         }
-        if (!(dto.get("details") instanceof Map<?, ?> details)) {
+        if (dto.details() == null || !dto.details().isObject()) {
             throw new BadRequestException("details {brand, lastFourDigits, expiry} are required");
         }
         PaymentMethod entity = new PaymentMethod();
@@ -67,45 +60,44 @@ public class PaymentMethodService {
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/paymentMethod/" + id);
         entity.setOwnerPartyId(owner);
-        entity.setMethodType(dto.get("@type") == null ? "bankCard" : String.valueOf(dto.get("@type")));
-        entity.setBrand(details.get("brand") == null ? null : String.valueOf(details.get("brand")));
-        entity.setLastFour(details.get("lastFourDigits") == null ? null
-                : String.valueOf(details.get("lastFourDigits")));
-        entity.setExpiry(details.get("expiry") == null ? null : String.valueOf(details.get("expiry")));
+        entity.setMethodType(dto.type() == null ? "bankCard" : dto.type());
+        entity.setBrand(dto.detail("brand"));
+        entity.setLastFour(dto.detail("lastFourDigits"));
+        entity.setExpiry(dto.detail("expiry"));
         // Dev vault: mint an opaque token. Production: PSP tokenization result.
         // EXCEPTION — a bnplToken method's token IS the provider's recurring
         // token (Klarna minted it; we only hold the reference): keep it.
-        if ("bnplToken".equals(entity.getMethodType()) && details.get("token") != null) {
-            entity.setPspToken(String.valueOf(details.get("token")));
+        if ("bnplToken".equals(entity.getMethodType()) && dto.detail("token") != null) {
+            entity.setPspToken(dto.detail("token"));
         } else {
             entity.setPspToken("tok_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
         }
-        entity.setPreferred(Boolean.TRUE.equals(dto.get("preferred")));
+        entity.setPreferred(dto.preferredOrFalse());
         entity.setStatus(PaymentMethod.ACTIVE);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity), true);
+        PaymentMethodView created = toView(repository.save(entity), true);
         events.publish("PaymentMethodCreateEvent", "paymentMethod", created);
         return created;
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> mine(String requestedPartyId) {
+    public List<PaymentMethodView> mine(String requestedPartyId) {
         String party = partyScope.scopedPartyId().orElse(requestedPartyId);
         if (party == null) {
             throw new BadRequestException("relatedPartyId is required for unscoped callers");
         }
         return repository.findByTenantIdAndOwnerPartyIdAndStatus(
                         tenantScope.currentTenantId(), party, PaymentMethod.ACTIVE)
-                .stream().map(m -> toMap(m, false)).toList();
+                .stream().map(m -> toView(m, false)).toList();
     }
 
     /** Machine-side resolution when a saved method pays: includes the vault token. */
     @Transactional(readOnly = true)
-    public Map<String, Object> resolve(String id) {
+    public PaymentMethodView resolve(String id) {
         PaymentMethod entity = active(id);
         requireOwn(entity);
-        return toMap(entity, true);
+        return toView(entity, true);
     }
 
     @Transactional
@@ -115,7 +107,7 @@ public class PaymentMethodService {
         entity.setStatus(PaymentMethod.DELETED);
         entity.setLastUpdate(OffsetDateTime.now());
         repository.save(entity);
-        events.publish("PaymentMethodDeleteEvent", "paymentMethod", toMap(entity, false));
+        events.publish("PaymentMethodDeleteEvent", "paymentMethod", toView(entity, false));
     }
 
     private PaymentMethod active(String id) {
@@ -135,20 +127,11 @@ public class PaymentMethodService {
         });
     }
 
-    private Map<String, Object> toMap(PaymentMethod m, boolean includeToken) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", m.getId());
-        map.put("href", m.getHref());
-        map.put("@type", m.getMethodType());
-        map.put("status", m.getStatus());
-        map.put("preferred", m.isPreferred());
-        Map<String, Object> details = new LinkedHashMap<>();
-        if (m.getBrand() != null) details.put("brand", m.getBrand());
-        if (m.getLastFour() != null) details.put("lastFourDigits", m.getLastFour());
-        if (m.getExpiry() != null) details.put("expiry", m.getExpiry());
-        if (includeToken) details.put("token", m.getPspToken());
-        map.put("details", details);
-        map.put("relatedParty", List.of(Map.of("id", m.getOwnerPartyId(), "role", "customer")));
-        return map;
+    private PaymentMethodView toView(PaymentMethod m, boolean includeToken) {
+        CardDetails details = CardDetails.presentation(m.getBrand(), m.getLastFour(),
+                m.getExpiry());
+        return new PaymentMethodView(m.getId(), m.getHref(), m.getMethodType(), m.getStatus(),
+                m.isPreferred(), includeToken ? details.withToken(m.getPspToken()) : details,
+                List.of(PartyRef.customer(m.getOwnerPartyId())));
     }
 }

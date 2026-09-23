@@ -1,6 +1,9 @@
 package com.bss.address.controller;
 
 import com.bss.address.api.ApiConstants;
+import com.bss.address.dto.RegistryConfigRequest;
+import com.bss.address.dto.RegistryConfigView;
+import com.bss.address.dto.RegistryTestResult;
 import com.bss.address.service.RegistryConfigService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The operator's national-registry bindings (per tenant, per country). GET
@@ -31,12 +33,12 @@ public class RegistryController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<RegistryConfigView>> list() {
         return ResponseEntity.ok(service.listForCurrentTenant());
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<RegistryConfigView> upsert(@RequestBody RegistryConfigRequest dto) {
         return ResponseEntity.ok(service.upsert(dto));
     }
 
@@ -49,7 +51,7 @@ public class RegistryController {
     /** Test connection — reachability of the configured base URL (GET /health,
      * short timeout); never a person lookup. */
     @PostMapping("/{country}/test")
-    public ResponseEntity<Map<String, Object>> test(@PathVariable String country) {
+    public ResponseEntity<RegistryTestResult> test(@PathVariable String country) {
         return ResponseEntity.ok(service.testConnection(country));
     }
 }

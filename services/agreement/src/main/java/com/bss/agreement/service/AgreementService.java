@@ -3,6 +3,10 @@ package com.bss.agreement.service;
 import com.bss.agreement.api.ApiConstants;
 import com.bss.agreement.api.OffsetPageRequest;
 import com.bss.agreement.api.PagedResult;
+import com.bss.agreement.dto.AgreementPatch;
+import com.bss.agreement.dto.AgreementPeriod;
+import com.bss.agreement.dto.AgreementRequest;
+import com.bss.agreement.dto.AgreementView;
 import com.bss.agreement.entity.Agreement;
 import com.bss.agreement.events.DomainEventPublisher;
 import com.bss.agreement.exception.BadRequestException;
@@ -11,6 +15,7 @@ import com.bss.agreement.repository.AgreementRepository;
 import com.bss.agreement.security.PartyScope;
 import com.bss.agreement.security.TenantScope;
 import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -18,7 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,8 +40,10 @@ import java.util.UUID;
 public class AgreementService {
 
     private static final String RESOURCE = "Agreement";
-    private static final Set<String> STATUSES = Set.of(
-            Agreement.IN_PROCESS, Agreement.ACTIVE, Agreement.TERMINATED);
+    /** Declaration order, not {@code Set.of}'s: this table is printed in the
+     * refusal, and a hash-ordered set re-shuffles the sentence every JVM. */
+    private static final Set<String> STATUSES = new LinkedHashSet<>(List.of(
+            Agreement.IN_PROCESS, Agreement.ACTIVE, Agreement.TERMINATED));
 
     private final AgreementRepository repository;
     private final DomainEventPublisher events;
@@ -58,33 +65,29 @@ public class AgreementService {
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null) {
+    public AgreementView create(AgreementRequest dto) {
+        if (dto.name() == null) {
             throw new BadRequestException("name is required");
         }
         // TMF651: the agreement's type is mandatory — `type` (spec name)
         // and `agreementType` (fleet name) are the same fact
-        if (dto.get("agreementType") == null && dto.get("type") != null) {
-            dto.put("agreementType", dto.get("type"));
-        }
-        if (dto.get("agreementType") == null) {
+        String agreementType = dto.resolvedType();
+        if (agreementType == null) {
             throw new BadRequestException("type is required — an agreement without a"
                     + " type is a promise nobody can classify");
         }
         // v3 kits and partners say engagedPartyRole; the fleet says
         // engagedParty — same list of {id, role} references
-        if (dto.get("engagedParty") == null && dto.get("engagedPartyRole") instanceof List<?>) {
-            dto.put("engagedParty", dto.get("engagedPartyRole"));
-        }
-        requireNamedCharacteristics(dto.get("characteristic"));
-        requirePermittedPartnershipRoles(dto);
+        JsonNode parties = dto.resolvedParties();
+        requireNamedCharacteristics(dto.characteristic());
+        requirePermittedPartnershipRoles(agreementType, dto.characteristic(), parties);
         String owner = null;
-        if (dto.get("engagedParty") instanceof List<?> parties) {
-            for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))
-                        && ref.get("id") != null) {
-                    owner = String.valueOf(ref.get("id"));
+        if (parties != null && parties.isArray()) {
+            for (JsonNode ref : parties) {
+                JsonNode role = ref.get("role");
+                if (ref.isObject() && role != null && "customer".equalsIgnoreCase(role.asText())
+                        && AgreementRequest.present(ref.get("id"))) {
+                    owner = ref.get("id").asText();
                 }
             }
         }
@@ -93,12 +96,12 @@ public class AgreementService {
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/agreement/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setAgreementType(dto.get("agreementType") == null ? "commercial"
-                : String.valueOf(dto.get("agreementType")));
-        entity.setStatus(dto.get("status") == null ? Agreement.IN_PROCESS : requireStatus(dto.get("status")));
+        entity.setName(dto.name());
+        entity.setAgreementType(agreementType);
+        entity.setStatus(dto.status() == null ? Agreement.IN_PROCESS : requireStatus(dto.status()));
         entity.setOwnerPartyId(owner);
-        if (dto.get("agreementPeriod") instanceof Map<?, ?> period) {
+        JsonNode period = dto.agreementPeriod();
+        if (period != null && period.isObject()) {
             entity.setPeriodStart(parseTime(period.get("startDateTime")));
             entity.setPeriodEnd(parseTime(period.get("endDateTime")));
         }
@@ -107,32 +110,34 @@ public class AgreementService {
             // commitment window opens now.
             entity.setPeriodStart(OffsetDateTime.now());
         }
-        if (dto.get("commitmentMonths") instanceof Number months) {
-            entity.setCommitmentMonths(months.intValue());
+        // a real JSON number only: the map path's `instanceof Number` ignored "12"
+        if (dto.commitmentMonths() != null && dto.commitmentMonths().isNumber()) {
+            int months = dto.commitmentMonths().intValue();
+            entity.setCommitmentMonths(months);
             if (entity.getPeriodStart() != null && entity.getPeriodEnd() == null) {
-                entity.setPeriodEnd(entity.getPeriodStart().plusMonths(months.intValue()));
+                entity.setPeriodEnd(entity.getPeriodStart().plusMonths(months));
             }
         }
-        entity.setEngagedPartyJson(writeJson(dto.get("engagedParty")));
-        entity.setAgreementItemJson(writeJson(dto.get("agreementItem")));
-        entity.setCharacteristicJson(writeJson(dto.get("characteristic")));
+        entity.setEngagedPartyJson(writeJson(parties));
+        entity.setAgreementItemJson(writeJson(dto.agreementItem()));
+        entity.setCharacteristicJson(writeJson(dto.characteristic()));
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
+        AgreementView created = toView(repository.save(entity));
         events.publish("AgreementCreateEvent", "agreement", created);
         return created;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public AgreementView findById(String id) {
         Agreement entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
-        return toMap(entity);
+        return toView(entity);
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<AgreementView> findAll(int offset, int limit, Map<String, String> filters) {
         Agreement probe = new Agreement();
         probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
@@ -150,16 +155,17 @@ public class AgreementService {
         Page<Agreement> page = repository.findAll(Example.of(probe),
                 new OffsetPageRequest(offset, limit,
                         org.springframework.data.domain.Sort.by("createdAt").descending()));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::toView).toList(),
+                page.getTotalElements());
     }
 
     /** Back-office lifecycle: activate (period starts) or terminate. */
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public AgreementView patch(String id, AgreementPatch patch) {
         Agreement entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        if (patch.get("status") != null) {
-            String target = requireStatus(patch.get("status"));
+        if (patch.status() != null) {
+            String target = requireStatus(patch.status());
             entity.setStatus(target);
             if (Agreement.ACTIVE.equals(target) && entity.getPeriodStart() == null) {
                 entity.setPeriodStart(OffsetDateTime.now());
@@ -169,7 +175,7 @@ public class AgreementService {
             }
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> updated = toMap(repository.save(entity));
+        AgreementView updated = toView(repository.save(entity));
         events.publish("AgreementStateChangeEvent", "agreement", updated);
         return updated;
     }
@@ -179,24 +185,28 @@ public class AgreementService {
      * needs a name. Map form: keyed entries (partnershipTypeId, sla…) are
      * names by construction, but a bare {value: …} names nothing.
      */
-    private void requireNamedCharacteristics(Object characteristic) {
-        if (characteristic instanceof List<?> entries) {
-            for (Object entry : entries) {
-                if (entry instanceof Map<?, ?> m && m.containsKey("value")
-                        && (m.get("name") == null || String.valueOf(m.get("name")).isBlank())) {
+    private void requireNamedCharacteristics(JsonNode characteristic) {
+        if (characteristic == null) {
+            return;
+        }
+        if (characteristic.isArray()) {
+            for (JsonNode entry : characteristic) {
+                JsonNode name = entry.get("name");
+                if (entry.isObject() && entry.has("value")
+                        && (!AgreementRequest.present(name) || name.asText().isBlank())) {
                     throw new BadRequestException(
                             "every characteristic needs a name — a value alone names nothing");
                 }
             }
-        } else if (characteristic instanceof Map<?, ?> m
-                && m.containsKey("value") && m.get("name") == null && m.size() == 1) {
+        } else if (characteristic.isObject() && characteristic.has("value")
+                && !AgreementRequest.present(characteristic.get("name"))
+                && characteristic.size() == 1) {
             throw new BadRequestException(
                     "every characteristic needs a name — a value alone names nothing");
         }
     }
 
-    private String requireStatus(Object status) {
-        String value = String.valueOf(status);
+    private String requireStatus(String value) {
         if (!STATUSES.contains(value)) {
             throw new BadRequestException("status must be one of " + STATUSES);
         }
@@ -211,34 +221,20 @@ public class AgreementService {
         });
     }
 
-    private OffsetDateTime parseTime(Object value) {
-        return value == null ? null : OffsetDateTime.parse(String.valueOf(value));
+    private OffsetDateTime parseTime(JsonNode value) {
+        return AgreementRequest.present(value) ? OffsetDateTime.parse(value.asText()) : null;
     }
 
-    private Map<String, Object> toMap(Agreement a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("href", a.getHref());
-        map.put("name", a.getName());
-        map.put("agreementType", a.getAgreementType());
-        map.put("type", a.getAgreementType());
-        map.put("status", a.getStatus());
-        if (a.getPeriodStart() != null || a.getPeriodEnd() != null) {
-            Map<String, Object> period = new LinkedHashMap<>();
-            if (a.getPeriodStart() != null) period.put("startDateTime", a.getPeriodStart().toString());
-            if (a.getPeriodEnd() != null) period.put("endDateTime", a.getPeriodEnd().toString());
-            map.put("agreementPeriod", period);
-        }
-        if (a.getCommitmentMonths() != null) map.put("commitmentMonths", a.getCommitmentMonths());
-        Object engaged = readJson(a.getEngagedPartyJson());
-        Object items = readJson(a.getAgreementItemJson());
-        map.put("engagedParty", engaged == null ? List.of() : engaged);
-        map.put("engagedPartyRole", engaged == null ? List.of() : engaged);
-        map.put("agreementItem", items == null ? List.of() : items);
-        if (a.getCharacteristicJson() != null) map.put("characteristic", readJson(a.getCharacteristicJson()));
-        map.put("lastUpdate", a.getLastUpdate());
-        map.put("@type", "Agreement");
-        return map;
+    private AgreementView toView(Agreement a) {
+        JsonNode engaged = readJson(a.getEngagedPartyJson());
+        JsonNode items = readJson(a.getAgreementItemJson());
+        return AgreementView.of(a.getId(), a.getHref(), a.getName(), a.getAgreementType(),
+                a.getStatus(), AgreementPeriod.of(a.getPeriodStart(), a.getPeriodEnd()),
+                a.getCommitmentMonths(),
+                engaged == null ? objectMapper.createArrayNode() : engaged,
+                items == null ? objectMapper.createArrayNode() : items,
+                a.getCharacteristicJson() == null ? null : readJson(a.getCharacteristicJson()),
+                a.getLastUpdate());
     }
 
     private String writeJson(Object value) {
@@ -249,9 +245,9 @@ public class AgreementService {
         }
     }
 
-    private Object readJson(String json) {
+    private JsonNode readJson(String json) {
         try {
-            return json == null ? null : objectMapper.readValue(json, Object.class);
+            return json == null ? null : objectMapper.readTree(json);
         } catch (JacksonException e) {
             throw new IllegalStateException("unreadable stored JSON", e);
         }
@@ -262,15 +258,15 @@ public class AgreementService {
      * role must be one its partnership type permits. Untyped agreements pass
      * untouched: no ceremony where none is due.
      */
-    @SuppressWarnings("unchecked")
-    private void requirePermittedPartnershipRoles(Map<String, Object> dto) {
-        if (!"partnership".equalsIgnoreCase(String.valueOf(dto.get("agreementType")))) {
+    private void requirePermittedPartnershipRoles(String agreementType, JsonNode characteristic,
+            JsonNode parties) {
+        if (!"partnership".equalsIgnoreCase(agreementType)) {
             return;
         }
         String typeId = null;
-        Object characteristic = dto.get("characteristic");
-        if (characteristic instanceof Map<?, ?> m && m.get("partnershipTypeId") != null) {
-            typeId = String.valueOf(m.get("partnershipTypeId"));
+        if (characteristic != null && characteristic.isObject()
+                && AgreementRequest.present(characteristic.get("partnershipTypeId"))) {
+            typeId = characteristic.get("partnershipTypeId").asText();
         }
         if (typeId == null) {
             return; // an untyped partnership is legal — the type is the opt-in
@@ -280,10 +276,10 @@ public class AgreementService {
             throw new BadRequestException(
                     "partnership type '" + typeId + "' is unknown or retired");
         }
-        if (dto.get("engagedParty") instanceof List<?> parties) {
-            for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("role") != null) {
-                    String role = String.valueOf(ref.get("role"));
+        if (parties != null && parties.isArray()) {
+            for (JsonNode ref : parties) {
+                if (ref.isObject() && AgreementRequest.present(ref.get("role"))) {
+                    String role = ref.get("role").asText();
                     if (permitted.stream().noneMatch(r -> r.equalsIgnoreCase(role))) {
                         throw new BadRequestException("role '" + role
                                 + "' is not permitted by this partnership type (permitted: "

@@ -1,5 +1,6 @@
 package com.bss.address.registry;
 
+import com.bss.address.dto.RegistryMatch;
 import com.bss.address.entity.RegistryConfig;
 import com.bss.address.entity.RegistryLookupLog;
 import com.bss.address.repository.RegistryConfigRepository;
@@ -47,7 +48,7 @@ public class RegistryRouter {
      * so the CDP re-homes movers and campaigns may trigger on it (F-P4).
      */
     @Transactional
-    public Optional<Map<String, Object>> match(String tenantId, String country,
+    public Optional<RegistryMatch.Bound> match(String tenantId, String country,
             RegistryAdapter.Person person, Map<String, Object> address, String callerSub,
             String partyId) {
         Optional<RegistryConfig> bound = configs.findByTenantIdAndCountry(tenantId, country)
@@ -87,16 +88,7 @@ public class RegistryRouter {
             events.publish("PartyAddressVerifiedEvent", "addressVerification", verification, tenantId);
         }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("provider", cfg.getProvider());
-        out.put("country", country);
-        out.put("outcome", result.outcome());
-        if (result.registeredAddress() != null) {
-            out.put("registeredAddress", result.registeredAddress());
-        }
-        if (result.movedDate() != null) {
-            out.put("movedDate", result.movedDate());
-        }
-        return Optional.of(out);
+        return Optional.of(new RegistryMatch.Bound(cfg.getProvider(), country, result.outcome(),
+                result.registeredAddress(), result.movedDate()));
     }
 }

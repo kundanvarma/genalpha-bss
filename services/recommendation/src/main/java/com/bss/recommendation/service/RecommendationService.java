@@ -1,13 +1,15 @@
 package com.bss.recommendation.service;
 
 import com.bss.recommendation.client.CommerceClients;
+import com.bss.recommendation.dto.OfferingRef;
+import com.bss.recommendation.dto.RecommendationItem;
+import com.bss.recommendation.dto.RecommendationView;
 import com.bss.recommendation.exception.BadRequestException;
 import com.bss.recommendation.rank.Ranker;
 import com.bss.recommendation.security.PartyScope;
 import org.springframework.stereotype.Service;
 
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +41,7 @@ public class RecommendationService {
         this.ranker = ranker;
     }
 
-    public Map<String, Object> recommendationFor(String requestedPartyId) {
+    public RecommendationView recommendationFor(String requestedPartyId) {
         String party = partyScope.scopedPartyId().orElse(requestedPartyId);
         if (party == null) {
             throw new BadRequestException("relatedPartyId is required for unscoped callers");
@@ -67,22 +69,12 @@ public class RecommendationService {
                 .sorted((a, b) -> Boolean.compare(interesting.test(b), interesting.test(a)))
                 .limit(5).toList();
 
-        List<Map<String, Object>> items = new java.util.ArrayList<>();
+        List<RecommendationItem> items = new java.util.ArrayList<>();
         for (int i = 0; i < candidates.size(); i++) {
             Map<String, Object> offering = candidates.get(i);
-            items.add(Map.of(
-                    "priority", i + 1,
-                    "offering", Map.of(
-                            "id", offering.get("id"),
-                            "name", offering.get("name"),
-                            "@referredType", "ProductOffering")));
+            items.add(new RecommendationItem(i + 1,
+                    OfferingRef.of(offering.get("id"), offering.get("name"))));
         }
-        Map<String, Object> recommendation = new LinkedHashMap<>();
-        recommendation.put("id", UUID.randomUUID().toString());
-        recommendation.put("name", "Recommended for you");
-        recommendation.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
-        recommendation.put("recommendationItem", items);
-        recommendation.put("@type", "Recommendation");
-        return recommendation;
+        return RecommendationView.of(UUID.randomUUID().toString(), party, items);
     }
 }

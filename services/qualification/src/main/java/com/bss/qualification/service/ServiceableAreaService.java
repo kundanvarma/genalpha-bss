@@ -3,6 +3,8 @@ package com.bss.qualification.service;
 import com.bss.qualification.api.ApiConstants;
 import com.bss.qualification.api.OffsetPageRequest;
 import com.bss.qualification.api.PagedResult;
+import com.bss.qualification.dto.ServiceableAreaRequest;
+import com.bss.qualification.dto.ServiceableAreaView;
 import com.bss.qualification.entity.ServiceableArea;
 import com.bss.qualification.events.DomainEventPublisher;
 import com.bss.qualification.exception.BadRequestException;
@@ -11,6 +13,7 @@ import com.bss.qualification.repository.ServiceableAreaRepository;
 import com.bss.qualification.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -43,7 +46,7 @@ public class ServiceableAreaService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<ServiceableAreaView> findAll(int offset, int limit, Map<String, String> filters) {
         ServiceableArea probe = new ServiceableArea();
         probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
@@ -55,23 +58,25 @@ public class ServiceableAreaService {
             }
         }
         Page<ServiceableArea> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::toView).toList(),
+                page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public ServiceableAreaView findById(String id) {
+        return toView(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id)));
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        Object prefix = dto.get("postcodePrefix");
-        Object offering = dto.get("productOffering");
-        if (prefix == null || String.valueOf(prefix).isBlank()) {
+    public ServiceableAreaView create(ServiceableAreaRequest dto) {
+        String prefix = dto.postcodePrefix();
+        JsonNode offering = dto.productOffering();
+        if (prefix == null || prefix.isBlank()) {
             throw new BadRequestException("postcodePrefix is required");
         }
-        if (!(offering instanceof Map<?, ?> ref) || ref.get("id") == null) {
+        if (offering == null || !offering.isObject() || offering.get("id") == null
+                || offering.get("id").isNull()) {
             throw new BadRequestException("productOffering.id is required");
         }
         ServiceableArea entity = new ServiceableArea();
@@ -79,12 +84,12 @@ public class ServiceableAreaService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/serviceableArea/" + id);
-        entity.setProductOfferingJson(writeJson(dto.get("productOffering")));
-        entity.setProductOfferingId(String.valueOf(ref.get("id")));
-        entity.setPostcodePrefix(String.valueOf(prefix));
-        entity.setName(dto.get("name") == null ? null : String.valueOf(dto.get("name")));
+        entity.setProductOfferingJson(writeJson(offering));
+        entity.setProductOfferingId(offering.get("id").asText());
+        entity.setPostcodePrefix(prefix);
+        entity.setName(dto.name());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
+        ServiceableAreaView created = toView(repository.save(entity));
         events.publish("ServiceableAreaCreateEvent", "serviceableArea", created);
         return created;
     }
@@ -93,23 +98,15 @@ public class ServiceableAreaService {
     public void delete(String id) {
         ServiceableArea entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        Map<String, Object> deleted = toMap(entity);
+        ServiceableAreaView deleted = toView(entity);
         repository.delete(entity);
         events.publish("ServiceableAreaDeleteEvent", "serviceableArea", deleted);
     }
 
-    private Map<String, Object> toMap(ServiceableArea entity) {
-        Map<String, Object> map = new java.util.LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        if (entity.getName() != null) {
-            map.put("name", entity.getName());
-        }
-        map.put("productOffering", readJson(entity.getProductOfferingJson()));
-        map.put("postcodePrefix", entity.getPostcodePrefix());
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "ServiceableArea");
-        return map;
+    private ServiceableAreaView toView(ServiceableArea entity) {
+        return ServiceableAreaView.of(entity.getId(), entity.getHref(), entity.getName(),
+                readJson(entity.getProductOfferingJson()), entity.getPostcodePrefix(),
+                entity.getLastUpdate());
     }
 
     private String writeJson(Object value) {

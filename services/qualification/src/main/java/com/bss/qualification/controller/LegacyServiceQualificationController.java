@@ -1,6 +1,9 @@
 package com.bss.qualification.controller;
 
 import com.bss.qualification.entity.LegacyServiceQualification;
+import com.bss.qualification.dto.CheckItemView;
+import com.bss.qualification.dto.CheckServiceQualificationView;
+import com.bss.qualification.dto.ServiceQualificationRequest;
 import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.LegacyServiceQualificationRepository;
@@ -56,11 +59,11 @@ public class LegacyServiceQualificationController {
                     "serviceQualificationItem is required — a qualification qualifies SOMETHING");
         }
         // one truth: run the v4 coverage engine over the same items
-        List<Map<String, Object>> evaluated;
+        List<CheckItemView> evaluated;
         try {
-            Map<String, Object> checked = engine.check(new LinkedHashMap<>(dto));
-            evaluated = checked.get("serviceQualificationItem") instanceof List<?> list
-                    ? (List<Map<String, Object>>) list : List.of();
+            CheckServiceQualificationView checked =
+                    engine.check(ServiceQualificationRequest.of(dto));
+            evaluated = checked.serviceQualificationItem();
         } catch (RuntimeException e) {
             evaluated = List.of(); // engine refused the shape — items keep an honest note
         }
@@ -72,15 +75,13 @@ public class LegacyServiceQualificationController {
                     ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();
             item.putIfAbsent("id", String.valueOf(n));
             item.put("state", "done");
-            Map<String, Object> verdict = n <= evaluated.size() ? evaluated.get(n - 1) : null;
-            if (verdict != null && verdict.get("qualificationItemResult") != null) {
-                item.put("qualificationItemResult", verdict.get("qualificationItemResult"));
-                if (verdict.get("alternateServiceProposal") != null) {
-                    item.put("alternateServiceProposal", verdict.get("alternateServiceProposal"));
+            CheckItemView verdict = n <= evaluated.size() ? evaluated.get(n - 1) : null;
+            if (verdict != null && verdict.qualificationItemResult() != null) {
+                item.put("qualificationItemResult", verdict.qualificationItemResult());
+                if (verdict.alternateServiceProposal() != null) {
+                    item.put("alternateServiceProposal", verdict.alternateServiceProposal());
                 }
-                if (verdict.get("note") != null) {
-                    item.put("note", verdict.get("note"));
-                }
+                // the engine never writes a note on a verdict; only the else arm below does
             } else {
                 item.put("note", List.of(Map.of("text", "not evaluable against this operator's"
                         + " coverage vocabulary — nothing was measured, no verdict is claimed")));

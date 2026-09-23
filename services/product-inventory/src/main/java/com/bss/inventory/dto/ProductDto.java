@@ -2,6 +2,7 @@ package com.bss.inventory.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
@@ -12,7 +13,7 @@ public class ProductDto {
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     @com.fasterxml.jackson.annotation.JsonProperty("previousOffering")
-    private java.util.Map<String, Object> previousOffering;
+    private JsonNode previousOffering;
 
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     @com.fasterxml.jackson.annotation.JsonProperty("offeringChangedAt")
@@ -39,11 +40,13 @@ public class ProductDto {
     @JsonProperty("status")
     private String status;
 
+    /** A TMF reference the caller wrote: stored and answered verbatim, in the
+     * caller's own key order, so it stays a tree rather than a shape of ours. */
     @JsonProperty("productOffering")
-    private Map<String, Object> productOffering;
+    private JsonNode productOffering;
 
     @JsonProperty("billingAccount")
-    private Map<String, Object> billingAccount;
+    private JsonNode billingAccount;
 
     @JsonProperty("productCharacteristic")
     private List<Map<String, Object>> productCharacteristic;
@@ -98,19 +101,19 @@ public class ProductDto {
         this.status = status;
     }
 
-    public Map<String, Object> getProductOffering() {
+    public JsonNode getProductOffering() {
         return productOffering;
     }
 
-    public void setProductOffering(Map<String, Object> productOffering) {
+    public void setProductOffering(JsonNode productOffering) {
         this.productOffering = productOffering;
     }
 
-    public Map<String, Object> getBillingAccount() {
+    public JsonNode getBillingAccount() {
         return billingAccount;
     }
 
-    public void setBillingAccount(Map<String, Object> billingAccount) {
+    public void setBillingAccount(JsonNode billingAccount) {
         this.billingAccount = billingAccount;
     }
 
@@ -151,8 +154,8 @@ public class ProductDto {
     public List<Map<String, Object>> getRealizingService() { return realizingService; }
     public void setRealizingService(List<Map<String, Object>> v) { this.realizingService = v; }
 
-    public java.util.Map<String, Object> getPreviousOffering() { return previousOffering; }
-    public void setPreviousOffering(java.util.Map<String, Object> v) { this.previousOffering = v; }
+    public JsonNode getPreviousOffering() { return previousOffering; }
+    public void setPreviousOffering(JsonNode v) { this.previousOffering = v; }
     public String getOfferingChangedAt() { return offeringChangedAt; }
     public void setOfferingChangedAt(String v) { this.offeringChangedAt = v; }
     public String getStartDate() { return startDate; }

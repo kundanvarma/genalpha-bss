@@ -1,17 +1,18 @@
 package com.bss.document.service;
 
+import com.bss.document.dto.ContentProviderConfigRequest;
+import com.bss.document.dto.ContentProviderConfigView;
 import com.bss.document.entity.ContentProviderConfig;
 import com.bss.document.exception.BadRequestException;
 import com.bss.document.exception.NotFoundException;
 import com.bss.document.repository.ContentProviderConfigRepository;
 import com.bss.document.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -23,11 +24,12 @@ import java.util.Set;
 @Service
 public class ContentProviderConfigService {
 
-    private static final Set<String> KNOWN_PROVIDERS = Set.of("sanity", "http");
+    /** Printed in the refusal, in the order the wire has always shown it. */
+    private static final Set<String> KNOWN_PROVIDERS =
+            new LinkedHashSet<>(List.of("http", "sanity"));
 
     private final ContentProviderConfigRepository repository;
     private final TenantScope tenantScope;
-    private final ObjectMapper mapper = new ObjectMapper();
 
     public ContentProviderConfigService(ContentProviderConfigRepository repository, TenantScope tenantScope) {
         this.repository = repository;
@@ -41,8 +43,8 @@ public class ContentProviderConfigService {
     }
 
     @Transactional
-    public Map<String, Object> upsert(Map<String, Object> dto) {
-        String provider = str(dto.get("provider"));
+    public ContentProviderConfigView upsert(ContentProviderConfigRequest dto) {
+        String provider = dto.provider();
         if (provider == null || !KNOWN_PROVIDERS.contains(provider)) {
             throw new BadRequestException("provider is required and must be one of " + KNOWN_PROVIDERS);
         }
@@ -54,20 +56,20 @@ public class ContentProviderConfigService {
             return fresh;
         });
         cfg.setProvider(provider);
-        cfg.setBaseUrl(str(dto.get("baseUrl")));
-        cfg.setProjectId(str(dto.get("projectId")));
-        cfg.setDataset(str(dto.get("dataset")));
-        cfg.setSecretRef(str(dto.get("secretRef")));
-        cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
-        cfg.setDirectUrl(Boolean.TRUE.equals(dto.get("directUrl")));
-        cfg.setConfig(configJson(dto.get("config")));
+        cfg.setBaseUrl(dto.baseUrl());
+        cfg.setProjectId(dto.projectId());
+        cfg.setDataset(dto.dataset());
+        cfg.setSecretRef(dto.secretRef());
+        cfg.setWebhookSecretRef(dto.webhookSecretRef());
+        cfg.setDirectUrl(dto.directUrlOrFalse());
+        cfg.setConfig(dto.configJson());
         cfg.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(cfg));
+        return ContentProviderConfigView.of(repository.save(cfg));
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> currentAsMap() {
-        return toMap(forCurrentTenant()
+    public ContentProviderConfigView current() {
+        return ContentProviderConfigView.of(forCurrentTenant()
                 .orElseThrow(() -> NotFoundException.forResource("ContentProviderConfig", tenantScope.currentTenantId())));
     }
 
@@ -76,37 +78,6 @@ public class ContentProviderConfigService {
         repository.findByTenantId(tenantScope.currentTenantId()).ifPresent(repository::delete);
     }
 
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
 
-    /** config may arrive as a JSON object (store as JSON) or a JSON string (store as-is). */
-    private String configJson(Object v) {
-        if (v == null) {
-            return null;
-        }
-        if (v instanceof String s) {
-            return s;
-        }
-        try {
-            return mapper.writeValueAsString(v);
-        } catch (Exception e) {
-            throw new BadRequestException("config is not serialisable JSON");
-        }
-    }
 
-    /** The secret is a REFERENCE only — the token value is never returned. */
-    private Map<String, Object> toMap(ContentProviderConfig c) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("tenantId", c.getTenantId());
-        map.put("provider", c.getProvider());
-        if (c.getBaseUrl() != null) map.put("baseUrl", c.getBaseUrl());
-        if (c.getProjectId() != null) map.put("projectId", c.getProjectId());
-        if (c.getDataset() != null) map.put("dataset", c.getDataset());
-        if (c.getSecretRef() != null) map.put("secretRef", c.getSecretRef());
-        if (c.getWebhookSecretRef() != null) map.put("webhookSecretRef", c.getWebhookSecretRef());
-        map.put("directUrl", c.isDirectUrl());
-        map.put("@type", "ContentProviderConfig");
-        return map;
-    }
 }

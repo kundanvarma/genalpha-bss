@@ -2,6 +2,10 @@ package com.bss.qualification.controller;
 
 import com.bss.qualification.api.ApiConstants;
 import com.bss.qualification.api.PagedResult;
+import com.bss.qualification.dto.PoqCheckRequest;
+import com.bss.qualification.dto.PoqCheckResult;
+import com.bss.qualification.dto.ServiceableAreaRequest;
+import com.bss.qualification.dto.ServiceableAreaView;
 import com.bss.qualification.service.QualificationService;
 import com.bss.qualification.service.ServiceableAreaService;
 import jakarta.validation.constraints.Max;
@@ -42,19 +46,19 @@ public class QualificationController {
     }
 
     @PostMapping("/checkProductOfferingQualification")
-    public ResponseEntity<Map<String, Object>> check(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<PoqCheckResult> check(@RequestBody PoqCheckRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(qualification.check(request));
     }
 
     @GetMapping("/serviceableArea")
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<ServiceableAreaView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
-        PagedResult<Map<String, Object>> result = areas.findAll(offset, limit, filters);
+        PagedResult<ServiceableAreaView> result = areas.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -62,14 +66,14 @@ public class QualificationController {
     }
 
     @GetMapping("/serviceableArea/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<ServiceableAreaView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(areas.findById(id));
     }
 
     @PostMapping("/serviceableArea")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = areas.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<ServiceableAreaView> create(@RequestBody ServiceableAreaRequest dto) {
+        ServiceableAreaView created = areas.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @DeleteMapping("/serviceableArea/{id}")

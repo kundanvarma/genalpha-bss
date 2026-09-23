@@ -1,5 +1,7 @@
 package com.bss.qualification.service;
 
+import com.bss.qualification.dto.PoqCheckRequest;
+import com.bss.qualification.dto.PoqCheckResult;
 import com.bss.qualification.entity.ServiceableArea;
 import com.bss.qualification.repository.ServiceableAreaRepository;
 import com.bss.qualification.security.TenantScope;
@@ -32,26 +34,22 @@ public class QualificationService {
     }
 
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> check(Map<String, Object> request) {
-        List<Map<String, Object>> items = request.get("productOfferingQualificationItem") instanceof List<?> l
-                ? (List<Map<String, Object>>) l
-                : List.of();
+    public PoqCheckResult check(PoqCheckRequest request) {
         List<Map<String, Object>> resultItems = new ArrayList<>();
         boolean allQualified = true;
-        for (Map<String, Object> item : items) {
+        for (Map<String, Object> item : request.productOfferingQualificationItem()) {
             Map<String, Object> result = qualifyItem(item);
             resultItems.add(result);
             allQualified &= QUALIFIED.equals(result.get("qualificationItemResult"));
         }
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", UUID.randomUUID().toString());
-        response.put("@type", "CheckProductOfferingQualification");
-        response.put("state", "done");
-        response.put("qualificationResult", allQualified ? QUALIFIED : UNQUALIFIED);
-        response.put("productOfferingQualificationItem", resultItems);
-        return response;
+        return PoqCheckResult.of(UUID.randomUUID().toString(),
+                allQualified ? QUALIFIED : UNQUALIFIED, resultItems);
     }
+
+    /* The verdict is OVERLAID on the caller's own item, key for key — including
+     * the HashMap iteration order the caller's keys land in. That echo is the
+     * contract every channel reads, so the item stays an open map here while
+     * the envelope around it is a record. */
 
     private Map<String, Object> qualifyItem(Map<String, Object> item) {
         Map<String, Object> result = new HashMap<>(item);

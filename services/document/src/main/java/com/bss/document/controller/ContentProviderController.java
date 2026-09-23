@@ -1,6 +1,8 @@
 package com.bss.document.controller;
 
 import com.bss.document.api.ApiConstants;
+import com.bss.document.dto.ContentProviderConfigRequest;
+import com.bss.document.dto.ContentProviderConfigView;
 import com.bss.document.service.ContentProviderConfigService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -9,8 +11,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * Bind the request's tenant to an external headless CMS/DAM (or clear it back to
@@ -28,13 +28,14 @@ public class ContentProviderController {
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ContentProviderConfigView> upsert(
+            @RequestBody ContentProviderConfigRequest dto) {
         return ResponseEntity.ok(service.upsert(dto));
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> current() {
-        return ResponseEntity.ok(service.currentAsMap());
+    public ResponseEntity<ContentProviderConfigView> current() {
+        return ResponseEntity.ok(service.current());
     }
 
     @DeleteMapping

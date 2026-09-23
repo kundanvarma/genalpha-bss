@@ -1,5 +1,6 @@
 package com.bss.document.service;
 
+import com.bss.document.dto.WebhookResult;
 import com.bss.document.entity.ContentProviderConfig;
 import com.bss.document.entity.StoredDocument;
 import com.bss.document.repository.ContentProviderConfigRepository;
@@ -20,9 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Reference-mode freshness. An external CMS calls the webhook when an asset
@@ -51,7 +50,7 @@ public class ContentWebhookService {
     }
 
     @Transactional
-    public Map<String, Object> handleSanity(String tenantId, byte[] rawBody, String signatureHeader) {
+    public WebhookResult handleSanity(String tenantId, byte[] rawBody, String signatureHeader) {
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
             ContentProviderConfig cfg = configs.findByTenantId(tenantId).orElse(null);
             String secret = cfg == null ? null : env(cfg.getWebhookSecretRef());
@@ -78,12 +77,8 @@ public class ContentWebhookService {
             documents.saveAll(hits);
             log.info("sanity webhook tenant={} op={} asset={} matched={}", tenantId, operation, assetId, hits.size());
 
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("tenantId", tenantId);
-            result.put("operation", deleted ? "delete" : "upsert");
-            result.put("assetId", assetId);
-            result.put("matched", hits.size());
-            return result;
+            return new WebhookResult(tenantId, deleted ? "delete" : "upsert", assetId,
+                    hits.size());
         }
     }
 

@@ -1,5 +1,8 @@
 package com.bss.address.service;
 
+import com.bss.address.dto.GeographicSiteRequest;
+import com.bss.address.dto.GeographicSiteView;
+import com.bss.address.dto.SitePlace;
 import com.bss.address.entity.GeographicAddress;
 import com.bss.address.entity.GeographicSite;
 import com.bss.address.exception.BadRequestException;
@@ -14,7 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,8 +33,10 @@ import java.util.UUID;
 public class GeographicSiteService {
 
     private static final String BASE = "/tmf-api/geographicSiteManagement/v4";
-    private static final Set<String> STATUSES = Set.of(
-            GeographicSite.PLANNED, GeographicSite.ACTIVE, GeographicSite.RETIRED);
+    /** The order this table is PRINTED in, kept as the wire has it: a
+     * {@code Set.of} re-shuffles the refusal sentence on every JVM start. */
+    private static final Set<String> STATUSES = new LinkedHashSet<>(List.of(
+            GeographicSite.ACTIVE, GeographicSite.RETIRED, GeographicSite.PLANNED));
     private static final TypeReference<List<Map<String, Object>>> JSON_LIST = new TypeReference<>() {
     };
 
@@ -50,21 +55,21 @@ public class GeographicSiteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String relatedPartyId) {
+    public List<GeographicSiteView> findAll(String relatedPartyId) {
         return sites.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(s -> relatedPartyId == null || readParties(s.getRelatedPartyJson())
                         .stream().anyMatch(p -> relatedPartyId.equals(String.valueOf(p.get("id")))))
-                .map(this::toMap).toList();
+                .map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(require(id));
+    public GeographicSiteView findById(String id) {
+        return toView(require(id));
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || String.valueOf(dto.get("name")).isBlank()) {
+    public GeographicSiteView create(GeographicSiteRequest dto) {
+        if (dto.name() == null || dto.name().isBlank()) {
             throw new BadRequestException("name is required — a site IS a named place");
         }
         String addressId = placeRefOf(dto);
@@ -78,29 +83,28 @@ public class GeographicSiteService {
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(BASE + "/geographicSite/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setDescription(dto.get("description") == null ? null
-                : String.valueOf(dto.get("description")));
-        entity.setStatus(dto.get("status") == null ? GeographicSite.PLANNED
-                : requireStatus(dto.get("status")));
-        entity.setRelatedPartyJson(writeJson(dto.get("relatedParty")));
+        entity.setName(dto.name());
+        entity.setDescription(dto.description());
+        entity.setStatus(dto.status() == null ? GeographicSite.PLANNED
+                : requireStatus(dto.status()));
+        entity.setRelatedPartyJson(writeJson(dto.relatedParty()));
         entity.setAddressId(addressId);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(sites.save(entity));
+        return toView(sites.save(entity));
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+    public GeographicSiteView patch(String id, GeographicSiteRequest dto) {
         GeographicSite entity = require(id);
-        if (dto.get("status") != null) {
-            entity.setStatus(requireStatus(dto.get("status")));
+        if (dto.status() != null) {
+            entity.setStatus(requireStatus(dto.status()));
         }
-        if (dto.get("name") != null) {
-            entity.setName(String.valueOf(dto.get("name")));
+        if (dto.name() != null) {
+            entity.setName(dto.name());
         }
-        if (dto.get("description") != null) {
-            entity.setDescription(String.valueOf(dto.get("description")));
+        if (dto.description() != null) {
+            entity.setDescription(dto.description());
         }
         String addressId = placeRefOf(dto);
         if (addressId != null) {
@@ -108,7 +112,7 @@ public class GeographicSiteService {
             entity.setAddressId(addressId);
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(sites.save(entity));
+        return toView(sites.save(entity));
     }
 
     @Transactional
@@ -129,16 +133,15 @@ public class GeographicSiteService {
                         "place.id '" + addressId + "' is not a stored geographicAddress"));
     }
 
-    private static String requireStatus(Object status) {
-        String value = String.valueOf(status);
+    private static String requireStatus(String value) {
         if (!STATUSES.contains(value)) {
             throw new BadRequestException("status must be one of " + STATUSES);
         }
         return value;
     }
 
-    private static String placeRefOf(Map<String, Object> dto) {
-        Object place = dto.get("place");
+    private static String placeRefOf(GeographicSiteRequest dto) {
+        Object place = dto.place();
         if (place instanceof List<?> list && !list.isEmpty()) {
             place = list.get(0);
         }
@@ -146,39 +149,12 @@ public class GeographicSiteService {
                 ? String.valueOf(ref.get("id")) : null;
     }
 
-    private Map<String, Object> toMap(GeographicSite s) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", s.getId());
-        map.put("href", s.getHref());
-        map.put("name", s.getName());
-        if (s.getDescription() != null) {
-            map.put("description", s.getDescription());
-        }
-        map.put("status", s.getStatus());
-        List<Map<String, Object>> parties = readParties(s.getRelatedPartyJson());
-        if (!parties.isEmpty()) {
-            map.put("relatedParty", parties);
-        }
+    private GeographicSiteView toView(GeographicSite s) {
         // the place, EMBEDDED: the site answers "where?" without a second call
-        addresses.findByIdAndTenantId(s.getAddressId(), s.getTenantId()).ifPresent(a -> {
-            Map<String, Object> place = new LinkedHashMap<>();
-            place.put("id", a.getId());
-            place.put("street1", a.getStreet1());
-            if (a.getStreet2() != null) {
-                place.put("street2", a.getStreet2());
-            }
-            place.put("postCode", a.getPostCode());
-            place.put("city", a.getCity());
-            if (a.getStateOrProvince() != null) {
-                place.put("stateOrProvince", a.getStateOrProvince());
-            }
-            place.put("country", a.getCountry());
-            place.put("@referredType", "GeographicAddress");
-            map.put("place", List.of(place));
-        });
-        map.put("lastUpdate", s.getLastUpdate());
-        map.put("@type", "GeographicSite");
-        return map;
+        SitePlace place = addresses.findByIdAndTenantId(s.getAddressId(), s.getTenantId())
+                .map(SitePlace::of).orElse(null);
+        return GeographicSiteView.of(s.getId(), s.getHref(), s.getName(), s.getDescription(),
+                s.getStatus(), readParties(s.getRelatedPartyJson()), place, s.getLastUpdate());
     }
 
     private List<Map<String, Object>> readParties(String json) {

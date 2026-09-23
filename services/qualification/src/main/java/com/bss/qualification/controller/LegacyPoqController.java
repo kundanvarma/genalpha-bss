@@ -2,6 +2,8 @@ package com.bss.qualification.controller;
 
 import com.bss.qualification.api.ApiConstants;
 import com.bss.qualification.entity.LegacyPoq;
+import com.bss.qualification.dto.PoqCheckRequest;
+import com.bss.qualification.dto.PoqCheckResult;
 import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.LegacyPoqRepository;
@@ -56,10 +58,8 @@ public class LegacyPoqController {
         }
         List<Map<String, Object>> evaluated = List.of();
         try {
-            Map<String, Object> checked = engine.check(new LinkedHashMap<>(dto));
-            if (checked.get("productOfferingQualificationItem") instanceof List<?> list) {
-                evaluated = (List<Map<String, Object>>) list;
-            }
+            PoqCheckResult checked = engine.check(PoqCheckRequest.of(items));
+            evaluated = checked.productOfferingQualificationItem();
         } catch (RuntimeException e) {
             // engine refused the shape — items keep an honest note below
         }

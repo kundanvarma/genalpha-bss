@@ -1,5 +1,17 @@
 package com.bss.qualification.service;
 
+import com.bss.qualification.dto.AccessOption;
+import com.bss.qualification.dto.AccessOptionsResult;
+import com.bss.qualification.dto.AlternateServiceProposal;
+import com.bss.qualification.dto.Characteristic;
+import com.bss.qualification.dto.CheckItemView;
+import com.bss.qualification.dto.CheckServiceQualificationView;
+import com.bss.qualification.dto.QueryItemView;
+import com.bss.qualification.dto.QueryServiceQualificationResult;
+import com.bss.qualification.dto.Reason;
+import com.bss.qualification.dto.SearchCriteria;
+import com.bss.qualification.dto.ServiceQualificationRequest;
+import com.bss.qualification.dto.ServiceView;
 import com.bss.qualification.entity.CoverageMap;
 import com.bss.qualification.entity.ServiceQualification;
 import com.bss.qualification.exception.BadRequestException;
@@ -8,6 +20,7 @@ import com.bss.qualification.repository.CoverageMapRepository;
 import com.bss.qualification.repository.ServiceQualificationRepository;
 import com.bss.qualification.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +51,13 @@ public class ServiceQualificationService {
     public static final String QUALIFIED = "qualified";
     public static final String UNQUALIFIED = "unqualified";
 
+    private static final TypeReference<List<CheckItemView>> STORED_ITEMS =
+            new TypeReference<>() {
+            };
+    private static final TypeReference<Map<String, Object>> STORED_PLACE =
+            new TypeReference<>() {
+            };
+
     private final CoverageMapRepository coverage;
     private final ServiceQualificationRepository qualifications;
     private final TenantScope tenantScope;
@@ -58,27 +78,16 @@ public class ServiceQualificationService {
      * ===================================================================== */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> query(Map<String, Object> request) {
+    public QueryServiceQualificationResult query(ServiceQualificationRequest request) {
         Map<String, Object> place = placeOf(request);
         String postCode = postCodeOf(place);
-        List<Map<String, Object>> items = new ArrayList<>();
+        List<QueryItemView> items = new ArrayList<>();
         int n = 1;
         for (CoverageMap row : bestRowsAt(postCode)) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", String.valueOf(n++));
-            item.put("state", "done");
-            item.put("qualificationItemResult", QUALIFIED);
-            item.put("service", serviceView(row));
-            items.add(item);
+            items.add(QueryItemView.of(n++, serviceView(row)));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", UUID.randomUUID().toString());
-        out.put("state", "done");
-        out.put("instantSync", true);
-        out.put("searchCriteria", Map.of("place", place));
-        out.put("serviceQualificationItem", items);
-        out.put("@type", "QueryServiceQualification");
-        return out;
+        return QueryServiceQualificationResult.of(UUID.randomUUID().toString(),
+                new SearchCriteria(place), items);
     }
 
     /* =====================================================================
@@ -87,21 +96,21 @@ public class ServiceQualificationService {
      * ===================================================================== */
 
     @Transactional
-    public Map<String, Object> check(Map<String, Object> request) {
-        List<Map<String, Object>> items = listOf(request.get("serviceQualificationItem"));
+    public CheckServiceQualificationView check(ServiceQualificationRequest request) {
+        List<Map<String, Object>> items = listOf(request.serviceQualificationItem());
         if (items.isEmpty()) {
             throw new BadRequestException("serviceQualificationItem is required");
         }
         Map<String, Object> topPlace = placeOf(request);
-        List<Map<String, Object>> outItems = new ArrayList<>();
+        List<CheckItemView> outItems = new ArrayList<>();
         boolean allQualified = true;
         int n = 1;
         for (Map<String, Object> item : items) {
             Map<String, Object> place = item.containsKey("place") || serviceOf(item).containsKey("place")
                     ? placeOf(item) : topPlace;
-            Map<String, Object> outItem = checkOne(item, place);
-            outItem.put("id", item.get("id") == null ? String.valueOf(n) : item.get("id"));
-            allQualified &= QUALIFIED.equals(outItem.get("qualificationItemResult"));
+            CheckItemView outItem = checkOne(item, place)
+                    .withId(item.get("id") == null ? String.valueOf(n) : item.get("id"));
+            allQualified &= outItem.isQualified();
             outItems.add(outItem);
             n++;
         }
@@ -122,60 +131,49 @@ public class ServiceQualificationService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findCheck(String id) {
+    public CheckServiceQualificationView findCheck(String id) {
         ServiceQualification row = qualifications
                 .findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("CheckServiceQualification", id));
-        return checkView(row, readJson(row.getResultJson()));
+        return checkView(row, readItems(row.getResultJson()));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listChecks() {
+    public List<CheckServiceQualificationView> listChecks() {
         return qualifications.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(r -> checkView(r, readJson(r.getResultJson()))).toList();
+                .stream().map(r -> checkView(r, readItems(r.getResultJson()))).toList();
     }
 
     /* ---------- the verdict ---------- */
 
-    private Map<String, Object> checkOne(Map<String, Object> item, Map<String, Object> place) {
+    private CheckItemView checkOne(Map<String, Object> item, Map<String, Object> place) {
         String postCode = postCodeOf(place);
         String technology = requestedTechnology(item);
-        Map<String, Object> outItem = new LinkedHashMap<>();
-        outItem.put("state", "done");
         if (technology == null) {
-            outItem.put("qualificationItemResult", UNQUALIFIED);
-            outItem.put("eligibilityUnavailabilityReason", List.of(Map.of(
-                    "code", "missingService",
-                    "label", "qualification item without a requested service"
-                            + " (serviceSpecification.name or a 'technology' characteristic)")));
-            return outItem;
+            return CheckItemView.refused(new Reason("missingService",
+                    "qualification item without a requested service"
+                            + " (serviceSpecification.name or a 'technology' characteristic)"));
         }
         Integer minDown = requestedMinDown(item);
         Optional<CoverageMap> best = bestRowAt(postCode, technology);
         boolean bandwidthOk = best.isPresent()
                 && (minDown == null || best.get().getMaxDownMbps() >= minDown);
         if (best.isPresent() && bandwidthOk) {
-            outItem.put("qualificationItemResult", QUALIFIED);
-            outItem.put("service", serviceView(best.get()));
-            return outItem;
+            return CheckItemView.qualified(serviceView(best.get()));
         }
-        outItem.put("qualificationItemResult", UNQUALIFIED);
         String label = best.isEmpty()
                 ? technology + " is not available at postcode "
                         + (postCode.isEmpty() ? "(none given)" : postCode)
                 : technology + " at postcode " + postCode + " delivers at most "
                         + best.get().getMaxDownMbps() + " Mbps, below the requested " + minDown;
-        outItem.put("eligibilityUnavailabilityReason", List.of(Map.of(
-                "code", best.isEmpty() ? "noCoverage" : "insufficientBandwidth", "label", label)));
+        CheckItemView outItem = CheckItemView.refused(new Reason(
+                best.isEmpty() ? "noCoverage" : "insufficientBandwidth", label));
         // the TMF645 signature: never a bare no — the best this address CAN have
-        bestRowsAt(postCode).stream()
+        Optional<CoverageMap> alternative = bestRowsAt(postCode).stream()
                 .filter(r -> !r.getTechnology().equals(technology) || !bandwidthOk)
-                .max(Comparator.comparing(CoverageMap::getMaxDownMbps))
-                .ifPresent(alt -> outItem.put("alternateServiceProposal", List.of(Map.of(
-                        "id", "alt-1",
-                        "alternateService", serviceView(alt),
-                        "@type", "AlternateServiceProposal"))));
-        return outItem;
+                .max(Comparator.comparing(CoverageMap::getMaxDownMbps));
+        return alternative.isEmpty() ? outItem
+                : outItem.withAlternative(AlternateServiceProposal.of(serviceView(alternative.get())));
     }
 
     /** Best row per technology at this postcode: longest matching prefix. */
@@ -208,27 +206,22 @@ public class ServiceQualificationService {
 
     /* ---------- shapes ---------- */
 
-    private Map<String, Object> serviceView(CoverageMap row) {
-        List<Map<String, Object>> characteristics = new ArrayList<>();
-        characteristics.add(Map.of("name", "technology", "value", row.getTechnology()));
-        characteristics.add(Map.of("name", "maxDownstreamMbps", "value", row.getMaxDownMbps()));
+    private ServiceView serviceView(CoverageMap row) {
+        List<Characteristic> characteristics = new ArrayList<>();
+        characteristics.add(new Characteristic("technology", row.getTechnology()));
+        characteristics.add(new Characteristic("maxDownstreamMbps", row.getMaxDownMbps()));
         if (row.getMaxUpMbps() != null) {
-            characteristics.add(Map.of("name", "maxUpstreamMbps", "value", row.getMaxUpMbps()));
+            characteristics.add(new Characteristic("maxUpstreamMbps", row.getMaxUpMbps()));
         }
         // open access: name the fibre owner + the layer, when this footprint is
         // served by a wholesaler rather than our own network
         if (row.getAccessOwner() != null) {
-            characteristics.add(Map.of("name", "accessOwner", "value", row.getAccessOwner()));
+            characteristics.add(new Characteristic("accessOwner", row.getAccessOwner()));
         }
         if (row.getAccessLayer() != null) {
-            characteristics.add(Map.of("name", "accessLayer", "value", row.getAccessLayer()));
+            characteristics.add(new Characteristic("accessLayer", row.getAccessLayer()));
         }
-        Map<String, Object> service = new LinkedHashMap<>();
-        service.put("serviceSpecification", Map.of(
-                "name", "broadband-" + row.getTechnology(), "@referredType", "ServiceSpecification"));
-        service.put("serviceCharacteristic", characteristics);
-        service.put("@type", "Service");
-        return service;
+        return ServiceView.of(row.getTechnology(), characteristics);
     }
 
     /* =====================================================================
@@ -240,10 +233,10 @@ public class ServiceQualificationService {
      * ===================================================================== */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> accessOptions(Map<String, Object> request) {
+    public AccessOptionsResult accessOptions(ServiceQualificationRequest request) {
         Map<String, Object> place = placeOf(request);
         String postCode = postCodeOf(place);
-        String technology = Optional.ofNullable(requestedTechnology(request))
+        String technology = Optional.ofNullable(requestedTechnologyIn(serviceOf(request)))
                 .or(() -> Optional.ofNullable(technologyCriterion(request)))
                 .orElse("fiber");
         Map<String, CoverageMap> best = new LinkedHashMap<>();
@@ -259,64 +252,63 @@ public class ServiceQualificationService {
                 best.put(key, row);
             }
         }
-        List<Map<String, Object>> options = new ArrayList<>();
+        List<AccessOption> options = new ArrayList<>();
         for (CoverageMap row : best.values()) {
-            Map<String, Object> option = new LinkedHashMap<>();
-            option.put("accessOwner", row.getAccessOwner());
-            option.put("accessLayer", row.getAccessLayer());
-            option.put("technology", row.getTechnology());
-            option.put("maxDownMbps", row.getMaxDownMbps());
-            if (row.getMaxUpMbps() != null) {
-                option.put("maxUpMbps", row.getMaxUpMbps());
-            }
-            option.put("@type", "WholesaleAccessOption");
-            options.add(option);
+            options.add(AccessOption.of(row.getAccessOwner(), row.getAccessLayer(),
+                    row.getTechnology(), row.getMaxDownMbps(), row.getMaxUpMbps()));
         }
-        options.sort(Comparator.comparingInt((Map<String, Object> o) ->
-                (Integer) o.get("maxDownMbps")).reversed());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("place", place);
-        out.put("technology", technology);
-        out.put("accessOption", options);
-        out.put("@type", "QueryAccessOptions");
-        return out;
+        options.sort(Comparator.comparingInt(AccessOption::maxDownMbps).reversed());
+        return AccessOptionsResult.of(place, technology, options);
     }
 
-    private static String technologyCriterion(Map<String, Object> request) {
-        if (request.get("searchCriteria") instanceof Map<?, ?> c && c.get("technology") != null) {
+    private static String technologyCriterion(ServiceQualificationRequest request) {
+        if (request.searchCriteria() instanceof Map<?, ?> c && c.get("technology") != null) {
             return String.valueOf(c.get("technology"));
         }
-        return request.get("technology") == null ? null : String.valueOf(request.get("technology"));
+        return request.technology() == null ? null : String.valueOf(request.technology());
     }
 
-    private Map<String, Object> checkView(ServiceQualification row, List<Map<String, Object>> items) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", row.getId());
-        out.put("href", row.getHref());
-        out.put("state", row.getState());
-        out.put("qualificationResult", row.getQualificationResult());
-        out.put("place", readJsonObject(row.getPlaceJson()));
-        out.put("serviceQualificationItem", items);
-        out.put("checkServiceQualificationDate", row.getCreatedAt());
-        out.put("@type", "CheckServiceQualification");
-        return out;
+    private CheckServiceQualificationView checkView(ServiceQualification row,
+            List<CheckItemView> items) {
+        return CheckServiceQualificationView.of(row.getId(), row.getHref(), row.getState(),
+                row.getQualificationResult(), readPlace(row.getPlaceJson()), items,
+                row.getCreatedAt());
     }
 
     /* ---------- request parsing ---------- */
 
     /** The place, wherever the caller put it: searchCriteria.place, the
-     * item's own place (list or object), the service's place, or top-level. */
-    private static Map<String, Object> placeOf(Map<String, Object> request) {
+     * request's own service block, or top-level. */
+    private static Map<String, Object> placeOf(ServiceQualificationRequest request) {
         Object candidate = null;
-        if (request.get("searchCriteria") instanceof Map<?, ?> criteria) {
+        if (request.searchCriteria() instanceof Map<?, ?> criteria) {
             candidate = criteria.get("place");
         }
         if (candidate == null) {
             candidate = serviceOf(request).get("place");
         }
         if (candidate == null) {
-            candidate = request.get("place");
+            candidate = request.place();
         }
+        return firstPlace(candidate);
+    }
+
+    /** The same rule for one item inside the request. */
+    private static Map<String, Object> placeOf(Map<String, Object> item) {
+        Object candidate = null;
+        if (item.get("searchCriteria") instanceof Map<?, ?> criteria) {
+            candidate = criteria.get("place");
+        }
+        if (candidate == null) {
+            candidate = serviceOf(item).get("place");
+        }
+        if (candidate == null) {
+            candidate = item.get("place");
+        }
+        return firstPlace(candidate);
+    }
+
+    private static Map<String, Object> firstPlace(Object candidate) {
         if (candidate instanceof List<?> list && !list.isEmpty()) {
             candidate = list.get(0);
         }
@@ -328,12 +320,19 @@ public class ServiceQualificationService {
                 : String.valueOf(place.get("postCode")).replaceAll("\\s", "");
     }
 
+    private static Map<String, Object> serviceOf(ServiceQualificationRequest request) {
+        return request.service() instanceof Map<?, ?> service ? castMap(service) : Map.of();
+    }
+
     private static Map<String, Object> serviceOf(Map<String, Object> item) {
         return item.get("service") instanceof Map<?, ?> service ? castMap(service) : Map.of();
     }
 
     private static String requestedTechnology(Map<String, Object> item) {
-        Map<String, Object> service = serviceOf(item);
+        return requestedTechnologyIn(serviceOf(item));
+    }
+
+    private static String requestedTechnologyIn(Map<String, Object> service) {
         for (Map<String, Object> c : listOf(service.get("serviceCharacteristic"))) {
             if ("technology".equals(c.get("name")) && c.get("value") != null) {
                 return String.valueOf(c.get("value"));
@@ -369,19 +368,17 @@ public class ServiceQualificationService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> readJson(String json) {
+    private List<CheckItemView> readItems(String json) {
         try {
-            return json == null ? List.of() : objectMapper.readValue(json, List.class);
+            return json == null ? List.of() : objectMapper.readValue(json, STORED_ITEMS);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored qualification result is unreadable", e);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> readJsonObject(String json) {
+    private Map<String, Object> readPlace(String json) {
         try {
-            return json == null ? Map.of() : objectMapper.readValue(json, Map.class);
+            return json == null ? Map.of() : objectMapper.readValue(json, STORED_PLACE);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored place is unreadable", e);
         }

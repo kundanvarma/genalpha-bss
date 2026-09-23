@@ -1,6 +1,7 @@
 package com.bss.document.controller;
 
 import com.bss.document.api.ApiConstants;
+import com.bss.document.dto.WebhookResult;
 import com.bss.document.service.ContentWebhookService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -11,8 +12,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.Map;
 
 /**
  * External CMS/DAM webhooks — anonymous at the door, HMAC-verified inside (the
@@ -30,7 +29,7 @@ public class ContentWebhookController {
     }
 
     @PostMapping("/{provider}/{tenantId}")
-    public ResponseEntity<Map<String, Object>> receive(
+    public ResponseEntity<WebhookResult> receive(
             @PathVariable String provider,
             @PathVariable String tenantId,
             @RequestBody(required = false) byte[] body,

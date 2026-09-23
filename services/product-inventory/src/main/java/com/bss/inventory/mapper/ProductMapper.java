@@ -4,6 +4,7 @@ import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
@@ -13,8 +14,6 @@ import java.util.Map;
 @Component
 public class ProductMapper {
 
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
-    };
     private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
     };
 
@@ -111,10 +110,11 @@ public class ProductMapper {
         if (patch.getProductOffering() != null) {
             // a REPOINTED offering is a plan change: remember what it was
             // and when, so the billing run can prorate the month honestly
-            java.util.Map<String, Object> before = readObject(entity.getProductOfferingJson());
-            Object oldId = before == null ? null : before.get("id");
-            Object newId = patch.getProductOffering().get("id");
-            if (oldId != null && newId != null && !String.valueOf(oldId).equals(String.valueOf(newId))) {
+            JsonNode before = readObject(entity.getProductOfferingJson());
+            JsonNode oldId = before == null ? null : before.get("id");
+            JsonNode newId = patch.getProductOffering().get("id");
+            // the map read both ids through String.valueOf: 5 and "5" were one id
+            if (present(oldId) && present(newId) && !oldId.asText().equals(newId.asText())) {
                 entity.setPreviousOfferingJson(entity.getProductOfferingJson());
                 entity.setOfferingChangedAt(java.time.OffsetDateTime.now());
             }
@@ -149,8 +149,19 @@ public class ProductMapper {
         }
     }
 
-    private Map<String, Object> readObject(String json) {
-        return read(json, JSON_OBJECT);
+    private static boolean present(JsonNode node) {
+        return node != null && !node.isNull();
+    }
+
+    private JsonNode readObject(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored JSON is unreadable", e);
+        }
     }
 
     private List<Map<String, Object>> readArray(String json) {

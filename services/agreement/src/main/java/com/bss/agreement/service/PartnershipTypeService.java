@@ -1,5 +1,8 @@
 package com.bss.agreement.service;
 
+import com.bss.agreement.dto.PartnershipTypeRequest;
+import com.bss.agreement.dto.PartnershipTypeView;
+import com.bss.agreement.dto.RoleType;
 import com.bss.agreement.entity.PartnershipType;
 import com.bss.agreement.exception.BadRequestException;
 import com.bss.agreement.exception.NotFoundException;
@@ -7,15 +10,14 @@ import com.bss.agreement.repository.PartnershipTypeRepository;
 import com.bss.agreement.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -27,7 +29,7 @@ import java.util.UUID;
 public class PartnershipTypeService {
 
     private static final String BASE = "/tmf-api/partnershipTypeManagement/v4";
-    private static final TypeReference<List<Map<String, Object>>> JSON_LIST = new TypeReference<>() {
+    private static final TypeReference<List<RoleType>> ROLE_LIST = new TypeReference<>() {
     };
 
     private final PartnershipTypeRepository repository;
@@ -42,28 +44,28 @@ public class PartnershipTypeService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<PartnershipTypeView> findAll() {
         return repository.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(require(id));
+    public PartnershipTypeView findById(String id) {
+        return toView(require(id));
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || String.valueOf(dto.get("name")).isBlank()) {
+    public PartnershipTypeView create(PartnershipTypeRequest dto) {
+        if (dto.name() == null || dto.name().isBlank()) {
             throw new BadRequestException("name is required");
         }
         // A kind without roles is a valid (if inert) catalog entry: it
         // permits NOTHING, and the agreement-signature check will refuse any
         // role named against it. But a roleType entry WITHOUT a name is a
         // contradiction — a role is its name.
-        List<Map<String, Object>> roleTypes = List.of();
-        if (dto.get("roleType") instanceof List<?> list && !list.isEmpty()) {
-            roleTypes = sanitizeRoleTypes(list);
+        List<RoleType> roleTypes = List.of();
+        if (dto.roleType() != null && dto.roleType().isArray() && !dto.roleType().isEmpty()) {
+            roleTypes = sanitizeRoleTypes(dto.roleType());
             if (roleTypes.isEmpty()) {
                 throw new BadRequestException(
                         "each roleType entry needs a name — a role IS its name");
@@ -74,15 +76,13 @@ public class PartnershipTypeService {
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(BASE + "/partnershipType/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setDescription(dto.get("description") == null ? null
-                : String.valueOf(dto.get("description")));
-        entity.setStatus(dto.get("status") == null ? PartnershipType.ACTIVE
-                : String.valueOf(dto.get("status")));
+        entity.setName(dto.name());
+        entity.setDescription(dto.description());
+        entity.setStatus(dto.status() == null ? PartnershipType.ACTIVE : dto.status());
         entity.setRoleTypeJson(writeJson(roleTypes));
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(entity));
+        return toView(repository.save(entity));
     }
 
     @Transactional
@@ -97,7 +97,7 @@ public class PartnershipTypeService {
         return repository.findByIdAndTenantId(typeId, tenantScope.currentTenantId())
                 .filter(t -> PartnershipType.ACTIVE.equals(t.getStatus()))
                 .map(t -> readRoleTypes(t.getRoleTypeJson()).stream()
-                        .map(r -> String.valueOf(r.get("name"))).toList())
+                        .map(RoleType::name).toList())
                 .orElse(List.of());
     }
 
@@ -108,41 +108,28 @@ public class PartnershipTypeService {
                 .orElseThrow(() -> NotFoundException.forResource("PartnershipType", id));
     }
 
-    private List<Map<String, Object>> sanitizeRoleTypes(List<?> raw) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Object entry : raw) {
-            if (entry instanceof Map<?, ?> m && m.get("name") != null
-                    && !String.valueOf(m.get("name")).isBlank()) {
-                Map<String, Object> role = new LinkedHashMap<>();
-                role.put("name", String.valueOf(m.get("name")));
-                if (m.get("description") != null) {
-                    role.put("description", String.valueOf(m.get("description")));
-                }
-                role.put("@type", "PartnerRoleType");
-                out.add(role);
+    private List<RoleType> sanitizeRoleTypes(JsonNode raw) {
+        List<RoleType> out = new ArrayList<>();
+        for (JsonNode entry : raw) {
+            JsonNode name = entry.get("name");
+            if (entry.isObject() && name != null && !name.isNull() && !name.asText().isBlank()) {
+                JsonNode description = entry.get("description");
+                out.add(RoleType.of(name.asText(),
+                        description == null || description.isNull() ? null : description.asText()));
             }
         }
         return out;
     }
 
-    private Map<String, Object> toMap(PartnershipType entity) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        map.put("name", entity.getName());
-        if (entity.getDescription() != null) {
-            map.put("description", entity.getDescription());
-        }
-        map.put("status", entity.getStatus());
-        map.put("roleType", readRoleTypes(entity.getRoleTypeJson()));
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "PartnershipType");
-        return map;
+    private PartnershipTypeView toView(PartnershipType entity) {
+        return PartnershipTypeView.of(entity.getId(), entity.getHref(), entity.getName(),
+                entity.getDescription(), entity.getStatus(),
+                readRoleTypes(entity.getRoleTypeJson()), entity.getLastUpdate());
     }
 
-    private List<Map<String, Object>> readRoleTypes(String json) {
+    private List<RoleType> readRoleTypes(String json) {
         try {
-            return json == null ? List.of() : objectMapper.readValue(json, JSON_LIST);
+            return json == null ? List.of() : objectMapper.readValue(json, ROLE_LIST);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored role types are unreadable", e);
         }

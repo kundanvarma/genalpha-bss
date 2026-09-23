@@ -1,6 +1,8 @@
 package com.bss.recommendation.controller;
 
 import com.bss.recommendation.api.ApiConstants;
+import com.bss.recommendation.dto.AffinityRow;
+import com.bss.recommendation.dto.RecommendationView;
 import com.bss.recommendation.service.AffinityRecommender;
 import com.bss.recommendation.service.RecommendationService;
 import org.springframework.http.ResponseEntity;
@@ -9,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 public class RecommendationController {
@@ -23,7 +24,7 @@ public class RecommendationController {
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/recommendation")
-    public ResponseEntity<List<Map<String, Object>>> recommendation(
+    public ResponseEntity<List<RecommendationView>> recommendation(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(List.of(service.recommendationFor(relatedPartyId)));
     }
@@ -31,7 +32,7 @@ public class RecommendationController {
     /** "Customers who bought this also bought" — public (product page),
      * aggregate only, min-support protected. */
     @GetMapping(ApiConstants.BASE_PATH + "/affinity")
-    public ResponseEntity<List<Map<String, Object>>> affinity(
+    public ResponseEntity<List<AffinityRow>> affinity(
             @RequestParam(name = "forOfferingId") String forOfferingId) {
         return ResponseEntity.ok(affinity.alsoBought(forOfferingId));
     }

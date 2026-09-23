@@ -1,6 +1,11 @@
 package com.bss.porting.service;
 
 import com.bss.porting.api.ApiConstants;
+import com.bss.porting.dto.EntityRef;
+import com.bss.porting.dto.PartyRef;
+import com.bss.porting.dto.PortedNumber;
+import com.bss.porting.dto.PortingOrderRequest;
+import com.bss.porting.dto.PortingOrderView;
 import com.bss.porting.entity.PortingOrder;
 import com.bss.porting.events.DomainEventPublisher;
 import com.bss.porting.exception.BadRequestException;
@@ -16,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,10 +56,9 @@ public class PortingService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        String direction = dto.get("direction") == null ? PortingOrder.PORT_IN
-                : String.valueOf(dto.get("direction"));
-        if (dto.get("phoneNumber") == null || dto.get("country") == null) {
+    public PortingOrderView create(PortingOrderRequest dto) {
+        String direction = dto.direction() == null ? PortingOrder.PORT_IN : dto.direction();
+        if (dto.phoneNumber() == null || dto.country() == null) {
             throw new BadRequestException("phoneNumber and country (ISO alpha-2) are required");
         }
         if (!List.of(PortingOrder.PORT_IN, PortingOrder.PORT_OUT).contains(direction)) {
@@ -66,21 +69,18 @@ public class PortingService {
         order.setTenantId(tenantScope.currentTenantId());
         order.setHref(ApiConstants.BASE_PATH + "/numberPortingOrder/" + order.getId());
         order.setDirection(direction);
-        order.setPhoneNumber(String.valueOf(dto.get("phoneNumber")).replaceAll("\\s", ""));
-        order.setCountry(String.valueOf(dto.get("country")).toUpperCase());
-        order.setOtherOperator(dto.get("otherOperator") == null ? null
-                : String.valueOf(dto.get("otherOperator")));
-        if (dto.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            order.setOwnerPartyId(String.valueOf(party.get("id")));
+        order.setPhoneNumber(dto.phoneNumber().replaceAll("\\s", ""));
+        order.setCountry(dto.country().toUpperCase());
+        order.setOtherOperator(dto.otherOperator());
+        if (dto.firstPartyId() != null) {
+            order.setOwnerPartyId(dto.firstPartyId());
         }
         // A customer can only port their own number, whatever they send.
         partyScope.scopedPartyId().ifPresent(order::setOwnerPartyId);
-        order.setProductOrderId(dto.get("productOrderId") == null ? null
-                : String.valueOf(dto.get("productOrderId")));
+        order.setProductOrderId(dto.productOrderId());
         order.setGateway(gateway.nameFor(order.getTenantId(), order.getCountry()));
         order.setStatus(PortingOrder.REQUESTED);
-        order.setRequestedCutover(parseTime(dto.get("requestedCutover")));
+        order.setRequestedCutover(parseTime(dto.requestedCutover()));
         // The customer's port-in wish date: honest window, never the past.
         if (order.getRequestedCutover() != null
                 && order.getRequestedCutover().isBefore(OffsetDateTime.now().minusHours(1))) {
@@ -109,7 +109,7 @@ public class PortingService {
             }
         }
         orders.save(order);
-        Map<String, Object> result = toMap(order);
+        PortingOrderView result = toView(order);
         events.publish("PortingOrderCreateEvent", "portingOrder", result);
         log.info("porting {} {} via {} -> {}", direction, order.getPhoneNumber(),
                 gateway.nameFor(order.getTenantId(), order.getCountry()), order.getStatus());
@@ -118,7 +118,7 @@ public class PortingService {
 
     /** The cutover fires (in production, a clearinghouse callback at the agreed time). */
     @Transactional
-    public Map<String, Object> complete(String id) {
+    public PortingOrderView complete(String id) {
         PortingOrder order = own(id);
         if (!PortingOrder.SCHEDULED.equals(order.getStatus())) {
             throw new ConflictException("only scheduled ports can complete (is " + order.getStatus() + ")");
@@ -133,35 +133,34 @@ public class PortingService {
         order.setCompletedAt(OffsetDateTime.now());
         order.setLastUpdate(OffsetDateTime.now());
         orders.save(order);
-        Map<String, Object> result = toMap(order);
+        PortingOrderView result = toView(order);
         events.publish("PortingOrderStateChangeEvent", "portingOrder", result);
         return result;
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String relatedPartyId, String status) {
+    public List<PortingOrderView> findAll(String relatedPartyId, String status) {
         String scoped = partyScope.scopedPartyId().orElse(relatedPartyId);
         return orders.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(o -> scoped == null || scoped.equals(o.getOwnerPartyId()))
                 .filter(o -> status == null || status.equals(o.getStatus()))
-                .map(this::toMap).toList();
+                .map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(own(id));
+    public PortingOrderView findById(String id) {
+        return toView(own(id));
     }
 
     /** The number a party has successfully ported in, for the orchestrator to activate on. */
     @Transactional(readOnly = true)
-    public Map<String, Object> portedNumberFor(String party) {
+    public PortedNumber portedNumberFor(String party) {
         return orders.findByTenantIdAndOwnerPartyIdAndStatus(
                         tenantScope.currentTenantId(), party, PortingOrder.COMPLETED).stream()
                 .filter(o -> PortingOrder.PORT_IN.equals(o.getDirection()))
                 .findFirst()
-                .map(o -> Map.<String, Object>of("phoneNumber", o.getPhoneNumber(),
-                        "portingOrderId", o.getId()))
-                .orElse(Map.of());
+                .map(o -> new PortedNumber(o.getPhoneNumber(), o.getId()))
+                .orElse(PortedNumber.NONE);
     }
 
     private PortingOrder own(String id) {
@@ -169,35 +168,28 @@ public class PortingService {
                 .orElseThrow(() -> NotFoundException.forResource("PortingOrder", id));
     }
 
-    private Map<String, Object> toMap(PortingOrder o) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", o.getId());
-        map.put("href", o.getHref());
-        map.put("direction", o.getDirection());
-        map.put("phoneNumber", o.getPhoneNumber());
-        map.put("country", o.getCountry());
-        if (o.getOtherOperator() != null) map.put("otherOperator", o.getOtherOperator());
-        map.put("status", o.getStatus());
-        map.put("clearinghouse", o.getGateway());
-        map.put("regulator", PortingRules.forCountry(o.getCountry()).regulator());
-        if (o.getRejectReason() != null) map.put("rejectReason", o.getRejectReason());
-        if (o.getRequestedCutover() != null) map.put("requestedCutover", o.getRequestedCutover().toString());
-        if (o.getScheduledCutover() != null) map.put("scheduledCutover", o.getScheduledCutover().toString());
-        if (o.getCompletedAt() != null) map.put("completedAt", o.getCompletedAt().toString());
-        if (o.getProductOrderId() != null) map.put("productOrder", Map.of("id", o.getProductOrderId()));
-        if (o.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", o.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("@type", "PortingOrder");
-        return map;
+    private PortingOrderView toView(PortingOrder o) {
+        return new PortingOrderView(o.getId(), o.getHref(), o.getDirection(), o.getPhoneNumber(),
+                o.getCountry(), o.getOtherOperator(), o.getStatus(), o.getGateway(),
+                PortingRules.forCountry(o.getCountry()).regulator(), o.getRejectReason(),
+                text(o.getRequestedCutover()), text(o.getScheduledCutover()),
+                text(o.getCompletedAt()),
+                o.getProductOrderId() == null ? null : new EntityRef(o.getProductOrderId()),
+                o.getOwnerPartyId() == null ? null
+                        : List.of(PartyRef.customer(o.getOwnerPartyId())),
+                "PortingOrder");
     }
 
-    private static OffsetDateTime parseTime(Object value) {
+    private static String text(OffsetDateTime value) {
+        return value == null ? null : value.toString();
+    }
+
+    private static OffsetDateTime parseTime(String value) {
         if (value == null) {
             return null;
         }
         try {
-            return OffsetDateTime.parse(String.valueOf(value));
+            return OffsetDateTime.parse(value);
         } catch (Exception e) {
             return null;
         }

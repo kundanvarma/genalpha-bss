@@ -1,6 +1,7 @@
 package com.bss.recommendation.service;
 
 import com.bss.recommendation.client.CommerceClients;
+import com.bss.recommendation.dto.AffinityRow;
 import com.bss.recommendation.security.TenantScope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -10,7 +11,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,7 +58,7 @@ public class AffinityRecommender {
 
     /** The offerings co-owned with X, most co-owned first, min-support
      * filtered — the "also bought" rail. */
-    public List<Map<String, Object>> alsoBought(String offeringId) {
+    public List<AffinityRow> alsoBought(String offeringId) {
         if (offeringId == null || offeringId.isBlank()) {
             return List.of();
         }
@@ -83,13 +83,10 @@ public class AffinityRecommender {
             return List.of();
         }
         Map<String, String> names = offeringNames();
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<AffinityRow> out = new ArrayList<>();
         for (Map.Entry<String, Integer> e : ranked) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("offering", Map.of("id", e.getKey(),
-                    "name", names.getOrDefault(e.getKey(), e.getKey())));
-            row.put("coOwners", e.getValue());
-            out.add(row);
+            out.add(AffinityRow.of(e.getKey(), names.getOrDefault(e.getKey(), e.getKey()),
+                    e.getValue()));
         }
         return out;
     }

@@ -1,6 +1,8 @@
 package com.bss.document.controller;
 
 import com.bss.document.api.ApiConstants;
+import com.bss.document.dto.DocumentRequest;
+import com.bss.document.dto.DocumentView;
 import com.bss.document.entity.StoredDocument;
 import com.bss.document.service.ContentResult;
 import com.bss.document.service.DocumentService;
@@ -17,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH + "/document")
@@ -30,12 +31,12 @@ public class DocumentController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<DocumentView> create(@RequestBody DocumentRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<DocumentView>> list(
             @RequestParam(required = false) String category) {
         return ResponseEntity.ok(service.findAll(category));
     }
@@ -49,7 +50,7 @@ public class DocumentController {
 
     /** Promotional creative for the shop window — public, like the logo. */
     @GetMapping("/banners")
-    public ResponseEntity<java.util.List<Map<String, Object>>> banners() {
+    public ResponseEntity<List<DocumentView>> banners() {
         return ResponseEntity.ok(service.banners());
     }
 
