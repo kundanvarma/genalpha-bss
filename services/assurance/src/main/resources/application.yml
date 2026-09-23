@@ -1,4 +1,11 @@
 spring:
+  # Outbound HTTP has an end. The JDK client waits forever by default, so a
+  # dependency that accepts the connection and then goes quiet holds a request
+  # thread until something kills it.
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 30s
   application:
     name: assurance
   datasource:

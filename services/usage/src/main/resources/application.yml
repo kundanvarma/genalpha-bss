@@ -71,6 +71,9 @@ bss:
     # the OCS's own "running low" line in bytes — the same number the
     # SigScale container runs with (OCS_THRESHOLD_BYTES); default 2 GB
     sigscale-threshold-bytes: ${OCS_THRESHOLD_BYTES:2000000000}
+    # how far out of date a signed OCS notification may be before it is
+    # refused — the replay window on /internal/ocs/** (5 minutes)
+    notify-signature-tolerance-ms: ${OCS_NOTIFY_TOLERANCE_MS:300000}
   downstream:
     ocs-base-url: ${OCS_BASE_URL:}
     # which adapter speaks to that OCS: http (the generic subscriber/bucket
@@ -81,6 +84,11 @@ bss:
     ocs-provider: ${OCS_PROVIDER:http}
     ocs-username: ${OCS_USERNAME:}
     ocs-password: ${OCS_PASSWORD:}
+    # The credential on the NORTHBOUND door (/internal/ocs/**): the shared
+    # secret the OCS signs its notifications with. Per tenant in tenants.yml
+    # (ocs-notify-secret); this deployment-wide value is only a fallback for a
+    # tenant that names none. Blank here AND there = that tenant's door is shut.
+    ocs-notify-secret: ${OCS_NOTIFY_SECRET:}
     # The gift boundary — household links are verified here live.
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
     # Product levers (giftable/giftScope/rollover*) live on the plan's spec.
