@@ -46,6 +46,16 @@
         "name": "payment:write"
       },
       {
+        "name": "payment:refund",
+        "description": "Send captured money back. Back office and the components that refund inside a flow a human decided — never a customer, never a care agent (they use the governed issueCredit action).",
+        "composite": false
+      },
+      {
+        "name": "payment:admin",
+        "description": "Configure the operator payment provider menu - base URL, provider, secret ref. Back office only: a customer holds payment:write to pay, and that must not be enough to redirect the operator payment traffic.",
+        "composite": false
+      },
+      {
         "name": "billing:read"
       },
       {
@@ -83,6 +93,11 @@
       },
       {
         "name": "communication:write"
+      },
+      {
+        "name": "communication:admin",
+        "description": "Write the operator message templates - the copy every customer notification is rendered from. Back office only: a customer holds communication:write so their own actions can mail them, which must not let them rewrite what the operator sends everyone.",
+        "composite": false
       },
       {
         "name": "customer",
@@ -150,7 +165,8 @@
             "porting:read",
             "porting:write",
             "knowledge:read",
-            "communication:write"
+            "communication:write",
+            "insight:read"
           ]
         }
       },
@@ -188,7 +204,7 @@
       },
       {
         "name": "policy:evaluate",
-        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
+        "description": "policy:evaluate — machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -302,7 +318,7 @@
       },
       {
         "name": "digital-worker",
-        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs \u2014 nothing more",
+        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs — nothing more",
         "composite": true,
         "composites": {
           "realm": [
@@ -324,16 +340,18 @@
       },
       {
         "name": "risk:assess",
-        "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
+        "description": "Run and read TMF696 risk assessments — a risk score is a credit check, back-office only"
       },
       {
         "name": "device:read"
       },
       {
         "name": "device:write"
-      }, {
+      },
+      {
         "name": "entitlement:read"
-      }, {
+      },
+      {
         "name": "entitlement:write"
       },
       {
@@ -762,7 +780,19 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
-    }, {
+    },
+    {
+      "clientId": "bss-ontology",
+      "name": "ontology machine identity (policy pre-check only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ontology-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
       "clientId": "bss-entitlement",
       "name": "device-entitlement machine identity (catalog reads, TS.43 ECS)",
       "enabled": true,
@@ -772,7 +802,8 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
-    }, {
+    },
+    {
       "clientId": "bss-ecs",
       "name": "TS.43 entitlement server OIDC client (web sheets, clients without SIM access)",
       "enabled": true,
@@ -781,8 +812,14 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost:8080/ts43/oidc/callback", "http://gateway:8080/ts43/oidc/callback", "https://*.taranga.no/ts43/oidc/callback"],
-      "webOrigins": ["+"],
+      "redirectUris": [
+        "http://localhost:8080/ts43/oidc/callback",
+        "http://gateway:8080/ts43/oidc/callback",
+        "https://*.taranga.no/ts43/oidc/callback"
+      ],
+      "webOrigins": [
+        "+"
+      ],
       "protocol": "openid-connect"
     },
     {
@@ -840,7 +877,8 @@
         "promotion:read",
         "party:read",
         "service:read",
-        "service:write"
+        "service:write",
+        "payment:refund"
       ]
     },
     {
@@ -925,7 +963,10 @@
         "entitlement:write",
         "migration:read",
         "migration:admin",
-        "catalog:approve"
+        "catalog:approve",
+        "payment:refund",
+        "payment:admin",
+        "communication:admin"
       ],
       "id": "69eb7c8c-9c3e-4254-87e2-2fceed188668"
     },
@@ -1020,14 +1061,16 @@
       "username": "service-account-bss-som",
       "enabled": true,
       "serviceAccountClientId": "bss-som",
-      "realmRoles": ["entitlement:write", 
+      "realmRoles": [
+        "entitlement:write",
         "ordering:read",
         "ordering:write",
         "porting:read",
         "catalog:read",
         "party:read",
         "assurance:read",
-        "insight:read"
+        "insight:read",
+        "usage:read"
       ],
       "id": "1a01fd9b-0748-52ab-8ae0-8d170a5279c6"
     },
@@ -1321,13 +1364,31 @@
       "serviceAccountClientId": "bss-device",
       "realmRoles": [
         "payment:read",
-        "payment:write"
+        "payment:write",
+        "payment:refund"
       ]
-    }, {
+    },
+    {
+      "username": "service-account-bss-ontology",
+      "enabled": true,
+      "serviceAccountClientId": "bss-ontology",
+      "realmRoles": [
+        "policy:evaluate",
+        "insight:read",
+        "inventory:read",
+        "billing:admin",
+        "workforce:use",
+        "assurance:read"
+      ]
+    },
+    {
       "username": "service-account-bss-entitlement",
       "enabled": true,
       "serviceAccountClientId": "bss-entitlement",
-      "realmRoles": ["communication:write", "catalog:read"]
+      "realmRoles": [
+        "communication:write",
+        "catalog:read"
+      ]
     },
     {
       "username": "service-account-bss-base-migration",
