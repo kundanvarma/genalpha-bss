@@ -64,7 +64,7 @@ bss:
         # Agentic commerce exposure: off (dark to agents) | discovery
         # (findable, no agent checkout) | full. New tenants default OFF —
         # being shopped by AI agents is opt-in, never assumed.
-        agent-commerce: ${AGENT_COMMERCE:full}
+        agent-commerce: ${AGENT_COMMERCE:off}
         # GEO: crawler visibility — open (all crawlers + llms.txt) |
         # search-only (classic search yes, AI answer/training bots no) |
         # dark (no crawlers). Newborn tenants default search-only.
@@ -165,7 +165,7 @@ bss:
         country: "NO"
         porting-gateway: nrdb
         business-sales: true
-        agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
+        agent-commerce: ${AGENT_COMMERCE_NOVA:off}
         ai-visibility: ${AI_VISIBILITY_NOVA:search-only}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_NOVA:internal}
@@ -1057,7 +1057,7 @@ bss:
           - "billing:write|Billing and finance checked"
         desk-learning: ${DESK_LEARNING_TARANGA:true}
         business-sales: true
-        agent-commerce: ${AGENT_COMMERCE_TARANGA:full}
+        agent-commerce: ${AGENT_COMMERCE_TARANGA:off}
         ai-visibility: "search-only"
         hosts: [shop.taranga.localhost, csr.taranga.localhost, console.taranga.localhost, biz.taranga.localhost,
                 shop.taranga.no, csr.taranga.no, console.taranga.no, biz.taranga.no, demo.taranga.no]
