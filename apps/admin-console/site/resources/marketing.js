@@ -93,7 +93,7 @@ RESOURCES.push(
       wrap.dataset.testid = 'journey-canvas';
       const waitLabel = (st) => ['days', 'hours', 'minutes', 'seconds']
         .filter((u) => st[u]).map((u) => `${st[u]} ${u}`).join(' ') || 'a while';
-      const labelOf = (st) => st.type === 'message' ? esc(st.subject || 'message')
+      const labelHtmlOf = (st) => st.type === 'message' ? esc(st.subject || 'message')
         : st.type === 'wait' ? `wait ${esc(waitLabel(st))}`
         : st.type === 'waitForEvent' ? `wait for ${esc(st.event || 'event')}`
         : (st.type === 'branch' || st.type === 'decision') ? `decision: ${esc(st.inSegment || '')}`
@@ -104,9 +104,10 @@ RESOURCES.push(
         const node = document.createElement('div');
         node.className = 'jnode jnode-' + (st.type || 'step');
         node.dataset.testid = 'canvas-node';
+        const labelHtml = labelHtmlOf(st);   // already escaped inside labelHtmlOf
         node.innerHTML = `<div class="jtype">${esc(st.type || '')}</div>`
           + (st.stage ? `<span class="jstage">${esc(st.stage)}</span>` : '')
-          + `<div class="jlabel">${labelOf(st)}</div>`
+          + `<div class="jlabel">${labelHtml}</div>`
           + (sends ? `<span class="jcount" data-testid="canvas-count">reached ${esc(f.reached ?? 0)} · active ${esc(f.active ?? 0)}</span>` : '');
         wrap.append(node);
         if (i < steps.length - 1) {

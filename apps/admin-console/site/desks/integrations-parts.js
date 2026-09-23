@@ -219,9 +219,9 @@ async function integrationsPayment(grid, card, pill) {
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
         // routing facts on the line: priority orders the card pool, currencies scope it
-        const curr = ps.currencies ? ` · ${esc(String(ps.currencies).replace(/[\[\]"]/g, ''))}` : '';
-        const prio = ps.priority != null && ps.priority !== 100 ? ` · prio ${esc(ps.priority)}` : '';
-        label.innerHTML = `<b>${esc(ps.displayName || ps.provider)}</b>${ps.isDefault ? ' · default' : ''}${prio}${curr}${ps.enabled === false ? ' · off' : ''}`;
+        const currHtml = ps.currencies ? ` · ${esc(String(ps.currencies).replace(/[\[\]"]/g, ''))}` : '';
+        const prioHtml = ps.priority != null && ps.priority !== 100 ? ` · prio ${esc(ps.priority)}` : '';
+        label.innerHTML = `<b>${esc(ps.displayName || ps.provider)}</b>${ps.isDefault ? ' · default' : ''}${prioHtml}${currHtml}${ps.enabled === false ? ' · off' : ''}`;
         // Test = reachability probe of the PSP's /health — never a payment
         const tst = document.createElement('button');
         tst.textContent = 'Test';

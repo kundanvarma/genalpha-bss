@@ -87,7 +87,7 @@ async function loadMembers() {
         const active = (svcs || []).filter((sv) => sv.state === 'active');
         const nums = active.flatMap((sv) => (sv.supportingResource || []).map((r) => r.value)).filter(Boolean);
         lines.innerHTML = active.length
-          ? `${active.length} ${t(active.length > 1 ? 'lines' : 'line')} · <span class="msisdn">${esc(nums.join(' · '))}</span>`
+          ? `${active.length} ${esc(t(active.length > 1 ? 'lines' : 'line'))} · <span class="msisdn">${esc(nums.join(' · '))}</span>`
           : t('no lines yet');
       })
       .catch(() => { lines.textContent = ''; });
@@ -182,7 +182,7 @@ async function loadPlans(orderable, memberCount) {
       .find((p) => p && p.price?.unit)?.price?.unit;
     const row = document.createElement('div');
     row.dataset.plan = o.id;
-    row.innerHTML = `${esc(o.name)} <span style="float:right" data-price>${esc(fmtMoney(monthly, unit))}/${t('month')}</span>`;
+    row.innerHTML = `${esc(o.name)} <span style="float:right" data-price>${esc(fmtMoney(monthly, unit))}/${esc(t('month'))}</span>`;
     box.append(row);
     // negotiated price, fail-soft to list
     authFetch('/tmf-api/policyManagement/v4/price', {
@@ -199,7 +199,7 @@ async function loadPlans(orderable, memberCount) {
         const label = r.adjustments.map((a) => a.label).join(', ');
         row.querySelector('[data-price]').innerHTML =
           `<s style="opacity:.55">${esc(fmtMoney(monthly, unit))}</s>
-           <b class="msisdn" data-testid="your-price">${esc(fmtMoney(r.total, unit))}/${t('month')}</b>
+           <b class="msisdn" data-testid="your-price">${esc(fmtMoney(r.total, unit))}/${esc(t('month'))}</b>
            <span style="opacity:.7">· ${esc(label)}</span>`;
       })
       .catch(() => {});
@@ -449,15 +449,15 @@ async function loadBills() {
         lines.replaceChildren(...rates.map((r) => {
           const d = document.createElement('div');
           const label = window._peopleById?.[r.forParty?.id];
-          const who = r.forParty?.id ? ` — <span data-for="${esc(r.forParty.id)}" class="linefor">${esc(label || r.forParty.id.slice(0, 8) + '…')}</span>` : '';
-          d.innerHTML = `${esc(r.name)}${who} <span style="float:right">${esc(fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit))}</span>`;
+          const whoHtml = r.forParty?.id ? ` — <span data-for="${esc(r.forParty.id)}" class="linefor">${esc(label || r.forParty.id.slice(0, 8) + '…')}</span>` : '';
+          d.innerHTML = `${esc(r.name)}${whoHtml} <span style="float:right">${esc(fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit))}</span>`;
           return d;
         }));
         resolveLineFor();
       })
       .catch(() => { lines.textContent = ''; });
   }
-  if (!bills.length) box.innerHTML = `<span class="dimhint">${t('No invoices yet — they appear after the operator\'s billing run.')}</span>`;
+  if (!bills.length) box.innerHTML = `<span class="dimhint">${esc(t('No invoices yet — they appear after the operator\'s billing run.'))}</span>`;
 }
 
 /* ---------- the MEMBER's my-page: the line their company pays for ---------- */
@@ -528,9 +528,9 @@ async function renderMemberView(orgName) {
         simRow.style.margin = '2px 0 8px 14px';
         simRow.dataset.simFor = sid;
         simRow.innerHTML = `SIM <span class="msisdn">${esc(sim.iccid)}</span>
-          <button class="ghost" data-puk style="margin-left:8px">${t('Show PUK')}</button>
-          <input data-pin placeholder="${t('New PIN')}" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
-          <button class="ghost" data-reset>${t('Reset PIN')}</button> <span data-sim-status></span>`;
+          <button class="ghost" data-puk style="margin-left:8px">${esc(t('Show PUK'))}</button>
+          <input data-pin placeholder="${esc(t('New PIN'))}" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
+          <button class="ghost" data-reset>${esc(t('Reset PIN'))}</button> <span data-sim-status></span>`;
         row.after(simRow);
         simRow.querySelector('[data-puk]').addEventListener('click', async () => {
           const full = await json(await authFetch(`${SERVICE_INV}/service/${sid}/sim?reveal=true`));
