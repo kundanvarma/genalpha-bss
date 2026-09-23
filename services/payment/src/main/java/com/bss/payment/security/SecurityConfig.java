@@ -34,6 +34,23 @@ public class SecurityConfig {
 
     private static final String READ = "payment:read";
     private static final String WRITE = "payment:write";
+    /**
+     * Sending money BACK is its own permission, and deliberately not WRITE.
+     *
+     * A customer needs payment:write to pay for anything, and refund sat behind
+     * that same authority — so a customer could refund their own captured
+     * payment, at will, and keep whatever they had bought. Ownership was
+     * checked, so nobody could reach another customer's money; the hole was
+     * that reaching your own was enough.
+     *
+     * A care agent does not get this either. An agent's way to put money back
+     * is the governed issueCredit action, which carries a ceiling, an approver
+     * above a threshold, and a receipt. This authority is for the back office
+     * and for the two components that refund as part of a flow a human already
+     * decided: billing resolving a dispute, and device-commerce reversing a
+     * failed device order.
+     */
+    private static final String REFUND = "payment:refund";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -48,6 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/payment/methods").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/webhook/**").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
+                        // before the general POST rule, or WRITE would answer it
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/payment/*/refund")
+                                .hasAuthority(REFUND)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PUT, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
