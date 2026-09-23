@@ -6,7 +6,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.OffsetDateTime;
-import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductStockDto {
@@ -22,7 +21,7 @@ public class ProductStockDto {
     private String name;
 
     @JsonProperty("productOffering")
-    private Map<String, Object> productOffering;
+    private EntityRef productOffering;
 
     @NotNull(message = "stockedQuantity is required")
     @JsonProperty("stockedQuantity")
@@ -67,11 +66,11 @@ public class ProductStockDto {
         this.name = name;
     }
 
-    public Map<String, Object> getProductOffering() {
+    public EntityRef getProductOffering() {
         return productOffering;
     }
 
-    public void setProductOffering(Map<String, Object> productOffering) {
+    public void setProductOffering(EntityRef productOffering) {
         this.productOffering = productOffering;
     }
 

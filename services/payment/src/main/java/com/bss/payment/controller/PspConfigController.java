@@ -1,6 +1,9 @@
 package com.bss.payment.controller;
 
 import com.bss.payment.api.ApiConstants;
+import com.bss.payment.dto.PspConfigRequest;
+import com.bss.payment.dto.PspConfigView;
+import com.bss.payment.dto.PspTestResult;
 import com.bss.payment.service.PspConfigService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The operator's PSP menu (per tenant). GET lists (read); PUT/DELETE edit the
@@ -30,12 +32,12 @@ public class PspConfigController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<PspConfigView>> list() {
         return ResponseEntity.ok(service.listForCurrentTenant());
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PspConfigView> upsert(@RequestBody PspConfigRequest dto) {
         return ResponseEntity.ok(service.upsert(dto));
     }
 
@@ -49,7 +51,7 @@ public class PspConfigController {
      * base URL is pinged (GET /health with a short timeout); an in-process
      * adapter (mock/mockbank, or no base URL) reports so honestly. */
     @org.springframework.web.bind.annotation.PostMapping("/{provider}/test")
-    public ResponseEntity<Map<String, Object>> test(@PathVariable String provider) {
+    public ResponseEntity<PspTestResult> test(@PathVariable String provider) {
         return ResponseEntity.ok(service.testConnection(provider));
     }
 }

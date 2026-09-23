@@ -3,7 +3,8 @@ package com.bss.stock.controller;
 import com.bss.stock.api.ApiConstants;
 import com.bss.stock.api.FieldSelector;
 import com.bss.stock.api.PagedResult;
-import com.bss.stock.dto.ProductStockDto;
+import com.bss.stock.dto.ProductStockView;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.bss.stock.service.ProductStockService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -49,7 +50,7 @@ public class ProductStockController {
         filters.remove("offset");
         filters.remove("limit");
         filters.remove("fields");
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
+        PagedResult<ProductStockView> result = service.findAll(offset, limit, filters);
         List<?> body = fields == null ? result.items() : fieldSelector.select(result.items(), fields);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
@@ -58,21 +59,21 @@ public class ProductStockController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<ProductStockView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
+    public ResponseEntity<ProductStockView> create(@RequestBody ObjectNode dto) {
+        ProductStockView created = service.create(dto);
         return ResponseEntity
-                .created(URI.create(String.valueOf(created.get("href"))))
+                .created(URI.create(String.valueOf(created.href())))
                 .body(created);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                 @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<ProductStockView> patch(@PathVariable("id") String id,
+                                                 @RequestBody ObjectNode patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 

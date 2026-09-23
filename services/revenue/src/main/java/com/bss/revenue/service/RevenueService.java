@@ -1,6 +1,30 @@
 package com.bss.revenue.service;
 
 import com.bss.revenue.client.BillingClient;
+import com.bss.revenue.dto.AccountNet;
+import com.bss.revenue.dto.AccountTotal;
+import com.bss.revenue.dto.BackfillReceipt;
+import com.bss.revenue.dto.ChartRow;
+import com.bss.revenue.dto.DrillRow;
+import com.bss.revenue.dto.JournalEntryView;
+import com.bss.revenue.dto.JournalLineView;
+import com.bss.revenue.dto.LoyaltyAccrual;
+import com.bss.revenue.dto.LoyaltyControl;
+import com.bss.revenue.dto.MonthRow;
+import com.bss.revenue.dto.PartyRef;
+import com.bss.revenue.dto.Period;
+import com.bss.revenue.dto.PeriodCloseReceipt;
+import com.bss.revenue.dto.ReconciliationView;
+import com.bss.revenue.dto.RemapReceipt;
+import com.bss.revenue.dto.RemapRequest;
+import com.bss.revenue.dto.RemittanceReceipt;
+import com.bss.revenue.dto.RemittanceRequest;
+import com.bss.revenue.dto.RevRecRow;
+import com.bss.revenue.dto.SubscriptionMetricsView;
+import com.bss.revenue.dto.SummaryView;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bss.revenue.entity.AccountMapping;
 import com.bss.revenue.entity.JournalEntry;
 import com.bss.revenue.entity.JournalLine;
@@ -95,6 +119,10 @@ public class RevenueService {
      * here it is a small, explicit list — the honest boundary.) */
     private static final Set<String> BNPL_PROVIDERS = Set.of("klarna");
 
+    private static final TypeReference<Map<String, Object>> OPEN_MAP = new TypeReference<>() { };
+
+    private final ObjectMapper json = new ObjectMapper();
+
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
     private final AccountMappingRepository mappings;
@@ -129,7 +157,7 @@ public class RevenueService {
             throw new BadRequestException("bill " + billId + " has no rate lines yet");
         }
         Map<String, Object> amountDue = billEvent.get("amountDue") instanceof Map<?, ?> m
-                ? castMap(m) : castMap(billingClient.bill(billId).get("amountDue"));
+                ? castMap(m) : castMap(asMap(billingClient.bill(billId)).get("amountDue"));
         BigDecimal total = money(amountDue.get("value"));
         String currency = amountDue.get("unit") == null ? "EUR" : String.valueOf(amountDue.get("unit"));
         String party = partyOf(billEvent);
@@ -648,37 +676,31 @@ public class RevenueService {
      * twice books once). The amount is the payout total; matching individual
      * captures inside it is the provider's statement's job, not the ledger's. */
     @Transactional
-    public Map<String, Object> postRemittance(Map<String, Object> dto) {
+    public RemittanceReceipt postRemittance(RemittanceRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String provider = dto.get("provider") == null ? null
-                : String.valueOf(dto.get("provider")).toLowerCase();
-        String reference = dto.get("reference") == null ? null : String.valueOf(dto.get("reference"));
+        String provider = dto.provider() == null ? null : dto.provider().toLowerCase();
+        String reference = dto.reference();
         if (provider == null || provider.isBlank() || reference == null || reference.isBlank()) {
             throw new IllegalArgumentException("provider and reference are required");
         }
         if (!BNPL_PROVIDERS.contains(provider)) {
             throw new IllegalArgumentException("'" + provider + "' is not a BNPL provider — nothing to clear");
         }
-        Map<String, Object> amount = castMap(dto.get("amount"));
-        BigDecimal value = money(amount.get("value"));
+        BigDecimal value = dto.amount() == null ? BigDecimal.ZERO : money(dto.amount().value());
         if (value.signum() <= 0) {
             throw new IllegalArgumentException("amount.value must be positive");
         }
-        String currency = amount.get("unit") == null ? "EUR" : String.valueOf(amount.get("unit"));
+        String currency = dto.amount() == null || dto.amount().unit() == null ? "EUR" : dto.amount().unit();
         String sourceRef = "remittance:" + provider + ":" + reference;
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("sourceRef", sourceRef);
         if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
-            out.put("posted", false);   // replayed payout file — already booked
-            return out;
+            return new RemittanceReceipt(sourceRef, false);   // replayed payout file — already booked
         }
         List<JournalLine> posting = List.of(
                 line("cash", value, null, reference, "Remittance " + provider + " " + reference),
                 line("bnpl:receivable", null, value, reference, "BNPL receivable cleared"));
         saveBalanced(tenant, sourceRef, "remittance",
                 "BNPL remittance — " + provider + " " + reference, currency, null, posting);
-        out.put("posted", true);
-        return out;
+        return new RemittanceReceipt(sourceRef, true);
     }
 
     /** Refund out the door: debit contra-revenue, credit cash. */
@@ -706,11 +728,10 @@ public class RevenueService {
 
     /** Idempotent onboarding of a pre-arc bill (and the suite's replay probe). */
     @Transactional
-    public Map<String, Object> backfill(String billId) {
-        Map<String, Object> bill = billingClient.bill(billId);
+    public BackfillReceipt backfill(String billId) {
+        Map<String, Object> bill = asMap(billingClient.bill(billId));
         boolean posted = postBill(billId, bill);   // close guard runs inside
-        return Map.of("billId", billId, "posted", posted,
-                "note", posted ? "journal entry created" : "already journaled — nothing to do");
+        return BackfillReceipt.of(billId, posted);
     }
 
     /** A credit note on an UNPAID bill: contra-revenue against AR, under
@@ -745,16 +766,16 @@ public class RevenueService {
      * this journal already carries, one accrual per day (fleet-safe tick or
      * on-demand). No value configured = control number only, nothing booked. */
     @Transactional
-    public Map<String, Object> loyaltyAccrual() {
+    public LoyaltyAccrual loyaltyAccrual() {
         String tenant = tenantScope.currentTenantId();
         BigDecimal perPoint = configValueOf("loyalty:liability");
         if (perPoint.signum() <= 0) {
-            return Map.of("posted", false, "note",
+            return LoyaltyAccrual.skipped(
                     "no currency-per-point configured on loyalty:liability — points stay a control number");
         }
         Long points = billingClient.loyaltyPointsLiability();
         if (points == null) {
-            return Map.of("posted", false, "note", "loyalty component unreachable");
+            return LoyaltyAccrual.skipped("loyalty component unreachable");
         }
         String liabilityCode = mappings.findByTenantIdAndMappingKey(tenant, "loyalty:liability")
                 .orElseThrow().getAccountCode();
@@ -769,12 +790,12 @@ public class RevenueService {
         BigDecimal target = perPoint.multiply(BigDecimal.valueOf(points)).setScale(2, RoundingMode.HALF_UP);
         BigDecimal delta = target.subtract(booked);
         if (delta.abs().compareTo(new BigDecimal("0.01")) < 0) {
-            return Map.of("posted", false, "note", "booked liability already matches "
+            return LoyaltyAccrual.skipped("booked liability already matches "
                     + points + " pts x " + perPoint);
         }
         String sourceRef = "loyalty-accrual:" + LocalDate.now();
         if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
-            return Map.of("posted", false, "note", "already accrued today — daily cadence");
+            return LoyaltyAccrual.skipped("already accrued today — daily cadence");
         }
         List<JournalLine> posting = delta.signum() > 0
                 ? List.of(line("loyalty:expense", delta, null, "loyalty", "Points liability accrual"),
@@ -785,13 +806,13 @@ public class RevenueService {
                           line("loyalty:expense", null, delta.negate(), "loyalty", "Accrual release"));
         saveBalanced(tenant, sourceRef, "loyalty", "Loyalty points accrual — " + points + " pts",
                 "EUR", null, posting);
-        return Map.of("posted", true, "points", points, "delta", delta, "target", target);
+        return LoyaltyAccrual.booked(points, delta, target);
     }
 
     /** Close = a completeness attestation: balanced (invariant) and FINAL —
      * postings for bills dated inside a closed period refuse with 409. */
     @Transactional
-    public Map<String, Object> closePeriod(String through) {
+    public PeriodCloseReceipt closePeriod(String through) {
         String tenant = tenantScope.currentTenantId();
         LocalDate date;
         try {
@@ -807,8 +828,7 @@ public class RevenueService {
         close.setClosedThrough(date);
         close.setClosedAt(OffsetDateTime.now());
         periods.save(close);
-        return Map.of("closedThrough", date.toString(),
-                "note", "postings for bills dated on or before this refuse; the export is final");
+        return PeriodCloseReceipt.of(date.toString());
     }
 
     private void requireOpenPeriod(String tenant, Object billDate) {
@@ -838,11 +858,11 @@ public class RevenueService {
     /* ---------- reads ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> journal(LocalDate date) {
+    public List<JournalEntryView> journal(LocalDate date) {
         return journal(date, null);
     }
 
-    public List<Map<String, Object>> journal(LocalDate date, String sourceRef) {
+    public List<JournalEntryView> journal(LocalDate date, String sourceRef) {
         String tenant = tenantScope.currentTenantId();
         // the proof run's lesson: an unfiltered list ages out of any fixed
         // page — asking about ONE source must be a repository question
@@ -851,7 +871,7 @@ public class RevenueService {
                 : date == null
                 ? entries.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)
                 : entries.findAllByTenantIdAndEntryDateOrderByCreatedAtAsc(tenant, date);
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<JournalEntryView> out = new ArrayList<>();
         for (JournalEntry e : found) {
             out.add(entryView(e, lines.findAllByTenantIdAndEntryIdOrderBySeqAsc(tenant, e.getId())));
         }
@@ -859,7 +879,7 @@ public class RevenueService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> entryById(String id) {
+    public JournalEntryView entryById(String id) {
         String tenant = tenantScope.currentTenantId();
         JournalEntry e = entries.findByIdAndTenantId(id, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("JournalEntry", id));
@@ -873,44 +893,41 @@ public class RevenueService {
     public String exportCsv(LocalDate date, String format) {
         if ("sap".equalsIgnoreCase(format)) {
             StringBuilder sap = new StringBuilder("BLDAT,BUDAT,XBLNR,BKTXT,HKONT,SHKZG,WRBTR,WAERS\n");
-            for (Map<String, Object> entry : journal(date)) {
-                for (Object o : (List<?>) entry.get("lines")) {
-                    Map<String, Object> l = castMap(o);
-                    boolean debit = money(l.get("debit")).signum() > 0;
-                    sap.append(String.join(",", String.valueOf(entry.get("entryDate")),
-                            String.valueOf(entry.get("entryDate")), String.valueOf(entry.get("sourceRef")),
-                            quote(entry.get("description")), String.valueOf(l.get("accountCode")),
-                            debit ? "S" : "H", plain(debit ? l.get("debit") : l.get("credit")),
-                            String.valueOf(entry.get("currency")))).append('\n');
+            for (JournalEntryView entry : journal(date)) {
+                for (JournalLineView l : entry.lines()) {
+                    boolean debit = l.debit().signum() > 0;
+                    sap.append(String.join(",", String.valueOf(entry.entryDate()),
+                            String.valueOf(entry.entryDate()), String.valueOf(entry.sourceRef()),
+                            quote(entry.description()), String.valueOf(l.accountCode()),
+                            debit ? "S" : "H", plain(debit ? l.debit() : l.credit()),
+                            String.valueOf(entry.currency()))).append('\n');
                 }
             }
             return sap.toString();
         }
         if ("netsuite".equalsIgnoreCase(format)) {
             StringBuilder ns = new StringBuilder("Date,Journal,Account,Debit,Credit,Memo,Currency\n");
-            for (Map<String, Object> entry : journal(date)) {
-                for (Object o : (List<?>) entry.get("lines")) {
-                    Map<String, Object> l = castMap(o);
-                    ns.append(String.join(",", String.valueOf(entry.get("entryDate")),
-                            String.valueOf(entry.get("id")),
-                            quote(l.get("accountCode") + " " + l.get("accountName")),
-                            plain(l.get("debit")), plain(l.get("credit")),
-                            quote(l.get("description")), String.valueOf(entry.get("currency")))).append('\n');
+            for (JournalEntryView entry : journal(date)) {
+                for (JournalLineView l : entry.lines()) {
+                    ns.append(String.join(",", String.valueOf(entry.entryDate()),
+                            String.valueOf(entry.id()),
+                            quote(l.accountCode() + " " + l.accountName()),
+                            plain(l.debit()), plain(l.credit()),
+                            quote(l.description()), String.valueOf(entry.currency()))).append('\n');
                 }
             }
             return ns.toString();
         }
         StringBuilder csv = new StringBuilder(
                 "entryDate,entryId,sourceType,accountCode,accountName,debit,credit,currency,ref,description\n");
-        for (Map<String, Object> entry : journal(date)) {
-            for (Object o : (List<?>) entry.get("lines")) {
-                Map<String, Object> l = castMap(o);
+        for (JournalEntryView entry : journal(date)) {
+            for (JournalLineView l : entry.lines()) {
                 csv.append(String.join(",",
-                        String.valueOf(entry.get("entryDate")), String.valueOf(entry.get("id")),
-                        String.valueOf(entry.get("sourceType")), String.valueOf(l.get("accountCode")),
-                        quote(l.get("accountName")), plain(l.get("debit")), plain(l.get("credit")),
-                        String.valueOf(entry.get("currency")), quote(l.get("ref")),
-                        quote(l.get("description")))).append('\n');
+                        String.valueOf(entry.entryDate()), String.valueOf(entry.id()),
+                        String.valueOf(entry.sourceType()), String.valueOf(l.accountCode()),
+                        quote(l.accountName()), plain(l.debit()), plain(l.credit()),
+                        String.valueOf(entry.currency()), quote(l.ref()),
+                        quote(l.description()))).append('\n');
             }
         }
         return csv.toString();
@@ -918,33 +935,24 @@ public class RevenueService {
 
     /** The tie-out: per-account totals, AR vs cash, every entry balanced. */
     @Transactional(readOnly = true)
-    public Map<String, Object> reconciliation(LocalDate date) {
-        List<Map<String, Object>> day = journal(date);
-        Map<String, Map<String, Object>> byAccount = new TreeMap<>();
+    public ReconciliationView reconciliation(LocalDate date) {
+        List<JournalEntryView> day = journal(date);
+        Map<String, AccountTotal> byAccount = new TreeMap<>();
         BigDecimal arDebits = BigDecimal.ZERO;
         BigDecimal cashDebits = BigDecimal.ZERO;
         BigDecimal bnplDebits = BigDecimal.ZERO;
         boolean allBalanced = true;
-        for (Map<String, Object> entry : day) {
+        for (JournalEntryView entry : day) {
             BigDecimal d = BigDecimal.ZERO;
             BigDecimal c = BigDecimal.ZERO;
-            for (Object o : (List<?>) entry.get("lines")) {
-                Map<String, Object> l = castMap(o);
-                BigDecimal debit = money(l.get("debit"));
-                BigDecimal credit = money(l.get("credit"));
+            for (JournalLineView l : entry.lines()) {
+                BigDecimal debit = money(l.debit());
+                BigDecimal credit = money(l.credit());
                 d = d.add(debit);
                 c = c.add(credit);
-                String code = String.valueOf(l.get("accountCode"));
-                Map<String, Object> acc = byAccount.computeIfAbsent(code, k -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("accountCode", k);
-                    m.put("accountName", l.get("accountName"));
-                    m.put("debit", BigDecimal.ZERO);
-                    m.put("credit", BigDecimal.ZERO);
-                    return m;
-                });
-                acc.put("debit", ((BigDecimal) acc.get("debit")).add(debit));
-                acc.put("credit", ((BigDecimal) acc.get("credit")).add(credit));
+                String code = String.valueOf(l.accountCode());
+                byAccount.merge(code, new AccountTotal(code, l.accountName(), debit, credit),
+                        (had, more) -> had.plus(more.debit(), more.credit()));
                 String key = keyOfCode(code);
                 if ("ar".equals(key)) {
                     arDebits = arDebits.add(debit);
@@ -961,23 +969,16 @@ public class RevenueService {
                 allBalanced = false;
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("date", date == null ? "all" : date.toString());
-        out.put("entries", day.size());
-        out.put("allEntriesBalanced", allBalanced);
-        out.put("billedTotal", arDebits);
-        out.put("cashTotal", cashDebits);
-        out.put("bnplReceivableTotal", bnplDebits);   // captured but not yet remitted by the BNPL provider
-        out.put("byAccount", new ArrayList<>(byAccount.values()));
         Long points = billingClient.loyaltyPointsLiability();
-        out.put("loyaltyPointsLiability", points == null
-                ? Map.of("note", "no loyalty component reachable")
-                : Map.of("points", points, "note",
-                        "control number — no currency valuation configured (see plan P2)"));
-        periods.findById(tenantScope.currentTenantId()).ifPresent(c ->
-                out.put("closedThrough", c.getClosedThrough().toString()));
-        out.put("@type", "RevenueReconciliation");
-        return out;
+        ReconciliationView out = new ReconciliationView(
+                date == null ? "all" : date.toString(), day.size(), allBalanced,
+                arDebits, cashDebits,
+                bnplDebits,   // captured but not yet remitted by the BNPL provider
+                new ArrayList<>(byAccount.values()),
+                points == null ? LoyaltyControl.unreachable() : LoyaltyControl.of(points),
+                null, "RevenueReconciliation");
+        PeriodClose close = periods.findById(tenantScope.currentTenantId()).orElse(null);
+        return close == null ? out : out.closedThrough(close.getClosedThrough().toString());
     }
 
     /** REV-REC INPUTS: the obligation timeline the ERP's ASC 606 / IFRS 15
@@ -986,9 +987,9 @@ public class RevenueService {
      * NOT restate prices here — the journal export already carries what
      * was billed; SSP allocation is deliberately the ERP's job. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> revrecInput() {
+    public List<RevRecRow> revrecInput() {
         LocalDate today = LocalDate.now();
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<RevRecRow> out = new ArrayList<>();
         for (Map<String, Object> a : billingClient.agreements()) {
             if (!"active".equals(a.get("status"))) {
                 continue;
@@ -1003,9 +1004,6 @@ public class RevenueService {
                     : java.time.temporal.ChronoUnit.MONTHS.between(start, end);
             long elapsed = Math.max(0, Math.min(months,
                     java.time.temporal.ChronoUnit.MONTHS.between(start, today)));
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("contractId", a.get("id"));
-            row.put("contractName", a.get("name"));
             String party = null;
             if (a.get("engagedParty") instanceof List<?> parties) {
                 for (Object p2 : parties) {
@@ -1015,20 +1013,17 @@ public class RevenueService {
                     }
                 }
             }
-            row.put("partyId", party);
+            String offeringId = null;
+            String offeringName = null;
             if (a.get("agreementItem") instanceof List<?> items && !items.isEmpty()
                     && items.get(0) instanceof Map<?, ?> item
                     && item.get("productOffering") instanceof Map<?, ?> po) {
-                row.put("offeringId", po.get("id"));
-                row.put("offeringName", po.get("name"));
+                offeringId = str(po.get("id"));
+                offeringName = str(po.get("name"));
             }
-            row.put("startDate", start.toString());
-            row.put("endDate", end.toString());
-            row.put("commitmentMonths", months);
-            row.put("monthsElapsed", elapsed);
-            row.put("monthsRemaining", months - elapsed);
-            row.put("@type", "RevRecInput");
-            out.add(row);
+            out.add(new RevRecRow(str(a.get("id")), str(a.get("name")), party,
+                    offeringId, offeringName, start.toString(), end.toString(),
+                    months, elapsed, months - elapsed, "RevRecInput"));
         }
         return out;
     }
@@ -1038,12 +1033,12 @@ public class RevenueService {
     public String revrecCsv() {
         StringBuilder csv = new StringBuilder(
                 "contractId,contractName,partyId,offeringId,offeringName,startDate,endDate,commitmentMonths,monthsElapsed,monthsRemaining\n");
-        for (Map<String, Object> row : revrecInput()) {
-            csv.append(String.join(",", plain(row.get("contractId")), quote(row.get("contractName")),
-                    plain(row.get("partyId")), plain(row.get("offeringId")),
-                    quote(row.get("offeringName")), plain(row.get("startDate")),
-                    plain(row.get("endDate")), plain(row.get("commitmentMonths")),
-                    plain(row.get("monthsElapsed")), plain(row.get("monthsRemaining")))).append('\n');
+        for (RevRecRow row : revrecInput()) {
+            csv.append(String.join(",", plain(row.contractId()), quote(row.contractName()),
+                    plain(row.partyId()), plain(row.offeringId()),
+                    quote(row.offeringName()), plain(row.startDate()),
+                    plain(row.endDate()), plain(row.commitmentMonths()),
+                    plain(row.monthsElapsed()), plain(row.monthsRemaining()))).append('\n');
         }
         return csv.toString();
     }
@@ -1051,51 +1046,38 @@ public class RevenueService {
     /* ---------- the chart ---------- */
 
     @Transactional
-    public List<Map<String, Object>> chart() {
+    public List<ChartRow> chart() {
         String tenant = tenantScope.currentTenantId();
         seedDefaults(tenant);
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<ChartRow> out = new ArrayList<>();
         for (AccountMapping m : mappings.findAllByTenantIdOrderByMappingKeyAsc(tenant)) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("key", m.getMappingKey());
-            row.put("accountCode", m.getAccountCode());
-            row.put("accountName", m.getAccountName());
-            if (m.getConfigValue() != null) {
-                row.put("configValue", m.getConfigValue());
-            }
-            out.add(row);
+            out.add(new ChartRow(m.getMappingKey(), m.getAccountCode(), m.getAccountName(),
+                    m.getConfigValue()));
         }
         return out;
     }
 
     @Transactional
-    public Map<String, Object> remap(Map<String, Object> dto) {
+    public RemapReceipt remap(RemapRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String key = String.valueOf(dto.get("key"));
+        String key = String.valueOf(dto.key());
         if (!DEFAULT_CHART.containsKey(key)) {
             throw new BadRequestException("unknown posting key '" + key + "' — one of " + DEFAULT_CHART.keySet());
         }
-        if (dto.get("accountCode") == null || dto.get("accountName") == null) {
+        if (dto.accountCode() == null || dto.accountName() == null) {
             throw new BadRequestException("accountCode and accountName are required");
         }
         seedDefaults(tenant);
         AccountMapping m = mappings.findByTenantIdAndMappingKey(tenant, key).orElseThrow();
-        m.setAccountCode(String.valueOf(dto.get("accountCode")));
-        m.setAccountName(String.valueOf(dto.get("accountName")));
-        if (dto.containsKey("configValue")) {
-            m.setConfigValue(dto.get("configValue") == null ? null
-                    : new BigDecimal(String.valueOf(dto.get("configValue"))));
+        m.setAccountCode(dto.accountCode());
+        m.setAccountName(dto.accountName());
+        // absent leaves the setting alone; an explicit JSON null clears it
+        if (dto.configValue() != null) {
+            m.setConfigValue(dto.configValue().isNull() ? null
+                    : new BigDecimal(dto.configValue().asText()));
         }
         mappings.save(m);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("key", key);
-        out.put("accountCode", m.getAccountCode());
-        out.put("accountName", m.getAccountName());
-        if (m.getConfigValue() != null) {
-            out.put("configValue", m.getConfigValue());
-        }
-        out.put("note", "applies to FUTURE postings — booked lines keep their snapshot");
-        return out;
+        return RemapReceipt.of(key, m.getAccountCode(), m.getAccountName(), m.getConfigValue());
     }
 
     /* ---------- internals ---------- */
@@ -1123,7 +1105,7 @@ public class RevenueService {
      * from their own accounts; and the prior equal-length period gives the delta.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> summary(LocalDate from, LocalDate to) {
+    public SummaryView summary(LocalDate from, LocalDate to) {
         String tenant = tenantScope.currentTenantId();
         seedDefaults(tenant);
         String taxCode = codeFor(tenant, "tax");
@@ -1141,17 +1123,10 @@ public class RevenueService {
 
         long invoices = entries.countByTenantIdAndSourceTypeAndEntryDateBetween(tenant, "bill", from, to);
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "RevenueSummary");
-        out.put("period", Map.of("fromDate", from.toString(), "toDate", to.toString()));
-        out.put("netRevenue", cur.revenue);
-        out.put("taxCollected", cur.tax);
-        out.put("cashCollected", cur.cash);
-        out.put("invoicesIssued", invoices);
-        out.put("priorNetRevenue", prev.revenue);
-        out.put("revenueDeltaPct", pctDelta(prev.revenue, cur.revenue));
-        out.put("byAccount", cur.byAccount);
-        return out;
+        return new SummaryView("RevenueSummary",
+                new Period(from.toString(), to.toString()),
+                cur.revenue(), cur.tax(), cur.cash(), invoices, prev.revenue(),
+                pctDelta(prev.revenue(), cur.revenue()), cur.byAccount());
     }
 
     /**
@@ -1166,7 +1141,7 @@ public class RevenueService {
      * The FIRST month in range has no prior, so it is the baseline (all NEW).
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> subscriptionMetrics(LocalDate from, LocalDate to) {
+    public SubscriptionMetricsView subscriptionMetrics(LocalDate from, LocalDate to) {
         String tenant = tenantScope.currentTenantId();
         seedDefaults(tenant);
         String code = codeFor(tenant, "rate:recurringCharge");   // 4000 unless remapped
@@ -1182,8 +1157,8 @@ public class RevenueService {
             }
         }
         // walk the REQUESTED months in order, classifying against the prior month
-        List<Map<String, Object>> months = new ArrayList<>();
-        List<Map<String, Object>> drill = new ArrayList<>();
+        List<MonthRow> months = new ArrayList<>();
+        List<DrillRow> drill = new ArrayList<>();
         String firstMonth = String.format("%04d-%02d", from.getYear(), from.getMonthValue());
         String lastMonth = String.format("%04d-%02d", to.getYear(), to.getMonthValue());
         BigDecimal prevMrr = null;
@@ -1233,71 +1208,51 @@ public class RevenueService {
                 }
             }
             int active = cur.size();
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("month", month);
-            row.put("mrr", scale(mrr));
-            row.put("newMrr", scale(newMrr));
-            row.put("expansionMrr", scale(expansion));
-            row.put("contractionMrr", scale(contraction));
-            row.put("churnedMrr", scale(churned));
-            row.put("activeAccounts", active);
-            row.put("arpu", active == 0 ? BigDecimal.ZERO
-                    : scale(mrr.divide(BigDecimal.valueOf(active), 2, RoundingMode.HALF_UP)));
-            row.put("churnRatePct", prev.isEmpty() ? null
-                    : scale(BigDecimal.valueOf(churnedAccounts * 100.0 / prev.size())));
             // NRR: what last month's customers are worth now / what they were worth
             BigDecimal prevTotal = prev.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-            row.put("nrrPct", prevTotal.signum() == 0 ? null
-                    : scale(mrr.subtract(newMrr).multiply(BigDecimal.valueOf(100))
-                            .divide(prevTotal, 1, RoundingMode.HALF_UP)));
-            row.put("baseline", month.equals(firstMonth) && prev.isEmpty());
-            months.add(row);
+            months.add(new MonthRow(month, scale(mrr), scale(newMrr), scale(expansion),
+                    scale(contraction), scale(churned), active,
+                    active == 0 ? BigDecimal.ZERO
+                            : scale(mrr.divide(BigDecimal.valueOf(active), 2, RoundingMode.HALF_UP)),
+                    prev.isEmpty() ? null
+                            : scale(BigDecimal.valueOf(churnedAccounts * 100.0 / prev.size())),
+                    prevTotal.signum() == 0 ? null
+                            : scale(mrr.subtract(newMrr).multiply(BigDecimal.valueOf(100))
+                                    .divide(prevTotal, 1, RoundingMode.HALF_UP)),
+                    month.equals(firstMonth) && prev.isEmpty()));
             prevMrr = mrr;
         }
-        drill.sort((a, b) -> ((BigDecimal) b.get("delta")).compareTo((BigDecimal) a.get("delta")));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("period", Map.of("fromDate", from.toString(), "toDate", to.toString()));
-        out.put("accountCode", code);
-        out.put("note", "billed recurring revenue from the subledger (account " + code
-                + "); a month reflects what the billing run recognised, not catalog list price");
-        out.put("months", months);
-        out.put("drillDown", drill.size() > 100 ? drill.subList(0, 100) : drill);
-        out.put("@type", "SubscriptionMetrics");
-        return out;
+        drill.sort((a, b) -> b.delta().compareTo(a.delta()));
+        return new SubscriptionMetricsView(new Period(from.toString(), to.toString()), code,
+                "billed recurring revenue from the subledger (account " + code
+                        + "); a month reflects what the billing run recognised, not catalog list price",
+                months, drill.size() > 100 ? drill.subList(0, 100) : drill, "SubscriptionMetrics");
     }
 
-    private static Map<String, Object> drillRow(String month, String party, String kind,
+    private static DrillRow drillRow(String month, String party, String kind,
             BigDecimal delta, BigDecimal nowMrr) {
-        Map<String, Object> r = new LinkedHashMap<>();
-        r.put("month", month);
-        r.put("partyId", party);
-        r.put("kind", kind);
-        r.put("delta", scale(delta));
-        r.put("mrr", scale(nowMrr));
-        return r;
+        return new DrillRow(month, party, kind, scale(delta), scale(nowMrr));
     }
 
     /** The waterfall as CSV — one row per month, the drill-down appended. */
     @Transactional(readOnly = true)
     public String subscriptionMetricsCsv(LocalDate from, LocalDate to) {
-        Map<String, Object> m = subscriptionMetrics(from, to);
+        SubscriptionMetricsView m = subscriptionMetrics(from, to);
         StringBuilder csv = new StringBuilder(
                 "month,mrr,newMrr,expansionMrr,contractionMrr,churnedMrr,activeAccounts,arpu,churnRatePct,nrrPct\n");
-        for (Object o : (List<?>) m.get("months")) {
-            Map<?, ?> r = (Map<?, ?>) o;
-            csv.append(r.get("month")).append(',').append(r.get("mrr")).append(',')
-                    .append(r.get("newMrr")).append(',').append(r.get("expansionMrr")).append(',')
-                    .append(r.get("contractionMrr")).append(',').append(r.get("churnedMrr")).append(',')
-                    .append(r.get("activeAccounts")).append(',').append(r.get("arpu")).append(',')
-                    .append(r.get("churnRatePct") == null ? "" : r.get("churnRatePct")).append(',')
-                    .append(r.get("nrrPct") == null ? "" : r.get("nrrPct")).append('\n');
+        for (MonthRow r : m.months()) {
+            csv.append(r.month()).append(',').append(r.mrr()).append(',')
+                    .append(r.newMrr()).append(',').append(r.expansionMrr()).append(',')
+                    .append(r.contractionMrr()).append(',').append(r.churnedMrr()).append(',')
+                    .append(r.activeAccounts()).append(',').append(r.arpu()).append(',')
+                    .append(r.churnRatePct() == null ? "" : r.churnRatePct()).append(',')
+                    .append(r.nrrPct() == null ? "" : r.nrrPct()).append('\n');
         }
         csv.append("\nmonth,partyId,kind,delta,mrr\n");
-        for (Object o : (List<?>) m.get("drillDown")) {
-            Map<?, ?> r = (Map<?, ?>) o;
-            csv.append(r.get("month")).append(',').append(r.get("partyId")).append(',')
-                    .append(r.get("kind")).append(',').append(r.get("delta")).append(',')
-                    .append(r.get("mrr")).append('\n');
+        for (DrillRow r : m.drillDown()) {
+            csv.append(r.month()).append(',').append(r.partyId()).append(',')
+                    .append(r.kind()).append(',').append(r.delta()).append(',')
+                    .append(r.mrr()).append('\n');
         }
         return csv.toString();
     }
@@ -1307,7 +1262,7 @@ public class RevenueService {
         BigDecimal revenue = BigDecimal.ZERO;
         BigDecimal tax = BigDecimal.ZERO;
         BigDecimal cash = BigDecimal.ZERO;
-        List<Map<String, Object>> byAccount = new ArrayList<>();
+        List<AccountNet> byAccount = new ArrayList<>();
         for (Object[] row : lines.sumByAccountBetween(tenant, from, to)) {
             String code = (String) row[0];
             String name = (String) row[1];
@@ -1320,19 +1275,15 @@ public class RevenueService {
             } else if (!nonRevenue.contains(code)) {
                 BigDecimal net = credit.subtract(debit);            // revenue up, contra down
                 revenue = revenue.add(net);
-                Map<String, Object> acct = new LinkedHashMap<>();
-                acct.put("accountCode", code);
-                acct.put("accountName", name);
-                acct.put("net", scale(net));
-                byAccount.add(acct);
+                byAccount.add(new AccountNet(code, name, scale(net)));
             }
         }
-        byAccount.sort((a, b) -> ((BigDecimal) b.get("net")).compareTo((BigDecimal) a.get("net")));
+        byAccount.sort((a, b) -> b.net().compareTo(a.net()));
         return new Totals(scale(revenue), scale(tax), scale(cash), byAccount);
     }
 
     private record Totals(BigDecimal revenue, BigDecimal tax, BigDecimal cash,
-            List<Map<String, Object>> byAccount) {
+            List<AccountNet> byAccount) {
     }
 
     private String codeFor(String tenant, String key) {
@@ -1401,32 +1352,16 @@ public class RevenueService {
         log.info("revenue: booked {} ({} lines, {} {})", sourceRef, posting.size(), debits, currency);
     }
 
-    private Map<String, Object> entryView(JournalEntry e, List<JournalLine> entryLines) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", e.getId());
-        out.put("entryDate", e.getEntryDate());
-        out.put("sourceRef", e.getSourceRef());
-        out.put("sourceType", e.getSourceType());
-        out.put("description", e.getDescription());
-        out.put("currency", e.getCurrency());
-        if (e.getPartyId() != null) {
-            out.put("relatedParty", List.of(Map.of("id", e.getPartyId(), "role", "customer")));
-        }
-        List<Map<String, Object>> ls = new ArrayList<>();
+    private JournalEntryView entryView(JournalEntry e, List<JournalLine> entryLines) {
+        List<JournalLineView> ls = new ArrayList<>();
         for (JournalLine l : entryLines) {
-            Map<String, Object> lm = new LinkedHashMap<>();
-            lm.put("seq", l.getSeq());
-            lm.put("accountCode", l.getAccountCode());
-            lm.put("accountName", l.getAccountName());
-            lm.put("debit", l.getDebit());
-            lm.put("credit", l.getCredit());
-            lm.put("ref", l.getRef());
-            lm.put("description", l.getDescription());
-            ls.add(lm);
+            ls.add(new JournalLineView(l.getSeq(), l.getAccountCode(), l.getAccountName(),
+                    l.getDebit(), l.getCredit(), l.getRef(), l.getDescription()));
         }
-        out.put("lines", ls);
-        out.put("@type", "JournalEntry");
-        return out;
+        return new JournalEntryView(e.getId(), e.getEntryDate(), e.getSourceRef(), e.getSourceType(),
+                e.getDescription(), e.getCurrency(),
+                e.getPartyId() == null ? null : List.of(PartyRef.customer(e.getPartyId())),
+                ls, "JournalEntry");
     }
 
     private String keyOfCode(String code) {
@@ -1465,6 +1400,15 @@ public class RevenueService {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castMap(Object m) {
         return m instanceof Map ? (Map<String, Object>) m : new LinkedHashMap<>();
+    }
+
+    /** A foreign document from billing: read as a tree, converted once at the boundary. */
+    private Map<String, Object> asMap(JsonNode node) {
+        return node == null || !node.isObject() ? new LinkedHashMap<>() : json.convertValue(node, OPEN_MAP);
+    }
+
+    private static String str(Object v) {
+        return v == null ? null : String.valueOf(v);
     }
 
     private static String plain(Object v) {

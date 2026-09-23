@@ -1,8 +1,12 @@
 package com.bss.payment.service;
 
+import com.bss.payment.dto.PspConfigRequest;
+import com.bss.payment.dto.PspConfigView;
+import com.bss.payment.dto.PspTestResult;
 import com.bss.payment.entity.PspConfig;
 import com.bss.payment.repository.PspConfigRepository;
 import com.bss.payment.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -11,7 +15,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,9 +40,9 @@ public class PspConfigService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listForCurrentTenant() {
+    public List<PspConfigView> listForCurrentTenant() {
         return repository.findByTenantIdOrderByDisplayNameAsc(tenantScope.currentTenantId())
-                .stream().map(PspConfigService::toMap).toList();
+                .stream().map(PspConfigService::toView).toList();
     }
 
     /** The PSP a tenant charges through: the default-flagged enabled provider,
@@ -52,8 +55,8 @@ public class PspConfigService {
     }
 
     @Transactional
-    public Map<String, Object> upsert(Map<String, Object> dto) {
-        String provider = str(dto.get("provider"));
+    public PspConfigView upsert(PspConfigRequest dto) {
+        String provider = dto.provider();
         if (provider == null || !KNOWN.contains(provider)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "provider is required and must be one of " + KNOWN);
@@ -67,17 +70,17 @@ public class PspConfigService {
             fresh.setCreatedAt(OffsetDateTime.now());
             return fresh;
         });
-        cfg.setDisplayName(str(dto.getOrDefault("displayName", provider)));
-        cfg.setBaseUrl(str(dto.get("baseUrl")));
-        cfg.setSecretRef(str(dto.get("secretRef")));
-        cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
-        cfg.setMethods(json(dto.get("methods")));
-        cfg.setDefault(Boolean.TRUE.equals(dto.get("isDefault")));
-        if (dto.get("priority") != null) {
-            cfg.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
+        cfg.setDisplayName(dto.displayName() == null ? provider : dto.displayName());
+        cfg.setBaseUrl(dto.baseUrl());
+        cfg.setSecretRef(dto.secretRef());
+        cfg.setWebhookSecretRef(dto.webhookSecretRef());
+        cfg.setMethods(json(dto.methods()));
+        cfg.setDefault(Boolean.TRUE.equals(dto.isDefault()));
+        if (dto.priority() != null && !dto.priority().isNull()) {
+            cfg.setPriority(Integer.parseInt(dto.priority().asText()));
         }
-        cfg.setCurrencies(dto.get("currencies") == null ? null : json(dto.get("currencies")));
-        cfg.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));
+        cfg.setCurrencies(json(dto.currencies()));
+        cfg.setEnabled(!Boolean.FALSE.equals(dto.enabled()));
         cfg.setLastUpdate(OffsetDateTime.now());
         if (cfg.isDefault()) {
             for (PspConfig other : repository.findByTenantIdOrderByDisplayNameAsc(tenant)) {
@@ -87,7 +90,7 @@ public class PspConfigService {
                 }
             }
         }
-        return toMap(repository.save(cfg));
+        return toView(repository.save(cfg));
     }
 
     @Transactional(readOnly = true)
@@ -171,16 +174,13 @@ public class PspConfigService {
      * configured base URL's /health with a short timeout; no base URL means an
      * in-process (or SDK-default) adapter, reported honestly, not probed. */
     @Transactional(readOnly = true)
-    public Map<String, Object> testConnection(String provider) {
+    public PspTestResult testConnection(String provider) {
         PspConfig cfg = repository.findByTenantIdAndProvider(tenantScope.currentTenantId(), provider)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "provider '" + provider + "' is not configured for this tenant"));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("provider", provider);
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
-            out.put("ok", true);
-            out.put("note", "no base URL configured — in-process/default adapter, nothing to probe");
-            return out;
+            return PspTestResult.said(provider, true,
+                    "no base URL configured — in-process/default adapter, nothing to probe");
         }
         try {
             java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
@@ -189,14 +189,11 @@ public class PspConfigService {
                     java.net.http.HttpRequest.newBuilder(java.net.URI.create(cfg.getBaseUrl() + "/health"))
                             .timeout(java.time.Duration.ofSeconds(4)).GET().build(),
                     java.net.http.HttpResponse.BodyHandlers.discarding());
-            out.put("ok", resp.statusCode() < 500);
-            out.put("status", resp.statusCode());
-            out.put("note", "reachability probe of " + cfg.getBaseUrl() + "/health — not a payment");
+            return PspTestResult.reached(provider, resp.statusCode(),
+                    "reachability probe of " + cfg.getBaseUrl() + "/health — not a payment");
         } catch (Exception e) {
-            out.put("ok", false);
-            out.put("note", "unreachable: " + e.getMessage());
+            return PspTestResult.said(provider, false, "unreachable: " + e.getMessage());
         }
-        return out;
     }
 
     @Transactional
@@ -205,37 +202,17 @@ public class PspConfigService {
                 .ifPresent(repository::delete);
     }
 
-    private String json(Object v) {
-        if (v == null) {
+    /** A posted list is stored as the JSON it is; an already-encoded string is stored verbatim. */
+    private static String json(JsonNode v) {
+        if (v == null || v.isNull()) {
             return null;
         }
-        if (v instanceof String s) {
-            return s;
-        }
-        try {
-            return mapper.writeValueAsString(v);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "not serialisable JSON");
-        }
-    }
-
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
+        return v.isTextual() ? v.textValue() : v.toString();
     }
 
     /** The secret is a reference only — the API key is never returned. */
-    private static Map<String, Object> toMap(PspConfig c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("provider", c.getProvider());
-        m.put("displayName", c.getDisplayName());
-        if (c.getBaseUrl() != null) m.put("baseUrl", c.getBaseUrl());
-        if (c.getSecretRef() != null) m.put("secretRef", c.getSecretRef());
-        if (c.getMethods() != null) m.put("methods", c.getMethods());
-        m.put("isDefault", c.isDefault());
-        m.put("priority", c.getPriority());
-        if (c.getCurrencies() != null) m.put("currencies", c.getCurrencies());
-        m.put("enabled", c.isEnabled());
-        m.put("@type", "PspConfig");
-        return m;
+    private static PspConfigView toView(PspConfig c) {
+        return new PspConfigView(c.getProvider(), c.getDisplayName(), c.getBaseUrl(), c.getSecretRef(),
+                c.getMethods(), c.isDefault(), c.getPriority(), c.getCurrencies(), c.isEnabled(), "PspConfig");
     }
 }

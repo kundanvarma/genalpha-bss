@@ -37,16 +37,16 @@ public class PartyLookupClient {
      *     organization tokens (a company has no first name). Empty on failure.
      */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> nameTokens(String tenantId, String partyId) {
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
+    public Map<String, String> nameTokens(String tenantId, String partyId) {
+        Map<String, String> out = new java.util.LinkedHashMap<>();
         try {
             Map<String, Object> person = partyClient.get()
                     .uri("/tmf-api/party/v4/individual/{id}", partyId)
                     .header("Authorization", "Bearer " + tokens.tokenFor(tenantId))
                     .retrieve().body(Map.class);
             if (person != null) {
-                if (person.get("givenName") != null) out.put("party.firstName", person.get("givenName"));
-                if (person.get("familyName") != null) out.put("party.lastName", person.get("familyName"));
+                if (person.get("givenName") != null) out.put("party.firstName", String.valueOf(person.get("givenName")));
+                if (person.get("familyName") != null) out.put("party.lastName", String.valueOf(person.get("familyName")));
                 if (person.get("organization") instanceof Map<?, ?> org && org.get("id") != null) {
                     out.putAll(orgTokens(tenantId, String.valueOf(org.get("id"))));
                 }
@@ -61,16 +61,16 @@ public class PartyLookupClient {
 
     /** organization.name / organization.tradingName for an org party. */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> orgTokens(String tenantId, String orgId) {
+    private Map<String, String> orgTokens(String tenantId, String orgId) {
         try {
             Map<String, Object> org = partyClient.get()
                     .uri("/tmf-api/party/v4/organization/{id}", orgId)
                     .header("Authorization", "Bearer " + tokens.tokenFor(tenantId))
                     .retrieve().body(Map.class);
             if (org == null) return Map.of();
-            Map<String, Object> t = new java.util.LinkedHashMap<>();
-            if (org.get("name") != null) t.put("organization.name", org.get("name"));
-            if (org.get("tradingName") != null) t.put("organization.tradingName", org.get("tradingName"));
+            Map<String, String> t = new java.util.LinkedHashMap<>();
+            if (org.get("name") != null) t.put("organization.name", String.valueOf(org.get("name")));
+            if (org.get("tradingName") != null) t.put("organization.tradingName", String.valueOf(org.get("tradingName")));
             return t;
         } catch (Exception e) {
             return Map.of();

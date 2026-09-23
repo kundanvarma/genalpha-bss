@@ -2,6 +2,19 @@ package com.bss.revenue.controller;
 
 import com.bss.revenue.api.ApiConstants;
 import com.bss.revenue.exception.BadRequestException;
+import com.bss.revenue.dto.BackfillReceipt;
+import com.bss.revenue.dto.BackfillRequest;
+import com.bss.revenue.dto.ChartRow;
+import com.bss.revenue.dto.JournalEntryView;
+import com.bss.revenue.dto.LoyaltyAccrual;
+import com.bss.revenue.dto.PeriodCloseReceipt;
+import com.bss.revenue.dto.PeriodCloseRequest;
+import com.bss.revenue.dto.ReconciliationView;
+import com.bss.revenue.dto.RemapReceipt;
+import com.bss.revenue.dto.RemapRequest;
+import com.bss.revenue.dto.RemittanceReceipt;
+import com.bss.revenue.dto.RemittanceRequest;
+import com.bss.revenue.dto.SummaryView;
 import com.bss.revenue.service.RevenueService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +52,7 @@ public class RevenueController {
      * computed once from the subledger. billing:read (GET /** is gated already).
      */
     @GetMapping("/summary")
-    public ResponseEntity<Map<String, Object>> summary(
+    public ResponseEntity<SummaryView> summary(
             @RequestParam(required = false) String fromDate,
             @RequestParam(required = false) String toDate) {
         LocalDate to = parseDate(toDate) != null ? parseDate(toDate) : LocalDate.now();
@@ -48,14 +61,14 @@ public class RevenueController {
     }
 
     @GetMapping("/journalEntry")
-    public ResponseEntity<List<Map<String, Object>>> journal(
+    public ResponseEntity<List<JournalEntryView>> journal(
             @RequestParam(required = false) String date,
             @RequestParam(required = false) String sourceRef) {
         return ResponseEntity.ok(service.journal(parseDate(date), sourceRef));
     }
 
     @GetMapping("/journalEntry/{id}")
-    public ResponseEntity<Map<String, Object>> entry(@PathVariable("id") String id) {
+    public ResponseEntity<JournalEntryView> entry(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.entryById(id));
     }
 
@@ -79,22 +92,22 @@ public class RevenueController {
     }
 
     @PostMapping("/loyaltyAccrual")
-    public ResponseEntity<Map<String, Object>> loyaltyAccrual() {
+    public ResponseEntity<LoyaltyAccrual> loyaltyAccrual() {
         return ResponseEntity.ok(service.loyaltyAccrual());
     }
 
     @PostMapping("/periodClose")
-    public ResponseEntity<Map<String, Object>> periodClose(@RequestBody Map<String, Object> dto) {
-        if (dto.get("through") == null) {
+    public ResponseEntity<PeriodCloseReceipt> periodClose(@RequestBody PeriodCloseRequest dto) {
+        if (dto.through() == null) {
             throw new BadRequestException("through (YYYY-MM-DD) is required");
         }
-        return ResponseEntity.ok(service.closePeriod(String.valueOf(dto.get("through"))));
+        return ResponseEntity.ok(service.closePeriod(dto.through()));
     }
 
     /** BNPL payout landed: clear the provider receivable (1100) to cash. Idempotent
      * by (provider, reference) — a payout file replayed twice books once. */
     @PostMapping("/remittance")
-    public ResponseEntity<Map<String, Object>> remittance(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<RemittanceReceipt> remittance(@RequestBody RemittanceRequest dto) {
         try {
             return ResponseEntity.ok(service.postRemittance(dto));
         } catch (IllegalArgumentException e) {
@@ -125,27 +138,27 @@ public class RevenueController {
     }
 
     @GetMapping(value = "/reconciliation", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, Object>> reconciliation(
+    public ResponseEntity<ReconciliationView> reconciliation(
             @RequestParam(required = false) String date) {
         return ResponseEntity.ok(service.reconciliation(parseDate(date)));
     }
 
     @GetMapping("/accountMapping")
-    public ResponseEntity<List<Map<String, Object>>> chart() {
+    public ResponseEntity<List<ChartRow>> chart() {
         return ResponseEntity.ok(service.chart());
     }
 
     @PostMapping("/accountMapping")
-    public ResponseEntity<Map<String, Object>> remap(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<RemapReceipt> remap(@RequestBody RemapRequest dto) {
         return ResponseEntity.ok(service.remap(dto));
     }
 
     @PostMapping("/backfill")
-    public ResponseEntity<Map<String, Object>> backfill(@RequestBody Map<String, Object> dto) {
-        if (dto.get("billId") == null) {
+    public ResponseEntity<BackfillReceipt> backfill(@RequestBody BackfillRequest dto) {
+        if (dto.billId() == null) {
             throw new BadRequestException("billId is required");
         }
-        return ResponseEntity.ok(service.backfill(String.valueOf(dto.get("billId"))));
+        return ResponseEntity.ok(service.backfill(dto.billId()));
     }
 
     private static LocalDate parseDate(String date) {

@@ -1,6 +1,7 @@
 package com.bss.payment.controller;
 
 import com.bss.payment.api.ApiConstants;
+import com.bss.payment.dto.WebhookReceipt;
 import com.bss.payment.service.PaymentWebhookService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 /**
  * PSP webhooks — anonymous at the door, HMAC-verified inside. Per-tenant path so a
@@ -28,7 +28,7 @@ public class PaymentWebhookController {
     }
 
     @PostMapping("/{provider}/{tenantId}")
-    public ResponseEntity<Map<String, Object>> receive(
+    public ResponseEntity<WebhookReceipt> receive(
             @PathVariable String provider,
             @PathVariable String tenantId,
             @RequestBody(required = false) byte[] body,

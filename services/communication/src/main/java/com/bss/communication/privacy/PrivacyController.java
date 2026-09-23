@@ -1,5 +1,8 @@
 package com.bss.communication.privacy;
 
+import com.bss.communication.dto.EraseReceipt;
+import com.bss.communication.dto.EraseRequest;
+import com.bss.communication.dto.PrivacyExport;
 import com.bss.communication.entity.CommunicationMessage;
 import com.bss.communication.repository.CommunicationMessageRepository;
 import com.bss.communication.security.TenantScope;
@@ -15,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The GDPR corner of this service. EXPORT rides the caller's OWN token —
@@ -38,25 +40,29 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
         List<CommunicationMessage> items = repository.findByTenantIdAndReceiverPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", CATEGORY, "count", items.size(), "items", items);
+        return new PrivacyExport(CATEGORY, items.size(), items);
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
+        // a nameless erasure is a 400, never a wildcard over the tenant
+        if (request == null || request.partyId() == null || request.partyId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partyId is required");
+        }
+        String target = request.partyId();
         List<CommunicationMessage> rows = repository.findByTenantIdAndReceiverPartyId(tenantScope.currentTenantId(), target);
         repository.deleteAll(rows);
-        return Map.of("category", CATEGORY, "deleted", rows.size(), "retained", 0);
+        return new EraseReceipt(CATEGORY, rows.size(), 0);
     }
 
     private String subject() {

@@ -6,7 +6,6 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF676 Payment. On create, paymentMethod may carry card details
@@ -33,7 +32,7 @@ public class PaymentDto {
     private MoneyDto amount;
 
     @JsonProperty("paymentMethod")
-    private Map<String, Object> paymentMethod;
+    private PaymentMethodRef paymentMethod;
 
     @JsonProperty("authorizationCode")
     private String authorizationCode;
@@ -52,7 +51,7 @@ public class PaymentDto {
     private String correlatorId;
 
     @JsonProperty("relatedParty")
-    private List<Map<String, Object>> relatedParty;
+    private List<RelatedPartyRef> relatedParty;
 
     @JsonProperty("paymentDate")
     private OffsetDateTime paymentDate;
@@ -106,11 +105,11 @@ public class PaymentDto {
         this.amount = amount;
     }
 
-    public Map<String, Object> getPaymentMethod() {
+    public PaymentMethodRef getPaymentMethod() {
         return paymentMethod;
     }
 
-    public void setPaymentMethod(Map<String, Object> paymentMethod) {
+    public void setPaymentMethod(PaymentMethodRef paymentMethod) {
         this.paymentMethod = paymentMethod;
     }
 
@@ -146,11 +145,11 @@ public class PaymentDto {
         this.correlatorId = correlatorId;
     }
 
-    public List<Map<String, Object>> getRelatedParty() {
+    public List<RelatedPartyRef> getRelatedParty() {
         return relatedParty;
     }
 
-    public void setRelatedParty(List<Map<String, Object>> relatedParty) {
+    public void setRelatedParty(List<RelatedPartyRef> relatedParty) {
         this.relatedParty = relatedParty;
     }
 

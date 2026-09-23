@@ -3,7 +3,6 @@ package com.bss.stock.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.Map;
 
 /**
  * Body of the TMF687-style task operations. reserveProductStock names an
@@ -14,17 +13,17 @@ import java.util.Map;
 public class StockOperationDto {
 
     @JsonProperty("productOffering")
-    private Map<String, Object> productOffering;
+    private EntityRef productOffering;
 
     @JsonProperty("quantity")
     private Integer quantity;
 
     @JsonProperty("relatedOrder")
-    private Map<String, Object> relatedOrder;
+    private EntityRef relatedOrder;
 
     /** TMF687 requestedProduct: the configured product (offering + productCharacteristic[] naming the variant). */
     @com.fasterxml.jackson.annotation.JsonProperty("requestedProduct")
-    private Map<String, Object> requestedProduct;
+    private ProductRef requestedProduct;
 
     @JsonProperty("state")
     private String state;
@@ -32,11 +31,11 @@ public class StockOperationDto {
     public StockOperationDto() {
     }
 
-    public Map<String, Object> getProductOffering() {
+    public EntityRef getProductOffering() {
         return productOffering;
     }
 
-    public void setProductOffering(Map<String, Object> productOffering) {
+    public void setProductOffering(EntityRef productOffering) {
         this.productOffering = productOffering;
     }
 
@@ -48,11 +47,11 @@ public class StockOperationDto {
         this.quantity = quantity;
     }
 
-    public Map<String, Object> getRelatedOrder() {
+    public EntityRef getRelatedOrder() {
         return relatedOrder;
     }
 
-    public void setRelatedOrder(Map<String, Object> relatedOrder) {
+    public void setRelatedOrder(EntityRef relatedOrder) {
         this.relatedOrder = relatedOrder;
     }
 
@@ -64,11 +63,11 @@ public class StockOperationDto {
         this.state = state;
     }
 
-    public Map<String, Object> getRequestedProduct() {
+    public ProductRef getRequestedProduct() {
         return requestedProduct;
     }
 
-    public void setRequestedProduct(Map<String, Object> requestedProduct) {
+    public void setRequestedProduct(ProductRef requestedProduct) {
         this.requestedProduct = requestedProduct;
     }
 }

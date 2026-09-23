@@ -1,6 +1,7 @@
 package com.bss.communication.controller;
 
 import com.bss.communication.api.ApiConstants;
+import com.bss.communication.dto.MarketingPreference;
 import com.bss.communication.exception.BadRequestException;
 import com.bss.communication.security.PartyScope;
 import com.bss.communication.service.MarketingPreferenceService;
@@ -14,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 /**
  * The customer's marketing preference centre — self-serve, party-scoped: a
@@ -34,16 +34,14 @@ public class MarketingPreferenceController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> get() {
-        return ResponseEntity.ok(Map.of("marketingOptOut", prefs.isOptedOut(requireCustomer())));
+    public ResponseEntity<MarketingPreference.View> get() {
+        return ResponseEntity.ok(new MarketingPreference.View(prefs.isOptedOut(requireCustomer())));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> set(@RequestBody Map<String, Object> body) {
-        boolean optOut = Boolean.TRUE.equals(body.get("optOut"))
-                || "true".equalsIgnoreCase(String.valueOf(body.get("optOut")));
-        boolean now = prefs.setOptOut(requireCustomer(), optOut, emailFromToken());
-        return ResponseEntity.ok(Map.of("marketingOptOut", now));
+    public ResponseEntity<MarketingPreference.View> set(@RequestBody MarketingPreference.Request body) {
+        boolean now = prefs.setOptOut(requireCustomer(), body.optedOut(), emailFromToken());
+        return ResponseEntity.ok(new MarketingPreference.View(now));
     }
 
     /** A marketing preference belongs to the customer whose token this is. */

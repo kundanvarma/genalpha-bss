@@ -1,7 +1,10 @@
 package com.bss.stock.controller;
 
 import com.bss.stock.api.ApiConstants;
+import com.bss.stock.dto.ReserveProductStockView;
 import com.bss.stock.dto.StockOperationDto;
+import com.bss.stock.dto.TaskReceipt;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.bss.stock.service.ReserveProductStockService;
 import com.bss.stock.service.StockOperationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,8 +50,8 @@ public class StockOperationController {
      * — the task form — which reserves against the shelf as before.
      */
     @PostMapping("/reserveProductStock")
-    public ResponseEntity<?> reserve(@RequestBody Map<String, Object> body) {
-        if (body.containsKey("reserveProductStockItem")) {
+    public ResponseEntity<?> reserve(@RequestBody ObjectNode body) {
+        if (body.has("reserveProductStockItem")) {
             return ResponseEntity.status(HttpStatus.CREATED).body(reserveResource.create(body));
         }
         StockOperationDto request = objectMapper.convertValue(body, StockOperationDto.class);
@@ -61,24 +64,24 @@ public class StockOperationController {
             @RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.keySet().removeAll(List.of("offset", "limit", "fields", "sort"));
-        List<Map<String, Object>> items = reserveResource.findAll(filters);
+        List<ReserveProductStockView> items = reserveResource.findAll(filters);
         return ResponseEntity.ok(fields == null ? items : fieldSelector.select(items, fields));
     }
 
     @GetMapping("/reserveProductStock/{id}")
-    public ResponseEntity<Map<String, Object>> getReserve(@PathVariable("id") String id) {
+    public ResponseEntity<ReserveProductStockView> getReserve(@PathVariable("id") String id) {
         return ResponseEntity.ok(reserveResource.findById(id));
     }
 
     @PostMapping("/releaseProductStock")
-    public ResponseEntity<Map<String, Object>> release(@RequestBody StockOperationDto request) {
+    public ResponseEntity<TaskReceipt> release(@RequestBody StockOperationDto request) {
         int released = service.release(request);
-        return ResponseEntity.ok(Map.of("state", "released", "reservations", released));
+        return ResponseEntity.ok(new TaskReceipt("released", released));
     }
 
     @PostMapping("/consumeProductStock")
-    public ResponseEntity<Map<String, Object>> consume(@RequestBody StockOperationDto request) {
+    public ResponseEntity<TaskReceipt> consume(@RequestBody StockOperationDto request) {
         int consumed = service.consume(request);
-        return ResponseEntity.ok(Map.of("state", "completed", "reservations", consumed));
+        return ResponseEntity.ok(new TaskReceipt("completed", consumed));
     }
 }

@@ -1,6 +1,7 @@
 package com.bss.payment.service;
 
 import com.bss.payment.dto.PaymentDto;
+import com.bss.payment.dto.WebhookReceipt;
 import com.bss.payment.entity.PspConfig;
 import com.bss.payment.security.TenantContext;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,8 +17,6 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * PSP webhooks — the authoritative async confirmation for a redirect/BNPL session
@@ -40,7 +39,7 @@ public class PaymentWebhookService {
         this.payments = payments;
     }
 
-    public Map<String, Object> handle(String provider, String tenantId, byte[] rawBody, String signatureHeader) {
+    public WebhookReceipt handle(String provider, String tenantId, byte[] rawBody, String signatureHeader) {
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
             PspConfig cfg = configs.forTenantAndProvider(tenantId, provider).orElse(null);
             String secret = cfg == null ? null : env(cfg.getWebhookSecretRef());
@@ -55,12 +54,7 @@ public class PaymentWebhookService {
             }
             PaymentDto dto = payments.confirmSession(tenantId, provider, sessionId);
             log.info("psp webhook {} tenant={} session={} -> payment {}", provider, tenantId, sessionId, dto.getId());
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("provider", provider);
-            out.put("sessionId", sessionId);
-            out.put("paymentId", dto.getId());
-            out.put("status", dto.getStatus());
-            return out;
+            return new WebhookReceipt(provider, sessionId, dto.getId(), dto.getStatus());
         }
     }
 

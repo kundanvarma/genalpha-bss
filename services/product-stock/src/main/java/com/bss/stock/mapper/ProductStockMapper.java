@@ -1,5 +1,6 @@
 package com.bss.stock.mapper;
 
+import com.bss.stock.dto.EntityRef;
 import com.bss.stock.dto.ProductStockDto;
 import com.bss.stock.dto.QuantityDto;
 import com.bss.stock.entity.ProductStock;
@@ -28,7 +29,7 @@ public class ProductStockMapper {
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setName(entity.getName());
-        dto.setProductOffering(readJsonObject(entity.getProductOfferingJson()));
+        dto.setProductOffering(readOfferingRef(entity.getProductOfferingJson()));
         String units = entity.getStockedUnits();
         dto.setStockedQuantity(new QuantityDto(entity.getStockedAmount(), units));
         dto.setReservedQuantity(new QuantityDto(reservedActive, units));
@@ -71,11 +72,21 @@ public class ProductStockMapper {
     }
 
     private String offeringIdIn(ProductStockDto dto) {
-        Object id = dto.getProductOffering() == null ? null : dto.getProductOffering().get("id");
-        return id == null ? null : String.valueOf(id);
+        return dto.getProductOffering() == null ? null : dto.getProductOffering().id();
     }
 
-    private String writeJsonObject(Map<String, Object> value) {
+    private EntityRef readOfferingRef(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, EntityRef.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String writeJsonObject(Object value) {
         if (value == null) {
             return null;
         }

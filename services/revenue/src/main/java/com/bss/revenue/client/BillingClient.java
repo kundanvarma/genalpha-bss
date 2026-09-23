@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.Map;
 
 /**
@@ -36,9 +38,10 @@ public class BillingClient {
         this.agreement = RestClient.builder().baseUrl(agreementBase).requestInterceptor(machineToken).build();
     }
 
-    public Map<String, Object> bill(String billId) {
+    /** Billing's own document — a foreign tree, read path by path, never re-shaped. */
+    public JsonNode bill(String billId) {
         return billing.get().uri("/tmf-api/customerBillManagement/v4/customerBill/{id}", billId)
-                .retrieve().body(MAP);
+                .retrieve().body(JsonNode.class);
     }
 
     public List<Map<String, Object>> ratesOf(String billId) {

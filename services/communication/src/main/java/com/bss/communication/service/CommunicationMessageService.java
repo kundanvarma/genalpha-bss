@@ -3,6 +3,14 @@ package com.bss.communication.service;
 import com.bss.communication.api.ApiConstants;
 import com.bss.communication.api.OffsetPageRequest;
 import com.bss.communication.api.PagedResult;
+import com.bss.communication.dto.MessagePatch;
+import com.bss.communication.dto.MessageView;
+import com.bss.communication.dto.NameValue;
+import com.bss.communication.dto.PartyRef;
+import com.bss.communication.dto.RenderedMessage;
+import com.bss.communication.dto.SendOutcome;
+import com.bss.communication.dto.SendRequest;
+import com.bss.communication.dto.SuppressedSend;
 import com.bss.communication.entity.CommunicationMessage;
 import com.bss.communication.events.DomainEventPublisher;
 import com.bss.communication.exception.BadRequestException;
@@ -18,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -99,13 +106,13 @@ public class CommunicationMessageService {
         repository.save(entity);
         // minted notifications are customer touchpoints too — downstream
         // (the TMF683 timeline) hears about EVERY message, not only ad-hoc
-        events.publish("CommunicationMessageCreateEvent", "communicationMessage", toMap(entity));
+        events.publish("CommunicationMessageCreateEvent", "communicationMessage", toView(entity));
         esp.forward(tenantId, id, n.partyId(), n.subject(), n.content(),
                 n.attachmentName(), n.attachmentBase64());
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<MessageView> findAll(int offset, int limit, Map<String, String> filters) {
         CommunicationMessage probe = new CommunicationMessage();
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
@@ -119,41 +126,41 @@ public class CommunicationMessageService {
         partyScope.scopedPartyId().ifPresent(probe::setReceiverPartyId);
         Page<CommunicationMessage> page = repository.findAll(Example.of(probe),
                 new OffsetPageRequest(offset, limit, Sort.by(Sort.Direction.DESC, "createdAt")));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::toView).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public MessageView findById(String id) {
         CommunicationMessage entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
-        return toMap(entity);
+        return toView(entity);
     }
 
     /** Ad-hoc send — the martech door. Customers receive, they do not send. */
     @Transactional
-    public Map<String, Object> send(Map<String, Object> dto) {
+    public SendOutcome send(SendRequest dto) {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("customers receive messages; sending is back-office");
         }
         // A PROSPECT reach: a not-yet-customer addressed by raw email (no party).
         // Consent is enforced upstream (the prospect audience only yields
         // consented contacts); the suppression list still applies at the ESP.
-        String toEmail = dto.get("toEmail") == null ? null : String.valueOf(dto.get("toEmail")).trim();
-        if (toEmail != null && !toEmail.isBlank() && receiverIn(dto) == null) {
+        String toEmail = dto.toEmail() == null ? null : dto.toEmail().trim();
+        if (toEmail != null && !toEmail.isBlank() && dto.receiver() == null) {
             return sendToProspect(toEmail, dto);
         }
-        String target = receiverIn(dto);
+        String target = dto.receiver();
         if (target == null) {
             throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
         }
         String tenantId = tenantScope.currentTenantId();
-        boolean templated = dto.get("templateRef") != null;
+        boolean templated = dto.templateRef() != null;
         // B2B: an Organization account fans out to its member Individuals — the
         // humans who read mail — so "notify the account" reaches a person. A B2C
         // individual is simply its own single recipient (unchanged behaviour).
         List<String> recipients = parties.recipientsOf(tenantId, target);
-        Map<String, Object> firstCreated = null;
+        MessageView firstCreated = null;
         int capped = 0;
         int optedOut = 0;
         for (String receiver : recipients) {
@@ -178,10 +185,10 @@ public class CommunicationMessageService {
             }
             // Personalize per recipient: the contact's own name, plus the org
             // tokens ({{organization.name}}) resolved from the company they're on.
-            Map<String, Object> rendered = templated
+            RenderedMessage rendered = templated
                     ? templates.materialize(receiver, dto)
                     : templates.renderInline(receiver, dto);
-            if (rendered.get("subject") == null) {
+            if (rendered.subject() == null) {
                 throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
             }
             CommunicationMessage entity = new CommunicationMessage();
@@ -189,14 +196,14 @@ public class CommunicationMessageService {
             entity.setId(id);
             entity.setTenantId(tenantId);
             entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
-            entity.setSubject(String.valueOf(rendered.get("subject")));
+            entity.setSubject(rendered.subject());
             // Unsubscribe in every MARKETING message (the law + the honest
             // thing) — but a transactional send (declared by the caller)
             // must arrive verbatim, and the link is email/in-app shaped, so
             // sms/push never carry it (an OTP is byte-exact).
-            String body = rendered.get("content") == null ? "" : String.valueOf(rendered.get("content"));
-            String messageType = rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType"));
-            boolean marketingFooter = !transactional(dto)
+            String body = rendered.content() == null ? "" : rendered.content();
+            String messageType = rendered.messageType() == null ? "inApp" : rendered.messageType();
+            boolean marketingFooter = !dto.transactional()
                     && !"sms".equals(messageType) && !"push".equals(messageType);
             entity.setContent(marketingFooter
                     ? body + "\n\n—\nToo many emails? Unsubscribe: " + unsub.linkFor(receiver)
@@ -204,10 +211,10 @@ public class CommunicationMessageService {
             entity.setMessageType(messageType);
             entity.setStatus(CommunicationMessage.SENT);
             entity.setReceiverPartyId(receiver);
-            entity.setSource(dto.get("source") == null ? null : String.valueOf(dto.get("source")));
+            entity.setSource(dto.source());
             entity.setCreatedAt(OffsetDateTime.now());
             entity.setLastUpdate(OffsetDateTime.now());
-            Map<String, Object> created = toMap(repository.save(entity));
+            MessageView created = toView(repository.save(entity));
             events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
             // THE SANDBOX WALL: a shadow-operator clone runs the real engines
             // but may never touch the outside world — the message stays in the
@@ -215,7 +222,7 @@ public class CommunicationMessageService {
             com.bss.communication.security.TenantRegistry.TenantEntry te = registry.byId(entity.getTenantId());
             if (te != null && te.isSandbox()) {
                 entity.setDeliveryStatus("sandbox-suppressed");
-                return toMap(repository.save(entity));
+                return toView(repository.save(entity));
             }
             // route to the channel's delivery seam (email/sms/push); inApp is the inbox
             channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
@@ -223,21 +230,17 @@ public class CommunicationMessageService {
             if (firstCreated == null) firstCreated = created;
         }
         if (firstCreated == null && (capped > 0 || optedOut > 0)) {
-            return Map.of("status", optedOut > 0 && capped == 0 ? "suppressed" : "capped",
-                    "capped", capped, "optedOut", optedOut,
-                    "reason", optedOut > 0 && capped == 0
-                            ? "every recipient has opted out of marketing"
-                            : "frequency cap reached for all recipients in the window");
+            return SuppressedSend.of(capped, optedOut);
         }
         return firstCreated;
     }
 
     /** Reach a prospect by email — the not-yet-customer path. Email only (no
      * inbox/account); brand + event tokens still render. */
-    private Map<String, Object> sendToProspect(String email, Map<String, Object> dto) {
+    private MessageView sendToProspect(String email, SendRequest dto) {
         String tenantId = tenantScope.currentTenantId();
-        Map<String, Object> rendered = templates.renderInline(null, dto);
-        if (rendered.get("subject") == null) {
+        RenderedMessage rendered = templates.renderInline(null, dto);
+        if (rendered.subject() == null) {
             throw new BadRequestException("subject and toEmail are required for a prospect reach");
         }
         CommunicationMessage entity = new CommunicationMessage();
@@ -245,8 +248,8 @@ public class CommunicationMessageService {
         entity.setId(id);
         entity.setTenantId(tenantId);
         entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
-        entity.setSubject(String.valueOf(rendered.get("subject")));
-        entity.setContent(rendered.get("content") == null ? null : String.valueOf(rendered.get("content")));
+        entity.setSubject(rendered.subject());
+        entity.setContent(rendered.content());
         entity.setMessageType("email");
         entity.setStatus(CommunicationMessage.SENT);
         entity.setReceiverPartyId("prospect:" + email);
@@ -258,7 +261,7 @@ public class CommunicationMessageService {
         if (te != null && te.isSandbox()) {
             entity.setDeliveryStatus("sandbox-suppressed");
         }
-        Map<String, Object> created = toMap(repository.save(entity));
+        MessageView created = toView(repository.save(entity));
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
         if (te == null || !te.isSandbox()) {
             esp.forwardToEmail(tenantId, id, email, entity.getSubject(), entity.getContent());
@@ -268,39 +271,16 @@ public class CommunicationMessageService {
 
     /** The one legal change: the receiver marking their message read. */
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public MessageView patch(String id, MessagePatch patch) {
         CommunicationMessage entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
-        if (!CommunicationMessage.READ.equals(patch.get("status"))) {
+        if (!CommunicationMessage.READ.equals(patch.status())) {
             throw new BadRequestException("the only supported change is status: 'read'");
         }
         entity.setStatus(CommunicationMessage.READ);
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(entity));
-    }
-
-    /** TMF681 characteristic {name:"category", value:"transactional"} — the
-     * caller's declaration that this send is service mail, not marketing. */
-    private boolean transactional(Map<String, Object> dto) {
-        if (!(dto.get("characteristic") instanceof List<?> chars)) return false;
-        for (Object c : chars) {
-            if (c instanceof Map<?, ?> m && "category".equals(String.valueOf(m.get("name")))
-                    && "transactional".equalsIgnoreCase(String.valueOf(m.get("value")))) return true;
-        }
-        return false;
-    }
-
-    private String receiverIn(Map<String, Object> dto) {
-        if (dto.get("relatedParty") instanceof List<?> parties) {
-            for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))
-                        && ref.get("id") != null) {
-                    return String.valueOf(ref.get("id"));
-                }
-            }
-        }
-        return null;
+        return toView(repository.save(entity));
     }
 
     private void requireOwn(CommunicationMessage entity) {
@@ -311,29 +291,12 @@ public class CommunicationMessageService {
         });
     }
 
-    private Map<String, Object> toMap(CommunicationMessage entity) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        map.put("subject", entity.getSubject());
-        map.put("content", entity.getContent());
-        map.put("messageType", entity.getMessageType());
-        map.put("status", entity.getStatus());
-        if (entity.getSource() != null) {
-            map.put("source", entity.getSource());
-        }
-        if (entity.getDeliveryStatus() != null) {
-            map.put("deliveryStatus", entity.getDeliveryStatus());
-        }
-        map.put("relatedParty", List.of(Map.of(
-                "id", entity.getReceiverPartyId(), "role", "customer", "@referredType", "Individual")));
-        if (entity.getSourceEventType() != null) {
-            map.put("characteristic", List.of(Map.of(
-                    "name", "sourceEventType", "value", entity.getSourceEventType())));
-        }
-        map.put("sendTime", entity.getCreatedAt());
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "CommunicationMessage");
-        return map;
+    private MessageView toView(CommunicationMessage entity) {
+        return new MessageView(entity.getId(), entity.getHref(), entity.getSubject(), entity.getContent(),
+                entity.getMessageType(), entity.getStatus(), entity.getSource(), entity.getDeliveryStatus(),
+                List.of(PartyRef.customer(entity.getReceiverPartyId())),
+                entity.getSourceEventType() == null ? null
+                        : List.of(new NameValue("sourceEventType", entity.getSourceEventType())),
+                entity.getCreatedAt(), entity.getLastUpdate(), "CommunicationMessage");
     }
 }

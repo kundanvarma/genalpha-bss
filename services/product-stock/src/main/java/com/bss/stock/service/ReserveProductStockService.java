@@ -1,11 +1,14 @@
 package com.bss.stock.service;
 
 import com.bss.stock.api.ApiConstants;
+import com.bss.stock.dto.ReserveProductStockView;
 import com.bss.stock.entity.ReserveProductStock;
 import com.bss.stock.exception.NotFoundException;
 import com.bss.stock.repository.ReserveProductStockRepository;
 import com.bss.stock.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,66 +34,59 @@ public class ReserveProductStockService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> body) {
+    public ReserveProductStockView create(ObjectNode body) {
         ReserveProductStock entity = new ReserveProductStock();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/reserveProductStock/" + id);
         entity.setTenantId(tenantScope.currentTenantId());
-        entity.setState(body.get("state") == null ? "reserved" : String.valueOf(body.get("state")));
-        entity.setPayloadJson(writeJson(body));
+        entity.setState(body.hasNonNull("state") ? body.get("state").asText() : "reserved");
+        entity.setPayloadJson(body.toString());
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(repository.save(entity));
+        return toView(repository.save(entity));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(Map<String, String> filters) {
+    public List<ReserveProductStockView> findAll(Map<String, String> filters) {
         return repository.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(r -> filters.get("id") == null || filters.get("id").equals(r.getId()))
                 .filter(r -> filters.get("href") == null || filters.get("href").equals(r.getHref()))
                 .filter(r -> filters.get("state") == null || filters.get("state").equals(r.getState()))
-                .map(this::toMap).toList();
+                .map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public ReserveProductStockView findById(String id) {
+        return toView(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id)));
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> toMap(ReserveProductStock e) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        Object stored = readJson(e.getPayloadJson());
-        if (stored instanceof Map<?, ?> m) {
-            map.putAll((Map<String, Object>) m);
-        }
-        map.put("id", e.getId());
-        map.put("href", e.getHref());
-        // TMF687 mandatory: reserveProductStockItem (from payload) + reserveProductStockState.
-        map.put("reserveProductStockState", e.getState());
-        map.putIfAbsent("reserveProductStockItem", List.of());
-        map.put("@type", "ReserveProductStock");
-        return map;
+    private ReserveProductStockView toView(ReserveProductStock e) {
+        ObjectNode stored = storedBody(e.getPayloadJson());
+        // TMF687 mandatory: reserveProductStockItem (from the payload) + reserveProductStockState.
+        JsonNode items = stored.has("reserveProductStockItem")
+                ? stored.get("reserveProductStockItem") : mapper.createArrayNode();
+        Map<String, JsonNode> rest = new LinkedHashMap<>();
+        stored.fields().forEachRemaining(f -> {
+            if (!ReserveProductStockView.DECLARED.contains(f.getKey())) {
+                rest.put(f.getKey(), f.getValue());
+            }
+        });
+        return new ReserveProductStockView(e.getId(), e.getHref(), e.getState(), items,
+                "ReserveProductStock", rest);
     }
 
-    private String writeJson(Object o) {
-        try {
-            return mapper.writeValueAsString(o);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private Object readJson(String s) {
-        if (s == null || s.isBlank()) {
-            return Map.of();
+    /** The document the poster wrote, exactly as it was stored. */
+    private ObjectNode storedBody(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return mapper.createObjectNode();
         }
         try {
-            return mapper.readValue(s, Object.class);
-        } catch (Exception e) {
-            return Map.of();
+            JsonNode node = mapper.readTree(stored);
+            return node instanceof ObjectNode o ? o : mapper.createObjectNode();
+        } catch (Exception ex) {
+            return mapper.createObjectNode();
         }
     }
 }

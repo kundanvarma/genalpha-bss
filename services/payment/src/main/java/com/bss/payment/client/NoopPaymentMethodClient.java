@@ -1,9 +1,9 @@
 package com.bss.payment.client;
 
+import com.bss.payment.dto.VaultMethodRequest;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
-
-import java.util.Map;
 
 /** Deployments without the vault: saved methods simply do not resolve. */
 @Component
@@ -11,12 +11,12 @@ import java.util.Map;
 public class NoopPaymentMethodClient implements PaymentMethodClient {
 
     @Override
-    public Map<String, Object> resolve(String paymentMethodId) {
+    public JsonNode resolve(String paymentMethodId) {
         return null;
     }
 
     @Override
-    public Map<String, Object> save(Map<String, Object> dto) {
+    public JsonNode save(VaultMethodRequest request) {
         throw new IllegalStateException("no payment-method vault in this deployment");
     }
 }

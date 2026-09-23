@@ -1,6 +1,9 @@
 package com.bss.communication.controller;
 
 import com.bss.communication.api.ApiConstants;
+import com.bss.communication.dto.RenderPreviewRequest;
+import com.bss.communication.dto.TemplateRequest;
+import com.bss.communication.dto.TemplateView;
 import com.bss.communication.service.MessageTemplateService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,34 +30,31 @@ public class MessageTemplateController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<TemplateView> create(@RequestBody TemplateRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<TemplateView>> list() {
         return ResponseEntity.ok(service.list());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String id) {
+    public ResponseEntity<TemplateView> get(@PathVariable String id) {
         return ResponseEntity.ok(service.get(id));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
-            @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<TemplateView> patch(@PathVariable String id,
+            @RequestBody TemplateRequest patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 
     /** Preview the copy this template renders for a locale + context. */
     @PostMapping("/{id}/render")
-    @SuppressWarnings("unchecked")
     public ResponseEntity<Map<String, String>> render(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        String locale = body.get("locale") == null ? null : String.valueOf(body.get("locale"));
-        Map<String, Object> context = body.get("context") instanceof Map<?, ?> m
-                ? (Map<String, Object>) m : Map.of();
-        return ResponseEntity.ok(service.renderPreview(id, locale, context));
+            @RequestBody RenderPreviewRequest body) {
+        return ResponseEntity.ok(service.renderPreview(id, body.locale(),
+                body.context() == null ? Map.of() : body.context()));
     }
 }

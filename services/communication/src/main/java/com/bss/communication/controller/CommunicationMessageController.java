@@ -2,6 +2,10 @@ package com.bss.communication.controller;
 
 import com.bss.communication.api.ApiConstants;
 import com.bss.communication.api.PagedResult;
+import com.bss.communication.dto.MessagePatch;
+import com.bss.communication.dto.MessageView;
+import com.bss.communication.dto.SendOutcome;
+import com.bss.communication.dto.SendRequest;
 import com.bss.communication.service.CommunicationMessageService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -33,14 +37,14 @@ public class CommunicationMessageController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<MessageView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
+        PagedResult<MessageView> result = service.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -48,19 +52,25 @@ public class CommunicationMessageController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<MessageView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> send(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.send(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<SendOutcome> send(@RequestBody SendRequest dto) {
+        SendOutcome created = service.send(dto);
+        // a suppressed send has no href; the map path minted the literal "null"
+        // for the Location header and the contract has always been that 201
+        return ResponseEntity.created(URI.create(hrefOf(created))).body(created);
+    }
+
+    private static String hrefOf(SendOutcome outcome) {
+        return outcome instanceof MessageView view && view.href() != null ? view.href() : "null";
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                     @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<MessageView> patch(@PathVariable("id") String id,
+                                                     @RequestBody MessagePatch patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 }

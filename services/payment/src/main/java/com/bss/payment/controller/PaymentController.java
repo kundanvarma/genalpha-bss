@@ -3,7 +3,16 @@ package com.bss.payment.controller;
 import com.bss.payment.api.ApiConstants;
 import com.bss.payment.api.FieldSelector;
 import com.bss.payment.api.PagedResult;
+import com.bss.payment.dto.ConfirmRequest;
+import com.bss.payment.dto.ExternalPaymentRequest;
 import com.bss.payment.dto.PaymentDto;
+import com.bss.payment.dto.PaymentMethodOption;
+import com.bss.payment.dto.PaymentSession;
+import com.bss.payment.dto.RefundReceipt;
+import com.bss.payment.dto.RefundRequest;
+import com.bss.payment.dto.SessionRequest;
+import com.bss.payment.dto.VaultRecurringRequest;
+import com.bss.payment.dto.VaultedRecurringMethod;
 import com.bss.payment.service.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -59,28 +68,27 @@ public class PaymentController {
     /** Money that arrived AT THE BANK (giro/credit transfer) — recorded by
      * remittance ingestion, machine-to-machine. */
     @PostMapping("/external")
-    public ResponseEntity<PaymentDto> recordExternal(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PaymentDto> recordExternal(@RequestBody ExternalPaymentRequest dto) {
         PaymentDto created = service.recordExternal(dto);
         return ResponseEntity.created(URI.create(created.getHref())).body(created);
     }
 
     /** The payment methods this tenant offers (card + redirect/BNPL) — the checkout picker. */
     @GetMapping("/methods")
-    public ResponseEntity<List<Map<String, Object>>> methods() {
+    public ResponseEntity<List<PaymentMethodOption>> methods() {
         return ResponseEntity.ok(service.methods());
     }
 
     /** Open a redirect/BNPL session (Klarna): returns where to send the customer. */
     @PostMapping("/session")
-    public ResponseEntity<Map<String, Object>> session(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PaymentSession> session(@RequestBody SessionRequest dto) {
         return ResponseEntity.ok(service.createSession(dto));
     }
 
     /** The return leg: confirm a session and get the authorized payment (idempotent). */
     @PostMapping("/confirm")
-    public ResponseEntity<PaymentDto> confirm(@RequestBody Map<String, Object> dto) {
-        return ResponseEntity.ok(service.confirm(
-                String.valueOf(dto.get("provider")), String.valueOf(dto.get("sessionId"))));
+    public ResponseEntity<PaymentDto> confirm(@RequestBody ConfirmRequest dto) {
+        return ResponseEntity.ok(service.confirm(dto.provider(), dto.sessionId()));
     }
 
     @GetMapping("/{id}")
@@ -91,8 +99,8 @@ public class PaymentController {
     /** §7a — "sign up for Klarna": tokenize an approved session and vault the
      * recurring token as a TMF670 bnplToken method (the customer's, list-safe). */
     @PostMapping("/vaultRecurring")
-    public ResponseEntity<java.util.Map<String, Object>> vaultRecurring(
-            @RequestBody java.util.Map<String, Object> dto) {
+    public ResponseEntity<VaultedRecurringMethod> vaultRecurring(
+            @RequestBody VaultRecurringRequest dto) {
         return ResponseEntity.ok(service.vaultRecurring(dto));
     }
 
@@ -112,9 +120,9 @@ public class PaymentController {
 
     /** Money BACK, partial or full — the PSP confirms before the record moves. */
     @PostMapping("/{id}/refund")
-    public ResponseEntity<java.util.Map<String, Object>> refund(
+    public ResponseEntity<RefundReceipt> refund(
             @PathVariable("id") String id,
-            @RequestBody(required = false) java.util.Map<String, Object> dto) {
-        return ResponseEntity.ok(service.refund(id, dto == null ? java.util.Map.of() : dto));
+            @RequestBody(required = false) RefundRequest dto) {
+        return ResponseEntity.ok(service.refund(id, dto == null ? RefundRequest.EMPTY : dto));
     }
 }

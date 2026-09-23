@@ -3,12 +3,12 @@ package com.bss.stock.service;
 import com.bss.stock.api.ApiConstants;
 import com.bss.stock.api.OffsetPageRequest;
 import com.bss.stock.api.PagedResult;
-import com.bss.stock.dto.ProductStockDto;
+import com.bss.stock.dto.ProductStockView;
+import com.bss.stock.dto.Quantity;
 import com.bss.stock.entity.ProductStock;
 import com.bss.stock.events.DomainEventPublisher;
 import com.bss.stock.exception.BadRequestException;
 import com.bss.stock.exception.NotFoundException;
-import com.bss.stock.mapper.ProductStockMapper;
 import com.bss.stock.repository.ProductStockRepository;
 import com.bss.stock.repository.StockReservationRepository;
 import com.bss.stock.security.TenantScope;
@@ -17,7 +17,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,15 +32,13 @@ public class ProductStockService {
 
     private final ProductStockRepository repository;
     private final StockReservationRepository reservations;
-    private final ProductStockMapper mapper;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
     public ProductStockService(ProductStockRepository repository, StockReservationRepository reservations,
-            ProductStockMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.reservations = reservations;
-        this.mapper = mapper;
         this.events = events;
         this.tenantScope = tenantScope;
     }
@@ -48,39 +50,39 @@ public class ProductStockService {
      * Echo the posted body (so spec fields round-trip) overlaid with the
      * server-managed id/href and the live stocked/reserved/available quantities.
      */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> toMap(ProductStock entity) {
-        Map<String, Object> map = new java.util.LinkedHashMap<>();
-        Object stored = readJson(entity.getPayloadJson());
-        if (stored instanceof Map<?, ?> m) {
-            map.putAll((Map<String, Object>) m);
-        }
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        if (entity.getName() != null) {
-            map.put("name", entity.getName());
-        }
+    private ProductStockView toView(ProductStock entity) {
+        ObjectNode stored = storedBody(entity.getPayloadJson());
         int active = reservations.activeQuantityFor(entity.getId(), tenantScope.currentTenantId());
         int stocked = entity.getStockedAmount() == null ? 0 : entity.getStockedAmount();
         String units = entity.getStockedUnits() == null ? "unit" : entity.getStockedUnits();
-        map.put("stockedQuantity", Map.of("amount", stocked, "units", units));
-        map.put("reservedQuantity", Map.of("amount", active, "units", units));
-        map.put("availableQuantity", Map.of("amount", stocked - active, "units", units));
-        // TMF687 mandatory attributes — always present, even for app-created rows.
-        map.putIfAbsent("productStockLevel", Map.of("amount", stocked));
-        map.putIfAbsent("productStockStatusType", "available");
-        map.putIfAbsent("stockedProduct", entity.getProductOfferingId() == null
-                ? Map.of() : Map.of("id", entity.getProductOfferingId()));
-        map.put("lastUpdate", entity.getLastUpdate());
-        map.put("@type", "ProductStock");
-        return map;
+        // TMF687 mandatory attributes — always present, even for app-created rows,
+        // but a posted value wins over the computed default, exactly as before.
+        JsonNode level = stored.has("productStockLevel") ? stored.get("productStockLevel")
+                : json.createObjectNode().put("amount", stocked);
+        JsonNode status = stored.has("productStockStatusType") ? stored.get("productStockStatusType")
+                : json.getNodeFactory().textNode("available");
+        JsonNode product = stored.has("stockedProduct") ? stored.get("stockedProduct")
+                : entity.getProductOfferingId() == null ? json.createObjectNode()
+                        : json.createObjectNode().put("id", entity.getProductOfferingId());
+        String name = entity.getName() != null ? entity.getName()
+                : stored.hasNonNull("name") ? stored.get("name").asText() : null;
+        Map<String, JsonNode> rest = new LinkedHashMap<>();
+        stored.fields().forEachRemaining(f -> {
+            if (!ProductStockView.DECLARED.contains(f.getKey())) {
+                rest.put(f.getKey(), f.getValue());
+            }
+        });
+        return new ProductStockView(entity.getId(), entity.getHref(), name,
+                new Quantity(stocked, units), new Quantity(active, units),
+                new Quantity(stocked - active, units),
+                level, status, product, entity.getLastUpdate(), "ProductStock", rest);
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
+    public PagedResult<ProductStockView> findAll(int offset, int limit, Map<String, String> filters) {
         Page<ProductStock> page = repository.findAll(Example.of(probeFor(filters)),
                 new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(this::toView).toList(), page.getTotalElements());
     }
 
     private ProductStock probeFor(Map<String, String> filters) {
@@ -101,52 +103,48 @@ public class ProductStockService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public ProductStockView findById(String id) {
         ProductStock entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        return toMap(entity);
+        return toView(entity);
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public ProductStockView create(ObjectNode dto) {
         ProductStock entity = new ProductStock();
         entity.setTenantId(tenantScope.currentTenantId());
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productStock/" + id);
-        entity.setName(dto.get("name") == null ? null : String.valueOf(dto.get("name")));
+        entity.setName(dto.hasNonNull("name") ? dto.get("name").asText() : null);
         entity.setStockedAmount(amountIn(dto));
         entity.setStockedUnits(unitsIn(dto));
-        if (dto.get("productOffering") instanceof Map<?, ?> po && po.get("id") != null) {
-            entity.setProductOfferingId(String.valueOf(po.get("id")));
+        if (dto.path("productOffering").hasNonNull("id")) {
+            entity.setProductOfferingId(dto.path("productOffering").get("id").asText());
         }
-        entity.setPayloadJson(writeJson(dto));
+        entity.setPayloadJson(dto.toString());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
+        ProductStockView created = toView(repository.save(entity));
         events.publish("ProductStockCreateEvent", "productStock", created);
         return created;
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public ProductStockView patch(String id, ObjectNode patch) {
         ProductStock entity = repository.findForUpdateById(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        if (patch.get("name") != null) {
-            entity.setName(String.valueOf(patch.get("name")));
+        if (patch.hasNonNull("name")) {
+            entity.setName(patch.get("name").asText());
         }
-        if (patch.containsKey("productStockLevel") || patch.containsKey("stockedQuantity")) {
+        if (patch.has("productStockLevel") || patch.has("stockedQuantity")) {
             entity.setStockedAmount(amountIn(patch));
         }
         // merge posted fields into the stored body so they round-trip
-        Object stored = readJson(entity.getPayloadJson());
-        Map<String, Object> merged = new java.util.LinkedHashMap<>();
-        if (stored instanceof Map<?, ?> m) {
-            merged.putAll(castMap(m));
-        }
-        merged.putAll(patch);
-        entity.setPayloadJson(writeJson(merged));
+        ObjectNode merged = storedBody(entity.getPayloadJson());
+        merged.setAll(patch);
+        entity.setPayloadJson(merged.toString());
         entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> updated = toMap(repository.save(entity));
+        ProductStockView updated = toView(repository.save(entity));
         events.publish("ProductStockAttributeValueChangeEvent", "productStock", updated);
         return updated;
     }
@@ -155,51 +153,40 @@ public class ProductStockService {
     public void delete(String id) {
         ProductStock entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        Map<String, Object> deleted = toMap(entity);
+        ProductStockView deleted = toView(entity);
         repository.delete(entity);
         events.publish("ProductStockDeleteEvent", "productStock", deleted);
     }
 
     /** Amount from productStockLevel.amount (spec) or stockedQuantity.amount (app), default 0. */
-    private static int amountIn(Map<String, Object> dto) {
+    private static int amountIn(JsonNode dto) {
         for (String key : new String[] {"productStockLevel", "stockedQuantity"}) {
-            if (dto.get(key) instanceof Map<?, ?> q && q.get("amount") instanceof Number n) {
-                return n.intValue();
+            if (dto.path(key).path("amount").isNumber()) {
+                return dto.path(key).path("amount").intValue();
             }
         }
         return 0;
     }
 
-    private static String unitsIn(Map<String, Object> dto) {
+    private static String unitsIn(JsonNode dto) {
         for (String key : new String[] {"stockedQuantity", "productStockLevel"}) {
-            if (dto.get(key) instanceof Map<?, ?> q && q.get("units") != null) {
-                return String.valueOf(q.get("units"));
+            if (dto.path(key).hasNonNull("units")) {
+                return dto.path(key).get("units").asText();
             }
         }
         return "unit";
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> m) {
-        return (Map<String, Object>) m;
-    }
-
-    private String writeJson(Object o) {
-        try {
-            return json.writeValueAsString(o);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private Object readJson(String s) {
-        if (s == null || s.isBlank()) {
-            return Map.of();
+    /** The document the poster wrote, exactly as it was stored. */
+    private ObjectNode storedBody(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return json.createObjectNode();
         }
         try {
-            return json.readValue(s, Object.class);
+            JsonNode node = json.readTree(stored);
+            return node instanceof ObjectNode o ? o : json.createObjectNode();
         } catch (Exception e) {
-            return Map.of();
+            return json.createObjectNode();
         }
     }
 }

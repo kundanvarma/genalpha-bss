@@ -3,8 +3,22 @@ package com.bss.payment.service;
 import com.bss.payment.api.ApiConstants;
 import com.bss.payment.api.OffsetPageRequest;
 import com.bss.payment.api.PagedResult;
+import com.bss.payment.dto.ExternalPaymentRequest;
 import com.bss.payment.dto.MoneyDto;
 import com.bss.payment.dto.PaymentDto;
+import com.bss.payment.dto.PaymentMethodOption;
+import com.bss.payment.dto.PaymentMethodRef;
+import com.bss.payment.dto.PaymentSession;
+import com.bss.payment.dto.RefundReceipt;
+import com.bss.payment.dto.RefundRequest;
+import com.bss.payment.dto.RelatedPartyRef;
+import com.bss.payment.dto.SessionRequest;
+import com.bss.payment.dto.VaultMethodRequest;
+import com.bss.payment.dto.VaultRecurringRequest;
+import com.bss.payment.dto.VaultedRecurringMethod;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bss.payment.entity.Payment;
 import com.bss.payment.events.DomainEventPublisher;
 import com.bss.payment.client.PaymentMethodClient;
@@ -38,6 +52,10 @@ public class PaymentService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PaymentService.class);
 
     private static final String RESOURCE = "Payment";
+
+    private static final TypeReference<Map<String, Object>> OPEN_MAP = new TypeReference<>() { };
+
+    private final ObjectMapper json = new ObjectMapper();
 
     /** The only legal moves: an authorization is either taken or given back. */
     private static final Map<String, Set<String>> TRANSITIONS = Map.of(
@@ -112,24 +130,29 @@ public class PaymentService {
             throw new BadRequestException("amount must be positive");
         }
         String currency = dto.getAmount().getUnit() == null ? "EUR" : dto.getAmount().getUnit();
-        Map<String, Object> method = dto.getPaymentMethod();
+        PaymentMethodRef posted = dto.getPaymentMethod();
+        // The open edge stops here: the PSP seam is handed the method as the
+        // open map a vendor adapter reads, nothing behind it touches raw JSON.
+        Map<String, Object> method = flatten(posted);
         // TMF670 seam: a saved method arrives as a reference, never as card
         // data. Resolve it in the vault (machine call), prove it belongs to
         // the payer, and pay with the vault token.
         String savedType = null;
-        if (method != null && method.get("id") != null && method.get("cardNumber") == null) {
-            Map<String, Object> saved = paymentMethods.resolve(String.valueOf(method.get("id")));
-            if (saved == null) {
+        if (posted != null && posted.id() != null && posted.extensions().get("cardNumber") == null) {
+            JsonNode saved = paymentMethods.resolve(posted.id());
+            if (saved == null || saved.isNull() || saved.isMissingNode()) {
                 throw new BadRequestException("saved payment method not found");
             }
-            Object methodOwner = ((java.util.List<Map<String, Object>>) saved.getOrDefault(
-                    "relatedParty", java.util.List.of())).stream().map(p -> p.get("id")).findFirst().orElse(null);
+            JsonNode parties = saved.path("relatedParty");
+            String methodOwner = parties.isArray() && !parties.isEmpty()
+                    ? parties.get(0).path("id").asText(null) : null;
             String payer = partyScope.scopedPartyId().orElse(null);
             if (payer != null && !payer.equals(methodOwner)) {
                 throw new BadRequestException("saved payment method not found");
             }
-            savedType = String.valueOf(saved.get("@type"));
-            method = (Map<String, Object>) saved.get("details");
+            savedType = saved.path("@type").asText(null);
+            JsonNode details = saved.path("details");
+            method = details.isObject() ? json.convertValue(details, OPEN_MAP) : null;
         }
         // §7a — a vaulted BNPL token pays the bill MERCHANT-INITIATED through
         // the provider that minted it (Klarna's recurring contract), never the
@@ -197,8 +220,8 @@ public class PaymentService {
         entity.setStatus(Payment.AUTHORIZED);
         entity.setAmountValue(dto.getAmount().getValue());
         entity.setAmountUnit(currency);
-        entity.setMethodType(dto.getPaymentMethod() == null ? null
-                : String.valueOf(dto.getPaymentMethod().getOrDefault("@type", "bankCard")));
+        entity.setMethodType(posted == null ? null
+                : posted.type() == null ? "bankCard" : posted.type());
         entity.setMethodLabel(auth.methodLabel());
         entity.setAuthorizationCode(auth.authorizationCode());
         entity.setPspProvider(psp.provider());
@@ -215,13 +238,10 @@ public class PaymentService {
 
     /** The payment methods the current tenant offers (card + any redirect methods). */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> methods() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<PaymentMethodOption> methods() {
+        List<PaymentMethodOption> out = new ArrayList<>();
         for (String m : pspConfigs.methodsForCurrentTenant()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("method", m);
-            row.put("redirect", !"card".equals(m));
-            out.add(row);
+            out.add(new PaymentMethodOption(m, !"card".equals(m)));
         }
         return out;
     }
@@ -245,20 +265,20 @@ public class PaymentService {
         }
     }
 
-    public Map<String, Object> createSession(Map<String, Object> dto) {
+    public PaymentSession createSession(SessionRequest request) {
         requireNotSandbox();
-        String method = String.valueOf(dto.get("method"));
+        String method = request.method();
         String tenant = tenantScope.currentTenantId();
         PspConfig primary = pspConfigs.providerForMethod(tenant, method)
                 .orElseThrow(() -> new BadRequestException("no provider configured for method '" + method + "'"));
         if (redirectRegistry.get(primary.getProvider()) == null) {
             throw new BadRequestException("no redirect adapter for '" + primary.getProvider() + "'");
         }
-        BigDecimal amount = dto.get("amount") instanceof Map<?, ?> a && a.get("value") != null
-                ? new BigDecimal(String.valueOf(a.get("value"))) : BigDecimal.ZERO;
-        String currency = dto.get("amount") instanceof Map<?, ?> a2 && a2.get("unit") != null
-                ? String.valueOf(a2.get("unit")) : "EUR";
-        String returnUrl = String.valueOf(dto.getOrDefault("returnUrl", ""));
+        BigDecimal amount = request.amount() != null && request.amount().getValue() != null
+                ? request.amount().getValue() : BigDecimal.ZERO;
+        String currency = request.amount() != null && request.amount().getUnit() != null
+                ? request.amount().getUnit() : "EUR";
+        String returnUrl = request.returnUrl() == null ? "" : request.returnUrl();
 
         // primary first, then every other configured redirect provider as backup
         List<PspConfig> candidates = new ArrayList<>();
@@ -275,16 +295,13 @@ public class PaymentService {
             try {
                 com.bss.payment.psp.RedirectPspAdapter.Session session = redirectRegistry.get(cfg.getProvider())
                         .createSession(cfg, amount, currency, returnUrl);
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("sessionId", session.sessionId());
-                out.put("redirectUrl", session.redirectUrl());
-                out.put("provider", cfg.getProvider());
+                PaymentSession out = PaymentSession.served(
+                        session.sessionId(), session.redirectUrl(), cfg.getProvider());
                 if (i > 0) {
-                    out.put("failedOverFrom", primary.getProvider());
                     log.warn("payment session for method '{}' failed over from {} to {}",
                             method, primary.getProvider(), cfg.getProvider());
+                    return out.failedOverFrom(primary.getProvider());
                 }
-                out.put("@type", "PaymentSession");
                 return out;
             } catch (RuntimeException e) {
                 last = e;
@@ -303,6 +320,13 @@ public class PaymentService {
      */
     @Transactional
     public PaymentDto confirmSession(String tenant, String provider, String sessionId) {
+        // A missing session id must never be looked up: session_ref IS NULL on
+        // every card payment, so a blank confirm would answer with somebody
+        // else's payment. The map path minted the literal "null" and refused by
+        // accident; this is the 400 the endpoint always meant.
+        if (provider == null || provider.isBlank() || sessionId == null || sessionId.isBlank()) {
+            throw new BadRequestException("provider and sessionId are required");
+        }
         var existing = repository.findFirstByTenantIdAndSessionRef(tenant, sessionId);
         if (existing.isPresent()) {
             return toDto(existing.get());
@@ -394,10 +418,9 @@ public class PaymentService {
      * caller. The vault row carries the provider in `brand` and the token in
      * its psp_token slot; customers never see the token back (list view). */
     @Transactional
-    public Map<String, Object> vaultRecurring(Map<String, Object> dto) {
-        String provider = dto.get("provider") == null ? null
-                : String.valueOf(dto.get("provider")).toLowerCase();
-        String sessionId = dto.get("sessionId") == null ? null : String.valueOf(dto.get("sessionId"));
+    public VaultedRecurringMethod vaultRecurring(VaultRecurringRequest request) {
+        String provider = request.provider() == null ? null : request.provider().toLowerCase();
+        String sessionId = request.sessionId();
         if (provider == null || sessionId == null) {
             throw new BadRequestException("provider and sessionId are required");
         }
@@ -414,16 +437,10 @@ public class PaymentService {
         }
         String owner = partyScope.scopedPartyId()
                 .orElseThrow(() -> new BadRequestException("a customer token is required to vault a method"));
-        Map<String, Object> saved = paymentMethods.save(Map.of(
-                "@type", "bnplToken",
-                "details", Map.of("brand", provider, "token", grant.token()),
-                "relatedParty", List.of(Map.of("id", owner, "role", "customer"))));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", saved == null ? null : saved.get("id"));
-        out.put("label", grant.label());
-        out.put("provider", provider);
-        out.put("@type", "VaultedRecurringMethod");
-        return out;
+        JsonNode saved = paymentMethods.save(
+                VaultMethodRequest.bnplToken(provider, grant.token(), owner));
+        return VaultedRecurringMethod.of(
+                saved == null ? null : saved.path("id").asText(null), grant.label(), provider);
     }
 
     /** Safe to fail over to a backup PSP? Only when the acquirer was demonstrably
@@ -494,16 +511,16 @@ public class PaymentService {
      * Idempotent on correlatorId — a re-sent bank file never books twice.
      */
     @Transactional
-    public PaymentDto recordExternal(Map<String, Object> dto) {
-        Object amount = dto.get("amount");
-        if (!(amount instanceof Map<?, ?> amt) || amt.get("value") == null) {
+    public PaymentDto recordExternal(ExternalPaymentRequest request) {
+        MoneyDto amount = request.amount();
+        if (amount == null || amount.getValue() == null) {
             throw new BadRequestException("amount {unit, value} is required");
         }
-        java.math.BigDecimal value = new java.math.BigDecimal(String.valueOf(amt.get("value")));
+        java.math.BigDecimal value = amount.getValue();
         if (value.signum() <= 0) {
             throw new BadRequestException("amount must be positive");
         }
-        String correlator = dto.get("correlatorId") == null ? null : String.valueOf(dto.get("correlatorId"));
+        String correlator = request.correlatorId();
         if (correlator != null) {
             Optional<Payment> prior = repository.findFirstByTenantIdAndCorrelatorId(
                     tenantScope.currentTenantId(), correlator);
@@ -516,19 +533,16 @@ public class PaymentService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/payment/" + id);
-        entity.setDescription(dto.get("description") == null ? "Bank transfer"
-                : String.valueOf(dto.get("description")));
+        entity.setDescription(request.description() == null ? "Bank transfer" : request.description());
         entity.setStatus(Payment.AUTHORIZED);
         entity.setAmountValue(value);
-        entity.setAmountUnit(amt.get("unit") == null ? "EUR" : String.valueOf(amt.get("unit")));
+        entity.setAmountUnit(amount.getUnit() == null ? "EUR" : amount.getUnit());
         entity.setMethodType("bankTransfer");
         entity.setMethodLabel("Bank transfer");
-        entity.setAuthorizationCode(dto.get("reference") == null ? null
-                : String.valueOf(dto.get("reference")));
+        entity.setAuthorizationCode(request.reference());
         entity.setPspProvider("bank");
         entity.setCorrelatorId(correlator);
-        entity.setOwnerPartyId(dto.get("ownerPartyId") == null ? null
-                : String.valueOf(dto.get("ownerPartyId")));
+        entity.setOwnerPartyId(request.ownerPartyId());
         entity.setPaymentDate(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         PaymentDto created = toDto(repository.save(entity));
@@ -574,7 +588,7 @@ public class PaymentService {
      * captured. A fully refunded payment says so in its status.
      */
     @Transactional
-    public Map<String, Object> refund(String id, Map<String, Object> dto) {
+    public RefundReceipt refund(String id, RefundRequest request) {
         Payment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
@@ -582,8 +596,8 @@ public class PaymentService {
             throw new ConflictException("only captured money can be refunded (status: "
                     + entity.getStatus() + ")");
         }
-        java.math.BigDecimal amount = dto.get("amount") instanceof Map<?, ?> m && m.get("value") != null
-                ? new java.math.BigDecimal(String.valueOf(m.get("value")))
+        java.math.BigDecimal amount = request.amount() != null && request.amount().getValue() != null
+                ? request.amount().getValue()
                 : entity.getAmountValue().subtract(entity.getRefundedAmount());
         java.math.BigDecimal refundable = entity.getAmountValue().subtract(entity.getRefundedAmount());
         if (amount.signum() <= 0 || amount.compareTo(refundable) > 0) {
@@ -597,20 +611,12 @@ public class PaymentService {
         }
         entity.setLastUpdate(OffsetDateTime.now());
         repository.save(entity);
-        Map<String, Object> receipt = new java.util.LinkedHashMap<>();
-        receipt.put("paymentId", entity.getId());
-        receipt.put("amount", Map.of("value", amount, "unit", entity.getAmountUnit()));
-        receipt.put("refundRef", refundRef);
-        receipt.put("refundedTotal", entity.getRefundedAmount());
-        receipt.put("status", entity.getStatus());
-        receipt.put("reason", dto.get("reason") == null ? null : String.valueOf(dto.get("reason")));
         // a payment created by an unscoped caller (back-office, remittance)
         // has no owner party — the receipt simply omits the reference
-        if (entity.getOwnerPartyId() != null) {
-            receipt.put("relatedParty", java.util.List.of(
-                    Map.of("id", entity.getOwnerPartyId(), "role", "customer")));
-        }
-        receipt.put("@type", "Refund");
+        RefundReceipt receipt = RefundReceipt.of(entity.getId(),
+                new MoneyDto(entity.getAmountUnit(), amount), refundRef,
+                entity.getRefundedAmount(), entity.getStatus(), request.reason(),
+                entity.getOwnerPartyId());
         events.publish("PaymentRefundEvent", "refund", receipt);
         return receipt;
     }
@@ -627,6 +633,25 @@ public class PaymentService {
         });
     }
 
+    /** The open map the PSP seam reads: declared keys first, the posted rest after. */
+    private static Map<String, Object> flatten(PaymentMethodRef ref) {
+        if (ref == null) {
+            return null;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (ref.type() != null) {
+            out.put("@type", ref.type());
+        }
+        if (ref.id() != null) {
+            out.put("id", ref.id());
+        }
+        if (ref.label() != null) {
+            out.put("label", ref.label());
+        }
+        out.putAll(ref.extensions());
+        return out;
+    }
+
     private PaymentDto toDto(Payment entity) {
         PaymentDto dto = new PaymentDto();
         dto.setId(entity.getId());
@@ -635,7 +660,7 @@ public class PaymentService {
         dto.setStatus(entity.getStatus());
         dto.setAmount(new MoneyDto(entity.getAmountUnit(), entity.getAmountValue()));
         if (entity.getMethodLabel() != null) {
-            dto.setPaymentMethod(Map.of("@type", entity.getMethodType(), "label", entity.getMethodLabel()));
+            dto.setPaymentMethod(PaymentMethodRef.masked(entity.getMethodType(), entity.getMethodLabel()));
         }
         dto.setAuthorizationCode(entity.getAuthorizationCode());
         dto.setSettlementRef(entity.getSettlementRef());
@@ -645,8 +670,7 @@ public class PaymentService {
         dto.setPspProvider(entity.getPspProvider());
         dto.setCorrelatorId(entity.getCorrelatorId());
         if (entity.getOwnerPartyId() != null) {
-            dto.setRelatedParty(List.of(Map.of(
-                    "id", entity.getOwnerPartyId(), "role", "payer", "@referredType", "Individual")));
+            dto.setRelatedParty(List.of(RelatedPartyRef.payer(entity.getOwnerPartyId())));
         }
         dto.setPaymentDate(entity.getPaymentDate());
         dto.setLastUpdate(entity.getLastUpdate());
