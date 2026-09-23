@@ -73,7 +73,7 @@ Both TMF760 task resources on product-catalog, new base path
   storefront's Offering page as data.
 - **`checkProductConfiguration`**: given picks (`selectedOption` ids +
   `configurationCharacteristic` name/value pairs), returns
-  approved/rejected per item with messages (both cardinality bounds,
+  accepted/rejected per item with messages (both cardinality bounds,
   characteristic values against the owning spec, policy block rules
   under the catalog's own machine identity), and for approvable
   configurations the priced result: recurring + one-time totals, the

@@ -94,7 +94,10 @@ const near = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
     { body: { checkProductConfigurationItem: [{ productConfiguration: {
       productOffering: { id: bundle.id }, ...configuration } }] } });
   const goodItem = goodCheck.body.checkProductConfigurationItem[0];
-  if (goodItem.state !== 'approved') fail('valid picks should approve: ' + JSON.stringify(goodItem.message));
+  // 'accepted' is the wire value the configurator has always returned, and
+  // what the storefront, the CSR desk and three other suites read. This suite
+  // asserted 'approved' and had therefore never passed — nothing ran it.
+  if (goodItem.state !== 'accepted') fail('valid picks should be accepted: ' + JSON.stringify(goodItem));
   const monthly = Number(goodItem.configurationPrice.monthlyTotal.value);
   const onceOff = Number(goodItem.configurationPrice.oneTimeTotal.value);
   const echoed = goodItem.productConfiguration;

@@ -267,7 +267,12 @@ public class AcpCheckoutService {
         if (result == null || !result.isObject()) {
             throw new BadRequestException("the configurator returned no verdict");
         }
-        if (!"approved".equals(result.path("state").asText())) {
+        // "accepted" is the configurator's verdict — the value TMF760 returns
+        // here, and the one the storefront and the CSR desk read. This asked
+        // for "approved", so an agent buying a CONFIGURED bundle was refused
+        // every single time, with the configurator's own empty message as the
+        // reason. No gate ran the suite that proves this path, so it sat broken.
+        if (!"accepted".equals(result.path("state").asText())) {
             JsonNode messages = result.path("message");
             throw new BadRequestException("the configuration was rejected: "
                     + (messages.isArray() ? String.join("; ",
