@@ -1,19 +1,51 @@
 package com.bss.som.controller;
 
 import com.bss.som.api.ApiConstants;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.bss.som.entity.ServiceInstance;
-import com.bss.som.entity.ServiceOrder;
-import com.bss.som.repository.ServiceInstanceRepository;
+import com.bss.som.api.Projection;
+import com.bss.som.dto.LineReceipts.CpeRestart;
+import com.bss.som.dto.LineReceipts.CpeView;
+import com.bss.som.dto.LineReceipts.ErrorView;
+import com.bss.som.dto.LineReceipts.Finding;
+import com.bss.som.dto.LineReceipts.NumberChange;
+import com.bss.som.dto.LineReceipts.NumberOffer;
+import com.bss.som.dto.LineReceipts.NumberOwner;
+import com.bss.som.dto.LineReceipts.ServiceDiagnosis;
+import com.bss.som.dto.LineReceipts.ServiceRestriction;
+import com.bss.som.dto.LineReceipts.ServiceStateReceipt;
+import com.bss.som.dto.LineReceipts.ServiceTransfer;
+import com.bss.som.dto.LineReceipts.SimPinReset;
+import com.bss.som.dto.LineReceipts.SimReplacement;
+import com.bss.som.dto.LineReceipts.SimView;
+import com.bss.som.dto.LineRequests.MigrateRequest;
+import com.bss.som.dto.LineRequests.PoolRequest;
+import com.bss.som.dto.LineRequests.RestrictRequest;
+import com.bss.som.dto.LineRequests.SimPinRequest;
+import com.bss.som.dto.LineRequests.SimReplaceRequest;
+import com.bss.som.dto.LineRequests.SuspendRequest;
+import com.bss.som.dto.LineRequests.TerminateRequest;
+import com.bss.som.dto.LineRequests.TransferRequest;
+import com.bss.som.dto.PartyRef;
+import com.bss.som.dto.ServiceOrderView;
+import com.bss.som.dto.ServiceView;
+import com.bss.som.dto.StandardFaceViews.ResourcePoolView;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ResourcePool;
+import com.bss.som.entity.ServiceInstance;
+import com.bss.som.entity.ServiceOrder;
+import com.bss.som.exception.BadRequestException;
+import com.bss.som.exception.NotFoundException;
+import com.bss.som.mapper.ServiceViews;
 import com.bss.som.repository.ResourceAssignmentRepository;
 import com.bss.som.repository.ResourcePoolRepository;
+import com.bss.som.repository.ServiceInstanceRepository;
 import com.bss.som.repository.ServiceOrderRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
-import org.springframework.http.ResponseEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,9 +53,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /** Read-side TMF641/638: what the production layer did and what is running. */
 @RestController
@@ -48,6 +86,8 @@ public class SomController {
     private final com.bss.som.client.OcsProvisioningClient ocs;
     private final com.bss.som.client.EntitlementClient entitlement;
     private final com.bss.som.client.DiagnosticsClients diagnostics;
+    private final ServiceViews serviceViews;
+    private final ObjectMapper objectMapper;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -61,7 +101,8 @@ public class SomController {
             com.bss.som.client.PartyOrgClient partyOrg,
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.client.EntitlementClient entitlement,
-            com.bss.som.client.DiagnosticsClients diagnostics) {
+            com.bss.som.client.DiagnosticsClients diagnostics,
+            ServiceViews serviceViews, ObjectMapper objectMapper) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.entitlement = entitlement;
@@ -78,6 +119,12 @@ public class SomController {
         this.partyOrg = partyOrg;
         this.ocs = ocs;
         this.diagnostics = diagnostics;
+        this.serviceViews = serviceViews;
+        this.objectMapper = objectMapper;
+    }
+
+    private static String masked(String iccid) {
+        return "•••• " + iccid.substring(iccid.length() - 5);
     }
 
     /**
@@ -86,24 +133,20 @@ public class SomController {
      * their own service, and a foreign id is a 404, never a 403.
      */
     @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim")
-    public ResponseEntity<Map<String, Object>> sim(
-            @org.springframework.web.bind.annotation.PathVariable String id,
+    public ResponseEntity<SimView> sim(@PathVariable String id,
             @RequestParam(name = "reveal", defaultValue = "false") boolean reveal) {
         com.bss.som.entity.SimCard sim = requireOwnSim(id);
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("serviceId", id);
-        body.put("iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5));
+        String puk = null;
         if (reveal) {
-            body.put("puk", pukVault.reveal(sim.getPuk(), sim.getIccid()));
+            puk = pukVault.reveal(sim.getPuk(), sim.getIccid());
             // legacy plaintext row? upgrade it now that we've touched it
             if (!pukVault.isEncrypted(sim.getPuk())) {
                 sim.setPuk(pukVault.encrypt(sim.getPuk(), sim.getIccid()));
-                sim.setLastUpdate(java.time.OffsetDateTime.now());
+                sim.setLastUpdate(OffsetDateTime.now());
                 sims.save(sim);
             }
         }
-        body.put("@type", "SimCard");
-        return ResponseEntity.ok(body);
+        return ResponseEntity.ok(new SimView(id, masked(sim.getIccid()), puk, "SimCard"));
     }
 
     /**
@@ -111,16 +154,14 @@ public class SomController {
      * never stored or logged in the BSS.
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim/resetPin")
-    public ResponseEntity<Map<String, Object>> resetPin(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<SimPinReset> resetPin(@PathVariable String id, @RequestBody SimPinRequest body) {
         com.bss.som.entity.SimCard sim = requireOwnSim(id);
-        String pin = String.valueOf(body.getOrDefault("newPin", ""));
+        String pin = body.newPin() == null ? "" : body.newPin();
         if (!pin.matches("\\d{4,8}")) {
-            throw new com.bss.som.exception.BadRequestException("newPin must be 4-8 digits");
+            throw new BadRequestException("newPin must be 4-8 digits");
         }
         if (!simPlatform.resetPin(sim.getIccid(), pin)) {
-            throw new com.bss.som.exception.BadRequestException("the SIM platform refused the PIN change");
+            throw new BadRequestException("the SIM platform refused the PIN change");
         }
         // the OWNER rides the event so the customer is told their PIN
         // changed — a silent credential change is a gift to fraudsters
@@ -128,12 +169,12 @@ public class SomController {
                 .map(ServiceInstance::getOwnerPartyId).orElse(null);
         Map<String, Object> pinEvent = new LinkedHashMap<>();
         pinEvent.put("serviceId", id);
-        pinEvent.put("iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5));
+        pinEvent.put("iccid", masked(sim.getIccid()));
         if (owner != null) {
-            pinEvent.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+            pinEvent.put("relatedParty", List.of(PartyRef.customer(owner)));
         }
         events.publish("SimPinResetEvent", "sim", pinEvent);
-        return ResponseEntity.ok(Map.of("status", "done", "@type", "SimPinReset"));
+        return ResponseEntity.ok(SimPinReset.done());
     }
 
     /**
@@ -144,22 +185,18 @@ public class SomController {
      * channel — a silent SIM swap is the textbook account-takeover.
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim/replace")
-    public ResponseEntity<Map<String, Object>> replaceSim(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        String reason = String.valueOf(body.getOrDefault("reason", "lost"));
-        if (!java.util.Set.of("lost", "stolen", "damaged", "upgrade").contains(reason)) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "reason must be lost, stolen, damaged or upgrade");
+    public ResponseEntity<SimReplacement> replaceSim(@PathVariable String id, @RequestBody SimReplaceRequest body) {
+        String reason = body.reason() == null ? "lost" : body.reason();
+        if (!Set.of("lost", "stolen", "damaged", "upgrade").contains(reason)) {
+            throw new BadRequestException("reason must be lost, stolen, damaged or upgrade");
         }
         com.bss.som.entity.SimCard old = requireOwnSim(id);
         if (!simPlatform.block(old.getIccid())) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "the SIM platform refused to block the old card — nothing was replaced");
+            throw new BadRequestException("the SIM platform refused to block the old card — nothing was replaced");
         }
-        old.setStatus(java.util.Set.of("lost", "stolen").contains(reason) ? "blocked" : "replaced");
+        old.setStatus(Set.of("lost", "stolen").contains(reason) ? "blocked" : "replaced");
         old.setReplacedReason(reason);
-        old.setLastUpdate(java.time.OffsetDateTime.now());
+        old.setLastUpdate(OffsetDateTime.now());
         sims.save(old);
         String tenant = tenantScope.currentTenantId();
         com.bss.som.entity.SimCard fresh = orchestration.mintSim(tenant, id);
@@ -170,20 +207,15 @@ public class SomController {
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("serviceId", id);
         event.put("reason", reason);
-        event.put("oldIccid", "•••• " + old.getIccid().substring(old.getIccid().length() - 5));
-        event.put("iccid", "•••• " + fresh.getIccid().substring(fresh.getIccid().length() - 5));
+        event.put("oldIccid", masked(old.getIccid()));
+        event.put("iccid", masked(fresh.getIccid()));
         if (owner != null) {
-            event.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+            event.put("relatedParty", List.of(PartyRef.customer(owner)));
         }
         events.publish("SimReplacedEvent", "sim", event);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("serviceId", id);
-        response.put("reason", reason);
-        response.put("oldSim", Map.of("iccid", event.get("oldIccid"), "status", old.getStatus()));
-        response.put("iccid", event.get("iccid"));
-        response.put("note", "the new card is active; its PUK is revealable the usual way");
-        response.put("@type", "SimReplacement");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(new SimReplacement(id, reason,
+                new SimReplacement.OldSim(masked(old.getIccid()), old.getStatus()), masked(fresh.getIccid()),
+                "the new card is active; its PUK is revealable the usual way", "SimReplacement"));
     }
 
     /**
@@ -196,92 +228,74 @@ public class SomController {
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/changeNumber")
     @org.springframework.transaction.annotation.Transactional
-    public ResponseEntity<Map<String, Object>> changeNumber(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
+    public ResponseEntity<NumberChange> changeNumber(@PathVariable String id) {
         String tenant = tenantScope.currentTenantId();
-        ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
-        partyScope.scopedPartyId().ifPresent(own -> {
-            if (!own.equals(instance.getOwnerPartyId())) {
-                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
-            }
-        });
+        ServiceInstance instance = requireOwnService(id);
         ResourceAssignment current = assignments.findByTenantIdAndServiceId(tenant, id).stream()
                 .filter(a -> !"partner".equals(a.getPoolId()))
                 .findFirst()
-                .orElseThrow(() -> new com.bss.som.exception.BadRequestException(
-                        "this service carries no number to change"));
+                .orElseThrow(() -> new BadRequestException("this service carries no number to change"));
         ResourcePool pool = pools.findFirstByTenantIdAndResourceType(tenant, ResourcePool.MSISDN)
-                .orElseThrow(() -> new com.bss.som.exception.BadRequestException(
-                        "no number pool configured for this tenant"));
+                .orElseThrow(() -> new BadRequestException("no number pool configured for this tenant"));
         String oldNumber = current.getValue();
         // the old number goes on the shelf, with its story
         com.bss.som.entity.NumberQuarantine shelf = new com.bss.som.entity.NumberQuarantine();
-        shelf.setId(java.util.UUID.randomUUID().toString());
+        shelf.setId(UUID.randomUUID().toString());
         shelf.setTenantId(tenant);
         shelf.setNumber(oldNumber);
         shelf.setServiceId(id);
         shelf.setReason("numberChange");
-        shelf.setReleasedAt(java.time.OffsetDateTime.now());
+        shelf.setReleasedAt(OffsetDateTime.now());
         quarantine.save(shelf);
         // the same assignment row carries the new draw — holder unchanged
         String fresh = pool.getPrefix() + String.format("%06d", pool.getNextValue());
         pool.setNextValue(pool.getNextValue() + 1);
-        pool.setLastUpdate(java.time.OffsetDateTime.now());
+        pool.setLastUpdate(OffsetDateTime.now());
         pools.save(pool);
         current.setPoolId(pool.getId());
         current.setValue(fresh);
-        current.setAssignedAt(java.time.OffsetDateTime.now());
+        current.setAssignedAt(OffsetDateTime.now());
         assignments.save(current);
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("serviceId", id);
         event.put("oldNumber", oldNumber);
         event.put("number", fresh);
         if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+            event.put("relatedParty", List.of(PartyRef.customer(instance.getOwnerPartyId())));
         }
         events.publish("NumberChangedEvent", "service", event);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("serviceId", id);
-        response.put("oldNumber", oldNumber);
-        response.put("number", fresh);
-        response.put("note", "the old number is quarantined; SIM, usage and billing are untouched");
-        response.put("@type", "NumberChange");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(new NumberChange(id, oldNumber, fresh,
+                "the old number is quarantined; SIM, usage and billing are untouched", "NumberChange"));
     }
 
     /** Vacation hold: pause the line — number and SIM stay yours, charging
      * pauses, and the hold lifts itself at the agreed date (max 90 days). */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/suspend")
-    public ResponseEntity<Map<String, Object>> suspend(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<ServiceStateReceipt> suspend(@PathVariable String id,
+            @RequestBody(required = false) SuspendRequest body) {
         ServiceInstance instance = requireOwnService(id);
-        Map<String, Object> dto = body == null ? Map.of() : body;
-        String reason = String.valueOf(dto.getOrDefault("reason", "vacation"));
-        java.time.OffsetDateTime resumeAt = null;
-        if (dto.get("until") != null) {
+        SuspendRequest dto = body == null ? SuspendRequest.EMPTY : body;
+        String reason = dto.reason() == null ? "vacation" : dto.reason();
+        OffsetDateTime resumeAt = null;
+        if (dto.until() != null) {
             try {
-                resumeAt = java.time.OffsetDateTime.parse(String.valueOf(dto.get("until")));
+                resumeAt = OffsetDateTime.parse(dto.until());
             } catch (Exception e) {
-                throw new com.bss.som.exception.BadRequestException("until must be an ISO date-time");
+                throw new BadRequestException("until must be an ISO date-time");
             }
-        } else if (dto.get("days") != null) {
-            resumeAt = java.time.OffsetDateTime.now()
-                    .plusDays(Long.parseLong(String.valueOf(dto.get("days"))));
+        } else if (dto.days() != null) {
+            resumeAt = OffsetDateTime.now().plusDays(dto.days());
         }
-        if (resumeAt != null && (resumeAt.isBefore(java.time.OffsetDateTime.now())
-                || resumeAt.isAfter(java.time.OffsetDateTime.now().plusDays(90)))) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "the hold must end in the future and within 90 days");
+        if (resumeAt != null && (resumeAt.isBefore(OffsetDateTime.now())
+                || resumeAt.isAfter(OffsetDateTime.now().plusDays(90)))) {
+            throw new BadRequestException("the hold must end in the future and within 90 days");
         }
         return ResponseEntity.ok(orchestration.suspend(instance, reason, resumeAt));
     }
 
     /** Lift the hold early — or at all, when no end date was set. */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/resume")
-    public ResponseEntity<Map<String, Object>> resume(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
+    public ResponseEntity<ServiceStateReceipt> resume(@PathVariable String id) {
         return ResponseEntity.ok(orchestration.resume(requireOwnService(id), "request"));
     }
 
@@ -293,75 +307,57 @@ public class SomController {
      * (service:write); customers never bar their own line this way.
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/restrict")
-    public ResponseEntity<Map<String, Object>> restrict(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<ServiceRestriction> restrict(@PathVariable String id,
+            @RequestBody(required = false) RestrictRequest body) {
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+                .orElseThrow(() -> NotFoundException.forResource("Service", id));
         if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
-            throw new com.bss.som.exception.BadRequestException(
+            throw new BadRequestException(
                     "only an active service can be restricted (state: " + instance.getState() + ")");
         }
-        Map<String, Object> dto = body == null ? Map.of() : body;
-        String reason = String.valueOf(dto.getOrDefault("reason", "nonpayment"));
+        RestrictRequest dto = body == null ? RestrictRequest.EMPTY : body;
+        String reason = dto.reason() == null ? "nonpayment" : dto.reason();
         Map<String, Object> profile = new LinkedHashMap<>();
-        if (dto.get("profile") instanceof Map<?, ?> p) {
-            p.forEach((k, v) -> profile.put(String.valueOf(k), v));
+        if (dto.profile() != null) {
+            profile.putAll(dto.profile());
         }
         profile.putIfAbsent("outgoingBarred", true);
         profile.putIfAbsent("dataThrottled", true);
         profile.put("emergencyWhitelist", true); // statutory — not a knob
-        instance.setRestrictedAt(java.time.OffsetDateTime.now());
+        instance.setRestrictedAt(OffsetDateTime.now());
         instance.setRestrictionReason(reason);
         try {
-            instance.setRestrictionProfileJson(new ObjectMapper().writeValueAsString(profile));
+            instance.setRestrictionProfileJson(objectMapper.writeValueAsString(profile));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new com.bss.som.exception.BadRequestException("unserializable restriction profile");
+            throw new BadRequestException("unserializable restriction profile");
         }
-        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("id", instance.getId());
-        event.put("name", instance.getName());
-        event.put("state", instance.getState());
-        event.put("reason", reason);
-        event.put("restrictionProfile", profile);
-        if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
-        }
+        ServiceRestriction event = new ServiceRestriction(instance.getId(), instance.getName(), instance.getState(),
+                reason, profile, PartyRef.customerListOrNull(instance.getOwnerPartyId()), null);
         events.publish("ServiceRestrictedEvent", "service", event);
-        Map<String, Object> response = new LinkedHashMap<>(event);
-        response.put("@type", "ServiceRestriction");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(event.labelled());
     }
 
     /** Lift the barring profile (the cure path, or an operator's hand). */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/unrestrict")
-    public ResponseEntity<Map<String, Object>> unrestrict(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
+    public ResponseEntity<ServiceRestriction> unrestrict(@PathVariable String id) {
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+                .orElseThrow(() -> NotFoundException.forResource("Service", id));
         if (instance.getRestrictedAt() == null) {
-            throw new com.bss.som.exception.BadRequestException("this service is not restricted");
+            throw new BadRequestException("this service is not restricted");
         }
         instance.setRestrictedAt(null);
         instance.setRestrictionReason(null);
         instance.setRestrictionProfileJson(null);
-        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("id", instance.getId());
-        event.put("name", instance.getName());
-        event.put("state", instance.getState());
-        if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
-        }
+        ServiceRestriction event = new ServiceRestriction(instance.getId(), instance.getName(), instance.getState(),
+                null, null, PartyRef.customerListOrNull(instance.getOwnerPartyId()), null);
         events.publish("ServiceUnrestrictedEvent", "service", event);
-        Map<String, Object> response = new LinkedHashMap<>(event);
-        response.put("@type", "ServiceRestriction");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(event.labelled());
     }
 
     /**
@@ -375,47 +371,44 @@ public class SomController {
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/transfer")
     @org.springframework.transaction.annotation.Transactional
-    public ResponseEntity<Map<String, Object>> transfer(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        String to = body.get("toPartyId") == null ? null : String.valueOf(body.get("toPartyId"));
+    public ResponseEntity<ServiceTransfer> transfer(@PathVariable String id, @RequestBody TransferRequest body) {
+        String to = body.toPartyId();
         if (to == null || to.isBlank()) {
-            throw new com.bss.som.exception.BadRequestException("toPartyId is required — who gets the line?");
+            throw new BadRequestException("toPartyId is required — who gets the line?");
         }
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+                .orElseThrow(() -> NotFoundException.forResource("Service", id));
         if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
-            throw new com.bss.som.exception.BadRequestException(
+            throw new BadRequestException(
                     "only an active line can be transferred (state: " + instance.getState() + ")");
         }
         String from = instance.getOwnerPartyId();
         if (to.equals(from)) {
-            throw new com.bss.som.exception.BadRequestException("the line already belongs to them");
+            throw new BadRequestException("the line already belongs to them");
         }
         // the target must be REAL — a typo must not orphan a line
         if (partyOrg.individualOf(to).isEmpty()) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "the receiving person is not on record — check the id");
+            throw new BadRequestException("the receiving person is not on record — check the id");
         }
         var auth = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
         boolean isBusinessAdmin = auth != null && auth.getAuthorities().stream()
                 .anyMatch(a -> "business:admin".equals(a.getAuthority()));
-        java.util.Optional<String> scoped = partyScope.scopedPartyId();
+        Optional<String> scoped = partyScope.scopedPartyId();
         if (isBusinessAdmin) {
             // inside the SAME company only — all three org facts from party data
             String adminOrg = partyOrg.orgOf(auth.getName()).orElse(null);
             if (adminOrg == null
                     || !adminOrg.equals(partyOrg.orgOf(from).orElse(null))
                     || !adminOrg.equals(partyOrg.orgOf(to).orElse(null))) {
-                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+                throw NotFoundException.forResource("Service", id);
             }
         } else if (scoped.isPresent() && !scoped.get().equals(from)) {
-            throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+            throw NotFoundException.forResource("Service", id);
         }
         instance.setOwnerPartyId(to);
-        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
         String number = null;
         for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(tenant, id)) {
@@ -424,17 +417,10 @@ public class SomController {
             assignments.save(a);
         }
         ocs.transfer(tenant, id, to);
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("serviceId", id);
-        event.put("name", instance.getName());
-        if (number != null) event.put("number", number);
-        event.put("relatedParty", List.of(
-                Map.of("id", from, "role", "giver"),
-                Map.of("id", to, "role", "receiver")));
+        ServiceTransfer event = new ServiceTransfer(id, instance.getName(), number,
+                List.of(PartyRef.of(from, "giver"), PartyRef.of(to, "receiver")), null);
         events.publish("ServiceTransferredEvent", "serviceTransfer", event);
-        Map<String, Object> response = new LinkedHashMap<>(event);
-        response.put("@type", "ServiceTransfer");
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(event.labelled());
     }
 
     /**
@@ -445,72 +431,66 @@ public class SomController {
      * that cannot run says so; a diagnosis never invents an all-clear.
      */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/diagnose")
-    public ResponseEntity<Map<String, Object>> diagnose(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
+    public ResponseEntity<ServiceDiagnosis> diagnose(@PathVariable String id) {
         ServiceInstance instance = requireOwnService(id);
         String tenant = tenantScope.currentTenantId();
-        List<Map<String, Object>> findings = new java.util.ArrayList<>();
+        List<Finding> findings = new ArrayList<>();
         String verdict = "allClear";
 
         if (ServiceInstance.SUSPENDED.equals(instance.getState())) {
-            findings.add(Map.of("code", "paused", "severity", "cause",
-                    "message", "This line is PAUSED" + (instance.getResumeAt() != null
-                            ? " until " + instance.getResumeAt().toLocalDate() : "")
-                            + " — nothing flows while it sleeps. Resume it to get moving."));
+            findings.add(Finding.cause("paused", "This line is PAUSED" + (instance.getResumeAt() != null
+                    ? " until " + instance.getResumeAt().toLocalDate() : "")
+                    + " — nothing flows while it sleeps. Resume it to get moving."));
             verdict = "paused";
         } else if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
-            findings.add(Map.of("code", "notActive", "severity", "cause",
-                    "message", "This service is " + instance.getState() + "."));
+            findings.add(Finding.cause("notActive", "This service is " + instance.getState() + "."));
             verdict = "notActive";
         }
 
         var problems = diagnostics.openProblems();
         if (problems.isEmpty()) {
-            findings.add(Map.of("code", "assuranceUnreachable", "severity", "caution",
-                    "message", "Could not check for network outages right now."));
+            findings.add(Finding.caution("assuranceUnreachable", "Could not check for network outages right now."));
         } else {
             Map<String, Object> onPath = instance.getDeliveryPath() == null ? null
                     : problems.get().stream()
-                            .filter(p -> instance.getDeliveryPath()
-                                    .equals(String.valueOf(p.get("affectedObject"))))
+                            .filter(p -> instance.getDeliveryPath().equals(String.valueOf(p.get("affectedObject"))))
                             .findFirst().orElse(null);
             if (onPath != null) {
-                findings.add(Map.of("code", "outage", "severity", "cause",
-                        "message", "KNOWN OUTAGE on your line's path ("
-                                + onPath.get("affectedObject") + "): "
-                                + onPath.getOrDefault("description", "crews are on it")
-                                + ". No ticket needed — it is already being worked."));
+                findings.add(Finding.cause("outage", "KNOWN OUTAGE on your line's path ("
+                        + onPath.get("affectedObject") + "): "
+                        + onPath.getOrDefault("description", "crews are on it")
+                        + ". No ticket needed — it is already being worked."));
                 if ("allClear".equals(verdict)) {
                     verdict = "outage";
                 }
             } else if (!problems.get().isEmpty()) {
-                findings.add(Map.of("code", "areaIncidents", "severity", "caution",
-                        "message", problems.get().size() + " network incident(s) are open in the"
-                                + " area — your line is not directly on an affected path, but"
-                                + " conditions may be degraded."));
+                findings.add(Finding.caution("areaIncidents", problems.get().size()
+                        + " network incident(s) are open in the"
+                        + " area — your line is not directly on an affected path, but"
+                        + " conditions may be degraded."));
             }
         }
 
         // the box at the customer's end: a broadband line whose router is offline is not a network fault
-        if ("broadband".equals(categoryOf(instance.getName())) && cpe != null && cpe.enabled()) {
+        if ("broadband".equals(ServiceViews.categoryOf(instance.getName())) && cpe != null && cpe.enabled()) {
             var box = cpe.state(tenant, id);
             if (box.isEmpty()) {
-                findings.add(Map.of("code", "routerUnreachable", "severity", "caution",
-                        "message", "Could not reach the equipment system to check your router right now."));
+                findings.add(Finding.caution("routerUnreachable",
+                        "Could not reach the equipment system to check your router right now."));
             } else if ("offline".equals(box.get().state())) {
-                findings.add(Map.of("code", "routerOffline", "severity", "cause",
-                        "message", "Your router (" + box.get().model() + ") is OFFLINE — the network side is fine."
-                                + " Check its power and cable, or restart it from here; last seen " + box.get().lastSeen() + "."));
+                findings.add(Finding.cause("routerOffline", "Your router (" + box.get().model()
+                        + ") is OFFLINE — the network side is fine."
+                        + " Check its power and cable, or restart it from here; last seen " + box.get().lastSeen() + "."));
                 if ("allClear".equals(verdict)) {
                     verdict = "routerOffline";
                 }
             } else if ("rebooting".equals(box.get().state())) {
-                findings.add(Map.of("code", "routerRebooting", "severity", "caution",
-                        "message", "Your router is restarting — give it a minute."));
+                findings.add(Finding.caution("routerRebooting", "Your router is restarting — give it a minute."));
             } else {
-                findings.add(Map.of("code", "routerOnline", "severity", "info",
-                        "message", "Router " + box.get().model() + " online, up " + (box.get().uptimeSeconds() / 86400) + " day(s), "
-                                + box.get().wifiClients() + " device(s) on Wi-Fi" + (box.get().firmwareOutdated() ? " — a firmware update is pending" : "") + "."));
+                findings.add(Finding.info("routerOnline", "Router " + box.get().model() + " online, up "
+                        + (box.get().uptimeSeconds() / 86400) + " day(s), "
+                        + box.get().wifiClients() + " device(s) on Wi-Fi"
+                        + (box.get().firmwareOutdated() ? " — a firmware update is pending" : "") + "."));
             }
         }
 
@@ -518,34 +498,24 @@ public class SomController {
             double used = asDouble(bucket.get("usedGB"));
             double total = asDouble(bucket.get("totalGB")) + asDouble(bucket.get("rolloverGB"));
             if (total > 0 && used >= total) {
-                findings.add(Map.of("code", "outOfData", "severity", "cause",
-                        "message", "You are OUT OF INCLUDED DATA (" + used + " of " + total
-                                + " GB used) — speed is reduced until the next cycle."
-                                + " A top-up restores full speed immediately."));
+                findings.add(Finding.cause("outOfData", "You are OUT OF INCLUDED DATA (" + used + " of " + total
+                        + " GB used) — speed is reduced until the next cycle."
+                        + " A top-up restores full speed immediately."));
             } else if (total > 0 && used / total >= 0.9) {
-                findings.add(Map.of("code", "nearDataCap", "severity", "caution",
-                        "message", String.format("%.0f%% of your data is used (%.1f of %.1f GB)"
-                                + " — speed drops when it runs out.", used / total * 100, used, total)));
+                findings.add(Finding.caution("nearDataCap", String.format("%.0f%% of your data is used (%.1f of %.1f GB)"
+                        + " — speed drops when it runs out.", used / total * 100, used, total)));
             }
         });
-        if ("allClear".equals(verdict)
-                && findings.stream().anyMatch(f -> "outOfData".equals(f.get("code")))) {
+        if ("allClear".equals(verdict) && findings.stream().anyMatch(f -> "outOfData".equals(f.code()))) {
             verdict = "throttled";
         }
 
         if (findings.isEmpty()) {
-            findings.add(Map.of("code", "allClear", "severity", "info",
-                    "message", "No known fault from here: line active, no outage on your path,"
-                            + " data remaining. If it still feels slow, raise a ticket and we"
-                            + " will dig deeper."));
+            findings.add(Finding.info("allClear", "No known fault from here: line active, no outage on your path,"
+                    + " data remaining. If it still feels slow, raise a ticket and we"
+                    + " will dig deeper."));
         }
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("serviceId", id);
-        report.put("name", instance.getName());
-        report.put("verdict", verdict);
-        report.put("findings", findings);
-        report.put("@type", "ServiceDiagnosis");
-        return ResponseEntity.ok(report);
+        return ResponseEntity.ok(new ServiceDiagnosis(id, instance.getName(), verdict, findings, "ServiceDiagnosis"));
     }
 
     private static double asDouble(Object v) {
@@ -558,56 +528,46 @@ public class SomController {
 
     /** The router or ONT on this line, as the ACS sees it — the customer's own, or any line for staff. */
     @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/cpe")
-    public ResponseEntity<Map<String, Object>> cpeState(@PathVariable String id) {
+    public ResponseEntity<Object> cpeState(@PathVariable String id) {
         ServiceInstance instance = requireOwnService(id);
         if (cpe == null || !cpe.enabled()) {
             return ResponseEntity.notFound().build();
         }
         var box = cpe.state(tenantScope.currentTenantId(), instance.getId());
         if (box.isEmpty()) {
-            return ResponseEntity.status(503).body(Map.of("code", "503", "reason", "equipment system unreachable", "@type", "Error"));
+            return ResponseEntity.status(503).body(ErrorView.of(503, "equipment system unreachable"));
         }
         var b = box.get();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("serviceId", instance.getId());
-        out.put("state", b.state());
-        out.put("uptimeSeconds", b.uptimeSeconds());
-        out.put("firmware", b.firmware());
-        out.put("firmwareOutdated", b.firmwareOutdated());
-        out.put("wifiClients", b.wifiClients());
-        out.put("model", b.model());
-        out.put("serial", b.serial());
-        out.put("lastSeen", b.lastSeen());
-        out.put("@type", "CustomerPremisesEquipment");
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new CpeView(instance.getId(), b.state(), b.uptimeSeconds(), b.firmware(),
+                b.firmwareOutdated(), b.wifiClients(), b.model(), b.serial(), b.lastSeen(),
+                "CustomerPremisesEquipment"));
     }
 
     /** Restart the router on this line — the customer on their own line, or care; logged as an event. */
     @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/cpe/restart")
-    public ResponseEntity<Map<String, Object>> cpeRestart(@PathVariable String id) {
+    public ResponseEntity<Object> cpeRestart(@PathVariable String id) {
         ServiceInstance instance = requireOwnService(id);
         if (cpe == null || !cpe.enabled()) {
             return ResponseEntity.notFound().build();
         }
         if (!"active".equalsIgnoreCase(instance.getState())) {
-            return ResponseEntity.status(409).body(Map.of("code", "409", "reason", "the line is not active", "@type", "Error"));
+            return ResponseEntity.status(409).body(ErrorView.of(409, "the line is not active"));
         }
         boolean accepted = cpe.reboot(tenantScope.currentTenantId(), instance.getId());
         if (!accepted) {
-            return ResponseEntity.status(503).body(Map.of("code", "503", "reason", "the equipment system did not accept the restart", "@type", "Error"));
+            return ResponseEntity.status(503).body(ErrorView.of(503, "the equipment system did not accept the restart"));
         }
         events.publish("CpeRestartedEvent", "service", Map.of("id", instance.getId(), "name", instance.getName(),
-                "relatedParty", java.util.List.of(Map.of("id", String.valueOf(instance.getOwnerPartyId()), "role", "customer"))));
-        return ResponseEntity.accepted().body(Map.of("serviceId", instance.getId(), "state", "rebooting",
-                "said", "Restart sent to the router — it is back in about a minute.", "@type", "CpeRestart"));
+                "relatedParty", List.of(Map.of("id", String.valueOf(instance.getOwnerPartyId()), "role", "customer"))));
+        return ResponseEntity.accepted().body(CpeRestart.sent(instance.getId()));
     }
 
     private ServiceInstance requireOwnService(String serviceId) {
         ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenantScope.currentTenantId())
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", serviceId));
+                .orElseThrow(() -> NotFoundException.forResource("Service", serviceId));
         partyScope.scopedPartyId().ifPresent(own -> {
             if (!own.equals(instance.getOwnerPartyId())) {
-                throw com.bss.som.exception.NotFoundException.forResource("Service", serviceId);
+                throw NotFoundException.forResource("Service", serviceId);
             }
         });
         return instance;
@@ -615,20 +575,14 @@ public class SomController {
 
     private com.bss.som.entity.SimCard requireOwnSim(String serviceId) {
         String tenant = tenantScope.currentTenantId();
-        ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenant)
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", serviceId));
-        partyScope.scopedPartyId().ifPresent(own -> {
-            if (!own.equals(instance.getOwnerPartyId())) {
-                throw com.bss.som.exception.NotFoundException.forResource("Service", serviceId);
-            }
-        });
+        requireOwnService(serviceId);
         // one ACTIVE card per service; blocked/replaced rows keep the history
         return sims.findFirstByTenantIdAndServiceIdAndStatus(tenant, serviceId, "active")
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("SIM for service", serviceId));
+                .orElseThrow(() -> NotFoundException.forResource("SIM for service", serviceId));
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")
-    public ResponseEntity<List<Map<String, Object>>> serviceOrders(
+    public ResponseEntity<List<JsonNode>> serviceOrders(
             @RequestParam(required = false) String productOrderId,
             @RequestParam(required = false) String externalId,
             @RequestParam(required = false) String category,
@@ -641,32 +595,16 @@ public class SomController {
                 ? serviceOrders.findByTenantIdAndProductOrderId(tenant, productOrderId)
                 : serviceOrders.findAll().stream()
                         .filter(o -> tenant.equals(o.getTenantId()))
-                        .sorted(java.util.Comparator.comparing(
-                                ServiceOrder::getCreatedAt).reversed())
+                        .sorted(Comparator.comparing(ServiceOrder::getCreatedAt).reversed())
                         .toList();
-        List<Map<String, Object>> out = rows.stream()
+        List<JsonNode> out = rows.stream()
                 .filter(o -> externalId == null || unquote(externalId).equals(o.getExternalId()))
                 .filter(o -> priority == null || unquote(priority).equals(o.getPriority()))
-                .map(this::orderMap)
-                .filter(m -> category == null
-                        || unquote(category).equals(String.valueOf(m.get("category"))))
+                .map(this::orderView)
+                .filter(v -> category == null || unquote(category).equals(String.valueOf(v.category())))
                 .skip(offset).limit(limit)
+                .map(v -> Projection.select(objectMapper, v, fields, "id"))
                 .toList();
-        if (fields != null && !fields.isBlank()) {
-            List<String> keep = new java.util.ArrayList<>(List.of("id"));
-            for (String f : fields.split(",")) {
-                keep.add(f.split("\\.")[0].trim());
-            }
-            out = out.stream().map(m -> {
-                Map<String, Object> slim = new LinkedHashMap<>();
-                for (String k : keep) {
-                    if (m.containsKey(k)) {
-                        slim.put(k, m.get(k));
-                    }
-                }
-                return slim;
-            }).toList();
-        }
         return ResponseEntity.ok(out);
     }
 
@@ -675,76 +613,60 @@ public class SomController {
      * (no product order behind it). The order is RECORDED and acknowledged —
      * fulfilment of external orders is the caller's workflow, honestly
      * reflected in a state that never claims progress that didn't happen.
-     * The /v3 alias serves the R18-era clients, same validation.
+     * The /v3 alias serves the R18-era clients, same validation. The
+     * caller's document is kept verbatim beside the row.
      */
-    @org.springframework.web.bind.annotation.PostMapping({
-            ApiConstants.ORDER_BASE + "/serviceOrder",
-            "/tmf-api/serviceOrdering/v3/serviceOrder"})
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> createServiceOrder(
-            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> dto) {
-        if (!(dto.get("orderItem") instanceof List<?> items) || items.isEmpty()) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "orderItem is required — an order orders SOMETHING");
+    @PostMapping({ApiConstants.ORDER_BASE + "/serviceOrder", "/tmf-api/serviceOrdering/v3/serviceOrder"})
+    public ResponseEntity<ServiceOrderView> createServiceOrder(@RequestBody ObjectNode dto) {
+        JsonNode items = dto.get("orderItem");
+        if (items == null || !items.isArray() || items.isEmpty()) {
+            throw new BadRequestException("orderItem is required — an order orders SOMETHING");
         }
-        for (Object item : items) {
-            if (item instanceof Map<?, ?> it && it.get("service") instanceof Map<?, ?> svc
-                    && svc.get("serviceSpecification") instanceof Map<?, ?> spec
-                    && (spec.get("id") == null || String.valueOf(spec.get("id")).isBlank())) {
-                throw new com.bss.som.exception.BadRequestException(
-                        "serviceSpecification needs an id — a nameless spec specifies nothing");
+        for (JsonNode item : items) {
+            JsonNode spec = item.path("service").path("serviceSpecification");
+            if (spec.isObject() && spec.path("id").asText("").isBlank()) {
+                throw new BadRequestException("serviceSpecification needs an id — a nameless spec specifies nothing");
             }
         }
         String tenant = tenantScope.currentTenantId();
         ServiceOrder order = new ServiceOrder();
-        String id = java.util.UUID.randomUUID().toString();
+        String id = UUID.randomUUID().toString();
         order.setId(id);
         order.setTenantId(tenant);
         order.setHref(ApiConstants.ORDER_BASE + "/serviceOrder/" + id);
         order.setState("acknowledged");
         order.setProductOrderId("external");
-        order.setItemName(dto.get("category") == null ? "external"
-                : String.valueOf(dto.get("category")));
-        order.setExternalId(dto.get("externalId") == null ? null
-                : String.valueOf(dto.get("externalId")));
-        order.setPriority(dto.get("priority") == null ? null
-                : String.valueOf(dto.get("priority")));
-        order.setDescription(dto.get("description") == null ? null
-                : String.valueOf(dto.get("description")));
+        order.setItemName(text(dto, "category", "external"));
+        order.setExternalId(text(dto, "externalId", null));
+        order.setPriority(text(dto, "priority", null));
+        order.setDescription(text(dto, "description", null));
         try {
-            order.setDocumentJson(new ObjectMapper().writeValueAsString(dto));
+            order.setDocumentJson(objectMapper.writeValueAsString(dto));
         } catch (com.fasterxml.jackson.core.JacksonException e) {
-            throw new com.bss.som.exception.BadRequestException("unserializable order document");
+            throw new BadRequestException("unserializable order document");
         }
-        order.setCreatedAt(java.time.OffsetDateTime.now());
-        order.setLastUpdate(java.time.OffsetDateTime.now());
+        order.setCreatedAt(OffsetDateTime.now());
+        order.setLastUpdate(OffsetDateTime.now());
         serviceOrders.save(order);
-        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
-                .body(orderMap(order));
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderView(order));
     }
 
-    @GetMapping({ApiConstants.ORDER_BASE + "/serviceOrder/{id}",
-            "/tmf-api/serviceOrdering/v3/serviceOrder/{id}"})
-    public ResponseEntity<Map<String, Object>> serviceOrderById(
-            @org.springframework.web.bind.annotation.PathVariable String id,
+    /** A posted scalar as text (its JSON rendering for a non-text node), or the fallback when absent/null. */
+    private static String text(JsonNode node, String key, String fallback) {
+        JsonNode v = node.get(key);
+        if (v == null || v.isNull()) {
+            return fallback;
+        }
+        return v.isValueNode() ? v.asText() : v.toString();
+    }
+
+    @GetMapping({ApiConstants.ORDER_BASE + "/serviceOrder/{id}", "/tmf-api/serviceOrdering/v3/serviceOrder/{id}"})
+    public ResponseEntity<JsonNode> serviceOrderById(@PathVariable String id,
             @RequestParam(required = false) String fields) {
         ServiceOrder order = serviceOrders.findById(id)
                 .filter(o -> tenantScope.currentTenantId().equals(o.getTenantId()))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                        .forResource("ServiceOrder", id));
-        Map<String, Object> full = orderMap(order);
-        if (fields == null || fields.isBlank()) {
-            return ResponseEntity.ok(full);
-        }
-        Map<String, Object> slim = new LinkedHashMap<>();
-        slim.put("id", full.get("id"));
-        for (String f : fields.split(",")) {
-            String key = f.split("\\.")[0].trim();
-            if (full.containsKey(key)) {
-                slim.put(key, full.get(key));
-            }
-        }
-        return ResponseEntity.ok(slim);
+                .orElseThrow(() -> NotFoundException.forResource("ServiceOrder", id));
+        return ResponseEntity.ok(Projection.select(objectMapper, orderView(order), fields, "id"));
     }
 
     /** TMF630 filter values may arrive quoted: priority="1". */
@@ -764,25 +686,24 @@ public class SomController {
      * an opaque party id, never a name.
      */
     @GetMapping(ApiConstants.INVENTORY_BASE + "/numberOwner")
-    public ResponseEntity<Map<String, Object>> numberOwner(@RequestParam String number) {
+    public ResponseEntity<NumberOwner> numberOwner(@RequestParam String number) {
         if (partyScope.scopedPartyId().isPresent()) {
-            throw com.bss.som.exception.NotFoundException.forResource("Number", number);
+            throw NotFoundException.forResource("Number", number);
         }
         // Tolerant matching: people type numbers without '+', and a '+' in a
         // query string arrives as a space — try the bare digits with a '+' too.
         String normalized = number.replaceAll("[\\s-]", "");
         String tenant = tenantScope.currentTenantId();
         return assignments.findFirstByTenantIdAndValue(tenant, normalized)
-                .or(() -> normalized.startsWith("+") ? java.util.Optional.empty()
+                .or(() -> normalized.startsWith("+") ? Optional.empty()
                         : assignments.findFirstByTenantIdAndValue(tenant, "+" + normalized))
                 .filter(a -> a.getOwnerPartyId() != null)
-                .map(a -> ResponseEntity.ok(Map.<String, Object>of(
-                        "number", a.getValue(), "partyId", a.getOwnerPartyId())))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Number", number));
+                .map(a -> ResponseEntity.ok(new NumberOwner(a.getValue(), a.getOwnerPartyId())))
+                .orElseThrow(() -> NotFoundException.forResource("Number", number));
     }
 
     @GetMapping({ApiConstants.INVENTORY_BASE + "/service", ApiConstants.INVENTORY_BASE + "/service/"})
-    public ResponseEntity<List<Map<String, Object>>> services(
+    public ResponseEntity<List<JsonNode>> services(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
             @RequestParam(name = "deliveryPath", required = false) String deliveryPath,
             @RequestParam(name = "name", required = false) String name,
@@ -800,53 +721,27 @@ public class SomController {
                         // newest first — a long-lived customer's fresh line must
                         // land inside the first page (same fix the order list got)
                         ? services.findByTenantIdAndOwnerPartyId(tenant, party).stream()
-                                .sorted(java.util.Comparator.comparing(
-                                        ServiceInstance::getCreatedAt).reversed())
+                                .sorted(Comparator.comparing(ServiceInstance::getCreatedAt).reversed())
                                 .toList()
                         : services.findAll().stream()
                                 .filter(s -> tenant.equals(s.getTenantId()))
-                                .sorted(java.util.Comparator.comparing(
-                                        ServiceInstance::getCreatedAt).reversed())
+                                .sorted(Comparator.comparing(ServiceInstance::getCreatedAt).reversed())
                                 .toList();
-        List<Map<String, Object>> out = rows.stream()
+        List<JsonNode> out = rows.stream()
                 .filter(s -> name == null || name.equals(s.getName()))
                 .filter(s -> state == null || state.equals(s.getState()))
-                .map(this::serviceMap)
-                .filter(m -> category == null || category.equals(m.get("category")))
+                .map(serviceViews::view)
+                .filter(v -> category == null || category.equals(v.category()))
                 .skip(offset).limit(limit)
+                // TMF630 attribute selection: id and href always ride along
+                .map(v -> Projection.selectExact(objectMapper, v, fields, "id", "href"))
                 .toList();
-        if (fields != null && !fields.isBlank()) {
-            // TMF630 attribute selection: id and href always ride along
-            List<String> keep = new java.util.ArrayList<>(List.of("id", "href"));
-            for (String f : fields.split(",")) {
-                keep.add(f.trim());
-            }
-            out = out.stream().map(m -> {
-                Map<String, Object> slim = new LinkedHashMap<>();
-                for (String k : keep) {
-                    if (m.containsKey(k)) {
-                        slim.put(k, m.get(k));
-                    }
-                }
-                return slim;
-            }).toList();
-        }
         return ResponseEntity.ok(out);
     }
 
     @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}")
-    public ResponseEntity<Map<String, Object>> serviceById(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
-        ServiceInstance instance = services.findById(id)
-                .filter(s -> tenantScope.currentTenantId().equals(s.getTenantId()))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                        .forResource("Service", id));
-        partyScope.scopedPartyId().ifPresent(own -> {
-            if (!own.equals(instance.getOwnerPartyId())) {
-                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
-            }
-        });
-        return ResponseEntity.ok(serviceMap(instance));
+    public ResponseEntity<ServiceView> serviceById(@PathVariable String id) {
+        return ResponseEntity.ok(serviceViews.view(requireOwnService(id)));
     }
 
     /**
@@ -854,18 +749,18 @@ public class SomController {
      * Assurance calls this when the current path fails — fibre cut, edge
      * takes over, SLA restored. Machine or staff only (service:write).
      */
-    @org.springframework.web.bind.annotation.PostMapping(
-            ApiConstants.INVENTORY_BASE + "/service/{id}/migrate")
-    public ResponseEntity<Map<String, Object>> migrate(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/migrate")
+    public ResponseEntity<ServiceView> migrate(@PathVariable String id, @RequestBody MigrateRequest body) {
+        if (body.deliveryPoint() == null || body.deliveryPoint().isBlank()) {
+            throw new BadRequestException("deliveryPoint is required — where does the service move to?");
+        }
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findById(id)
                 .filter(s -> tenant.equals(s.getTenantId()))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+                .orElseThrow(() -> NotFoundException.forResource("Service", id));
         String from = instance.getDeliveryPath();
-        instance.setDeliveryPath(String.valueOf(body.get("deliveryPoint")));
-        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        instance.setDeliveryPath(body.deliveryPoint());
+        instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
         events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
                 "id", instance.getId(), "name", instance.getName(),
@@ -873,49 +768,43 @@ public class SomController {
                 "previousDeliveryPath", from == null ? "" : from,
                 "relatedParty", instance.getOwnerPartyId() == null ? List.of()
                         : List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer"))));
-        return ResponseEntity.ok(serviceMap(instance));
+        return ResponseEntity.ok(serviceViews.view(instance));
     }
 
     /** Cease a service (disconnect) — staff, machine, or the OWNER
      * cancelling their own subscription; releases the number. */
-    @org.springframework.web.bind.annotation.PostMapping(
-            ApiConstants.INVENTORY_BASE + "/service/{id}/terminate")
-    public ResponseEntity<Map<String, Object>> terminate(
-            @org.springframework.web.bind.annotation.PathVariable String id,
-            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/terminate")
+    public ResponseEntity<ServiceStateReceipt> terminate(@PathVariable String id,
+            @RequestBody(required = false) TerminateRequest body) {
         requireOwnService(id); // scoped tokens cancel only their own line
-        String reason = body == null || body.get("reason") == null ? "cease" : String.valueOf(body.get("reason"));
+        String reason = body == null || body.reason() == null ? "cease" : body.reason();
         return ResponseEntity.ok(orchestration.terminateService(id, reason));
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> orderMap(ServiceOrder o) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", o.getId());
-        map.put("href", o.getHref());
-        map.put("state", o.getState());
-        map.put("category", o.getItemName());
-        map.put("orderDate", o.getCreatedAt().toString());
-        map.put("productOrderId", o.getProductOrderId());
-        if (o.getExternalId() != null) map.put("externalId", o.getExternalId());
-        if (o.getPriority() != null) map.put("priority", o.getPriority());
-        if (o.getDescription() != null) map.put("description", o.getDescription());
-        if (o.getCompletedAt() != null) map.put("completionDate", o.getCompletedAt().toString());
-        // orderItem rides every row: the posted items for external orders,
-        // the single add-item an internal order factually IS otherwise
-        List<Map<String, Object>> items = null;
+    /**
+     * The TMF641 view of an order. orderItem rides every row: the posted
+     * items for external orders (the caller's document, id/state/action
+     * defaulted where absent), the single add-item an internal order
+     * factually IS otherwise.
+     */
+    private ServiceOrderView orderView(ServiceOrder o) {
+        List<JsonNode> items = null;
         if (o.getDocumentJson() != null) {
             try {
-                Map<String, Object> doc = new ObjectMapper().readValue(o.getDocumentJson(), Map.class);
-                if (doc.get("orderItem") instanceof List<?> raw) {
-                    items = new java.util.ArrayList<>();
+                JsonNode doc = objectMapper.readTree(o.getDocumentJson());
+                JsonNode raw = doc.get("orderItem");
+                if (raw != null && raw.isArray()) {
+                    items = new ArrayList<>();
                     int n = 0;
-                    for (Object it : raw) {
+                    for (JsonNode it : raw) {
                         n++;
-                        Map<String, Object> item = new LinkedHashMap<>((Map<String, Object>) it);
-                        item.putIfAbsent("id", String.valueOf(n));
-                        item.putIfAbsent("state", o.getState());
-                        item.putIfAbsent("action", "add");
+                        if (!it.isObject()) {
+                            continue;
+                        }
+                        ObjectNode item = it.deepCopy();
+                        if (!item.has("id")) item.put("id", String.valueOf(n));
+                        if (!item.has("state")) item.put("state", o.getState());
+                        if (!item.has("action")) item.put("action", "add");
                         items.add(item);
                     }
                 }
@@ -924,44 +813,37 @@ public class SomController {
             }
         }
         if (items == null || items.isEmpty()) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", "1");
-            item.put("state", o.getState());
-            item.put("action", "add");
-            item.put("service", Map.of("name", o.getItemName()));
-            items = List.of(item);
+            items = List.of(objectMapper.valueToTree(ServiceOrderView.DerivedItem.add(o.getState(), o.getItemName())));
         }
-        map.put("orderItem", items);
-        map.put("@type", "ServiceOrder");
-        return map;
+        return new ServiceOrderView(o.getId(), o.getHref(), o.getState(), o.getItemName(),
+                o.getCreatedAt().toString(), o.getProductOrderId(), o.getExternalId(), o.getPriority(),
+                o.getDescription(), o.getCompletedAt() == null ? null : o.getCompletedAt().toString(),
+                items, "ServiceOrder");
     }
 
     @PostMapping("/tmf-api/resourcePoolManagement/v4/resourcePool")
-    public ResponseEntity<Map<String, Object>> createPool(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ResourcePoolView> createPool(@RequestBody PoolRequest dto) {
+        if (dto.prefix() == null) {
+            throw new BadRequestException("prefix is required — a pool mints values from it");
+        }
         ResourcePool pool = new ResourcePool();
-        pool.setId(java.util.UUID.randomUUID().toString());
+        pool.setId(UUID.randomUUID().toString());
         pool.setTenantId(tenantScope.currentTenantId());
         pool.setHref("/tmf-api/resourcePoolManagement/v4/resourcePool/" + pool.getId());
-        pool.setName(String.valueOf(dto.getOrDefault("name", "numbers")));
-        pool.setResourceType(String.valueOf(dto.getOrDefault("resourceType", ResourcePool.MSISDN)));
-        pool.setPrefix(String.valueOf(dto.get("prefix")));
-        pool.setNextValue(dto.get("nextValue") instanceof Number n ? n.longValue() : 1L);
-        pool.setCreatedAt(java.time.OffsetDateTime.now());
-        pool.setLastUpdate(java.time.OffsetDateTime.now());
+        pool.setName(dto.name() == null ? "numbers" : dto.name());
+        pool.setResourceType(dto.resourceType() == null ? ResourcePool.MSISDN : dto.resourceType());
+        pool.setPrefix(dto.prefix());
+        pool.setNextValue(dto.nextValue() == null ? 1L : dto.nextValue());
+        pool.setCreatedAt(OffsetDateTime.now());
+        pool.setLastUpdate(OffsetDateTime.now());
         pools.save(pool);
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", pool.getId());
-        map.put("name", pool.getName());
-        map.put("resourceType", pool.getResourceType());
-        map.put("prefix", pool.getPrefix());
-        map.put("@type", "ResourcePool");
-        return ResponseEntity.status(HttpStatus.CREATED).body(map);
+        return ResponseEntity.status(HttpStatus.CREATED).body(poolView(pool));
     }
 
     /** Choose-your-number: an ANONYMOUS shortlist of available numbers (the
      * shop's picker) — previewed from the pool's window, never consumed. */
     @GetMapping("/tmf-api/resourcePoolManagement/v4/numberOffer")
-    public ResponseEntity<List<Map<String, Object>>> numberOffer(
+    public ResponseEntity<List<NumberOffer>> numberOffer(
             @RequestParam(name = "count", defaultValue = "6") int count,
             @RequestParam(name = "shuffle", required = false) String shuffle) {
         return ResponseEntity.ok(orchestration.offerNumbers(
@@ -969,136 +851,12 @@ public class SomController {
     }
 
     @GetMapping("/tmf-api/resourcePoolManagement/v4/resourcePool")
-    public ResponseEntity<List<Map<String, Object>>> listPools() {
+    public ResponseEntity<List<ResourcePoolView>> listPools() {
         return ResponseEntity.ok(pools.findByTenantId(tenantScope.currentTenantId()).stream()
-                .map(p -> {
-                    Map<String, Object> map = new LinkedHashMap<String, Object>();
-                    map.put("id", p.getId());
-                    map.put("name", p.getName());
-                    map.put("resourceType", p.getResourceType());
-                    map.put("prefix", p.getPrefix());
-                    map.put("@type", "ResourcePool");
-                    return map;
-                }).toList());
+                .map(this::poolView).toList());
     }
 
-    /** The inventory view of a service; the TMF640 face builds on the same map. */
-    Map<String, Object> serviceMap(ServiceInstance s) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        String category = categoryOf(s.getName());
-        map.put("id", s.getId());
-        map.put("href", s.getHref());
-        map.put("name", s.getName());
-        map.put("description", s.getName() + " — " + category + " service");
-        map.put("state", s.getState());
-        map.put("category", category);
-        map.put("startDate", s.getCreatedAt().toString());
-        map.put("serviceOrderId", s.getServiceOrderId());
-        // WHY a line is paused matters (vacation vs nonpayment) — say it
-        if (s.getSuspendReason() != null) {
-            map.put("suspendReason", s.getSuspendReason());
-        }
-        if (s.getResumeAt() != null) {
-            map.put("resumeAt", s.getResumeAt().toString());
-        }
-        if (s.getRestrictedAt() != null) {
-            Map<String, Object> restriction = new LinkedHashMap<>();
-            restriction.put("reason", s.getRestrictionReason());
-            restriction.put("since", s.getRestrictedAt().toString());
-            try {
-                restriction.put("profile", new ObjectMapper()
-                        .readValue(s.getRestrictionProfileJson(), Map.class));
-            } catch (Exception e) {
-                restriction.put("profile", Map.of());
-            }
-            map.put("restriction", restriction);
-        }
-        // TMF638 (v3 kit) demands every array non-empty with typed entries.
-        // Doctrine: fill them with DERIVED-REAL facts; where the fleet truly
-        // has no relationship, the entry SAYS so (an explicit standalone
-        // self-reference) rather than inventing a phantom dependency.
-        map.put("serviceRelationship", List.of(Map.of(
-                "relationshipType", "standalone",
-                "service", Map.of("id", s.getId(), "href", s.getHref()))));
-        map.put("supportingService", List.of(Map.of(
-                "id", s.getId(), "href", s.getHref(), "name", s.getName(),
-                "note", "standalone — supports itself; not an invented dependency")));
-        map.put("serviceSpecification", Map.of(
-                "id", "svcspec-" + category,
-                "href", "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/svcspec-" + category,
-                "name", category + " service",
-                "version", "1.0"));
-        // the OPERATOR is a related party of every service it runs; the
-        // owning customer joins when the service is owned
-        List<Map<String, Object>> parties = new java.util.ArrayList<>();
-        if (s.getOwnerPartyId() != null) {
-            parties.add(Map.of("id", s.getOwnerPartyId(),
-                    "href", "/tmf-api/party/v4/individual/" + s.getOwnerPartyId(),
-                    "role", "customer"));
-        }
-        parties.add(Map.of("id", "op-" + s.getTenantId(),
-                "href", "/tmf-api/party/v4/organization/op-" + s.getTenantId(),
-                "role", "serviceProvider"));
-        map.put("relatedParty", parties);
-        // Partner entitlements are credentials, not network resources: they
-        // surface as an activationCode characteristic, never as a "number".
-        List<com.bss.som.entity.ResourceAssignment> assigned = assignments
-                .findByTenantIdAndServiceId(s.getTenantId(), s.getId());
-        List<Map<String, Object>> supporting = new java.util.ArrayList<>(assigned.stream()
-                .filter(a -> !"partner".equals(a.getPoolId()))
-                .map(a -> Map.<String, Object>of("id", a.getId(),
-                        "href", "/tmf-api/resourceInventoryManagement/v4/resource/" + a.getId(),
-                        "value", a.getValue(), "@referredType", "Resource"))
-                .toList());
-        if (supporting.isEmpty()) {
-            // no issued resource — the PROVISIONING RECORD (its service
-            // order) is the real thing that stood this service up
-            supporting.add(Map.of("id", s.getServiceOrderId(),
-                    "href", "/tmf-api/serviceOrdering/v4/serviceOrder/" + s.getServiceOrderId(),
-                    "@referredType", "ServiceOrder"));
-        }
-        List<Map<String, Object>> characteristics = new java.util.ArrayList<>(assigned.stream()
-                .filter(a -> "partner".equals(a.getPoolId()))
-                .map(a -> Map.<String, Object>of("name", "activationCode",
-                        "valueType", "string", "value", a.getValue()))
-                .toList());
-        characteristics.add(Map.of("name", "category", "valueType", "string", "value", category));
-        List<Map<String, Object>> places = new java.util.ArrayList<>();
-        if (s.getDeliveryPath() != null) {
-            map.put("deliveryPath", s.getDeliveryPath());
-            characteristics.add(Map.of("name", "deliveryPath",
-                    "valueType", "string", "value", s.getDeliveryPath()));
-            places.add(Map.of("id", "path:" + s.getDeliveryPath(),
-                    "href", "/tmf-api/geographicSiteManagement/v4/geographicSite/path:"
-                            + s.getDeliveryPath(),
-                    "name", s.getDeliveryPath(),
-                    "role", "servingSite", "@type", "RelatedPlaceRefOrValue"));
-        }
-        places.add(Map.of("id", "sa-" + s.getTenantId(),
-                "href", "/tmf-api/geographicSiteManagement/v4/geographicSite/sa-" + s.getTenantId(),
-                "name", "service area", "role", "serviceArea",
-                "@type", "RelatedPlaceRefOrValue"));
-        // network slice: what priority this line rides right now, and until when
-        if (s.getSliceProfile() != null) {
-            characteristics.add(Map.of("name", "sliceProfile", "valueType", "string", "value", s.getSliceProfile()));
-            if (s.getSliceUntil() != null) {
-                characteristics.add(Map.of("name", "sliceUntil", "valueType", "dateTime", "value", s.getSliceUntil().toString()));
-            }
-        }
-        map.put("place", places);
-        map.put("supportingResource", supporting);
-        map.put("serviceCharacteristic", characteristics);
-        map.put("@type", "Service");
-        return map;
-    }
-
-    /** The service's kind, derived from what it IS named — never invented. */
-    private String categoryOf(String name) {
-        String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
-        if (n.contains("mobile") || n.contains("phone") || n.contains("sim")) return "mobile";
-        if (n.contains("broadband") || n.contains("fiber") || n.contains("fibre")
-                || n.contains("internet") || n.contains("dsl")) return "broadband";
-        if (n.contains("tv") || n.contains("netflix") || n.contains("stream")) return "tv";
-        return "service";
+    private ResourcePoolView poolView(ResourcePool p) {
+        return ResourcePoolView.of(p.getId(), p.getName(), p.getResourceType(), p.getPrefix());
     }
 }

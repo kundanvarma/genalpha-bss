@@ -2,6 +2,19 @@ package com.bss.som.service;
 
 import com.bss.som.client.OrderingClient;
 import com.bss.som.client.PartyOrgClient;
+import com.bss.som.dto.DealerDtos.AgreementRequest;
+import com.bss.som.dto.DealerDtos.CommissionPage;
+import com.bss.som.dto.DealerDtos.CommissionView;
+import com.bss.som.dto.DealerDtos.DealerAgreementView;
+import com.bss.som.dto.DealerDtos.KitActivationReceipt;
+import com.bss.som.dto.DealerDtos.KitActivationRequest;
+import com.bss.som.dto.DealerDtos.KitBatchRequest;
+import com.bss.som.dto.DealerDtos.LeaderboardRow;
+import com.bss.som.dto.DealerDtos.OrderStatus;
+import com.bss.som.dto.DealerDtos.SaleReceipt;
+import com.bss.som.dto.DealerDtos.SaleRequest;
+import com.bss.som.dto.DealerDtos.StarterKitView;
+import com.bss.som.dto.Money;
 import com.bss.som.entity.CommissionEntry;
 import com.bss.som.entity.DealerAgreement;
 import com.bss.som.entity.StarterKit;
@@ -111,12 +124,12 @@ public class DealerService {
 
     /** Back office signs the chain: org + commission per activation. */
     @Transactional
-    public Map<String, Object> createAgreement(Map<String, Object> dto) {
+    public DealerAgreementView createAgreement(AgreementRequest dto) {
         if (partyScope.scopedPartyId().isPresent() || !callerHasAuthority("service:write")) {
             throw new BadRequestException("dealer agreements are a back-office operation");
         }
-        String orgId = String.valueOf(dto.get("dealerOrgId"));
-        if (orgId == null || "null".equals(orgId)) {
+        String orgId = dto.dealerOrgId();
+        if (orgId == null) {
             throw new BadRequestException("dealerOrgId is required");
         }
         String tenant = tenantScope.currentTenantId();
@@ -129,9 +142,9 @@ public class DealerService {
                     fresh.setCreatedAt(OffsetDateTime.now());
                     return fresh;
                 });
-        agreement.setName(dto.get("name") == null ? orgId : String.valueOf(dto.get("name")));
-        if (dto.get("clientId") != null) {
-            String clientId = String.valueOf(dto.get("clientId"));
+        agreement.setName(dto.name() == null ? orgId : dto.name());
+        if (dto.clientId() != null) {
+            String clientId = dto.clientId();
             // one credential speaks for ONE dealer: signing a chain with a
             // client takes that client from any previous holder
             for (DealerAgreement holder : agreements.findByTenantIdAndClientId(tenant, clientId)) {
@@ -143,28 +156,26 @@ public class DealerService {
             }
             agreement.setClientId(clientId);
         }
-        Map<String, Object> commission = dto.get("commission") instanceof Map<?, ?> c
-                ? (Map<String, Object>) c : Map.of();
-        agreement.setCommissionValue(new BigDecimal(String.valueOf(
-                commission.getOrDefault("value", "0"))));
-        agreement.setCommissionUnit(String.valueOf(commission.getOrDefault("unit", "EUR")));
+        Money commission = dto.commission();
+        agreement.setCommissionValue(commission == null || commission.value() == null
+                ? BigDecimal.ZERO : commission.value());
+        agreement.setCommissionUnit(commission == null || commission.unit() == null ? "EUR" : commission.unit());
         agreement.setLastUpdate(OffsetDateTime.now());
         agreements.save(agreement);
         log.info("dealer agreement: {} earns {} {} per activation", agreement.getName(),
                 agreement.getCommissionValue(), agreement.getCommissionUnit());
-        return agreementMap(agreement);
+        return agreementView(agreement);
     }
 
     /** A batch of kits for the caller's OWN store — codes humans can read
      * over a counter, SIMs minted operator-side like every other. */
     @Transactional
-    public List<Map<String, Object>> mintBatch(Map<String, Object> dto) {
+    public List<StarterKitView> mintBatch(KitBatchRequest dto) {
         DealerAgreement dealer = requireDealer();
-        int count = Math.min(50, Math.max(1, dto.get("count") == null ? 1
-                : Integer.parseInt(String.valueOf(dto.get("count")))));
-        String store = dto.get("store") == null ? null : String.valueOf(dto.get("store"));
+        int count = Math.min(50, Math.max(1, dto.count() == null ? 1 : dto.count()));
+        String store = dto.store();
         SecureRandom random = new SecureRandom();
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<StarterKitView> out = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             StringBuilder code = new StringBuilder();
             for (int c = 0; c < 8; c++) {
@@ -187,7 +198,7 @@ public class DealerService {
             kit.setCreatedAt(OffsetDateTime.now());
             kit.setLastUpdate(OffsetDateTime.now());
             kits.save(kit);
-            out.add(kitMap(kit));
+            out.add(kitView(kit));
         }
         log.info("{} starter kits minted for {} ({})", count, dealer.getName(), store);
         return out;
@@ -195,11 +206,11 @@ public class DealerService {
 
     /** The store's own kits — and ONLY the store's own. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> myKits() {
+    public List<StarterKitView> myKits() {
         DealerAgreement dealer = requireDealer();
         return kits.findTop200ByTenantIdAndDealerOrgIdOrderByCreatedAtDesc(
                 tenantScope.currentTenantId(), dealer.getDealerOrgId())
-                .stream().map(this::kitMap).toList();
+                .stream().map(this::kitView).toList();
     }
 
     /**
@@ -208,18 +219,18 @@ public class DealerService {
      * attribution. The customer must already exist (they register in the
      * shop or app); the counter never invents identities.
      */
-    public Map<String, Object> sell(Map<String, Object> dto) {
+    public SaleReceipt sell(SaleRequest dto) {
         DealerAgreement dealer = requireDealer();
-        String email = String.valueOf(dto.get("customerEmail"));
-        Map<String, Object> customer = party.individualByEmail(email)
+        if (dto.customerEmail() == null || dto.customerEmail().isBlank()) {
+            throw new BadRequestException("customerEmail is required — the counter sells to a registered customer");
+        }
+        Map<String, Object> customer = party.individualByEmail(dto.customerEmail())
                 .orElseThrow(() -> new BadRequestException(
                         "no customer with that email — ask them to register in the app first"));
-        String orderId = placeDealerOrder(dealer, String.valueOf(customer.get("id")),
-                dto.get("store") == null ? null : String.valueOf(dto.get("store")),
-                String.valueOf(dto.get("offeringId")),
-                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")),
-                dto.get("device") == null ? null : String.valueOf(dto.get("device")));
-        return Map.of("productOrderId", orderId, "customerId", customer.get("id"));
+        String customerId = String.valueOf(customer.get("id"));
+        String orderId = placeDealerOrder(dealer, customerId, dto.store(), dto.offeringId(), dto.offeringName(),
+                dto.device());
+        return new SaleReceipt(orderId, customerId);
     }
 
     /**
@@ -229,10 +240,13 @@ public class DealerService {
      * the kit's own SIM becomes the line's SIM.
      */
     @Transactional
-    public Map<String, Object> activateKit(Map<String, Object> dto) {
+    public KitActivationReceipt activateKit(KitActivationRequest dto) {
         String caller = partyScope.scopedPartyId()
                 .orElseThrow(() -> new BadRequestException("kit activation is a customer act"));
-        String code = String.valueOf(dto.get("code")).trim().toUpperCase();
+        if (dto.code() == null || dto.code().isBlank()) {
+            throw new BadRequestException("code is required — the code printed in the box");
+        }
+        String code = dto.code().trim().toUpperCase();
         StarterKit kit = kits.findByTenantIdAndActivationCode(tenantScope.currentTenantId(), code)
                 .orElseThrow(() -> NotFoundException.forResource("StarterKit", code));
         if (!StarterKit.AVAILABLE.equals(kit.getStatus())) {
@@ -240,10 +254,7 @@ public class DealerService {
         }
         DealerAgreement dealer = agreements.findByTenantIdAndDealerOrgId(
                 tenantScope.currentTenantId(), kit.getDealerOrgId()).orElse(null);
-        String orderId = placeDealerOrder(dealer, caller, kit.getStore(),
-                String.valueOf(dto.get("offeringId")),
-                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")),
-                null);
+        String orderId = placeDealerOrder(dealer, caller, kit.getStore(), dto.offeringId(), dto.offeringName(), null);
         kit.setStatus(StarterKit.ACTIVATED);
         kit.setProductOrderId(orderId);
         kit.setActivatedBy(caller);
@@ -252,7 +263,7 @@ public class DealerService {
         kits.save(kit);
         log.info("starter kit {} activated by {} — order {}, credit to {}",
                 code, caller, orderId, kit.getDealerOrgId());
-        return Map.of("productOrderId", orderId, "iccid", kit.getIccid());
+        return new KitActivationReceipt(orderId, kit.getIccid());
     }
 
     private String placeDealerOrder(DealerAgreement dealer, String customerId, String store,
@@ -288,7 +299,7 @@ public class DealerService {
      * order credits (activation lands within seconds of a digital sale).
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> orderStatus(String productOrderId) {
+    public OrderStatus orderStatus(String productOrderId) {
         DealerAgreement dealer = requireDealer();
         String tenant = tenantScope.currentTenantId();
         List<CommissionEntry> mine = commissions
@@ -297,10 +308,7 @@ public class DealerService {
         if (mine.isEmpty()) {
             throw NotFoundException.forResource("ProductOrder", productOrderId);
         }
-        return Map.of(
-                "productOrderId", productOrderId,
-                "activated", true,
-                "commission", mine.stream().map(this::commissionMap).toList());
+        return new OrderStatus(productOrderId, true, mine.stream().map(this::commissionView).toList());
     }
 
     /** The telesales sibling needs the same two powers, seam-shaped. */
@@ -317,38 +325,45 @@ public class DealerService {
                 offer.getOfferingId(), offer.getOfferingName(), null);
     }
 
-    /** The dealer's money page: entries newest first, plus honest totals. */
-    @Transactional(readOnly = true)
+    /** A store's running tally while the ledger is walked; frozen into a row at the end. */
+    private static final class Tally {
+        final String dealerOrgId;
+        final String store;
+        final String unit;
+        long activations;
+        BigDecimal commission = BigDecimal.ZERO;
+
+        Tally(String dealerOrgId, String store, String unit) {
+            this.dealerOrgId = dealerOrgId;
+            this.store = store;
+            this.unit = unit;
+        }
+    }
+
     /** G4 — CHANNEL GAMIFICATION: the season leaderboard the commission
      *  ledger always contained. Stores ranked by accrued commission and
      *  activations; the operator's sell-side scoreboard, sold-side honest. */
-    public List<Map<String, Object>> leaderboard() {
-        Map<String, Map<String, Object>> byKey = new LinkedHashMap<>();
+    @Transactional(readOnly = true)
+    public List<LeaderboardRow> leaderboard() {
+        Map<String, Tally> byKey = new LinkedHashMap<>();
         for (CommissionEntry e : commissions.findByTenantId(tenantScope.currentTenantId())) {
             String key = e.getDealerOrgId() + "|" + (e.getStore() == null ? "" : e.getStore());
-            Map<String, Object> row = byKey.computeIfAbsent(key, k -> {
-                Map<String, Object> fresh = new LinkedHashMap<>();
-                fresh.put("dealerOrgId", e.getDealerOrgId());
-                fresh.put("store", e.getStore());
-                fresh.put("activations", 0L);
-                fresh.put("commission", BigDecimal.ZERO);
-                fresh.put("unit", e.getAmountUnit());
-                return fresh;
-            });
-            row.put("activations", (long) row.get("activations") + 1);
-            row.put("commission", ((BigDecimal) row.get("commission"))
-                    .add(e.getAmountValue() == null ? BigDecimal.ZERO : e.getAmountValue()));
+            Tally row = byKey.computeIfAbsent(key, k -> new Tally(e.getDealerOrgId(), e.getStore(), e.getAmountUnit()));
+            row.activations++;
+            row.commission = row.commission.add(e.getAmountValue() == null ? BigDecimal.ZERO : e.getAmountValue());
         }
-        List<Map<String, Object>> out = new java.util.ArrayList<>(byKey.values());
-        out.sort((a, b) -> ((BigDecimal) b.get("commission")).compareTo((BigDecimal) a.get("commission")));
+        List<Tally> sorted = new ArrayList<>(byKey.values());
+        sorted.sort((a, b) -> b.commission.compareTo(a.commission));
+        List<LeaderboardRow> out = new ArrayList<>();
         int rank = 0;
-        for (Map<String, Object> row : out) {
-            row.put("rank", ++rank);
+        for (Tally t : sorted) {
+            out.add(new LeaderboardRow(t.dealerOrgId, t.store, t.activations, t.commission, t.unit, ++rank));
         }
         return out;
     }
 
-    public Map<String, Object> myCommission() {
+    /** The dealer's money page: entries newest first, plus honest totals. */
+    public CommissionPage myCommission() {
         DealerAgreement dealer = requireDealer();
         List<CommissionEntry> entries = commissions
                 .findTop200ByTenantIdAndDealerOrgIdOrderByAccruedAtDesc(
@@ -357,48 +372,24 @@ public class DealerService {
         for (CommissionEntry e : entries) {
             totals.merge(e.getStatus(), e.getAmountValue(), BigDecimal::add);
         }
-        return Map.of(
-                "dealer", dealer.getName(),
-                "commissionPerActivation", Map.of("value", dealer.getCommissionValue(),
-                        "unit", dealer.getCommissionUnit()),
-                "totals", totals,
-                "entries", entries.stream().map(this::commissionMap).toList());
+        return new CommissionPage(dealer.getName(),
+                new Money(dealer.getCommissionValue(), dealer.getCommissionUnit()), totals,
+                entries.stream().map(this::commissionView).toList());
     }
 
-    private Map<String, Object> agreementMap(DealerAgreement a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("dealerOrgId", a.getDealerOrgId());
-        map.put("name", a.getName());
-        map.put("commission", Map.of("value", a.getCommissionValue(), "unit", a.getCommissionUnit()));
-        map.put("@type", "DealerAgreement");
-        return map;
+    private DealerAgreementView agreementView(DealerAgreement a) {
+        return new DealerAgreementView(a.getId(), a.getDealerOrgId(), a.getName(),
+                new Money(a.getCommissionValue(), a.getCommissionUnit()), "DealerAgreement");
     }
 
-    private Map<String, Object> kitMap(StarterKit k) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", k.getId());
-        map.put("activationCode", k.getActivationCode());
-        map.put("iccid", k.getIccid());
-        map.put("store", k.getStore());
-        map.put("status", k.getStatus());
-        map.put("activatedAt", k.getActivatedAt() == null ? null : k.getActivatedAt().toString());
-        map.put("@type", "StarterKit");
-        return map;
+    private StarterKitView kitView(StarterKit k) {
+        return new StarterKitView(k.getId(), k.getActivationCode(), k.getIccid(), k.getStore(), k.getStatus(),
+                k.getActivatedAt() == null ? null : k.getActivatedAt().toString(), "StarterKit");
     }
 
-    private Map<String, Object> commissionMap(CommissionEntry e) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", e.getId());
-        map.put("store", e.getStore());
-        map.put("offeringName", e.getOfferingName());
-        map.put("device", e.getDeviceNote());
-        map.put("amount", Map.of("value", e.getAmountValue(), "unit", e.getAmountUnit()));
-        map.put("status", e.getStatus());
-        map.put("reason", e.getReason());
-        map.put("accruedAt", e.getAccruedAt().toString());
-        map.put("hardensAt", e.getHardensAt().toString());
-        map.put("@type", "CommissionEntry");
-        return map;
+    private CommissionView commissionView(CommissionEntry e) {
+        return new CommissionView(e.getId(), e.getStore(), e.getOfferingName(), e.getDeviceNote(),
+                new Money(e.getAmountValue(), e.getAmountUnit()), e.getStatus(), e.getReason(),
+                e.getAccruedAt().toString(), e.getHardensAt().toString(), "CommissionEntry");
     }
 }

@@ -1,11 +1,25 @@
 package com.bss.som.controller;
 
+import com.bss.som.api.Projection;
+import com.bss.som.dto.LineReceipts.ServiceDiagnosis;
+import com.bss.som.dto.ServiceRef;
+import com.bss.som.dto.SpecRef;
+import com.bss.som.dto.StandardFaceViews.NamedValue;
+import com.bss.som.dto.StandardFaceViews.ResourcePoolView;
+import com.bss.som.dto.StandardFaceViews.ResourceView;
+import com.bss.som.dto.StandardFaceViews.ServiceSpecView;
+import com.bss.som.dto.StandardFaceViews.ServiceTestRequest;
+import com.bss.som.dto.StandardFaceViews.ServiceTestSpecRequest;
+import com.bss.som.dto.StandardFaceViews.ServiceTestSpecView;
+import com.bss.som.dto.StandardFaceViews.ServiceTestView;
 import com.bss.som.entity.InventoryResource;
 import com.bss.som.entity.NumberQuarantine;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.entity.ServiceTest;
 import com.bss.som.entity.ServiceTestSpec;
+import com.bss.som.exception.BadRequestException;
+import com.bss.som.exception.NotFoundException;
 import com.bss.som.repository.InventoryResourceRepository;
 import com.bss.som.repository.NumberQuarantineRepository;
 import com.bss.som.repository.ResourceAssignmentRepository;
@@ -14,7 +28,9 @@ import com.bss.som.repository.ServiceTestRepository;
 import com.bss.som.repository.ServiceTestSpecRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +42,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,7 +53,8 @@ import java.util.UUID;
  * check, zero duplicated logic). TMF639: the pools and the issued-number
  * ledger, HONESTLY labeled — a pool here is a monotonic counter, so the
  * face reports what was ISSUED and quarantined and never invents an
- * "available" count.
+ * "available" count. A resource a caller POSTed is kept verbatim and
+ * answered as its own document with the row's facts on top.
  */
 @RestController
 public class StandardFacesController {
@@ -53,13 +68,13 @@ public class StandardFacesController {
     private final InventoryResourceRepository inventory;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public StandardFacesController(SomController som, ServiceTestRepository tests,
             ServiceTestSpecRepository testSpecs,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             NumberQuarantineRepository quarantine, InventoryResourceRepository inventory,
-            TenantScope tenantScope, PartyScope partyScope) {
+            TenantScope tenantScope, PartyScope partyScope, ObjectMapper objectMapper) {
         this.som = som;
         this.tests = tests;
         this.testSpecs = testSpecs;
@@ -69,36 +84,34 @@ public class StandardFacesController {
         this.inventory = inventory;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
+        this.objectMapper = objectMapper;
     }
 
     /* ---------- TMF653 serviceTest ---------- */
 
     @PostMapping("/tmf-api/serviceTestManagement/v4/serviceTest")
-    public ResponseEntity<Map<String, Object>> runTest(@RequestBody Map<String, Object> dto) {
-        String serviceId = dto.get("relatedService") instanceof Map<?, ?> ref
-                && ref.get("id") != null && !String.valueOf(ref.get("id")).isBlank()
-                ? String.valueOf(ref.get("id")) : null;
+    public ResponseEntity<ServiceTestView> runTest(@RequestBody ServiceTestRequest dto) {
+        String serviceId = dto.serviceId();
         if (serviceId == null) {
-            throw new com.bss.som.exception.BadRequestException("relatedService {id} is required");
+            throw new BadRequestException("relatedService {id} is required");
         }
-        if (!(dto.get("testSpecification") instanceof Map<?, ?> spec) || spec.get("id") == null) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "testSpecification {id} is required — a test without a spec proves nothing");
+        if (dto.testSpecification() == null || !dto.testSpecification().isObject()
+                || dto.testSpecification().get("id") == null || dto.testSpecification().get("id").isNull()) {
+            throw new BadRequestException("testSpecification {id} is required — a test without a spec proves nothing");
         }
         ServiceTest test = new ServiceTest();
         test.setId(UUID.randomUUID().toString());
         test.setTenantId(tenantScope.currentTenantId());
         test.setServiceId(serviceId);
         test.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
-        test.setName(dto.get("name") == null ? "diagnose " + serviceId
-                : String.valueOf(dto.get("name")));
-        test.setTestSpecJson(writeJson(dto.get("testSpecification")));
+        test.setName(dto.name() == null ? "diagnose " + serviceId : dto.name());
+        test.setTestSpecJson(writeJson(dto.testSpecification()));
         try {
             // same code path, same owner check as the CSR Diagnose button
-            Map<String, Object> diagnosis = som.diagnose(serviceId).getBody();
-            test.setVerdict(String.valueOf(diagnosis.get("verdict")));
-            test.setFindingsJson(writeJson(diagnosis.get("findings")));
-        } catch (com.bss.som.exception.NotFoundException e) {
+            ServiceDiagnosis diagnosis = som.diagnose(serviceId).getBody();
+            test.setVerdict(diagnosis.verdict());
+            test.setFindingsJson(writeJson(diagnosis.findings()));
+        } catch (NotFoundException e) {
             // a party-scoped caller probing a foreign service keeps the 404
             // (the owner check IS the protection); STAFF referencing a
             // service outside this inventory gets an honest inconclusive
@@ -106,9 +119,8 @@ public class StandardFacesController {
                 throw e;
             }
             test.setVerdict("inconclusive");
-            test.setFindingsJson(writeJson(List.of(Map.of(
-                    "name", "error",
-                    "value", "service '" + serviceId + "' is not in this inventory — "
+            test.setFindingsJson(writeJson(List.of(new NamedValue("error",
+                    "service '" + serviceId + "' is not in this inventory — "
                             + "reference recorded, nothing was measured"))));
         }
         test.setCreatedAt(OffsetDateTime.now());
@@ -117,7 +129,7 @@ public class StandardFacesController {
     }
 
     @GetMapping("/tmf-api/serviceTestManagement/v4/serviceTest")
-    public ResponseEntity<List<Map<String, Object>>> listTests(
+    public ResponseEntity<List<ServiceTestView>> listTests(
             @RequestParam(required = false) String serviceId,
             @RequestParam(required = false) String name,
             @RequestParam(name = "relatedService.id", required = false) String relatedServiceId) {
@@ -130,168 +142,131 @@ public class StandardFacesController {
                 .filter(t -> partyScope.scopedPartyId()
                         .map(own -> own.equals(t.getOwnerPartyId())).orElse(true))
                 .map(this::testView)
-                .filter(m -> name == null || name.equals(m.get("name")))
+                .filter(v -> name == null || name.equals(v.name()))
                 .toList());
     }
 
     @GetMapping("/tmf-api/serviceTestManagement/v4/serviceTest/{id}")
-    public ResponseEntity<Map<String, Object>> testById(@PathVariable("id") String id,
+    public ResponseEntity<JsonNode> testById(@PathVariable("id") String id,
             @RequestParam(required = false) String fields) {
         ServiceTest t = tests.findByIdAndTenantId(id, tenantScope.currentTenantId())
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                        .forResource("ServiceTest", id));
+                .orElseThrow(() -> NotFoundException.forResource("ServiceTest", id));
         partyScope.scopedPartyId().ifPresent(own -> {
             if (!own.equals(t.getOwnerPartyId())) {
-                throw com.bss.som.exception.NotFoundException.forResource("ServiceTest", id);
+                throw NotFoundException.forResource("ServiceTest", id);
             }
         });
-        return ResponseEntity.ok(project(testView(t), fields));
+        return ResponseEntity.ok(Projection.selectExact(objectMapper, testView(t), fields, "id"));
     }
 
     /* ---------- TMF653 serviceTestSpecification ---------- */
 
     @PostMapping("/tmf-api/serviceTestManagement/v4/serviceTestSpecification")
-    public ResponseEntity<Map<String, Object>> createTestSpec(@RequestBody Map<String, Object> dto) {
-        if (!(dto.get("name") instanceof String name) || name.isBlank()) {
-            throw new com.bss.som.exception.BadRequestException("name is required");
+    public ResponseEntity<ServiceTestSpecView> createTestSpec(@RequestBody ServiceTestSpecRequest dto) {
+        if (dto.name() == null || dto.name().isBlank()) {
+            throw new BadRequestException("name is required");
         }
-        if (!(dto.get("relatedServiceSpecification") instanceof Map<?, ?> rel)
-                || rel.get("id") == null || String.valueOf(rel.get("id")).isBlank()) {
-            throw new com.bss.som.exception.BadRequestException(
+        JsonNode rel = dto.relatedServiceSpecification();
+        if (rel == null || !rel.isObject() || rel.path("id").asText("").isBlank()) {
+            throw new BadRequestException(
                     "relatedServiceSpecification {id} is required — a test spec tests SOMETHING");
         }
         ServiceTestSpec spec = new ServiceTestSpec();
         spec.setId(UUID.randomUUID().toString());
         spec.setTenantId(tenantScope.currentTenantId());
-        spec.setName(name);
-        spec.setRelatedSpecJson(writeJson(dto.get("relatedServiceSpecification")));
+        spec.setName(dto.name());
+        spec.setRelatedSpecJson(writeJson(rel));
         spec.setCreatedAt(OffsetDateTime.now());
         testSpecs.save(spec);
         return ResponseEntity.status(HttpStatus.CREATED).body(specTestView(spec));
     }
 
     @GetMapping("/tmf-api/serviceTestManagement/v4/serviceTestSpecification")
-    public ResponseEntity<List<Map<String, Object>>> listTestSpecs(
+    public ResponseEntity<List<ServiceTestSpecView>> listTestSpecs(
             @RequestParam(required = false) String name,
             @RequestParam(name = "relatedServiceSpecification.id", required = false)
             String relatedSpecId) {
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<ServiceTestSpecView> out = new ArrayList<>();
         out.add(diagnoseSpecView());
         for (ServiceTestSpec spec : testSpecs
                 .findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())) {
             out.add(specTestView(spec));
         }
         if (name != null) {
-            out.removeIf(m -> !name.equals(m.get("name")));
+            out.removeIf(v -> !name.equals(v.name()));
         }
         if (relatedSpecId != null) {
-            out.removeIf(m -> !(m.get("relatedServiceSpecification") instanceof Map<?, ?> rel
-                    && relatedSpecId.equals(String.valueOf(rel.get("id")))));
+            out.removeIf(v -> !(v.relatedServiceSpecification().isObject()
+                    && relatedSpecId.equals(v.relatedServiceSpecification().path("id").asText())));
         }
         return ResponseEntity.ok(out);
     }
 
     @GetMapping("/tmf-api/serviceTestManagement/v4/serviceTestSpecification/{id}")
-    public ResponseEntity<Map<String, Object>> testSpecById(@PathVariable("id") String id,
+    public ResponseEntity<JsonNode> testSpecById(@PathVariable("id") String id,
             @RequestParam(required = false) String fields) {
-        Map<String, Object> view = "diagnose".equals(id) ? diagnoseSpecView()
+        ServiceTestSpecView view = "diagnose".equals(id) ? diagnoseSpecView()
                 : testSpecs.findByIdAndTenantId(id, tenantScope.currentTenantId())
                         .map(this::specTestView)
-                        .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                                .forResource("ServiceTestSpecification", id));
-        return ResponseEntity.ok(project(view, fields));
+                        .orElseThrow(() -> NotFoundException.forResource("ServiceTestSpecification", id));
+        return ResponseEntity.ok(Projection.selectExact(objectMapper, view, fields, "id"));
     }
 
     /** The built-in spec: the CSR diagnose triage, virtual for every tenant. */
-    private Map<String, Object> diagnoseSpecView() {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", "diagnose");
-        map.put("href", "/tmf-api/serviceTestManagement/v4/serviceTestSpecification/diagnose");
-        map.put("name", "diagnose triage");
-        map.put("relatedServiceSpecification", Map.of("id", "svcspec-service",
-                "href", "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/svcspec-service"));
-        map.put("@type", "ServiceTestSpecification");
-        return map;
+    private ServiceTestSpecView diagnoseSpecView() {
+        return new ServiceTestSpecView("diagnose",
+                "/tmf-api/serviceTestManagement/v4/serviceTestSpecification/diagnose", "diagnose triage",
+                objectMapper.valueToTree(new SpecRef("svcspec-service",
+                        "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/svcspec-service", null, null)),
+                "ServiceTestSpecification");
     }
 
-    private Map<String, Object> specTestView(ServiceTestSpec spec) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", spec.getId());
-        map.put("href", "/tmf-api/serviceTestManagement/v4/serviceTestSpecification/" + spec.getId());
-        map.put("name", spec.getName());
-        try {
-            map.put("relatedServiceSpecification", spec.getRelatedSpecJson() == null ? Map.of()
-                    : objectMapper.readValue(spec.getRelatedSpecJson(), Map.class));
-        } catch (Exception e) {
-            map.put("relatedServiceSpecification", Map.of());
-        }
-        map.put("@type", "ServiceTestSpecification");
-        return map;
-    }
-
-    /** TMF630 attribute selection: the asked-for fields, id always along. */
-    private Map<String, Object> project(Map<String, Object> full, String fields) {
-        if (fields == null || fields.isBlank()) {
-            return full;
-        }
-        Map<String, Object> slim = new LinkedHashMap<>();
-        if (full.containsKey("id")) {
-            slim.put("id", full.get("id"));
-        }
-        for (String f : fields.split(",")) {
-            String key = f.trim();
-            if (full.containsKey(key)) {
-                slim.put(key, full.get(key));
-            }
-        }
-        return slim;
+    private ServiceTestSpecView specTestView(ServiceTestSpec spec) {
+        JsonNode related = readObject(spec.getRelatedSpecJson());
+        return new ServiceTestSpecView(spec.getId(),
+                "/tmf-api/serviceTestManagement/v4/serviceTestSpecification/" + spec.getId(), spec.getName(),
+                related == null ? objectMapper.createObjectNode() : related, "ServiceTestSpecification");
     }
 
     /* ---------- TMF639 resource faces (staff-grade reads) ---------- */
 
     @GetMapping("/tmf-api/resourceInventoryManagement/v4/resourcePool")
-    public ResponseEntity<List<Map<String, Object>>> resourcePools() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public ResponseEntity<List<ResourcePoolView>> resourcePools() {
+        List<ResourcePoolView> out = new ArrayList<>();
         for (ResourcePool pool : pools.findByTenantId(tenantScope.currentTenantId())) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", pool.getId());
-            map.put("name", pool.getName());
-            map.put("resourceType", pool.getResourceType());
-            map.put("prefix", pool.getPrefix());
-            map.put("issuedCounter", pool.getNextValue());
-            map.put("note", "this pool is a generator, not a free-list — issued and "
-                    + "quarantined are facts; an 'available' count would be an invention");
-            map.put("@type", "ResourcePool");
-            out.add(map);
+            out.add(ResourcePoolView.facts(pool.getId(), pool.getName(), pool.getResourceType(), pool.getPrefix(),
+                    pool.getNextValue()));
         }
         return ResponseEntity.ok(out);
     }
 
     @PostMapping("/tmf-api/resourceInventoryManagement/v4/resource")
-    public ResponseEntity<Map<String, Object>> createResource(@RequestBody Map<String, Object> dto) {
-        if (!(dto.get("name") instanceof String name) || name.isBlank()) {
-            throw new com.bss.som.exception.BadRequestException(
-                    "name is required — an inventory record IS a named thing");
+    public ResponseEntity<JsonNode> createResource(@RequestBody ObjectNode dto) {
+        JsonNode name = dto.get("name");
+        if (name == null || !name.isTextual() || name.asText().isBlank()) {
+            throw new BadRequestException("name is required — an inventory record IS a named thing");
         }
         InventoryResource r = new InventoryResource();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
-        r.setName(name);
-        r.setCategory(dto.get("category") instanceof String c ? c : null);
-        r.setResourceStatus(dto.get("resourceStatus") instanceof String s ? s : "available");
+        r.setName(name.asText());
+        r.setCategory(dto.get("category") != null && dto.get("category").isTextual()
+                ? dto.get("category").asText() : null);
+        r.setResourceStatus(dto.get("resourceStatus") != null && dto.get("resourceStatus").isTextual()
+                ? dto.get("resourceStatus").asText() : "available");
         r.setDocumentJson(writeJson(dto));
         r.setCreatedAt(OffsetDateTime.now());
         inventory.save(r);
-        Map<String, Object> view = storedView(r);
-        return ResponseEntity.created(java.net.URI.create(String.valueOf(view.get("href")))).body(view);
+        ObjectNode view = storedView(r);
+        return ResponseEntity.created(java.net.URI.create(view.get("href").asText())).body(view);
     }
 
     @GetMapping("/tmf-api/resourceInventoryManagement/v4/resource")
-    public ResponseEntity<List<Map<String, Object>>> resources(
+    public ResponseEntity<List<JsonNode>> resources(
             @RequestParam(required = false) String serviceId,
             @RequestParam(required = false) String name) {
         String tenant = tenantScope.currentTenantId();
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<JsonNode> out = new ArrayList<>();
         for (InventoryResource r : inventory.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)) {
             out.add(storedView(r));
         }
@@ -300,44 +275,44 @@ public class StandardFacesController {
                 : assignments.findAll().stream()
                         .filter(a -> tenant.equals(a.getTenantId())).limit(200).toList();
         for (ResourceAssignment a : issued) {
-            out.add(assignmentView(a));
+            out.add(objectMapper.valueToTree(assignmentView(a)));
         }
         for (NumberQuarantine q : quarantine.findAll().stream()
                 .filter(q -> tenant.equals(q.getTenantId())).limit(100).toList()) {
-            out.add(quarantineView(q));
+            out.add(objectMapper.valueToTree(ResourceView.quarantined(q.getNumber())));
         }
         if (serviceId != null) {
-            out.removeIf(m -> !(m.get("relatedService") instanceof Map<?, ?> ref
-                    && serviceId.equals(ref.get("id"))));
+            out.removeIf(v -> !(v.path("relatedService").isObject()
+                    && serviceId.equals(v.path("relatedService").path("id").asText(null))));
         }
         if (name != null) {
-            out.removeIf(m -> !name.equals(m.get("name")));
+            out.removeIf(v -> !name.equals(v.path("name").asText(null)));
         }
         return ResponseEntity.ok(out);
     }
 
     @GetMapping("/tmf-api/resourceInventoryManagement/v4/resource/{id}")
-    public ResponseEntity<Map<String, Object>> resourceById(@PathVariable("id") String id) {
+    public ResponseEntity<JsonNode> resourceById(@PathVariable("id") String id) {
         String tenant = tenantScope.currentTenantId();
-        return inventory.findByIdAndTenantId(id, tenant).map(r -> ResponseEntity.ok(storedView(r)))
+        return inventory.findByIdAndTenantId(id, tenant).map(r -> ResponseEntity.<JsonNode>ok(storedView(r)))
                 .or(() -> assignments.findById(id)
                         .filter(a -> tenant.equals(a.getTenantId()))
-                        .map(a -> ResponseEntity.ok(assignmentView(a))))
+                        .map(a -> ResponseEntity.<JsonNode>ok(objectMapper.valueToTree(assignmentView(a)))))
                 .or(() -> quarantine.findAll().stream()
                         .filter(q -> tenant.equals(q.getTenantId())
                                 && ("quarantine-" + q.getNumber()).equals(id))
-                        .findFirst().map(q -> ResponseEntity.ok(quarantineView(q))))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                        .forResource("Resource", id));
+                        .findFirst().map(q -> ResponseEntity.<JsonNode>ok(
+                                objectMapper.valueToTree(ResourceView.quarantined(q.getNumber())))))
+                .orElseThrow(() -> NotFoundException.forResource("Resource", id));
     }
 
-    private Map<String, Object> storedView(InventoryResource r) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        try {
-            if (r.getDocumentJson() != null) {
-                map.putAll(objectMapper.readValue(r.getDocumentJson(), Map.class));
-            }
-        } catch (Exception ignored) { }
+    /** The caller's document as posted, with the row's facts written over it and a default @type. */
+    private ObjectNode storedView(InventoryResource r) {
+        ObjectNode map = objectMapper.createObjectNode();
+        JsonNode doc = readObject(r.getDocumentJson());
+        if (doc != null) {
+            map.setAll((ObjectNode) doc);
+        }
         map.put("id", r.getId());
         map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/" + r.getId());
         map.put("name", r.getName());
@@ -345,37 +320,14 @@ public class StandardFacesController {
             map.put("category", r.getCategory());
         }
         map.put("resourceStatus", r.getResourceStatus());
-        map.putIfAbsent("@type", "Resource");
+        if (!map.has("@type")) {
+            map.put("@type", "Resource");
+        }
         return map;
     }
 
-    private Map<String, Object> assignmentView(ResourceAssignment a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/" + a.getId());
-        map.put("name", a.getValue());
-        map.put("value", a.getValue());
-        map.put("resourceStatus", "assigned");
-        map.put("poolId", a.getPoolId());
-        if (a.getServiceId() != null) {
-            map.put("relatedService", Map.of("id", a.getServiceId()));
-        }
-        if (a.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", a.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("@type", "Resource");
-        return map;
-    }
-
-    private Map<String, Object> quarantineView(NumberQuarantine q) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", "quarantine-" + q.getNumber());
-        map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/quarantine-" + q.getNumber());
-        map.put("name", q.getNumber());
-        map.put("value", q.getNumber());
-        map.put("resourceStatus", "quarantined");
-        map.put("@type", "Resource");
-        return map;
+    private ResourceView assignmentView(ResourceAssignment a) {
+        return ResourceView.assigned(a.getId(), a.getValue(), a.getPoolId(), a.getServiceId(), a.getOwnerPartyId());
     }
 
     /* ---------- TMF633 serviceSpecification (read-only, derived) ----------
@@ -386,58 +338,29 @@ public class StandardFacesController {
     private static final List<String> SPEC_CATEGORIES = List.of("mobile", "broadband", "tv", "service");
 
     @GetMapping("/tmf-api/serviceCatalogManagement/v4/serviceSpecification")
-    public ResponseEntity<List<Map<String, Object>>> serviceSpecifications() {
-        return ResponseEntity.ok(SPEC_CATEGORIES.stream().map(this::specView).toList());
+    public ResponseEntity<List<ServiceSpecView>> serviceSpecifications() {
+        return ResponseEntity.ok(SPEC_CATEGORIES.stream().map(ServiceSpecView::of).toList());
     }
 
     @GetMapping("/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}")
-    public ResponseEntity<Map<String, Object>> serviceSpecification(@PathVariable("id") String id) {
+    public ResponseEntity<ServiceSpecView> serviceSpecification(@PathVariable("id") String id) {
         return SPEC_CATEGORIES.stream()
                 .filter(c -> ("svcspec-" + c).equals(id))
-                .findFirst().map(c -> ResponseEntity.ok(specView(c)))
-                .orElseThrow(() -> com.bss.som.exception.NotFoundException
-                        .forResource("ServiceSpecification", id));
+                .findFirst().map(c -> ResponseEntity.ok(ServiceSpecView.of(c)))
+                .orElseThrow(() -> NotFoundException.forResource("ServiceSpecification", id));
     }
 
-    private Map<String, Object> specView(String category) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", "svcspec-" + category);
-        map.put("href", "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/svcspec-" + category);
-        map.put("name", category + " service");
-        map.put("version", "1.0");
-        map.put("lifecycleStatus", "active");
-        map.put("@type", "ServiceSpecification");
-        return map;
-    }
-
-    private Map<String, Object> testView(ServiceTest t) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", t.getId());
-        map.put("href", "/tmf-api/serviceTestManagement/v4/serviceTest/" + t.getId());
-        map.put("name", t.getName() == null ? "diagnose " + t.getServiceId() : t.getName());
-        map.put("relatedService", Map.of("id", t.getServiceId(),
-                "href", "/tmf-api/serviceInventory/v4/service/" + t.getServiceId()));
-        Map<String, Object> specRef;
-        try {
-            specRef = t.getTestSpecJson() == null ? null
-                    : objectMapper.readValue(t.getTestSpecJson(), Map.class);
-        } catch (Exception e) {
-            specRef = null;
-        }
-        map.put("testSpecification", specRef != null ? specRef : Map.of("id", "diagnose",
-                "href", "/tmf-api/serviceTestManagement/v4/serviceTestSpecification/diagnose",
-                "name", "diagnose triage"));
-        map.put("state", "completed");
-        map.put("verdict", t.getVerdict());
-        try {
-            map.put("testMeasure", t.getFindingsJson() == null ? List.of()
-                    : objectMapper.readValue(t.getFindingsJson(), List.class));
-        } catch (Exception e) {
-            map.put("testMeasure", List.of());
-        }
-        map.put("createdAt", t.getCreatedAt());
-        map.put("@type", "ServiceTest");
-        return map;
+    private ServiceTestView testView(ServiceTest t) {
+        JsonNode specRef = readObject(t.getTestSpecJson());
+        JsonNode measures = readJson(t.getFindingsJson());
+        return new ServiceTestView(t.getId(),
+                "/tmf-api/serviceTestManagement/v4/serviceTest/" + t.getId(),
+                t.getName() == null ? "diagnose " + t.getServiceId() : t.getName(),
+                ServiceRef.inventory(t.getServiceId()),
+                specRef != null ? specRef : objectMapper.valueToTree(SpecRef.diagnose()),
+                "completed", t.getVerdict(),
+                measures != null && measures.isArray() ? measures : objectMapper.createArrayNode(),
+                t.getCreatedAt(), "ServiceTest");
     }
 
     private String writeJson(Object o) {
@@ -446,5 +369,21 @@ public class StandardFacesController {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private JsonNode readJson(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JsonNode readObject(String json) {
+        JsonNode n = readJson(json);
+        return n != null && n.isObject() ? n : null;
     }
 }

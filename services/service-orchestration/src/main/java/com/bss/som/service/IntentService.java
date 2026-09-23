@@ -1,5 +1,13 @@
 package com.bss.som.service;
 
+import com.bss.som.dto.IntentDtos.Expectation;
+import com.bss.som.dto.IntentDtos.Expression;
+import com.bss.som.dto.IntentDtos.ExpressionView;
+import com.bss.som.dto.IntentDtos.IntentReport;
+import com.bss.som.dto.IntentDtos.IntentRequest;
+import com.bss.som.dto.IntentDtos.IntentView;
+import com.bss.som.dto.IntentDtos.ProposedItem;
+import com.bss.som.dto.PartyRef;
 import com.bss.som.entity.Intent;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.events.DomainEventPublisher;
@@ -52,65 +60,60 @@ public class IntentService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        Map<String, Object> expression = dto.get("expression") instanceof Map<?, ?> e
-                ? castMap(e) : dto;
-        if (dto.get("name") == null || expression.get("place") == null
-                || expression.get("latencyMs") == null) {
+    public IntentView create(IntentRequest dto) {
+        // the expression may ride bare at the top level (the keys the record kept)
+        Expression expression = dto.expression() != null ? dto.expression()
+                : objectMapper.convertValue(dto.extensions(), Expression.class);
+        if (dto.name() == null || expression.place() == null || expression.latencyMs() == null) {
             throw new BadRequestException(
                     "name and expression {place, latencyMs, bandwidthMbps} are required");
         }
         Intent intent = new Intent();
         intent.setId(UUID.randomUUID().toString());
         intent.setTenantId(tenantScope.currentTenantId());
-        intent.setName(String.valueOf(dto.get("name")));
-        intent.setDescription(dto.get("description") == null ? null
-                : String.valueOf(dto.get("description")));
-        if (dto.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            intent.setOwnerPartyId(String.valueOf(party.get("id")));
+        intent.setName(dto.name());
+        intent.setDescription(dto.description());
+        if (dto.relatedParty() != null && !dto.relatedParty().isEmpty()
+                && dto.relatedParty().get(0) != null && dto.relatedParty().get(0).id() != null) {
+            intent.setOwnerPartyId(dto.relatedParty().get(0).id());
         }
-        intent.setPlace(String.valueOf(expression.get("place")));
-        intent.setLatencyMs(asLong(expression.get("latencyMs"), "latencyMs"));
-        intent.setBandwidthMbps(expression.get("bandwidthMbps") == null ? 1000
-                : asLong(expression.get("bandwidthMbps"), "bandwidthMbps"));
-        intent.setAiTokensMillions(expression.get("aiTokensMillions") == null ? null
-                : asLong(expression.get("aiTokensMillions"), "aiTokensMillions"));
-        intent.setValidFrom(parseTime(expression.get("validFrom")));
-        intent.setValidUntil(parseTime(expression.get("validUntil")));
+        intent.setPlace(expression.place());
+        intent.setLatencyMs(expression.latencyMs());
+        intent.setBandwidthMbps(expression.bandwidthMbps() == null ? 1000 : expression.bandwidthMbps());
+        intent.setAiTokensMillions(expression.aiTokensMillions());
+        intent.setValidFrom(parseTime(expression.validFrom()));
+        intent.setValidUntil(parseTime(expression.validUntil()));
         intent.setStatus(Intent.ACKNOWLEDGED);
         intent.setCreatedAt(OffsetDateTime.now());
         intent.setLastUpdate(OffsetDateTime.now());
 
         // Autonomous feasibility: no human between the ask and the answer.
-        Map<String, Object> report = evaluate(intent);
-        intent.setStatus(Boolean.TRUE.equals(report.get("feasible"))
-                ? Intent.FEASIBILITY_CHECKED : Intent.INFEASIBLE);
+        IntentReport report = evaluate(intent);
+        intent.setStatus(report.feasible() ? Intent.FEASIBILITY_CHECKED : Intent.INFEASIBLE);
         try {
             intent.setReport(objectMapper.writeValueAsString(report));
         } catch (Exception e) {
             throw new IllegalStateException("report serialization failed", e);
         }
         intents.save(intent);
-        Map<String, Object> result = toMap(intent);
+        IntentView result = view(intent);
         events.publish("IntentCreateEvent", "intent", result);
         return result;
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<IntentView> findAll() {
         return intents.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(this::view).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
-        return toMap(intents.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public IntentView findById(String id) {
+        return view(intents.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Intent", id)));
     }
 
-    private Map<String, Object> evaluate(Intent intent) {
-        Map<String, Object> report = new LinkedHashMap<>();
+    private IntentReport evaluate(Intent intent) {
         boolean needsEdge = intent.getLatencyMs() < EDGE_LATENCY_THRESHOLD_MS;
         ResourcePool edgePool = pools.findAll().stream()
                 .filter(p -> tenantScope.currentTenantId().equals(p.getTenantId()))
@@ -119,98 +122,60 @@ public class IntentService {
                 .findFirst().orElse(null);
 
         if (intent.getBandwidthMbps() > MAX_BANDWIDTH_MBPS) {
-            report.put("feasible", false);
-            report.put("reason", "requested bandwidth exceeds slice capability ("
+            return IntentReport.infeasible("requested bandwidth exceeds slice capability ("
                     + MAX_BANDWIDTH_MBPS + " Mbps)");
-            return report;
         }
         if (needsEdge && edgePool == null) {
-            report.put("feasible", false);
-            report.put("reason", "a " + intent.getLatencyMs() + "ms round trip cannot be served"
+            return IntentReport.infeasible("a " + intent.getLatencyMs() + "ms round trip cannot be served"
                     + " from regional cloud, and no edge GPU site covers '" + intent.getPlace()
                     + "' — physics, not policy");
-            return report;
         }
 
-        report.put("feasible", true);
-        report.put("deliveryPoint", needsEdge ? "edge:" + edgePool.getName() : "regional-cloud");
-        List<Map<String, Object>> proposal = new ArrayList<>();
-        proposal.add(Map.of(
-                "service", "5g-slice",
-                "offeringName", "Stadium 5G Slice",
-                "reason", intent.getBandwidthMbps() + " Mbps guaranteed at "
+        List<ProposedItem> proposal = new ArrayList<>();
+        proposal.add(new ProposedItem("5g-slice", "Stadium 5G Slice",
+                intent.getBandwidthMbps() + " Mbps guaranteed at "
                         + intent.getLatencyMs() + "ms for '" + intent.getPlace() + "'"));
         // The upsell: the network proposes MORE than the customer asked for.
         if (edgePool != null && (needsEdge || intent.getAiTokensMillions() != null)) {
-            proposal.add(Map.of(
-                    "service", "edge-ai-inferencing",
-                    "offeringName", "Edge AI Inferencing",
-                    "reason", intent.getAiTokensMillions() != null
+            proposal.add(new ProposedItem("edge-ai-inferencing", "Edge AI Inferencing",
+                    intent.getAiTokensMillions() != null
                             ? intent.getAiTokensMillions() + "M tokens of AI inferencing next to the venue"
                             : "GPU capacity is available at " + edgePool.getName()
                                     + " — AI workloads (overlays, highlights, commentary) can run"
                                     + " inside the latency budget; proposed as an extension"));
         }
-        report.put("proposedItems", proposal);
-        report.put("expectation", Map.of(
-                "latencyMs", intent.getLatencyMs(),
-                "bandwidthMbps", intent.getBandwidthMbps(),
-                "slaBacked", true));
-        return report;
+        return new IntentReport(true, null, needsEdge ? "edge:" + edgePool.getName() : "regional-cloud", proposal,
+                new Expectation(intent.getLatencyMs(), intent.getBandwidthMbps(), true));
     }
 
-    private Map<String, Object> toMap(Intent intent) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", intent.getId());
-        map.put("href", "/tmf-api/intentManagement/v4/intent/" + intent.getId());
-        map.put("name", intent.getName());
-        if (intent.getDescription() != null) map.put("description", intent.getDescription());
-        map.put("status", intent.getStatus());
-        Map<String, Object> expression = new LinkedHashMap<>();
-        expression.put("place", intent.getPlace());
-        expression.put("latencyMs", intent.getLatencyMs());
-        expression.put("bandwidthMbps", intent.getBandwidthMbps());
-        if (intent.getAiTokensMillions() != null) {
-            expression.put("aiTokensMillions", intent.getAiTokensMillions());
-        }
-        if (intent.getValidFrom() != null) expression.put("validFrom", intent.getValidFrom().toString());
-        if (intent.getValidUntil() != null) expression.put("validUntil", intent.getValidUntil().toString());
-        map.put("expression", expression);
-        if (intent.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", intent.getOwnerPartyId(), "role", "customer")));
-        }
+    /** The stored report is read back as the tree it was written as — rows older images wrote included. */
+    private IntentView view(Intent intent) {
+        com.fasterxml.jackson.databind.JsonNode report = null;
         if (intent.getReport() != null) {
             try {
-                map.put("intentReport", objectMapper.readValue(intent.getReport(), Map.class));
+                report = objectMapper.readTree(intent.getReport());
             } catch (Exception ignored) {
                 // report stays absent if unreadable
             }
         }
-        map.put("@type", "Intent");
-        return map;
+        return new IntentView(intent.getId(), "/tmf-api/intentManagement/v4/intent/" + intent.getId(),
+                intent.getName(), intent.getDescription(), intent.getStatus(),
+                new ExpressionView(intent.getPlace(), intent.getLatencyMs(), intent.getBandwidthMbps(),
+                        intent.getAiTokensMillions(),
+                        intent.getValidFrom() == null ? null : intent.getValidFrom().toString(),
+                        intent.getValidUntil() == null ? null : intent.getValidUntil().toString()),
+                PartyRef.customerListOrNull(intent.getOwnerPartyId()), report, "Intent");
     }
 
-    private static long asLong(Object value, String field) {
-        try {
-            return Long.parseLong(String.valueOf(value));
-        } catch (NumberFormatException e) {
-            throw new BadRequestException(field + " must be a number");
-        }
-    }
-
-    private static OffsetDateTime parseTime(Object value) {
+    private static OffsetDateTime parseTime(String value) {
         if (value == null) {
             return null;
         }
         try {
-            return OffsetDateTime.parse(String.valueOf(value));
+            return OffsetDateTime.parse(value);
         } catch (Exception e) {
             return null;
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> map) {
-        return (Map<String, Object>) map;
-    }
 }

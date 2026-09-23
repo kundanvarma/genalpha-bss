@@ -1,5 +1,7 @@
 package com.bss.som.controller;
 
+import com.bss.som.dto.IntentDtos.IntentRequest;
+import com.bss.som.dto.IntentDtos.IntentView;
 import com.bss.som.service.IntentService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /** TMF921-shaped intent management: the front door of the autonomous OSS. */
 @RestController
@@ -25,18 +26,18 @@ public class IntentController {
     }
 
     @PostMapping("/intent")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<IntentView> create(@RequestBody IntentRequest dto) {
+        IntentView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping("/intent")
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<IntentView>> list() {
         return ResponseEntity.ok(service.findAll());
     }
 
     @GetMapping("/intent/{id}")
-    public ResponseEntity<Map<String, Object>> byId(@PathVariable String id) {
+    public ResponseEntity<IntentView> byId(@PathVariable String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 }

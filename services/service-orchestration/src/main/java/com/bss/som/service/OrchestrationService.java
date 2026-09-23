@@ -2,6 +2,8 @@ package com.bss.som.service;
 
 import com.bss.som.api.ApiConstants;
 import com.bss.som.client.OrderingClient;
+import com.bss.som.dto.LineReceipts.NumberOffer;
+import com.bss.som.dto.LineReceipts.ServiceStateReceipt;
 import com.bss.som.entity.ServiceInstance;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.exception.NotFoundException;
@@ -976,7 +978,7 @@ public class OrchestrationService {
      * remembers to lift becomes a churn letter.
      */
     @Transactional
-    public Map<String, Object> suspend(ServiceInstance instance, String reason,
+    public ServiceStateReceipt suspend(ServiceInstance instance, String reason,
             java.time.OffsetDateTime resumeAt) {
         if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
             throw new com.bss.som.exception.BadRequestException(
@@ -988,22 +990,15 @@ public class OrchestrationService {
         instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
         ocs.suspend(instance.getTenantId(), instance.getId());
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("id", instance.getId());
-        event.put("name", instance.getName());
-        event.put("state", instance.getState());
-        event.put("reason", reason);
-        if (resumeAt != null) event.put("resumeAt", resumeAt.toString());
-        if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
-        }
+        ServiceStateReceipt event = ServiceStateReceipt.suspended(instance.getId(), instance.getName(),
+                instance.getState(), reason, resumeAt == null ? null : resumeAt.toString(), instance.getOwnerPartyId());
         events.publish("ServiceSuspendedEvent", "service", event);
         log.info("suspended service {} ({}) until {}", instance.getName(), reason, resumeAt);
         return event;
     }
 
     @Transactional
-    public Map<String, Object> resume(ServiceInstance instance, String how) {
+    public ServiceStateReceipt resume(ServiceInstance instance, String how) {
         if (!ServiceInstance.SUSPENDED.equals(instance.getState())) {
             throw new com.bss.som.exception.BadRequestException(
                     "only a suspended service can resume (state: " + instance.getState() + ")");
@@ -1014,14 +1009,8 @@ public class OrchestrationService {
         instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
         ocs.resume(instance.getTenantId(), instance.getId());
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("id", instance.getId());
-        event.put("name", instance.getName());
-        event.put("state", instance.getState());
-        event.put("resumedBy", how);
-        if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
-        }
+        ServiceStateReceipt event = ServiceStateReceipt.resumed(instance.getId(), instance.getName(),
+                instance.getState(), how, instance.getOwnerPartyId());
         events.publish("ServiceResumedEvent", "service", event);
         log.info("resumed service {} ({})", instance.getName(), how);
         return event;
@@ -1268,10 +1257,10 @@ public class OrchestrationService {
      * shuffle seed returns the same list (stable while the shopper thinks);
      * a new seed deals a fresh hand, the Verizon-style "show me others". */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<Map<String, Object>> offerNumbers(String tenant, int count, String shuffle) {
+    public List<NumberOffer> offerNumbers(String tenant, int count, String shuffle) {
         return pools.findFirstByTenantIdAndResourceTypeOrderByIdAsc(tenant, com.bss.som.entity.ResourcePool.MSISDN)
                 .map(pool -> {
-                    List<Map<String, Object>> out = new java.util.ArrayList<>();
+                    List<NumberOffer> out = new java.util.ArrayList<>();
                     long base = pool.getNextValue();
                     java.util.Random rnd = new java.util.Random(
                             java.util.Objects.hash(base, shuffle == null ? "" : shuffle));
@@ -1283,7 +1272,7 @@ public class OrchestrationService {
                         }
                         String candidate = pool.getPrefix() + String.format("%06d", base + offset);
                         if (assignments.findFirstByTenantIdAndValue(tenant, candidate).isEmpty()) {
-                            out.add(Map.of("msisdn", candidate));
+                            out.add(new NumberOffer(candidate));
                         }
                     }
                     return out;
@@ -1298,12 +1287,12 @@ public class OrchestrationService {
      * means a ported-out MSISDN is not re-issued from our pool — it's gone.
      */
     @Transactional
-    public java.util.List<Map<String, Object>> terminateForParty(String party, String reason) {
+    public List<ServiceStateReceipt> terminateForParty(String party, String reason) {
         String tenant = com.bss.som.security.TenantContext.current();
         if (tenant == null) {
             tenant = tenantScope.currentTenantId();
         }
-        java.util.List<Map<String, Object>> terminated = new ArrayList<>();
+        List<ServiceStateReceipt> terminated = new ArrayList<>();
         for (ServiceInstance instance : services.findByTenantIdAndOwnerPartyId(tenant, party)) {
             if (ServiceInstance.TERMINATED.equals(instance.getState())) {
                 continue;
@@ -1314,13 +1303,13 @@ public class OrchestrationService {
     }
 
     @Transactional
-    public Map<String, Object> terminateService(String serviceId, String reason) {
+    public ServiceStateReceipt terminateService(String serviceId, String reason) {
         ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Service", serviceId));
         return terminate(instance, reason);
     }
 
-    private Map<String, Object> terminate(ServiceInstance instance, String reason) {
+    private ServiceStateReceipt terminate(ServiceInstance instance, String reason) {
         instance.setState(ServiceInstance.TERMINATED);
         instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
@@ -1341,15 +1330,8 @@ public class OrchestrationService {
             shelf.setReleasedAt(OffsetDateTime.now());
             quarantine.save(shelf);
         }
-        Map<String, Object> event = new LinkedHashMap<>();
-        event.put("id", instance.getId());
-        event.put("name", instance.getName());
-        event.put("state", instance.getState());
-        event.put("reason", reason);
-        if (releasedNumber != null) event.put("releasedNumber", releasedNumber);
-        if (instance.getOwnerPartyId() != null) {
-            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
-        }
+        ServiceStateReceipt event = ServiceStateReceipt.terminated(instance.getId(), instance.getName(),
+                instance.getState(), reason, releasedNumber, instance.getOwnerPartyId());
         clawBackCommission(instance.getTenantId(), instance.getId());
         events.publish("ServiceTerminatedEvent", "service", event);
         log.info("terminated service {} for {} ({})", instance.getName(), instance.getOwnerPartyId(), reason);

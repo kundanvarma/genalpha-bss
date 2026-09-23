@@ -15,6 +15,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -68,8 +70,9 @@ class OrchestrationTest {
         }
         // C1: SOM now reports each item's completion per-item (both digital →
         // completed), instead of a single whole-order complete() call.
-        verify(ordering, times(1)).updateItemState("po-1", "1", "completed");
-        verify(ordering, times(1)).updateItemState("po-1", "2", "completed");
+        // the item is told which service realises it (TMF637 lineage), so the four-arg callback is the one made
+        verify(ordering, times(1)).updateItemState(eq("po-1"), eq("1"), eq("completed"), any());
+        verify(ordering, times(1)).updateItemState(eq("po-1"), eq("2"), eq("completed"), any());
         verify(ordering, never()).complete("po-1");
         verify(ordering, never()).complete("po-2");
 

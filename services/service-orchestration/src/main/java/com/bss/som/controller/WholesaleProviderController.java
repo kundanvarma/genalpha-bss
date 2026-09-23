@@ -1,5 +1,11 @@
 package com.bss.som.controller;
 
+import com.bss.som.dto.Characteristic;
+import com.bss.som.dto.WholesaleDtos.ProviderAccessOrderView;
+import com.bss.som.dto.WholesaleDtos.ProviderSettlement;
+import com.bss.som.dto.WholesaleDtos.RetailerStatement;
+import com.bss.som.dto.WholesaleDtos.SonataOrderAck;
+import com.bss.som.dto.WholesaleDtos.SonataOrderRequest;
 import com.bss.som.entity.ProviderAccessOrder;
 import com.bss.som.service.WholesaleProviderService;
 import org.springframework.http.ResponseEntity;
@@ -8,9 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Our MEF LSO Sonata Service Ordering face, as a fibre OWNER: retailers place
@@ -29,79 +33,45 @@ public class WholesaleProviderController {
     }
 
     @PostMapping("/mefApi/serviceOrdering/v1/serviceOrder")
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> order(@RequestBody Map<String, Object> body) {
-        String buyerRef = str(body.get("externalId"));
-        String callbackUrl = str(body.get("callbackUrl"));
-        String retailerPartyId = str(body.get("buyerId"));
+    public ResponseEntity<SonataOrderAck> order(@RequestBody SonataOrderRequest body) {
         String accessLayer = null, postCode = null;
         Integer bandwidth = null;
-        if (body.get("serviceOrderItem") instanceof List<?> items && !items.isEmpty()
-                && items.get(0) instanceof Map<?, ?> item
-                && item.get("service") instanceof Map<?, ?> service
-                && service.get("serviceCharacteristic") instanceof List<?> chars) {
-            for (Object c : chars) {
-                if (!(c instanceof Map<?, ?> ch)) {
-                    continue;
-                }
-                String name = str(ch.get("name"));
-                Object value = ch.get("value");
-                if ("accessLayer".equals(name)) {
-                    accessLayer = str(value);
-                } else if ("postCode".equals(name)) {
-                    postCode = str(value);
-                } else if ("bandwidthMbps".equals(name) && value instanceof Number n) {
-                    bandwidth = n.intValue();
-                }
+        for (Characteristic ch : body.characteristics()) {
+            if (ch == null) {
+                continue;
+            }
+            if ("accessLayer".equals(ch.name())) {
+                accessLayer = ch.text();
+            } else if ("postCode".equals(ch.name())) {
+                postCode = ch.text();
+            } else if ("bandwidthMbps".equals(ch.name()) && ch.value() instanceof Number n) {
+                bandwidth = n.intValue();
             }
         }
-        ProviderAccessOrder o = provider.acceptOrder(buyerRef, callbackUrl, retailerPartyId,
+        ProviderAccessOrder o = provider.acceptOrder(body.externalId(), body.callbackUrl(), body.buyerId(),
                 accessLayer, bandwidth, postCode);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", o.getId());
-        out.put("state", o.getState());
-        out.put("@type", "ServiceOrder");
-        return ResponseEntity.status(201).body(out);
+        return ResponseEntity.status(201).body(new SonataOrderAck(o.getId(), o.getState(), "ServiceOrder"));
     }
 
     /** What we have sold — the provider's order book (for the partner portal + billing). */
     @GetMapping("/tmf-api/serviceOrdering/v4/providerAccessOrder")
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<ProviderAccessOrderView>> list() {
         return ResponseEntity.ok(provider.list().stream().map(this::view).toList());
     }
 
     /** What each retailer owes US for the access live on our network — the wholesale
      *  bill we raise as the fibre owner (accounts receivable). */
     @GetMapping("/tmf-api/serviceOrdering/v4/wholesaleProviderSettlement")
-    public ResponseEntity<Map<String, Object>> settlement() {
-        List<Map<String, Object>> retailers = provider.providerSettlement();
-        double total = retailers.stream()
-                .mapToDouble(r -> ((Number) r.getOrDefault("totalMonthlyCharge", 0)).doubleValue()).sum();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "WholesaleProviderSettlement");
-        out.put("periodType", "month");
-        out.put("retailer", retailers);
-        out.put("totalMonthlyRevenue", Math.round(total * 100.0) / 100.0);
-        out.put("currency", "EUR");
-        return ResponseEntity.ok(out);
+    public ResponseEntity<ProviderSettlement> settlement() {
+        List<RetailerStatement> retailers = provider.providerSettlement();
+        double total = retailers.stream().mapToDouble(RetailerStatement::totalMonthlyCharge).sum();
+        return ResponseEntity.ok(new ProviderSettlement("WholesaleProviderSettlement", "month", retailers,
+                Math.round(total * 100.0) / 100.0, "EUR"));
     }
 
-    private Map<String, Object> view(ProviderAccessOrder o) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", o.getId());
-        m.put("buyerRef", o.getBuyerRef());
-        m.put("retailerPartyId", o.getRetailerPartyId());
-        m.put("accessLayer", o.getAccessLayer());
-        m.put("bandwidthMbps", o.getBandwidthMbps());
-        m.put("postCode", o.getPostCode());
-        m.put("state", o.getState());
-        m.put("activatedAt", o.getActivatedAt());
-        m.put("createdAt", o.getCreatedAt());
-        m.put("@type", "ProviderAccessOrder");
-        return m;
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
+    private ProviderAccessOrderView view(ProviderAccessOrder o) {
+        return new ProviderAccessOrderView(o.getId(), o.getBuyerRef(), o.getRetailerPartyId(), o.getAccessLayer(),
+                o.getBandwidthMbps(), o.getPostCode(), o.getState(), o.getActivatedAt(), o.getCreatedAt(),
+                "ProviderAccessOrder");
     }
 }

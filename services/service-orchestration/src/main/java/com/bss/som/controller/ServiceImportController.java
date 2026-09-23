@@ -1,6 +1,8 @@
 package com.bss.som.controller;
 
 import com.bss.som.api.ApiConstants;
+import com.bss.som.dto.ImportReport;
+import com.bss.som.dto.ImportReport.ImportRequest;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.entity.ServiceInstance;
@@ -14,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -40,20 +41,20 @@ public class ServiceImportController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> importService(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ImportReport> importService(@RequestBody ImportRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String owner = String.valueOf(dto.get("ownerPartyId"));
-        String name = String.valueOf(dto.get("name"));
-        String msisdn = dto.get("msisdn") == null ? null : String.valueOf(dto.get("msisdn"));
-        if (owner == null || "null".equals(owner) || name == null || "null".equals(name)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "ownerPartyId and name are required"));
+        String owner = dto.ownerPartyId();
+        String name = dto.name();
+        String msisdn = dto.msisdn();
+        if (owner == null || name == null) {
+            return ResponseEntity.badRequest().body(new ImportReport.Refused("ownerPartyId and name are required"));
         }
         if (msisdn != null) {
             boolean already = assignments.findAll().stream().anyMatch(a ->
                     tenant.equals(a.getTenantId()) && msisdn.equals(a.getValue())
                             && owner.equals(a.getOwnerPartyId()));
             if (already) {
-                return ResponseEntity.ok(Map.of("imported", false, "reason", "already imported"));
+                return ResponseEntity.ok(ImportReport.Skipped.already());
             }
         }
         ServiceInstance instance = new ServiceInstance();
@@ -79,8 +80,6 @@ public class ServiceImportController {
             a.setAssignedAt(OffsetDateTime.now());
             assignments.save(a);
         }
-        return ResponseEntity.status(201).body(Map.of(
-                "imported", true, "serviceId", serviceId,
-                "name", name, "msisdn", msisdn == null ? "" : msisdn));
+        return ResponseEntity.status(201).body(ImportReport.Imported.of(serviceId, name, msisdn));
     }
 }

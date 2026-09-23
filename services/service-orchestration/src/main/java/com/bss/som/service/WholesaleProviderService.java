@@ -1,5 +1,7 @@
 package com.bss.som.service;
 
+import com.bss.som.dto.WholesaleDtos.RetailerStatement;
+import com.bss.som.dto.WholesaleDtos.SettlementLine;
 import com.bss.som.entity.ProviderAccessOrder;
 import com.bss.som.events.DomainEventPublisher;
 import com.bss.som.repository.ProviderAccessOrderRepository;
@@ -69,7 +71,7 @@ public class WholesaleProviderService {
      * retailer do the IP work).
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> providerSettlement() {
+    public List<RetailerStatement> providerSettlement() {
         String tenant = tenantScope.currentTenantId();
         Map<String, Map<String, Integer>> byRetailerLayer = new java.util.TreeMap<>();
         for (ProviderAccessOrder o : orders.findByTenantIdAndState(tenant, ProviderAccessOrder.ACTIVE)) {
@@ -78,27 +80,17 @@ public class WholesaleProviderService {
             byRetailerLayer.computeIfAbsent(retailer, k -> new java.util.TreeMap<>())
                     .merge(layer, 1, Integer::sum);
         }
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        List<RetailerStatement> out = new java.util.ArrayList<>();
         for (Map.Entry<String, Map<String, Integer>> e : byRetailerLayer.entrySet()) {
-            List<Map<String, Object>> lines = new java.util.ArrayList<>();
+            List<SettlementLine> lines = new java.util.ArrayList<>();
             double total = 0.0;
             for (Map.Entry<String, Integer> le : e.getValue().entrySet()) {
                 double rate = rateFor(le.getKey());
                 double amount = round(rate * le.getValue());
-                Map<String, Object> line = new java.util.LinkedHashMap<>();
-                line.put("accessLayer", le.getKey());
-                line.put("activeLines", le.getValue());
-                line.put("ratePerLine", rate);
-                line.put("amount", amount);
-                lines.add(line);
+                lines.add(new SettlementLine(le.getKey(), le.getValue(), rate, amount));
                 total += amount;
             }
-            Map<String, Object> stmt = new java.util.LinkedHashMap<>();
-            stmt.put("retailer", e.getKey());
-            stmt.put("line", lines);
-            stmt.put("totalMonthlyCharge", round(total));
-            stmt.put("currency", "EUR");
-            out.add(stmt);
+            out.add(new RetailerStatement(e.getKey(), lines, round(total), "EUR"));
         }
         return out;
     }

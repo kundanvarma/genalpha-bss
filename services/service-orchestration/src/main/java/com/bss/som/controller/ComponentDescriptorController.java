@@ -1,5 +1,6 @@
 package com.bss.som.controller;
 
+import com.bss.som.dto.ComponentDescriptor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -7,9 +8,7 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -32,13 +31,7 @@ public class ComponentDescriptorController {
     }
 
     @GetMapping(WELL_KNOWN)
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", "service-orchestration");
-        out.put("meaning", "Turns product orders into live services — activates lines, drives the OCS and the entitlement server, and records the service inventory.");
-        out.put("manages", List.of("Service"));
-        out.put("events", EVENTS);
-        out.put("topic", "bss.som.events");
+    public ComponentDescriptor describe() {
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
             if (info.getPathPatternsCondition() == null) {
@@ -49,8 +42,8 @@ public class ComponentDescriptorController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        out.put("routes", new ArrayList<>(routes));
-        out.put("@type", "GenAlphaComponent");
-        return out;
+        return new ComponentDescriptor("service-orchestration",
+                "Turns product orders into live services — activates lines, drives the OCS and the entitlement server, and records the service inventory.",
+                List.of("Service"), EVENTS, "bss.som.events", new ArrayList<>(routes), "GenAlphaComponent");
     }
 }

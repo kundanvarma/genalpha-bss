@@ -1,5 +1,11 @@
 package com.bss.som.service;
 
+import com.bss.som.dto.TelesalesDtos.ConfirmReceipt;
+import com.bss.som.dto.TelesalesDtos.DialEntry;
+import com.bss.som.dto.TelesalesDtos.DialList;
+import com.bss.som.dto.TelesalesDtos.OfferReceipt;
+import com.bss.som.dto.TelesalesDtos.OfferRequest;
+import com.bss.som.dto.TelesalesDtos.OfferRow;
 import com.bss.som.entity.DealerAgreement;
 import com.bss.som.entity.TelesalesOffer;
 import com.bss.som.exception.BadRequestException;
@@ -77,14 +83,17 @@ public class TelesalesService {
      * default for outbound.
      */
     @Transactional
-    public Map<String, Object> offer(Map<String, Object> dto) {
+    public OfferReceipt offer(OfferRequest dto) {
         DealerAgreement dealer = dealers.requireDealerAgreement();
         String tenant = tenantScope.currentTenantId();
-        String phone = dto.get("phone") == null ? null : String.valueOf(dto.get("phone"));
+        String phone = dto.phone();
         washOrRefuse(tenant, phone);
-        String email = String.valueOf(dto.get("customerEmail"));
+        String email = dto.customerEmail();
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("customerEmail is required — the offer is confirmed by that identity");
+        }
         Map<String, Object> customer = party.individualByEmail(email).orElse(null);
-        if (customer == null && dto.get("prospectName") == null) {
+        if (customer == null && dto.prospectName() == null) {
             throw new BadRequestException(
                     "no customer with that email — for a COLD prospect, send prospectName too");
         }
@@ -97,20 +106,18 @@ public class TelesalesService {
         offer.setId(UUID.randomUUID().toString());
         offer.setTenantId(tenant);
         offer.setDealerOrgId(dealer.getDealerOrgId());
-        offer.setStore(dto.get("campaign") == null ? dealer.getName()
-                : String.valueOf(dto.get("campaign")));
+        offer.setStore(dto.campaign() == null ? dealer.getName() : dto.campaign());
         if (customer != null) {
             offer.setCustomerId(String.valueOf(customer.get("id")));
         } else {
             // COLD: no identity yet — the offer remembers who was called;
             // identity arrives when they register with this email
             offer.setProspectEmail(email.toLowerCase());
-            offer.setProspectName(String.valueOf(dto.get("prospectName")));
+            offer.setProspectName(dto.prospectName());
         }
         offer.setCustomerPhone(phone);
-        offer.setOfferingId(String.valueOf(dto.get("offeringId")));
-        offer.setOfferingName(dto.get("offeringName") == null ? null
-                : String.valueOf(dto.get("offeringName")));
+        offer.setOfferingId(String.valueOf(dto.offeringId()));
+        offer.setOfferingName(dto.offeringName());
         offer.setConfirmToken(token.toString());
         offer.setStatus(TelesalesOffer.OFFERED);
         offer.setCreatedAt(OffsetDateTime.now());
@@ -132,23 +139,17 @@ public class TelesalesService {
         }
         log.info("telesales offer {} by {} to {} — NO order until the customer confirms",
                 offer.getId(), dealer.getName(), offer.getCustomerId());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("offerId", offer.getId());
-        out.put("status", offer.getStatus());
-        out.put("expiresAt", offer.getExpiresAt().toString());
-        if (offer.getCustomerId() == null) {
-            // the partner's own SMS carries the code to a cold prospect —
-            // there is no inbox to put it in yet
-            out.put("confirmToken", offer.getConfirmToken());
-            out.put("prospect", true);
-        }
-        return out;
+        // a COLD prospect's receipt carries the code: the partner's own SMS
+        // takes it to them — there is no inbox to put it in yet
+        boolean cold = offer.getCustomerId() == null;
+        return new OfferReceipt(offer.getId(), offer.getStatus(), offer.getExpiresAt().toString(),
+                cold ? offer.getConfirmToken() : null, cold ? Boolean.TRUE : null);
     }
 
     /** The customer's WRITTEN yes: the token is the capability. Only now
      * is the order born — and with it, the partner's commission. */
     @Transactional
-    public Map<String, Object> confirm(String tenantId, String callerPartyId, String token) {
+    public ConfirmReceipt confirm(String tenantId, String callerPartyId, String token) {
         TelesalesOffer offer = offers.findByTenantIdAndConfirmToken(tenantId,
                         token == null ? "" : token.trim().toUpperCase())
                 .orElseThrow(() -> NotFoundException.forResource("TelesalesOffer", "token"));
@@ -176,7 +177,7 @@ public class TelesalesService {
         }
         if (TelesalesOffer.CONFIRMED.equals(offer.getStatus())) {
             // idempotent: re-clicking the link never orders twice
-            return Map.of("status", offer.getStatus(), "productOrderId", offer.getProductOrderId());
+            return new ConfirmReceipt(offer.getStatus(), offer.getProductOrderId());
         }
         if (!TelesalesOffer.OFFERED.equals(offer.getStatus())
                 || offer.getExpiresAt().isBefore(OffsetDateTime.now())) {
@@ -191,7 +192,7 @@ public class TelesalesService {
         offers.save(offer);
         log.info("telesales offer {} CONFIRMED in writing — order {} exists now, and so does"
                 + " the commission", offer.getId(), orderId);
-        return Map.of("status", offer.getStatus(), "productOrderId", orderId);
+        return new ConfirmReceipt(offer.getStatus(), orderId);
     }
 
     /** Unconfirmed is unbinding: offers expire on the clock. */
@@ -229,10 +230,10 @@ public class TelesalesService {
      * citizens are excluded and counted, never listed.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> dialList(String segment) {
+    public DialList dialList(String segment) {
         dealers.requireDealerAgreement();
         String tenant = tenantScope.currentTenantId();
-        List<Map<String, Object>> entries = new java.util.ArrayList<>();
+        List<DialEntry> entries = new java.util.ArrayList<>();
         int reserved = 0;
         int unreachable = 0;
         for (String partyId : insight.segmentMembers(segment)) {
@@ -254,19 +255,13 @@ public class TelesalesService {
                 unreachable++;
                 continue; // fail-closed per number: unwashed is uncallable
             }
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("partyId", partyId);
-            entry.put("name", (person.getOrDefault("givenName", "") + " "
-                    + person.getOrDefault("familyName", "")).trim());
-            entry.put("phone", phone);
-            entry.put("email", email);
-            entry.put("consent", "segment-consented, DNC-washed");
-            entries.add(entry);
+            entries.add(new DialEntry(partyId,
+                    (person.getOrDefault("givenName", "") + " " + person.getOrDefault("familyName", "")).trim(),
+                    phone, email, "segment-consented, DNC-washed"));
         }
         log.info("dial list '{}': {} callable, {} reserved excluded, {} unwashed excluded",
                 segment, entries.size(), reserved, unreachable);
-        return Map.of("segment", segment, "entries", entries,
-                "reservedExcluded", reserved, "unwashedExcluded", unreachable);
+        return new DialList(segment, entries, reserved, unreachable);
     }
 
     @SuppressWarnings("unchecked")
@@ -315,19 +310,13 @@ public class TelesalesService {
 
     /** The partner's own offers — their pipeline view. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> myOffers() {
+    public List<OfferRow> myOffers() {
         DealerAgreement dealer = dealers.requireDealerAgreement();
         return offers.findTop100ByTenantIdAndDealerOrgIdOrderByCreatedAtDesc(
-                tenantScope.currentTenantId(), dealer.getDealerOrgId()).stream().map(o -> {
-                    Map<String, Object> map = new LinkedHashMap<String, Object>();
-                    map.put("id", o.getId());
-                    map.put("offeringName", o.getOfferingName());
-                    map.put("campaign", o.getStore());
-                    map.put("status", o.getStatus());
-                    map.put("createdAt", o.getCreatedAt().toString());
-                    map.put("@type", "TelesalesOffer");
-                    return (Map<String, Object>) map;
-                }).toList();
+                tenantScope.currentTenantId(), dealer.getDealerOrgId()).stream()
+                .map(o -> new OfferRow(o.getId(), o.getOfferingName(), o.getStore(), o.getStatus(),
+                        o.getCreatedAt().toString(), "TelesalesOffer"))
+                .toList();
     }
 
     private void washOrRefuse(String tenantId, String phone) {

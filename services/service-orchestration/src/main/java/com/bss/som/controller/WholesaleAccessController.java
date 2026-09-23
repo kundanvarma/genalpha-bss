@@ -2,6 +2,11 @@ package com.bss.som.controller;
 
 import com.bss.som.api.ApiConstants;
 import com.bss.som.client.WholesaleRateCardClient;
+import com.bss.som.dto.WholesaleDtos.NotificationReceipt;
+import com.bss.som.dto.WholesaleDtos.OwnerStatement;
+import com.bss.som.dto.WholesaleDtos.SonataNotification;
+import com.bss.som.dto.WholesaleDtos.WholesaleAccessOrderView;
+import com.bss.som.dto.WholesaleDtos.WholesaleSettlement;
 import com.bss.som.entity.WholesaleAccessOrder;
 import com.bss.som.repository.WholesaleAccessOrderRepository;
 import com.bss.som.security.TenantScope;
@@ -15,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -49,13 +53,11 @@ public class WholesaleAccessController {
      * identity; the order id in the path is the correlation. Idempotent.
      */
     @PostMapping(ApiConstants.ORDER_BASE + "/wholesaleAccessOrder/{id}/notification")
-    public ResponseEntity<Map<String, Object>> notify(@PathVariable("id") String id,
-            @RequestBody(required = false) Map<String, Object> body) {
-        String sonataOrderId = body == null ? null
-                : body.get("sonataOrderId") != null ? String.valueOf(body.get("sonataOrderId"))
-                : body.get("id") != null ? String.valueOf(body.get("id")) : null;
+    public ResponseEntity<NotificationReceipt> notify(@PathVariable("id") String id,
+            @RequestBody(required = false) SonataNotification body) {
+        String sonataOrderId = body == null ? null : body.orderId();
         boolean activated = orchestration.activateWholesaleAccess(id, sonataOrderId);
-        return ResponseEntity.ok(Map.of("id", id, "activated", activated));
+        return ResponseEntity.ok(new NotificationReceipt(id, activated));
     }
 
     /**
@@ -65,7 +67,7 @@ public class WholesaleAccessController {
      * the retail business runs on when it sells over someone else's fibre.
      */
     @GetMapping(ApiConstants.ORDER_BASE + "/wholesaleSettlement")
-    public ResponseEntity<Map<String, Object>> settlement() {
+    public ResponseEntity<WholesaleSettlement> settlement() {
         String tenant = tenantScope.currentTenantId();
         Map<String, WholesaleRateCardClient.Rate> card = rateCard.rateCard();
         Double retailMonthly = rateCard.retailMonthly(RETAIL_FIBRE);
@@ -76,7 +78,7 @@ public class WholesaleAccessController {
             linesByOwner.merge(w.getAccessOwner(), 1, Integer::sum);
         }
 
-        List<Map<String, Object>> statements = new ArrayList<>();
+        List<OwnerStatement> statements = new ArrayList<>();
         double totalOwed = 0.0;
         double totalMargin = 0.0;
         int totalLines = 0;
@@ -86,32 +88,20 @@ public class WholesaleAccessController {
             WholesaleRateCardClient.Rate rate = card.get(owner);
             double perLine = rate == null ? 0.0 : rate.perLine();
             double owed = round(perLine * lines);
-            Map<String, Object> s = new LinkedHashMap<>();
-            s.put("accessOwner", owner);
-            s.put("accessLayer", rate == null ? null : rate.layer());
-            s.put("activeLines", lines);
-            s.put("ratePerLine", perLine);
-            s.put("monthlyOwed", owed);
+            Double retailPerLine = null;
+            Double marginPerLine = null;
             if (retailMonthly != null && rate != null) {
-                s.put("retailMonthlyPerLine", retailMonthly);
-                s.put("marginPerLine", round(retailMonthly - perLine));
+                retailPerLine = retailMonthly;
+                marginPerLine = round(retailMonthly - perLine);
                 totalMargin += round((retailMonthly - perLine) * lines);
             }
-            s.put("currency", "EUR");
-            statements.add(s);
+            statements.add(new OwnerStatement(owner, rate == null ? null : rate.layer(), lines, perLine, owed,
+                    retailPerLine, marginPerLine, "EUR"));
             totalOwed += owed;
             totalLines += lines;
         }
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "WholesaleSettlement");
-        out.put("periodType", "month");
-        out.put("owner", statements);
-        out.put("totalActiveLines", totalLines);
-        out.put("totalMonthlyOwed", round(totalOwed));
-        out.put("totalMonthlyMargin", round(totalMargin));
-        out.put("currency", "EUR");
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new WholesaleSettlement("WholesaleSettlement", "month", statements, totalLines,
+                round(totalOwed), round(totalMargin), "EUR"));
     }
 
     private static double round(double v) {
@@ -119,7 +109,7 @@ public class WholesaleAccessController {
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/wholesaleAccessOrder")
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<WholesaleAccessOrderView>> list(
             @RequestParam(required = false) String productOrderId,
             @RequestParam(required = false) String state) {
         String tenant = tenantScope.currentTenantId();
@@ -131,20 +121,9 @@ public class WholesaleAccessController {
         return ResponseEntity.ok(rows.stream().map(this::view).toList());
     }
 
-    private Map<String, Object> view(WholesaleAccessOrder w) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", w.getId());
-        m.put("productOrderId", w.getProductOrderId());
-        m.put("serviceId", w.getServiceId());
-        m.put("accessOwner", w.getAccessOwner());
-        m.put("accessLayer", w.getAccessLayer());
-        m.put("bandwidthMbps", w.getBandwidthMbps());
-        m.put("postCode", w.getPostCode());
-        m.put("state", w.getState());
-        m.put("externalId", w.getExternalId());
-        m.put("activatedAt", w.getActivatedAt());
-        m.put("createdAt", w.getCreatedAt());
-        m.put("@type", "WholesaleAccessOrder");
-        return m;
+    private WholesaleAccessOrderView view(WholesaleAccessOrder w) {
+        return new WholesaleAccessOrderView(w.getId(), w.getProductOrderId(), w.getServiceId(), w.getAccessOwner(),
+                w.getAccessLayer(), w.getBandwidthMbps(), w.getPostCode(), w.getState(), w.getExternalId(),
+                w.getActivatedAt(), w.getCreatedAt(), "WholesaleAccessOrder");
     }
 }
