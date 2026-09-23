@@ -55,7 +55,7 @@ ops/arch/ratchet.sh                                       # architecture ratchet
 ## Security with teeth
 
 - **A request body is a record, never a raw map.** A record cannot carry a field it does not declare, so mass assignment is impossible by construction. The ratchet counts PATCH/PUT/POST handlers with a raw `Map` body; the count may only fall.
-- **Tenant, owner and state come from the token and the store, never from the body.** Row-level security is the wall; the service is the door.
+- **Tenant, owner and state come from the token and the store, never from the body.** Row-level security is the wall; the service is the door. A new table is unprotected by default, so `python3 ops/security/rls_check.py` proves the wall against the live catalogue, not the migrations: every table with a `tenant_id` has a policy, no runtime role is a superuser or owns a tenant table, and a session pinned to one tenant cannot read another's rows. Run it against a fleet that is up before calling an arc done. It found eight unprotected tables the first time.
 - **Tokens are validated in every component** (39 `SecurityConfig` copies), not at the gateway: the gateway stamps the tenant from the hostname and routes. A drift check across the copies is a follow-up.
 - **CI runs CodeQL and dependency review** (`.github/workflows/security.yml`); Dependabot keeps dependencies current. Only a high-severity dependency finding blocks the merge (`fail-on-severity: high`); CodeQL findings appear as code-scanning alerts and block nothing until branch protection requires them — a follow-up.
 - **Every component has a threat model** in `docs/threat-model/`; touching a trust boundary means updating it.

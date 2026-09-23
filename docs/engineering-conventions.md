@@ -147,7 +147,9 @@ with its suites green.
 
 | Rule | Check |
 |---|---|
-| Every table carries `tenant_id`; every table gets a row-level-security migration in `db/migration-postgresql`. | `PostgresMigrationTest` per component; RLS suite. |
+| Every table carries `tenant_id`; every table gets a row-level-security migration in `db/migration-postgresql`. | `PostgresMigrationTest` per component; `ops/security/rls_check.py` against a running fleet. |
+| A table added by a later migration is **not** protected because the first one was. Postgres leaves row-level security off by default, and nothing fails when it is missing — the rows are simply readable. | `rls_check.py` reads the live catalogue rather than the migrations, so a table nobody thought about still shows up. It found eight the first time it ran, four of them holding two tenants' rows. |
+| The runtime role is never a table owner and never a superuser. An owner is exempt from its own policies unless they are `FORCE`d, so ownership drift switches the wall off without touching a single policy. | `rls_check.py` asserts owner, `rolsuper` and `rolbypassrls` per database. This is checked rather than `FORCE`d everywhere because `FORCE` is a no-op while the owner is a superuser, and the invariant is the thing that actually matters. |
 | Flyway versions are **shared** between `db/migration` and `db/migration-postgresql`. | Flyway refuses duplicates; `mvn clean` first. |
 | Every state change publishes a domain event through the **outbox** in the same transaction; consumers are idempotent. | Suite per arc asserts the event; the martech sweep after any event change. |
 | No cross-component database access. A component reads another only through its API or its events. | ArchUnit `noClasses().dependOnClassesThat().resideInPackage("..other.entity..")` where present; review. |
