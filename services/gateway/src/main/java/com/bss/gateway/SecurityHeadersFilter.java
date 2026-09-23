@@ -1,5 +1,6 @@
 package com.bss.gateway;
 
+import com.bss.gateway.tenant.TenantHosts;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -8,6 +9,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.net.URI;
+import java.util.stream.Collectors;
 
 /**
  * The response headers every page and every API answer carries.
@@ -51,22 +55,56 @@ public class SecurityHeadersFilter implements GlobalFilter, Ordered {
             + "style-src 'self' 'unsafe-inline'; "
             + "img-src 'self' data: blob: https:; "
             + "font-src 'self' data:; "
-            + "connect-src 'self'; "
+            + "connect-src 'self'%s; "
             + "object-src 'none'; "
             + "base-uri 'self'; "
             + "form-action 'self'; "
             + "frame-ancestors 'self'";
 
-    private static final String STRICT = BASE_POLICY.formatted("");
-    private static final String CONSOLE = BASE_POLICY.formatted(" 'unsafe-eval'");
-
     /** The one path whose page needs eval; everything else gets the strict policy. */
     private static final String CONSOLE_PATH = "/console";
 
     private final boolean enabled;
+    private final String strict;
+    private final String console;
 
-    public SecurityHeadersFilter(@Value("${bss.gateway.security-headers:true}") boolean enabled) {
+    public SecurityHeadersFilter(@Value("${bss.gateway.security-headers:true}") boolean enabled,
+            TenantHosts tenants) {
         this.enabled = enabled;
+        // Every channel signs in against its tenant's OIDC issuer and then
+        // exchanges the code for a token from the browser. The issuer is a
+        // different origin from the gateway, so a bare connect-src 'self'
+        // does not merely tighten the page — it stops anyone logging in.
+        // The registry already names every issuer this deployment serves, so
+        // the policy is built from it rather than from a second list that
+        // could drift away from the first.
+        String idps = tenants.getRegistry().stream()
+                .map(TenantHosts.Entry::getIssuer)
+                .map(SecurityHeadersFilter::originOf)
+                .filter(o -> o != null && !o.isBlank())
+                .distinct()
+                .sorted()
+                .collect(Collectors.joining(" "));
+        String connect = idps.isEmpty() ? "" : " " + idps;
+        this.strict = BASE_POLICY.formatted("", connect);
+        this.console = BASE_POLICY.formatted(" 'unsafe-eval'", connect);
+    }
+
+    /** scheme://host[:port] — a source expression, never a path. */
+    private static String originOf(String issuer) {
+        if (issuer == null || issuer.isBlank()) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(issuer.trim());
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                return null;
+            }
+            return uri.getScheme() + "://" + uri.getHost()
+                    + (uri.getPort() > -1 ? ":" + uri.getPort() : "");
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     @Override
@@ -80,7 +118,7 @@ public class SecurityHeadersFilter implements GlobalFilter, Ordered {
             HttpHeaders h = exchange.getResponse().getHeaders();
             String path = exchange.getRequest().getPath().value();
             setIfAbsent(h, "Content-Security-Policy",
-                    path.startsWith(CONSOLE_PATH) ? CONSOLE : STRICT);
+                    path.startsWith(CONSOLE_PATH) ? console : strict);
             setIfAbsent(h, "X-Content-Type-Options", "nosniff");
             setIfAbsent(h, "X-Frame-Options", "SAMEORIGIN");
             setIfAbsent(h, "Referrer-Policy", "no-referrer");

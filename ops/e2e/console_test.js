@@ -96,9 +96,14 @@ const run = Date.now();
   let authored = null;
   for (let i = 0; i < 10 && !authored; i++) {
     await page.waitForTimeout(1000);
+    // Look it up BY NAME, not by scanning a page of the list: the catalog
+    // does not order by recency, so on a grown tenant a freshly created
+    // offering lands anywhere, and a limit=100 scan finds it or not by luck.
+    // That made this step flap for reasons that had nothing to do with saving.
     authored = await page.evaluate(async (name) => {
-      const res = await authFetch('/tmf-api/productCatalogManagement/v4/productOffering?limit=100');
-      return (await res.json()).find((o) => o.name === name) || null;
+      const res = await authFetch(
+        '/tmf-api/productCatalogManagement/v4/productOffering?name=' + encodeURIComponent(name));
+      return (await res.json())[0] || null;
     }, `E2E Composer Bundle ${run}`);
   }
   if (!authored) {

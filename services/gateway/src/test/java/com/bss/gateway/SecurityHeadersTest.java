@@ -1,5 +1,6 @@
 package com.bss.gateway;
 
+import com.bss.gateway.tenant.TenantHosts;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -17,13 +18,29 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SecurityHeadersTest {
 
+    /** A registry like the real one: two tenants on one IdP, one on another. */
+    private static TenantHosts registry() {
+        TenantHosts hosts = new TenantHosts();
+        hosts.setRegistry(java.util.List.of(
+                entry("http://localhost:8085/realms/bss"),
+                entry("http://localhost:8085/realms/taranga"),
+                entry("https://id.example.test/realms/nova")));
+        return hosts;
+    }
+
+    private static TenantHosts.Entry entry(String issuer) {
+        TenantHosts.Entry e = new TenantHosts.Entry();
+        e.setIssuer(issuer);
+        return e;
+    }
+
     private static HttpHeaders headersFor(String path, String forwardedProto) {
         MockServerHttpRequest.BaseBuilder<?> req = MockServerHttpRequest.get(path);
         if (forwardedProto != null) {
             req = req.header("X-Forwarded-Proto", forwardedProto);
         }
         MockServerWebExchange exchange = MockServerWebExchange.from(req);
-        new SecurityHeadersFilter(true).filter(exchange, e -> Mono.empty()).block();
+        new SecurityHeadersFilter(true, registry()).filter(exchange, e -> Mono.empty()).block();
         // headers are written beforeCommit, which is where a proxied response
         // gets them -- so commit the response the way a real answer would
         exchange.getResponse().setComplete().block();
@@ -93,7 +110,7 @@ class SecurityHeadersTest {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/shop/"));
         exchange.getResponse().getHeaders().set("Content-Security-Policy", "default-src 'none'");
 
-        new SecurityHeadersFilter(true).filter(exchange, e -> Mono.empty()).block();
+        new SecurityHeadersFilter(true, registry()).filter(exchange, e -> Mono.empty()).block();
         exchange.getResponse().setComplete().block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst("Content-Security-Policy"))
@@ -103,9 +120,36 @@ class SecurityHeadersTest {
     }
 
     @Test
+    void theIdentityProvidersAreReachableOrNobodyCanSignIn() {
+        // Every channel signs in against its tenant's issuer and then exchanges
+        // the code for a token FROM THE BROWSER. The issuer is another origin,
+        // so connect-src 'self' alone does not tighten the page — it stops
+        // login outright. This caught exactly that, after the fact.
+        String csp = headersFor("/console/", null).getFirst("Content-Security-Policy");
+
+        assertThat(csp).contains("connect-src 'self' http://localhost:8085 https://id.example.test");
+        // one entry per origin, not per tenant
+        assertThat(csp.split("http://localhost:8085", -1).length - 1).isEqualTo(1);
+        // an origin, never a realm path
+        assertThat(csp).doesNotContain("/realms/");
+    }
+
+    @Test
+    void aRegistryWithNoIssuerLeavesConnectSrcAlone() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/shop/"));
+        TenantHosts empty = new TenantHosts();
+        empty.setRegistry(java.util.List.of());
+        new SecurityHeadersFilter(true, empty).filter(exchange, e -> Mono.empty()).block();
+        exchange.getResponse().setComplete().block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst("Content-Security-Policy"))
+                .contains("connect-src 'self';");
+    }
+
+    @Test
     void theWholeThingHasAnOffSwitch() {
         MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/shop/"));
-        new SecurityHeadersFilter(false).filter(exchange, e -> Mono.empty()).block();
+        new SecurityHeadersFilter(false, registry()).filter(exchange, e -> Mono.empty()).block();
         exchange.getResponse().setComplete().block();
 
         assertThat(exchange.getResponse().getHeaders().getFirst("Content-Security-Policy")).isNull();
