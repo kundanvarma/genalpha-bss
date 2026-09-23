@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The proof run: every suite, serially, one report. The claim "eighty-four
-# suites, all green" becomes a fact with a receipt — or an honest list of
-# what broke.
+# The proof run: every suite, serially, one report. The claim "every suite
+# green" becomes a fact with a receipt — or an honest list of what broke.
+# The suite count is never written down here: it is whatever ops/e2e/*_test.js
+# holds, and ops/arch/claims.sh makes the README say the same number.
 #
 # Hard-won operational shape (first runs taught all of this):
 #  - suites run SERIALLY (known cross-talk under parallelism)
@@ -14,6 +15,14 @@
 #    the closed-loop suite that tests it
 #  - failures get ONE automatic retry pass at the end; attempts are
 #    recorded, verdicts stay honest
+#
+# EXIT STATUS IS THE VERDICT. This script is a gate, not a report: it exits
+# 1 when any suite ends red, 2 when the fleet never came ready. It used to
+# print the failures and exit 0, which meant any automation that called it
+# read a green shell status over a red run — the worst kind of bug, because
+# it is silent and it flatters. A retry-pass is reported as FLAKY, never
+# folded into the clean count; PROOF_STRICT=1 makes flaky fail too.
+#   PROOF_CONTINUE_ON_NOT_READY=1   diagnose against a half-up fleet (never in CI)
 set -u
 cd "$(dirname "$0")/.."
 export PATH=/opt/homebrew/bin:$PATH
@@ -50,7 +59,14 @@ wait_ready() {
     echo "[$(date +%H:%M:%S)] waiting for the fleet (kc=$kc gw=$gw)"
     sleep 10
   done
-  echo "[$(date +%H:%M:%S)] fleet never came ready — proceeding anyway"
+  # A dead front door is a FAILED RUN, not a footnote. Diagnosing against a
+  # half-up fleet is a deliberate act, and it names itself.
+  if [ -n "${PROOF_CONTINUE_ON_NOT_READY:-}" ]; then
+    echo "[$(date +%H:%M:%S)] fleet never came ready — proceeding anyway (PROOF_CONTINUE_ON_NOT_READY)"
+    return 0
+  fi
+  echo "[$(date +%H:%M:%S)] fleet never came ready after 300s" >&2
+  return 1
 }
 
 before_suite() {
@@ -70,9 +86,23 @@ after_suite() {
   esac
 }
 
+NOT_READY_STREAK=0
+
 run_one() {
   local name="$1" attempt="${2:-1}"
-  wait_ready
+  if ! wait_ready; then
+    # record it as a verdict so the receipt shows WHY, then stop burning
+    # forty minutes on a fleet that is plainly down
+    printf '%s\t%s\t%s\t%s\t%s\n' "$name" "notready" "0" "-" "$attempt" >> "$RESULTS"
+    echo "[$(date +%H:%M:%S)] notready ${name} (attempt $attempt)"
+    NOT_READY_STREAK=$((NOT_READY_STREAK + 1))
+    if [ "$NOT_READY_STREAK" -ge 3 ]; then
+      echo "ABORTED: the fleet failed readiness three times running" >&2
+      exit 2
+    fi
+    return 0
+  fi
+  NOT_READY_STREAK=0
   before_suite "$name"
   local file="ops/e2e/${name}.js"
   local log="$RESULTS_DIR/${name}.log"
@@ -116,8 +146,28 @@ if [ -n "$FAILED" ]; then
   for name in $FAILED; do run_one "$name" 2; done
 fi
 
-# final verdict per suite = best attempt
-PASS=$(awk -F'\t' '{ if ($2 == "pass") ok[$1] = 1 } END { n = 0; for (s in ok) n++; print n }' "$RESULTS")
+# ---- the verdict ----------------------------------------------------------
+# Three buckets, not two. A suite that went red and then green on the retry
+# is FLAKY: it is not a failure, and it is not the same fact as a first-pass
+# green. Folding it into one number is how a proof run starts lying quietly.
+CLEAN=$(awk -F'\t' '$5 == 1 && $2 == "pass" { c[$1] = 1 } END { n = 0; for (s in c) n++; print n }' "$RESULTS")
+FLAKY_LIST=$(awk -F'\t' '$2 == "pass" { ok[$1] = 1 } $5 == 1 && $2 != "pass" { bad[$1] = 1 }
+                         END { for (s in bad) if (s in ok) print s }' "$RESULTS" | sort)
+FAILED_LIST=$(awk -F'\t' '$2 == "pass" { ok[$1] = 1 } { seen[$1] = 1 }
+                          END { for (s in seen) if (!(s in ok)) print s }' "$RESULTS" | sort)
 TOTAL=$(awk -F'\t' '{ seen[$1] = 1 } END { n = 0; for (s in seen) n++; print n }' "$RESULTS")
-echo "PROOF-RUN COMPLETE: $PASS/$TOTAL passed"
-awk -F'\t' '{ v[$1] = ($2 == "pass") ? "pass" : v[$1] "x" } END { for (s in v) if (v[s] != "pass") print s }' "$RESULTS"
+FLAKY_N=$(printf '%s' "$FLAKY_LIST" | grep -c . || true)
+FAILED_N=$(printf '%s' "$FAILED_LIST" | grep -c . || true)
+
+echo "PROOF-RUN COMPLETE: $CLEAN/$TOTAL clean · $FLAKY_N flaky · $FAILED_N failed"
+[ "$FLAKY_N" -gt 0 ] && { echo "FLAKY (passed only on retry):"; echo "$FLAKY_LIST"; }
+[ "$FAILED_N" -gt 0 ] && { echo "FAILED:"; echo "$FAILED_LIST"; }
+
+# a receipt tied to a commit, so "all green" can be checked instead of believed
+printf '{\n  "sha": "%s",\n  "when": "%s",\n  "total": %s,\n  "clean": %s,\n  "flaky": %s,\n  "failed": %s\n}\n' \
+  "$(git rev-parse HEAD 2>/dev/null || echo unknown)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  "$TOTAL" "$CLEAN" "$FLAKY_N" "$FAILED_N" > "$RESULTS_DIR/summary.json"
+
+[ "$FAILED_N" -gt 0 ] && exit 1
+[ -n "${PROOF_STRICT:-}" ] && [ "$FLAKY_N" -gt 0 ] && exit 1
+exit 0
