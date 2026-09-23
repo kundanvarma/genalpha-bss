@@ -40,14 +40,41 @@ class PostgresMigrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
+    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() throws Exception {
         assertThat(postgres.isRunning()).isTrue();
 
-        Integer applied = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(11);
+        // Counted from the migration files themselves, not hardcoded. The
+        // hardcoded number said 11 while the tree held 12, and nothing noticed
+        // because this test skips wherever Docker is absent — which was
+        // everywhere. A number that has to be edited by hand after every
+        // migration is a number that goes stale; what is worth asserting is
+        // that every migration on the classpath actually applied.
+        assertThat(applied()).isEqualTo(migrationFilesOnClasspath());
+
+        Integer failed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false", Integer.class);
+        assertThat(failed).isZero();
 
         assertThat(repository.count()).isZero();
+    }
+
+
+    private int applied() {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
+    }
+
+    /** Both locations apply on real Postgres: vendor-neutral plus postgres-only. */
+    private int migrationFilesOnClasspath() throws Exception {
+        int total = 0;
+        for (String location : new String[] {"db/migration", "db/migration-postgresql"}) {
+            java.net.URL dir = getClass().getClassLoader().getResource(location);
+            assertThat(dir).as(location + " is on the test classpath").isNotNull();
+            java.io.File[] files = new java.io.File(dir.toURI()).listFiles(
+                    (d, name) -> name.startsWith("V") && name.endsWith(".sql"));
+            total += files == null ? 0 : files.length;
+        }
+        return total;
     }
 
     @Test

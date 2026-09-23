@@ -41,12 +41,20 @@ class PostgresMigrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
+    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() throws Exception {
         assertThat(postgres.isRunning()).isTrue();
 
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(23); // + V21 price windows, V22 service candidate + catalog jobs, V23 their RLS (versions are shared across migration/ and migration-postgresql/)
+        // Counted from the migration files, not hardcoded — see the sibling
+        // components: a hand-edited number goes stale the moment a migration
+        // lands, and this whole family skips wherever Docker is absent, so
+        // nothing ever said so.
+        assertThat(applied).isEqualTo(migrationFilesOnClasspath());
+
+        Integer failed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false", Integer.class);
+        assertThat(failed).isZero();
 
         // A real query against the migrated schema, on the real engine.
         assertThat(repository.count()).isZero();
@@ -60,5 +68,20 @@ class PostgresMigrationTest {
                   AND table_name IN ('product_offering', 'category', 'product_specification')
                 """, Integer.class);
         assertThat(tables).isEqualTo(3);
+    }
+
+    /** Both locations apply on real Postgres: vendor-neutral plus postgres-only. */
+    private int migrationFilesOnClasspath() throws Exception {
+        int total = 0;
+        for (String location : new String[] {"db/migration", "db/migration-postgresql"}) {
+            java.net.URL dir = getClass().getClassLoader().getResource(location);
+            if (dir == null) {
+                continue;
+            }
+            java.io.File[] files = new java.io.File(dir.toURI()).listFiles(
+                    (d, name) -> name.startsWith("V") && name.endsWith(".sql"));
+            total += files == null ? 0 : files.length;
+        }
+        return total;
     }
 }

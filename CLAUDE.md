@@ -25,6 +25,14 @@ bash ops/run-all-suites.sh                                # ~40 min, writes ops/
 ops/arch/ratchet.sh                                       # architecture ratchet (also a pre-commit + edit hook)
 ```
 
+- The **Testcontainers** tests (`PostgresMigrationTest`, 29 components — the only ones that meet real Postgres) skip silently on this laptop unless Colima is spelled out. They pass in CI, where Docker is native:
+
+```bash
+DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLED=true \
+  mvn -B verify -DargLine="-Dapi.version=1.44"
+```
+
+  `api.version` must be a JVM system property — the `DOCKER_API_VERSION` env var is ignored and the client negotiates 1.32, which Colima refuses. Ryuk (the reaper) cannot start here, and without it disabled every test is "skipped: Docker is not available", which reads exactly like a pass.
 - Gateway `http://localhost:8080`, Keycloak `http://localhost:8085` realm `bss`; staff `demo/demo`, product `pat@bss.local/pat`, customer `paula@family.example/paula`.
 - `docker compose build -q` hides failures: check the `Built` line or the container's created time.
 - Flyway "more than one migration with version N" = stale `target/` → `mvn clean`, and remember the two migration folders share numbers.

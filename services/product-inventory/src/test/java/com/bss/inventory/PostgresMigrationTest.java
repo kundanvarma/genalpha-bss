@@ -39,12 +39,20 @@ class PostgresMigrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
+    void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() throws Exception {
         assertThat(postgres.isRunning()).isTrue();
 
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(10); // every migration on disk: 9 shared + 1 postgres-only (RLS)
+        // Counted from the migration files, not hardcoded — see the sibling
+        // components: a hand-edited number goes stale the moment a migration
+        // lands, and this whole family skips wherever Docker is absent, so
+        // nothing ever said so.
+        assertThat(applied).isEqualTo(migrationFilesOnClasspath());
+
+        Integer failed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false", Integer.class);
+        assertThat(failed).isZero();
 
         assertThat(repository.count()).isZero();
     }
@@ -56,5 +64,20 @@ class PostgresMigrationTest {
                 WHERE table_schema = 'public' AND table_name = 'product'
                 """, Integer.class);
         assertThat(tables).isEqualTo(1);
+    }
+
+    /** Both locations apply on real Postgres: vendor-neutral plus postgres-only. */
+    private int migrationFilesOnClasspath() throws Exception {
+        int total = 0;
+        for (String location : new String[] {"db/migration", "db/migration-postgresql"}) {
+            java.net.URL dir = getClass().getClassLoader().getResource(location);
+            if (dir == null) {
+                continue;
+            }
+            java.io.File[] files = new java.io.File(dir.toURI()).listFiles(
+                    (d, name) -> name.startsWith("V") && name.endsWith(".sql"));
+            total += files == null ? 0 : files.length;
+        }
+        return total;
     }
 }
