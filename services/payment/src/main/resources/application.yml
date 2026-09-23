@@ -1,6 +1,15 @@
 spring:
   application:
     name: payment
+  # Outbound HTTP has an end. The JDK client waits forever by default, so a
+  # dependency that accepts the connection and then goes quiet holds a request
+  # thread until something kills it. These apply to every client built from the
+  # auto-configured builder; the PSP adapters build their own and take their
+  # timeouts from bss.payment.psp below, where a card authorization needs room.
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 20s
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/payment}
     username: ${DB_USERNAME:postgres}

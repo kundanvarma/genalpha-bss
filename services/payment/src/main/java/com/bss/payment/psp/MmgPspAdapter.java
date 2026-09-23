@@ -27,9 +27,13 @@ public class MmgPspAdapter implements RedirectPspAdapter {
     private static final Logger log = LoggerFactory.getLogger(MmgPspAdapter.class);
 
     private final RestClient.Builder builder;
+    /** carries the connect and read timeouts; a quiet provider must not hold a thread */
+    private final org.springframework.http.client.ClientHttpRequestFactory requestFactory;
 
-    public MmgPspAdapter(RestClient.Builder builder) {
+    public MmgPspAdapter(RestClient.Builder builder,
+            org.springframework.http.client.ClientHttpRequestFactory pspRequestFactory) {
         this.builder = builder;
+        this.requestFactory = pspRequestFactory;
     }
 
     @Override
@@ -95,7 +99,7 @@ public class MmgPspAdapter implements RedirectPspAdapter {
 
     private RestClient client(PspConfig cfg) {
         RestClient.Builder b = builder.baseUrl(cfg.getBaseUrl() == null ? "https://api.mmg.gy" : cfg.getBaseUrl())
-                .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
+                .requestFactory(requestFactory);
         String key = cfg.getSecretRef() == null ? null : System.getenv(cfg.getSecretRef());
         if (key != null && !key.isBlank()) {
             b = b.defaultHeader("Authorization", "Bearer " + key);
