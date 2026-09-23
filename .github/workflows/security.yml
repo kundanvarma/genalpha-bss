@@ -78,3 +78,16 @@ jobs:
       # working tree is what protects the repository.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: ops/scan-secrets.sh --all
+
+  claims-gate:
+    name: Claims gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The ratchet counts code debt. This counts the distance between what
+      # the documents claim and what the code does — suite counts, stack
+      # versions, secure-by-default settings, and whether every gate we call
+      # a gate can actually fail. An outside review found five of these at
+      # once; none was a bug, and together they cost more than a bug.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: ops/arch/claims.sh

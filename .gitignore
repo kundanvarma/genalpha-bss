@@ -45,3 +45,4 @@ __pycache__/
 # research-note PDFs are rendered on demand (docs/make-note-pdf.mjs), never committed
 docs/*.pdf
 ops/cloud/aws-demo/box.env
+.ci-fleet.override.yml

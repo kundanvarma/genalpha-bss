@@ -32,13 +32,27 @@ const TARGETS = [
     open: async (p) => { await p.goto(`${BASE}/partner/`); await p.waitForSelector('#signin', { state: 'visible', timeout: 20000 }); await p.click('#signin'); await kcLogin(p, 'demo', 'demo'); await p.waitForSelector('#app', { state: 'visible', timeout: 20000 }); } },
 ];
 
+// A CI smoke tier cannot afford the whole fleet, but it can afford the
+// storefront. A11Y_TARGETS is a comma-separated list of label prefixes
+// ("storefront,csr"); unset means every channel, as the proof run does.
+const WANTED = (process.env.A11Y_TARGETS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const SELECTED = WANTED.length
+  ? TARGETS.filter((t) => WANTED.some((w) => t.label.startsWith(w)))
+  : TARGETS;
+
 (async () => {
   const browser = await chromium.launch();
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   let total = 0;
 
-  for (const t of TARGETS) {
-    const ctx = await browser.newContext();
+  if (!SELECTED.length) fail(`A11Y_TARGETS="${process.env.A11Y_TARGETS}" matched no channel`);
+  for (const t of SELECTED) {
+    // bypassCSP is for the SCANNER, not the app: the gateway's content policy
+    // refuses inline script (SecurityHeadersFilter), and axe is injected as
+    // inline script, so without this every scan dies with a CSP error instead
+    // of a verdict. The page's real policy is unchanged and still shipped —
+    // csp_test.js is what proves the header itself.
+    const ctx = await browser.newContext({ bypassCSP: true });
     const page = await ctx.newPage();
     try {
       await t.open(page);
@@ -65,5 +79,7 @@ const TARGETS = [
   }
 
   await browser.close();
-  console.log(`\nALL A11Y CHECKS PASSED — 5 channels, 0 WCAG 2.2 AA violations. Accessibility is enforced in CI: labels, landmarks, keyboard, headings and contrast all hold, and the brand-derived --teal-text keeps any tenant's color legible.`);
+  console.log(`\nALL A11Y CHECKS PASSED — ${SELECTED.length} channel(s), 0 WCAG 2.2 AA violations:`
+    + ` labels, landmarks, keyboard, headings and contrast all hold, and the brand-derived`
+    + ` --teal-text keeps any tenant's color legible.`);
 })();

@@ -1,0 +1,186 @@
+name: Browser proof
+
+# The repository's largest gap, named by an outside review on 23 Sep 2026:
+# 227 Playwright suites and a full axe estate existed, the README said
+# accessibility was "enforced in CI", and no workflow ran a browser at all.
+# Everything downstream of a merge was protected by a habit.
+#
+# Three tiers, because one does not fit:
+#
+#   pr-smoke   every pull request. A 18-service slice (ops/ci-fleet.sh smoke)
+#              and the suites in ops/e2e/smoke-suites.txt. Minutes, not an hour.
+#   nightly    the whole fleet, every suite, via ops/run-all-suites.sh.
+#              ops/fleet.sh says the full shape wants 24-32GB; a standard
+#              GitHub runner has 16 (public) or 7 (private). So this tier is
+#              OFF until it is pointed at a runner that can hold it — set
+#              BROWSER_PROOF_RUNNER (repo variable) to a self-hosted or larger
+#              label and it starts running. Until then the nightly proof is the
+#              laptop run, and its receipt is ops/e2e/.proof-run/summary.json.
+#
+# Actions are pinned to commit SHAs — same reason as ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: browser-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-smoke:
+    name: PR smoke (storefront slice + axe)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: '22'
+
+      # The images copy a HOST-built jar (see any service Dockerfile), so the
+      # jars must exist before compose can build anything. -am pulls in the
+      # shared modules each service needs, and nothing else.
+      - name: Package the slice
+        run: |
+          set -euo pipefail
+          mvn -B -T 1C package -DskipTests \
+            -pl services/gateway,services/product-catalog,services/product-ordering,services/product-inventory,services/party-account,services/shopping-cart,services/payment,services/payment-method,services/promotion,services/qualification,services/policy,services/document,services/user-roles \
+            -am
+
+      - name: Build the slice's images
+        run: |
+          set -euo pipefail
+          docker compose build gateway product-catalog product-ordering \
+            product-inventory party-account shopping-cart payment payment-method \
+            promotion qualification policy document user-roles storefront
+
+      - name: Boot the smoke fleet
+        run: ops/ci-fleet.sh smoke
+
+      # The documented order (README, "demo data"), trimmed to what the
+      # storefront slice needs: the catalog, its bundle shape and its prices.
+      - name: Seed the demo data
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet requests
+          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions; do
+            echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
+          done
+
+      - name: Install Playwright
+        working-directory: ops/e2e
+        run: |
+          npm i playwright axe-core
+          npx playwright install --with-deps chromium
+
+      # Each suite is a gate: a red suite fails the job. The runner keeps
+      # going so one failure does not hide the next, then exits non-zero.
+      - name: Run the smoke suites
+        working-directory: ops/e2e
+        env:
+          A11Y_TARGETS: storefront
+        run: |
+          set -uo pipefail
+          failed=""
+          while read -r line; do
+            suite=$(echo "$line" | sed 's/#.*//' | tr -d '[:space:]')
+            [ -z "$suite" ] && continue
+            echo "::group::$suite"
+            node "$suite.js" || failed="$failed $suite"
+            echo "::endgroup::"
+          done < smoke-suites.txt
+          if [ -n "$failed" ]; then
+            echo "browser proof FAILED:$failed"
+            exit 1
+          fi
+          echo "browser proof: every smoke suite green"
+
+      - name: Fleet diagnostics on failure
+        if: failure()
+        run: |
+          docker ps -a --format '{{.Names}}\t{{.Status}}'
+          for c in $(docker ps -a --format '{{.Names}}' | grep '^bss-'); do
+            echo "::group::$c"; docker logs --tail 60 "$c" 2>&1 | tail -60; echo "::endgroup::"
+          done
+
+      - name: Keep the receipts
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4
+        with:
+          name: browser-proof-${{ github.sha }}
+          path: |
+            ops/e2e/.proof-run/
+            ops/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  nightly-full:
+    name: Nightly full proof (needs a big runner)
+    if: github.event_name == 'schedule' && vars.BROWSER_PROOF_RUNNER != ''
+    runs-on: ${{ vars.BROWSER_PROOF_RUNNER }}
+    timeout-minutes: 240
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Set up Node
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4
+        with:
+          node-version: '22'
+      - name: Package and build every image
+        run: |
+          set -euo pipefail
+          mvn -B -T 1C package -DskipTests
+          docker compose build
+      - name: Boot the full fleet
+        run: ops/ci-fleet.sh full
+      - name: Seed
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet requests
+          for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
+                   seed_serviceable_areas seed_coverage_map seed_usage_allowances \
+                   seed_agreement_terms seed_promotions seed_resource_pools \
+                   seed_ai_slice seed_verified_identity seed_nova \
+                   seed_catalog_taxonomy seed_family_max seed_vas seed_content \
+                   seed_device_content seed_color_pricing seed_ocs_charging; do
+            echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
+          done
+      # run-all-suites.sh is the gate: it exits 1 on any failed suite and 2
+      # when the fleet never came ready. PROOF_STRICT makes a retry-pass fail
+      # too — a nightly should be held to a higher bar than a laptop.
+      - name: The proof run
+        env:
+          PROOF_STRICT: '1'
+        run: bash ops/run-all-suites.sh
+      - name: Keep the receipts
+        if: always()
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4
+        with:
+          name: proof-run-${{ github.sha }}
+          path: ops/e2e/.proof-run/
+          if-no-files-found: ignore
+          retention-days: 30

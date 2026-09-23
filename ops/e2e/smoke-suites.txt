@@ -1,0 +1,18 @@
+# THE PR TIER. One line per suite, # for a comment.
+#
+# A pull request cannot afford 227 suites or 95 services, so it buys the
+# cheapest evidence that the storefront slice still works end to end through
+# the gateway with a real token — plus axe on the storefront, because
+# accessibility is the thing most likely to rot silently.
+#
+# The rule for this list: every suite here must run against the slice in
+# ops/ci-fleet.sh (SMOKE_SERVICES). Adding a suite that needs another service
+# means adding that service there too, and paying for it on every PR.
+# Everything else belongs in the nightly full proof run.
+
+# Start small and grow this list only as the slice proves it can host more.
+# Rejected on purpose: shop_window_test (needs the taranga and enet tenants,
+# which means seeding and running two more operators on every PR).
+
+shop_staff_guard_test # the shop in a browser, real Keycloak SSO, genalpha only
+a11y_test             # axe-core, storefront only (A11Y_TARGETS=storefront)
