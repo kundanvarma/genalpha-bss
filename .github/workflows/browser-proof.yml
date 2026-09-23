@@ -7,8 +7,8 @@ name: Browser proof
 #
 # Three tiers, because one does not fit:
 #
-#   pr-smoke   every pull request. A 18-service slice (ops/ci-fleet.sh smoke)
-#              and the suites in ops/e2e/smoke-suites.txt. Minutes, not an hour.
+#   pr-smoke   every pull request. An 18-service slice that compose expands to
+#              33 via depends_on (~10GiB), and the suites in smoke-suites.txt.
 #   nightly    the whole fleet, every suite, via ops/run-all-suites.sh.
 #              ops/fleet.sh says the full shape wants 24-32GB; a standard
 #              GitHub runner has 16 (public) or 7 (private). So this tier is
@@ -38,7 +38,7 @@ jobs:
     name: PR smoke (storefront slice + axe)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -56,21 +56,23 @@ jobs:
           node-version: '22'
 
       # The images copy a HOST-built jar (see any service Dockerfile), so the
-      # jars must exist before compose can build anything. -am pulls in the
-      # shared modules each service needs, and nothing else.
-      - name: Package the slice
-        run: |
-          set -euo pipefail
-          mvn -B -T 1C package -DskipTests \
-            -pl services/gateway,services/product-catalog,services/product-ordering,services/product-inventory,services/party-account,services/shopping-cart,services/payment,services/payment-method,services/promotion,services/qualification,services/policy,services/document,services/user-roles \
-            -am
+      # jars must exist before compose can build anything. The first attempt
+      # packaged only the 13 named modules and compose then tried to build the
+      # services depends_on drags in, which died with
+      # "lstat /target: no such file or directory". The whole reactor is the
+      # honest answer: it is what ci.yml already does, and it cannot go stale.
+      - name: Package
+        run: mvn -B -T 1C package -DskipTests
 
+      # Build exactly what the fleet is about to start — ci-fleet.sh computes
+      # the depends_on closure, so this list cannot drift from reality.
       - name: Build the slice's images
         run: |
           set -euo pipefail
-          docker compose build gateway product-catalog product-ordering \
-            product-inventory party-account shopping-cart payment payment-method \
-            promotion qualification policy document user-roles storefront
+          services="$(ops/ci-fleet.sh build-list)"
+          echo "building: $services"
+          # shellcheck disable=SC2086
+          docker compose build $services
 
       - name: Boot the smoke fleet
         run: ops/ci-fleet.sh smoke
