@@ -38,10 +38,41 @@ SMOKE_SERVICES="postgres kafka redis keycloak gateway
   document user-roles storefront"
 
 case "$TIER" in
-  smoke) SERVICES="$SMOKE_SERVICES" ;;
+  smoke|build-list) SERVICES="$SMOKE_SERVICES" ;;
   full)  SERVICES="" ;;  # empty = every service in the default profile
-  *)     echo "usage: ops/ci-fleet.sh [smoke|full]" >&2; exit 64 ;;
+  *)     echo "usage: ops/ci-fleet.sh [smoke|full|build-list]" >&2; exit 64 ;;
 esac
+
+# THE CLOSURE. Asking compose for 18 services starts 33, because compose
+# honours depends_on. Anything it starts needs an image, and an image needs a
+# packaged jar — CI built only the named 18 and the rest died with
+# "lstat /target: no such file or directory". Computing the closure here rather
+# than listing it in the workflow means it cannot drift when depends_on changes.
+resolve_closure() {
+  [ -z "$SERVICES" ] && { docker compose config --services; return; }
+  docker compose config --format json 2>/dev/null | python3 -c '
+import json,sys
+cfg = json.load(sys.stdin)
+svcs = cfg.get("services", {})
+want, seen = sys.argv[1].split(), set()
+while want:
+    s = want.pop()
+    if s in seen or s not in svcs: continue
+    seen.add(s)
+    want.extend((svcs[s].get("depends_on") or {}).keys())
+print(" ".join(sorted(seen)))' "$SERVICES"
+}
+
+# `build-list` prints the buildable services (no infra images) so the workflow
+# can build exactly what it is about to start, and nothing else.
+if [ "$TIER" = "build-list" ]; then
+  for s in $(resolve_closure); do
+    case "$s" in postgres|kafka|redis|keycloak|minio|azurite) continue ;; esac
+    printf '%s ' "$s"
+  done
+  echo
+  exit 0
+fi
 
 # Cap every JVM. The images read $JAVA_OPTS (see any service Dockerfile), so an
 # override file generated here beats editing 95 compose blocks by hand.
