@@ -120,10 +120,28 @@ which was wrong in both directions: eleven of twelve were already
 redacted, and the twelfth was `taranga` — the one tenant that is publicly
 reachable on the hosted box *and* wired to a real model key. Corrected
 2026-09-23, along with the tenant. The ledger (`ai_audit`) keeps the redacted prompt and
-response either way and records `redactedFields`. No retention sweep
-deletes AI ledger rows, so stored (redacted) prompts are kept until
-someone removes them, and neither `ai_audit` nor the decision log is yet
-a category in the passport or the erase fan-out.
+response either way and records `redactedFields`.
+
+**Retention runs on two clocks** (since 2026-09-23, `AiRetentionSweep`),
+because the rows are not alike. A *redacted* row holds placeholders, not
+people — it is the evidence that the governor did its job, and keeping it
+is the point; its window is `bss.retention.ai-audit-seconds`, off by
+default like every other retention dial here. A *raw* row is different in
+kind: a tenant that switched on `ai-raw-exposure` sent the unredacted
+prompt, and the ledger kept it. That is real personal data in a table, so
+raw rows expire on `bss.retention.ai-audit-raw-seconds` — **bounded by
+default at 30 days**. The dangerous mode carries its own expiry rather
+than depending on whoever enabled it also remembering to configure a
+sweep. No tenant ships with raw exposure on, so in practice this clock is
+a safety net.
+
+**Not offered, and why:** erasing one person's AI records on request.
+`ai_audit` carries no subject link — no column says whose call a row was
+— so the question cannot be answered from that table at all. After
+redaction the rows are placeholders rather than personal data, and the
+rows that *are* personal data (raw) expire on their own clock. Adding a
+subject link is a schema change and honest future work, not something to
+claim now. The decision log is likewise not yet a passport category.
 
 ## Still on the ledger
 

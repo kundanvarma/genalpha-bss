@@ -11,6 +11,14 @@ public interface AiAuditRepository extends JpaRepository<AiAudit, String> {
 
     List<AiAudit> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 
+    /* ---- retention: the ledger is not a place personal data lives forever ---- */
+
+    /** Rows written with RAW exposure — these carry unredacted personal data. */
+    List<AiAudit> findByRawExposureTrueAndCreatedAtBefore(OffsetDateTime cutoff);
+
+    /** Every row past the general window, whatever its exposure. */
+    List<AiAudit> findByCreatedAtBefore(OffsetDateTime cutoff);
+
     /** Spend this window — the budget sum, riding the tenant+createdAt index. */
     @Query("SELECT COALESCE(SUM(a.costMicros), 0) FROM AiAudit a "
             + "WHERE a.tenantId = :tenantId AND a.createdAt >= :since")
