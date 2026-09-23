@@ -7,9 +7,15 @@ HOOK="$REPO/.git/hooks/pre-commit"
 cat > "$HOOK" <<'EOF'
 #!/bin/bash
 R="$(git rev-parse --show-toplevel)"
-"$R/ops/scan-secrets.sh" || exit $?
-"$R/ops/arch/ratchet.sh" || exit $?
-exec "$R/ops/arch/claims.sh"
+# Run every gate PRESENT ON THIS CHECKOUT. A gate that does not exist on the
+# branch you are standing on is not a failure — claims.sh arrived on a feature
+# branch and the hook then died on main with "No such file or directory", which
+# is exactly how people learn to reach for --no-verify. A missing gate is
+# skipped; a failing gate still stops the commit.
+for gate in ops/scan-secrets.sh ops/arch/ratchet.sh ops/arch/claims.sh; do
+  [ -x "$R/$gate" ] || continue
+  "$R/$gate" || exit $?
+done
 EOF
 chmod +x "$HOOK"
-echo "install-hooks: pre-commit now runs ops/scan-secrets.sh, ops/arch/ratchet.sh and ops/arch/claims.sh on every commit"
+echo "install-hooks: pre-commit now runs whichever of ops/scan-secrets.sh, ops/arch/ratchet.sh and ops/arch/claims.sh exist on the current checkout"
