@@ -60,4 +60,47 @@ class RedactorTest {
         assertThat(redactor.redact("mail bob@example.org")).isEqualTo("mail <email#1>");
         assertThat(redactor.redact(null)).isNull();
     }
+
+    @Test
+    void masksLabelledPersonNamesInProseAndJson() {
+        Redaction map = redactor.begin();
+        String out = redactor.redact("""
+                Customer: Mira Nilsen
+                Contact person: Olav Fjordbygg, subscriber: Mira Nilsen
+                {"givenName": "Mira", "familyName": "Nilsen", "productName": "Fiber 1000"}
+                Kunde: Nils Hansen; fornavn: Nils""", map);
+        assertThat(out)
+                // the same person keeps the SAME placeholder wherever they recur
+                .contains("Customer: <name#3>")
+                .contains("subscriber: <name#3>")
+                .contains("Contact person: <name#4>")
+                .doesNotContain("Mira Nilsen").doesNotContain("Olav Fjordbygg")
+                .doesNotContain("Nils Hansen")
+                // JSON stays valid JSON: label intact, only the value replaced
+                .contains("\"givenName\": \"<name#1>\"")
+                .contains("\"familyName\": \"<name#2>\"")
+                // a product is not a person, even inside the same object
+                .contains("\"productName\": \"Fiber 1000\"");
+        assertThat(map.restore(out)).contains("Mira Nilsen").contains("Olav Fjordbygg");
+    }
+
+    @Test
+    void doesNotEatThingsThatAreNotPeople() {
+        Redaction map = redactor.begin();
+        String out = redactor.redact("""
+                Product name: Fiber 1000
+                Campaign name: Winter Sale
+                Plan name: GenAlpha Mobile 50 GB
+                {"productName": "Galaxy S26", "offeringName": "TV Max"}
+                The customer asked about pricing and the contact was by phone.""", map);
+        assertThat(out)
+                .contains("Product name: Fiber 1000")
+                .contains("Campaign name: Winter Sale")
+                .contains("Plan name: GenAlpha Mobile 50 GB")
+                .contains("\"productName\": \"Galaxy S26\"")
+                .contains("\"offeringName\": \"TV Max\"")
+                // prose that merely mentions the words is not a labelled name
+                .contains("The customer asked about pricing");
+        assertThat(map.count()).isZero();
+    }
 }

@@ -18,8 +18,9 @@ import java.util.regex.Pattern;
  * (dddd.dd.ddddd); ICCID (19–20 digits); IMEI (15 digits); card PAN (13–19
  * digits, Luhn); national identity numbers (Norwegian fødselsnummer, 11
  * digits; Nordic dddddd-dddd); generic 9–12 digit identifiers; phone
- * numbers; and the value of a labelled address line ("Address: …").
- * Names are not recognised — a wider recogniser is insight's PII firewall.
+ * numbers; the value of a labelled address line ("Address: …"); and the value
+ * of a labelled PERSON name, in prose ("Customer: …") or JSON ("givenName").
+ * A name in free prose with no label still goes — stated in docs/privacy.md.
  */
 @Component
 public class Redactor {
@@ -28,6 +29,26 @@ public class Redactor {
     private static final Pattern ADDRESS_LINE = Pattern.compile(
             "(?im)(?<![\\w])((?:(?:street|billing|shipping|postal|home|invoice|delivery|installation|service)[ \\t]+)?"
             + "(?:address|adresse|gateadresse|postadresse|street|strasse|straße|osoite)[ \\t]*[:=][ \\t]*)([^\\r\\n]+?)[ \\t]*$");
+    /**
+     * A LABELLED person name, in prose ({@code Customer: Mira Nilsen}) or in
+     * embedded JSON ({@code "familyName": "Nilsen"}) — the two shapes a prompt
+     * assembled from BSS data actually carries.
+     *
+     * Only PERSON labels, never a bare "name". "Product name: Fiber 1000" and
+     * "Campaign name: Winter" are not people, and a recogniser that eats them
+     * would make every prompt worse while protecting nobody. The price of that
+     * precision is stated in docs/privacy.md: a name in free prose, with no
+     * label in front of it, still goes.
+     */
+    private static final String NAME_LABELS =
+            "customer|customer[ _]?name|subscriber|subscriber[ _]?name|contact|contact[ _]?name"
+            + "|contact[ _]?person|account[ _]?holder|party[ _]?name|full[ _]?name"
+            + "|given[ _]?name|first[ _]?name|family[ _]?name|last[ _]?name|middle[ _]?name"
+            + "|kunde|kundenavn|kontaktperson|kontaktnavn|abonnent|fornavn|etternavn";
+    private static final Pattern NAME_LINE = Pattern.compile(
+            "(?im)(?<![\\w])((?:" + NAME_LABELS + ")[ \\t]*[:=][ \\t]*)([^\\r\\n,;{}\\[\\]\"]+?)[ \\t]*(?=[,;]|$)");
+    private static final Pattern NAME_JSON = Pattern.compile(
+            "(?i)(\"(?:" + NAME_LABELS + ")\"[ \\t]*:[ \\t]*\")([^\"]+)(\")");
     private static final Pattern IBAN = Pattern.compile(
             "\\b[A-Z]{2}\\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\\b");
     private static final Pattern NO_ACCOUNT = Pattern.compile("\\b\\d{4}[ .]\\d{2}[ .]\\d{5}\\b");
@@ -56,6 +77,10 @@ public class Redactor {
             return null;
         }
         String out = replaceAll(text, EMAIL, "email", map, v -> true);
+        // names before the numeric recognisers: a name is captured by its
+        // label, and the label tells us more than any shape ever could
+        out = redactLabelled(out, NAME_JSON, "name", map, 2);
+        out = redactLabelled(out, NAME_LINE, "name", map, 2);
         out = redactAddressLines(out, map);
         out = replaceAll(out, IBAN, "iban", map, Redactor::ibanChecks);
         out = replaceAll(out, NO_ACCOUNT, "account", map, v -> true);
@@ -76,6 +101,34 @@ public class Redactor {
             String value = m.group();
             m.appendReplacement(out, Matcher.quoteReplacement(
                     accept.test(value) ? map.placeholder(type, value) : value));
+        }
+        m.appendTail(out);
+        return out.toString();
+    }
+
+    /**
+     * Replace only the VALUE group of a labelled match, keeping the label and
+     * anything after it intact — so {@code "familyName": "Nilsen"} stays valid
+     * JSON with a placeholder inside it, and the model still knows what the
+     * field meant.
+     */
+    private static String redactLabelled(String text, Pattern pattern, String type,
+            Redaction map, int valueGroup) {
+        Matcher m = pattern.matcher(text);
+        StringBuilder out = new StringBuilder();
+        while (m.find()) {
+            String value = m.group(valueGroup).trim();
+            if (value.isEmpty() || value.startsWith("<")) {
+                continue;   // already a placeholder, or nothing to hide
+            }
+            StringBuilder replacement = new StringBuilder(m.group(1));
+            replacement.append(map.placeholder(type, value));
+            for (int g = valueGroup + 1; g <= m.groupCount(); g++) {
+                if (m.group(g) != null) {
+                    replacement.append(m.group(g));
+                }
+            }
+            m.appendReplacement(out, Matcher.quoteReplacement(replacement.toString()));
         }
         m.appendTail(out);
         return out.toString();
