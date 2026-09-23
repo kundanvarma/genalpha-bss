@@ -16,7 +16,6 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -37,6 +36,9 @@ public class EapAkaService {
 
     /** What a completed relay hands back. */
     public record Outcome(boolean ok, String imsi, String reason) { }
+
+    /** What a started relay hands back: the challenge to send, and the session to cookie. */
+    public record Challenge(String session, String packet) { }
 
     private final AucClient auc;
     private final EapSessionRepository sessions;
@@ -66,7 +68,7 @@ public class EapAkaService {
 
     /** Start a relay: the challenge packet (base64) and the session id to cookie. Empty when the AUC does not know the IMSI. */
     @Transactional
-    public Optional<Map<String, String>> start(String tenantId, String eapId) {
+    public Optional<Challenge> start(String tenantId, String eapId) {
         Optional<String> imsi = imsiOf(eapId);
         if (imsi.isEmpty()) {
             return Optional.empty();
@@ -91,7 +93,7 @@ public class EapAkaService {
         s.setKautHex(HEX.formatHex(keys.kAut()));
         s.setCreatedAt(OffsetDateTime.now());
         sessions.save(s);
-        return Optional.of(Map.of("session", s.getId(), "packet", Base64.getEncoder().encodeToString(challenge)));
+        return Optional.of(new Challenge(s.getId(), Base64.getEncoder().encodeToString(challenge)));
     }
 
     /** Finish a relay with the device's EAP-Response/AKA-Challenge (base64). One shot: the session is consumed. */

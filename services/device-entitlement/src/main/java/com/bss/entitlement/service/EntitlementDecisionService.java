@@ -1,6 +1,9 @@
 package com.bss.entitlement.service;
 
 import com.bss.entitlement.client.CatalogClient;
+import com.bss.entitlement.dto.EntitlementBlocks;
+import com.bss.entitlement.dto.EntitlementExplanation;
+import com.bss.entitlement.dto.Ts43Block;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,87 +75,64 @@ public class EntitlementDecisionService {
     }
 
     /** The TS.43 application block for one app id, or null for apps this ECS does not serve. */
-    public Map<String, Object> decide(EntitlementSubscriber s, String app, String token) {
+    public Ts43Block decide(EntitlementSubscriber s, String app, String token) {
         Map<String, Boolean> f = features(s);
         boolean live = EntitlementSubscriber.ACTIVE.equals(s.getStatus());
         switch (app) {
             case "ap2003": {
-                Map<String, Object> out = new LinkedHashMap<>();
-                List<Map<String, Object>> entries = new java.util.ArrayList<>();
-                entries.add(Map.of("RATVoiceEntitleInfoDetails", rat("1", "1", status(f.get("volte"), live, s))));
-                Map<String, Object> nr = new LinkedHashMap<>(rat("2", "1", status(f.get("vonr") || f.get("volte"), live, s)));
+                EntitlementBlocks.RatDetails lte =
+                        new EntitlementBlocks.RatDetails("1", "1", status(f.get("volte"), live, s));
+                EntitlementBlocks.RatDetails nr =
+                        new EntitlementBlocks.RatDetails("2", "1", status(f.get("vonr") || f.get("volte"), live, s));
                 if (!f.get("vonr")) {
-                    nr.put("NetworkVoiceIRATCapablity", "EPS-Fallback");
+                    nr = nr.withEpsFallback();
                 }
-                entries.add(Map.of("RATVoiceEntitleInfoDetails", nr));
-                out.put("VoiceOverCellularEntitleInfo", entries);
-                return out;
+                return new EntitlementBlocks.VoiceOverCellular(List.of(
+                        new EntitlementBlocks.RatEntry(lte), new EntitlementBlocks.RatEntry(nr)));
             }
             case "ap2004": {
-                Map<String, Object> out = new LinkedHashMap<>();
                 String st = status(f.get("vowifi"), live, s);
-                out.put("EntitlementStatus", st);
-                out.put("ServiceFlow_URL", publicBaseUrl + "/ts43/flow/vowifi");
-                out.put("ServiceFlow_UserData", "token=" + (token == null ? "" : token) + "&imsi=" + s.getImsi());
-                out.put("AddrStatus", s.isEmergencyAddressConfirmed() ? "1" : "0");
-                out.put("TC_Status", s.isTermsAccepted() ? "1" : "0");
-                out.put("ProvStatus", s.isImsProvisioned() ? "1" : "3");
-                if (INCOMPATIBLE.equals(st)) {
-                    out.put("MessageForIncompatible", "Wi-Fi calling is not available on this plan.");
-                }
-                return out;
+                return new EntitlementBlocks.VoWifi(st,
+                        publicBaseUrl + "/ts43/flow/vowifi",
+                        "token=" + (token == null ? "" : token) + "&imsi=" + s.getImsi(),
+                        s.isEmergencyAddressConfirmed() ? "1" : "0",
+                        s.isTermsAccepted() ? "1" : "0",
+                        s.isImsProvisioned() ? "1" : "3",
+                        INCOMPATIBLE.equals(st) ? "Wi-Fi calling is not available on this plan." : null);
             }
-            case "ap2005": {
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("EntitlementStatus", status(f.get("smsoip"), live, s));
-                return out;
-            }
+            case "ap2005":
+                return new EntitlementBlocks.SmsOverIp(status(f.get("smsoip"), live, s));
             case "ap2010": {
                 String type = dataPlanType(s);
-                List<Map<String, Object>> details = new java.util.ArrayList<>();
+                List<EntitlementBlocks.DataPlanEntry> details = new java.util.ArrayList<>();
                 for (String access : List.of("1", "2", "3", "4", "5")) {
-                    details.add(Map.of("DataPlanInfoDetails", Map.of("AccessType", access, "DataPlanType", type)));
+                    details.add(new EntitlementBlocks.DataPlanEntry(
+                            new EntitlementBlocks.DataPlanDetails(type, access)));
                 }
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("DataPlanInfo", details);
-                return out;
+                return new EntitlementBlocks.DataPlan(details);
             }
-            case "ap2012": { // Direct Carrier Billing (TS.43 §13)
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("EntitlementStatus", status(f.get("carrierbilling"), live, s));
-                out.put("TC_Status", s.isTermsAccepted() ? "1" : "0");
-                out.put("ServiceFlow_URL", publicBaseUrl + "/ts43/flow/carrier-billing");
-                out.put("ServiceFlow_UserData", "imsi=" + s.getImsi());
-                return out;
-            }
+            case "ap2012": // Direct Carrier Billing (TS.43 §13)
+                return new EntitlementBlocks.CarrierBilling(status(f.get("carrierbilling"), live, s),
+                        s.isTermsAccepted() ? "1" : "0",
+                        publicBaseUrl + "/ts43/flow/carrier-billing",
+                        "imsi=" + s.getImsi());
             case "ap2013": { // Private User Identity (TS.43 §12): an encoded identity for Wi-Fi gateways
-                Map<String, Object> out = new LinkedHashMap<>();
                 String st = status(f.get("privateidentity"), live, s);
-                out.put("EntitlementStatus", st);
-                if (ENABLED.equals(st)) {
-                    out.put("PrivateUserID", privateUserId(s));
-                    out.put("PrivateUserIDType", "1");
-                    out.put("PrivateUserIDExpiry", java.time.OffsetDateTime.now().plusDays(30).toString());
+                if (!ENABLED.equals(st)) {
+                    return EntitlementBlocks.PrivateUserIdentity.off(st);
                 }
-                return out;
+                return new EntitlementBlocks.PrivateUserIdentity(st, privateUserId(s), "1",
+                        java.time.OffsetDateTime.now().plusDays(30).toString());
             }
-            case "ap2014": { // Phone number (TS.43 §13.1, GetPhoneNumber)
-                Map<String, Object> out = new LinkedHashMap<>();
-                out.put("MSISDN", s.getMsisdn() == null ? "" : "+" + s.getMsisdn().replaceAll("[^0-9]", ""));
-                out.put("OperationResult", s.getMsisdn() == null ? "100" : "1");
-                return out;
-            }
-            case "ap2016": { // SatMode (TS.43 §15)
-                Map<String, Object> out = new LinkedHashMap<>();
-                String st = status(f.get("satellite"), live, s);
-                out.put("EntitlementStatus", st);
-                out.put("ServiceFlow_URL", publicBaseUrl + "/ts43/flow/satellite");
-                out.put("ServiceFlow_UserData", "imsi=" + s.getImsi());
-                if (!f.get("satellite")) {
-                    out.put("MessageForIncompatible", "Satellite messaging is not part of this plan.");
-                }
-                return out;
-            }
+            case "ap2014": // Phone number (TS.43 §13.1, GetPhoneNumber)
+                return new EntitlementBlocks.PhoneNumber(
+                        s.getMsisdn() == null ? "" : "+" + s.getMsisdn().replaceAll("[^0-9]", ""),
+                        s.getMsisdn() == null ? "100" : "1");
+            case "ap2016": // SatMode (TS.43 §15)
+                return new EntitlementBlocks.SatMode(status(f.get("satellite"), live, s),
+                        publicBaseUrl + "/ts43/flow/satellite",
+                        "imsi=" + s.getImsi(),
+                        f.get("satellite") ? null : "Satellite messaging is not part of this plan.");
             default:
                 return null;
         }
@@ -172,12 +152,9 @@ public class EntitlementDecisionService {
     }
 
     /** A human-language view of the same decision, for the console and the BSS API. */
-    public Map<String, Object> explain(EntitlementSubscriber s) {
+    public EntitlementExplanation explain(EntitlementSubscriber s) {
         Map<String, Boolean> f = features(s);
         boolean live = EntitlementSubscriber.ACTIVE.equals(s.getStatus());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("plan", planName(s));
-        out.put("lineStatus", s.getStatus());
         Map<String, String> services = new LinkedHashMap<>();
         services.put("Voice over 4G (VoLTE)", word(status(f.get("volte"), live, s)));
         services.put("Voice over 5G (VoNR)", word(status(f.get("vonr"), live, s)));
@@ -191,8 +168,7 @@ public class EntitlementDecisionService {
         services.put("Carrier billing (app stores)", word(status(f.get("carrierbilling"), live, s)));
         services.put("Satellite messaging", word(status(f.get("satellite"), live, s)));
         services.put("Private Wi-Fi identity", word(status(f.get("privateidentity"), live, s)));
-        out.put("services", services);
-        return out;
+        return new EntitlementExplanation(planName(s), s.getStatus(), services);
     }
 
     private String status(boolean feature, boolean live, EntitlementSubscriber s) {
@@ -212,14 +188,6 @@ public class EntitlementDecisionService {
             case INCOMPATIBLE -> "not compatible";
             default -> "off";
         };
-    }
-
-    private static Map<String, Object> rat(String accessType, String homeRoaming, String status) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("AccessType", accessType);
-        m.put("HomeRoamingNWType", homeRoaming);
-        m.put("EntitlementStatus", status);
-        return m;
     }
 
     @SuppressWarnings("unchecked")

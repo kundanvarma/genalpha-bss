@@ -1,11 +1,12 @@
 package com.bss.entitlement.service;
 
+import com.bss.entitlement.dto.RcsConfiguration;
+import com.bss.entitlement.dto.Ts43Envelope;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.bss.entitlement.security.TenantRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -46,47 +47,34 @@ public class RcsConfigService {
         this.defaultApn = defaultApn;
     }
 
-    /** The configuration document as a map — rendered by {@link Ts43Xml} in RCC.07's XML shape. */
-    public Map<String, Object> configuration(EntitlementSubscriber s, String token, boolean withToken) {
+    /** The configuration document — rendered by {@link Ts43Xml} in RCC.07's XML shape. */
+    public RcsConfiguration configuration(EntitlementSubscriber s, String token, boolean withToken) {
         Map<String, Boolean> f = decisions.features(s);
         boolean live = EntitlementSubscriber.ACTIVE.equals(s.getStatus());
         boolean rcs = live && f.getOrDefault("rcs", false);
-        Map<String, Object> doc = new LinkedHashMap<>();
         // RCC.14: version 0 = RCS disabled, the client resets to its defaults
-        doc.put("Vers", Map.of("version", rcs ? configVersion : "0", "validity", String.valueOf(validitySeconds)));
-        if (withToken && token != null) {
-            doc.put("Token", Map.of("token", token, "validity", String.valueOf(validitySeconds)));
-        }
+        Ts43Envelope.Vers vers = new Ts43Envelope.Vers(String.valueOf(validitySeconds), rcs ? configVersion : "0");
+        Ts43Envelope.Token tokenBlock = withToken && token != null
+                ? new Ts43Envelope.Token(token, String.valueOf(validitySeconds)) : null;
         if (!rcs) {
-            return doc;
+            return RcsConfiguration.disabled(vers, tokenBlock);
         }
         TenantRegistry.TenantEntry t = tenants.byId(s.getTenantId());
         String realm = t != null && t.getRcsImsRealm() != null && !t.getRcsImsRealm().isBlank() ? t.getRcsImsRealm() : defaultRealm;
         String pcscf = t != null && t.getRcsPcscf() != null && !t.getRcsPcscf().isBlank() ? t.getRcsPcscf() : defaultPcscf;
         String apn = t != null && t.getRcsApn() != null && !t.getRcsApn().isBlank() ? t.getRcsApn() : defaultApn;
-        Map<String, Object> ims = new LinkedHashMap<>();
-        ims.put("AppID", "ap2001");
-        ims.put("Name", "IMS Settings");
-        ims.put("Home_network_domain_name", realm);
-        ims.put("Private_User_Identity", s.getImsi() + "@" + realm);
-        ims.put("Public_User_Identity_List", Map.of("Public_User_Identity", "sip:+" + (s.getMsisdn() == null ? "" : s.getMsisdn()) + "@" + realm));
-        ims.put("LBO_P-CSCF_Address", Map.of("Address", pcscf, "AddressType", "FQDN"));
-        ims.put("AuthType", "AKA");
-        ims.put("Media_type_restriction_policy", "1");
-        ims.put("Ext", Map.of("rcsVolteSingleRegistration", "1", "ApnConfig", Map.of("Apn", apn)));
-        doc.put("ap2001", ims);
-        Map<String, Object> services = new LinkedHashMap<>();
-        services.put("AppID", "ap2002");
-        services.put("Name", "RCS settings");
-        services.put("SERVICES", Map.of(
-                "ChatAuth", "1", "GroupChatAuth", "1", "ftAuth", "1", "standaloneMsgAuth", "1",
-                "geolocPushAuth", "1", "vsAuth", f.getOrDefault("volte", false) ? "1" : "0",
-                "presencePrfl", "0", "rcsIPVoiceCallAuth", f.getOrDefault("volte", false) ? "1" : "0",
-                "rcsIPVideoCallAuth", "0"));
-        services.put("MESSAGING", Map.of("ChatRevokeTimer", "0", "MaxSize1toM", "1048576", "ftHTTPCSURI",
-                "https://ft." + realm + "/upload"));
-        services.put("PRESENCE", Map.of("usePresence", "0"));
-        doc.put("ap2002", services);
-        return doc;
+        RcsConfiguration.ImsSettings ims = new RcsConfiguration.ImsSettings("ap2001", "IMS Settings", realm,
+                s.getImsi() + "@" + realm,
+                new RcsConfiguration.PublicUserIdentityList(
+                        "sip:+" + (s.getMsisdn() == null ? "" : s.getMsisdn()) + "@" + realm),
+                new RcsConfiguration.PcscfAddress("FQDN", pcscf),
+                "AKA", "1",
+                new RcsConfiguration.Ext(new RcsConfiguration.ApnConfig(apn), "1"));
+        String voice = f.getOrDefault("volte", false) ? "1" : "0";
+        RcsConfiguration.RcsSettings services = new RcsConfiguration.RcsSettings("ap2002", "RCS settings",
+                new RcsConfiguration.Services("1", "1", "0", "1", "1", voice, voice, "0", "1"),
+                new RcsConfiguration.Messaging("1048576", "0", "https://ft." + realm + "/upload"),
+                new RcsConfiguration.Presence("0"));
+        return new RcsConfiguration(vers, tokenBlock, ims, services);
     }
 }

@@ -1,5 +1,6 @@
 package com.bss.entitlement.controller;
 
+import com.bss.entitlement.dto.ComponentDescriptor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -7,9 +8,7 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -32,13 +31,7 @@ public class ComponentDescriptorController {
     }
 
     @GetMapping(WELL_KNOWN)
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", "device-entitlement");
-        out.put("meaning", "Tells phones what their subscription lets them use — VoLTE, Wi-Fi calling, companion eSIMs — from the plan and the line's state.");
-        out.put("manages", List.of("Entitlement"));
-        out.put("events", EVENTS);
-        out.put("topic", "bss.entitlement.events");
+    public ComponentDescriptor describe() {
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
             if (info.getPathPatternsCondition() == null) {
@@ -49,8 +42,9 @@ public class ComponentDescriptorController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        out.put("routes", new ArrayList<>(routes));
-        out.put("@type", "GenAlphaComponent");
-        return out;
+        return new ComponentDescriptor("device-entitlement",
+                "Tells phones what their subscription lets them use — VoLTE, Wi-Fi calling, companion eSIMs — from the plan and the line's state.",
+                List.of("Entitlement"), EVENTS, "bss.entitlement.events",
+                new ArrayList<>(routes), "GenAlphaComponent");
     }
 }

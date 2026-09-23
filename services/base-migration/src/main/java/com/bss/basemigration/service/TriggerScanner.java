@@ -1,11 +1,15 @@
 package com.bss.basemigration.service;
 
 import com.bss.basemigration.client.PartyClient;
+import com.bss.basemigration.dto.MigrationPlanRequest;
+import com.bss.basemigration.dto.TriggerScanResult;
 import com.bss.basemigration.entity.MigrationPlan;
 import com.bss.basemigration.repository.MigrationPlanRepository;
 import com.bss.basemigration.security.TenantContext;
 import com.bss.basemigration.security.TenantRegistry;
 import com.bss.basemigration.tick.TickGuard;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,7 +22,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -89,27 +92,27 @@ public class TriggerScanner {
     }
 
     /** One plan's scan; returns what it did (the on-demand endpoint's answer). */
-    public Map<String, Object> scanPlan(MigrationPlan plan) {
+    public TriggerScanResult scanPlan(MigrationPlan plan) {
         return switch (plan.getTriggerType()) {
             case MigrationPlan.TRIGGER_AGE -> scanAge(plan);
             case MigrationPlan.TRIGGER_PROMO -> scanPromoExpiry(plan);
-            default -> Map.of("triggerType", plan.getTriggerType(), "scheduled", 0,
-                    "note", "bulk plans discover on arm; nothing to scan");
+            default -> TriggerScanResult.Bulk.of(plan.getTriggerType());
         };
     }
 
-    private Map<String, Object> scanAge(MigrationPlan plan) {
-        Map<String, Object> rule = json.readMap(plan.getTriggerJson());
-        int ageYears = rule.get("ageYears") instanceof Number n ? n.intValue() : -1;
-        String strategy = rule.get("strategy") == null
-                ? STRATEGY_AUTO : String.valueOf(rule.get("strategy"));
+    private TriggerScanResult scanAge(MigrationPlan plan) {
+        ObjectNode rule = json.readObject(plan.getTriggerJson());
+        JsonNode years = rule.get("ageYears");
+        int ageYears = years != null && years.isNumber() ? years.intValue() : -1;
+        String strategy = !rule.hasNonNull("strategy")
+                ? STRATEGY_AUTO : MigrationPlanRequest.text(rule.get("strategy"));
         LocalDate today = LocalDate.now(clock);
         int scheduled = 0;
         int grandfathered = 0;
         List<String> flagged = new ArrayList<>(json.readStrings(plan.getGrandfatheredJson()));
         for (Map<String, Object> individual : parties.listIndividuals()) {
             String partyId = String.valueOf(individual.get("id"));
-            LocalDate birth = parseDate(individual.get("birthDate"));
+            LocalDate birth = parseDate(String.valueOf(individual.get("birthDate")));
             if (birth == null || ageYears < 0) {
                 continue;
             }
@@ -137,17 +140,12 @@ public class TriggerScanner {
             plan.setLastUpdate(OffsetDateTime.now(clock));
             plans.save(plan);
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("triggerType", MigrationPlan.TRIGGER_AGE);
-        result.put("strategy", strategy);
-        result.put("scheduled", scheduled);
-        result.put("grandfathered", grandfathered);
-        return result;
+        return new TriggerScanResult.Age(MigrationPlan.TRIGGER_AGE, strategy, scheduled, grandfathered);
     }
 
-    private Map<String, Object> scanPromoExpiry(MigrationPlan plan) {
-        Map<String, Object> rule = json.readMap(plan.getTriggerJson());
-        LocalDate endDate = parseDate(rule.get("endDate"));
+    private TriggerScanResult scanPromoExpiry(MigrationPlan plan) {
+        JsonNode raw = json.readObject(plan.getTriggerJson()).get("endDate");
+        LocalDate endDate = raw == null || raw.isNull() ? null : parseDate(MigrationPlanRequest.text(raw));
         LocalDate today = LocalDate.now(clock);
         int scheduled = 0;
         boolean due = endDate != null && !today.isBefore(endDate.minusDays(plan.getNoticeDays()));
@@ -155,20 +153,14 @@ public class TriggerScanner {
             // courtesy notice, no exit right — the roll-off was disclosed at sale
             scheduled = discovery.discoverBulk(plan, true, OffsetDateTime.now(clock));
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("triggerType", MigrationPlan.TRIGGER_PROMO);
-        result.put("endDate", endDate == null ? null : endDate.toString());
-        result.put("due", due);
-        result.put("scheduled", scheduled);
-        return result;
+        return new TriggerScanResult.Promo(MigrationPlan.TRIGGER_PROMO,
+                endDate == null ? null : endDate.toString(), due, scheduled);
     }
 
-    private static LocalDate parseDate(Object raw) {
-        if (raw == null) {
-            return null;
-        }
+    /** {@code String.valueOf} first, as the map path did — a missing birth date reads as "null" and fails to parse. */
+    private static LocalDate parseDate(String raw) {
         try {
-            return LocalDate.parse(String.valueOf(raw));
+            return LocalDate.parse(raw);
         } catch (DateTimeParseException e) {
             return null;
         }

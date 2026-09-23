@@ -1,10 +1,15 @@
 package com.bss.entitlement.service;
 
+import com.bss.entitlement.dto.Ts43Block;
+import com.bss.entitlement.dto.Ts43Envelope;
 import com.bss.entitlement.entity.EntitlementDevice;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.bss.entitlement.entity.EntitlementToken;
 import com.bss.entitlement.repository.EntitlementDeviceRepository;
 import com.bss.entitlement.repository.EntitlementSubscriberRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +53,7 @@ public class EcsService {
     private final OidcService oidc;
     private final String entitlementVersion;
     private final long versValidity;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public EcsService(EntitlementSubscriberRepository subscribers, EntitlementDeviceRepository devices,
             EapAkaService eap, TokenService tokens, EntitlementDecisionService decisions, OdsaService odsa,
@@ -92,21 +97,22 @@ public class EcsService {
         boolean fresh = auth.fresh();
 
         // --- the answer ---
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("Vers", Map.of("version", entitlementVersion, "validity", String.valueOf(versValidity)));
+        ObjectNode body = mapper.createObjectNode();
+        body.set("Vers", mapper.valueToTree(new Ts43Envelope.Vers(String.valueOf(versValidity), entitlementVersion)));
         if (fresh) {
-            body.put("Token", Map.of("token", token, "validity", String.valueOf(tokens.validitySeconds())));
+            body.set("Token", mapper.valueToTree(
+                    new Ts43Envelope.Token(token, String.valueOf(tokens.validitySeconds()))));
         }
         List<String> served = new ArrayList<>();
         for (String app : apps) {
-            Map<String, Object> block;
+            Ts43Block block;
             if ("ap2006".equals(app) || "ap2009".equals(app)) {
                 block = odsa.handle(s, app, p);
             } else {
                 block = decisions.decide(s, app, token);
             }
             if (block != null) {
-                body.put(app, block);
+                body.set(app, mapper.valueToTree(block));
                 served.add(app);
             }
         }
@@ -148,24 +154,27 @@ public class EcsService {
                 }
                 subscriberService.log(tenantId, terminalId, null, appLabel, operation, "unauthenticated", "no token and no EAP_ID");
                 // TS.43: 511 Network Authentication Required when the client must authenticate
-                return new Auth(new Reply(511, "application/json", Map.of("error", "authentication required: present a token or EAP_ID"), null), null, null, false);
+                return new Auth(new Reply(511, "application/json",
+                        new Ts43Envelope.Refusal("authentication required: present a token or EAP_ID"), null), null, null, false);
             }
             if (relayPacket == null) {
-                Optional<Map<String, String>> start = eap.start(tenantId, eapId);
+                Optional<EapAkaService.Challenge> start = eap.start(tenantId, eapId);
                 if (start.isEmpty()) {
                     subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
                             appLabel, operation, "forbidden", "AUC does not know this identity");
-                    return new Auth(new Reply(403, "application/json", Map.of("error", "unknown identity"), null), null, null, false);
+                    return new Auth(new Reply(403, "application/json",
+                            new Ts43Envelope.Refusal("unknown identity"), null), null, null, false);
                 }
                 subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
                         appLabel, operation, "eap-challenge", "EAP-Request/AKA-Challenge issued");
-                return new Auth(new Reply(200, RELAY_TYPE, Map.of("eap-relay-packet", start.get().get("packet")),
-                        SESSION_COOKIE + "=" + start.get().get("session") + "; Path=/; HttpOnly"), null, null, false);
+                return new Auth(new Reply(200, RELAY_TYPE, new Ts43Envelope.EapRelay(start.get().packet()),
+                        SESSION_COOKIE + "=" + start.get().session() + "; Path=/; HttpOnly"), null, null, false);
             }
             EapAkaService.Outcome outcome = eap.complete(tenantId, session, relayPacket);
             if (!outcome.ok()) {
                 subscriberService.log(tenantId, terminalId, outcome.imsi(), appLabel, operation, "eap-failed", outcome.reason());
-                return new Auth(new Reply(403, "application/json", Map.of("error", "EAP-AKA failed: " + outcome.reason()), null), null, null, false);
+                return new Auth(new Reply(403, "application/json",
+                        new Ts43Envelope.Refusal("EAP-AKA failed: " + outcome.reason()), null), null, null, false);
             }
             imsi = outcome.imsi();
             fresh = true;
@@ -174,7 +183,8 @@ public class EcsService {
         if (sub.isEmpty()) {
             subscriberService.log(tenantId, terminalId, imsi, appLabel, operation, "forbidden",
                     "SIM authenticated but no line is bound to this IMSI");
-            return new Auth(new Reply(403, "application/json", Map.of("error", "no subscription for this identity"), null), null, null, false);
+            return new Auth(new Reply(403, "application/json",
+                    new Ts43Envelope.Refusal("no subscription for this identity"), null), null, null, false);
         }
         if (fresh) {
             token = tokens.issue(tenantId, imsi, terminalId).getToken();
@@ -193,7 +203,7 @@ public class EcsService {
 
     private Reply error(int status, String message, String tenantId, String terminalId, String imsi, List<String> apps, String operation) {
         subscriberService.log(tenantId, terminalId, imsi, appNames(apps), operation, "bad-request", message);
-        return new Reply(status, "application/json", Map.of("error", message), null);
+        return new Reply(status, "application/json", new Ts43Envelope.Refusal(message), null);
     }
 
     /** The request's own parameters as a query string (what OIDC resumes after sign-in). */
@@ -292,46 +302,39 @@ public class EcsService {
     }
 
     /** The answer, in words: "VoLTE on · Wi-Fi calling on (address needed) · data plan metered". */
-    @SuppressWarnings("unchecked")
-    private static String summary(Map<String, Object> body, List<String> served) {
+    private static String summary(ObjectNode body, List<String> served) {
         List<String> parts = new ArrayList<>();
         for (String app : served) {
-            Object block = body.get(app);
-            if (!(block instanceof Map<?, ?> m)) {
+            JsonNode m = body.get(app);
+            if (m == null || !m.isObject()) {
                 continue;
             }
             String name = appName(app);
             switch (app) {
                 case "ap2003" -> {
-                    Object info = m.get("VoiceOverCellularEntitleInfo");
-                    String st = "off";
-                    if (info instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first
-                            && first.get("RATVoiceEntitleInfoDetails") instanceof Map<?, ?> d) {
-                        st = statusWord(d.get("EntitlementStatus"));
-                    }
-                    parts.add(name + " " + st);
+                    JsonNode first = m.path("VoiceOverCellularEntitleInfo").path(0)
+                            .path("RATVoiceEntitleInfoDetails");
+                    parts.add(name + " " + (first.isObject()
+                            ? statusWord(first.get("EntitlementStatus")) : "off"));
                 }
                 case "ap2004" -> {
                     String st = statusWord(m.get("EntitlementStatus"));
-                    boolean needsAddress = "on".equals(st) && !"1".equals(String.valueOf(m.get("AddrStatus")));
+                    boolean needsAddress = "on".equals(st) && !"1".equals(text(m.get("AddrStatus")));
                     parts.add(name + " " + st + (needsAddress ? " (address needed)" : ""));
                 }
                 case "ap2005" -> parts.add(name + " " + statusWord(m.get("EntitlementStatus")));
                 case "ap2010" -> {
-                    Object info = m.get("DataPlanInfo");
-                    String type = "";
-                    if (info instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> first
-                            && first.get("DataPlanInfoDetails") instanceof Map<?, ?> d) {
-                        type = String.valueOf(d.get("DataPlanType")).toLowerCase();
-                    }
-                    parts.add(name + " " + type);
+                    JsonNode first = m.path("DataPlanInfo").path(0).path("DataPlanInfoDetails");
+                    parts.add(name + " " + (first.isObject()
+                            ? text(first.get("DataPlanType")).toLowerCase() : ""));
                 }
                 case "ap2006", "ap2009" -> {
-                    if (m.get("CompanionAppEligibility") != null || m.get("PrimaryAppEligibility") != null) {
-                        Object e = m.get("CompanionAppEligibility") != null ? m.get("CompanionAppEligibility") : m.get("PrimaryAppEligibility");
-                        parts.add(name + (String.valueOf(e).equals("1") ? " eligible" : " not eligible"));
-                    } else if (m.get("SubscriptionResult") != null) {
-                        parts.add(name + " " + switch (String.valueOf(m.get("SubscriptionResult"))) {
+                    if (m.hasNonNull("CompanionAppEligibility") || m.hasNonNull("PrimaryAppEligibility")) {
+                        JsonNode e = m.hasNonNull("CompanionAppEligibility")
+                                ? m.get("CompanionAppEligibility") : m.get("PrimaryAppEligibility");
+                        parts.add(name + (text(e).equals("1") ? " eligible" : " not eligible"));
+                    } else if (m.hasNonNull("SubscriptionResult")) {
+                        parts.add(name + " " + switch (text(m.get("SubscriptionResult"))) {
                             case "1" -> "sent to the web sheet";
                             case "2" -> "profile ready to download";
                             case "3" -> "done";
@@ -339,10 +342,10 @@ public class EcsService {
                             case "5" -> "not available on this plan";
                             default -> "answered";
                         });
-                    } else if (m.get("CompanionConfigurations") != null) {
+                    } else if (m.hasNonNull("CompanionConfigurations")) {
                         parts.add(name + " configuration sent");
-                    } else if (m.get("ServiceStatus") != null) {
-                        parts.add(name + " service " + ("1".equals(String.valueOf(m.get("ServiceStatus"))) ? "activated" : "deactivated"));
+                    } else if (m.hasNonNull("ServiceStatus")) {
+                        parts.add(name + " service " + ("1".equals(text(m.get("ServiceStatus"))) ? "activated" : "deactivated"));
                     } else {
                         parts.add(name + " answered");
                     }
@@ -353,8 +356,13 @@ public class EcsService {
         return String.join(" · ", parts);
     }
 
-    private static String statusWord(Object status) {
-        return switch (String.valueOf(status)) {
+    /** What {@code String.valueOf(map.get(k))} said: the value's own text, "null" when there was none. */
+    private static String text(JsonNode node) {
+        return node == null || node.isNull() ? "null" : node.isTextual() ? node.textValue() : node.toString();
+    }
+
+    private static String statusWord(JsonNode status) {
+        return switch (text(status)) {
             case "1" -> "on";
             case "2" -> "not compatible";
             case "3" -> "being set up";

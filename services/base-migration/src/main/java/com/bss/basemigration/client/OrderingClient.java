@@ -1,5 +1,6 @@
 package com.bss.basemigration.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -16,7 +17,8 @@ import java.util.Map;
  * and the ordering service's own validation, proration and completion
  * path do the rest, untouched. Machine call under this service's own
  * identity (ordering:write); relatedParty names the customer because a
- * machine token is not party-scoped.
+ * machine token is not party-scoped. The receipt comes back as the ordering
+ * service's own document — a tree, never re-shaped here.
  */
 @Component
 public class OrderingClient {
@@ -33,8 +35,7 @@ public class OrderingClient {
      * the item's product when present. Returns the created order (the
      * ordering service completes modify-only orders inline).
      */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> placeModifyOrder(String partyId, String productId,
+    public JsonNode placeModifyOrder(String partyId, String productId,
             String offeringId, String offeringName, Map<String, Object> characteristics,
             String description) {
         Map<String, Object> product = new LinkedHashMap<>();
@@ -61,6 +62,6 @@ public class OrderingClient {
                 .header("Content-Type", "application/json")
                 .body(order)
                 .retrieve()
-                .body(Map.class);
+                .body(JsonNode.class);
     }
 }

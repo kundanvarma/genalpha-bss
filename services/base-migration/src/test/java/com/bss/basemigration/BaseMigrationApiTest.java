@@ -168,7 +168,8 @@ class BaseMigrationApiTest {
         when(agreements.commitmentEnd(eq("bindy-1"), eq("off-legacy"), any()))
                 .thenReturn(Optional.of(OffsetDateTime.now(clock).plusDays(60)));
         when(ordering.placeModifyOrder(anyString(), anyString(), anyString(), any(), any(), anyString()))
-                .thenReturn(Map.of("id", "ord-1", "state", "completed"));
+                .thenReturn(new com.fasterxml.jackson.databind.ObjectMapper()
+                        .createObjectNode().put("id", "ord-1").put("state", "completed"));
 
         String planId = createPlan("""
                 {"name": "Legacy sunset",

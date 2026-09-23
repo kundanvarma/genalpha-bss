@@ -1,5 +1,7 @@
 package com.bss.entitlement.controller;
 
+import com.bss.entitlement.dto.RcsConfiguration;
+import com.bss.entitlement.dto.Ts43Envelope;
 import com.bss.entitlement.security.TenantScope;
 import com.bss.entitlement.service.EcsService;
 import com.bss.entitlement.service.RcsConfigService;
@@ -62,7 +64,7 @@ public class RcsConfigController {
                     relay = String.valueOf(json.get("eap-relay-packet"));
                 }
             } catch (Exception e) {
-                return ResponseEntity.badRequest().body(Map.of("error", "body must be JSON"));
+                return ResponseEntity.badRequest().body(new Ts43Envelope.Refusal("body must be JSON"));
             }
         }
         return answer(normalise(query), relay, request);
@@ -79,17 +81,18 @@ public class RcsConfigController {
             h.set(HttpHeaders.CONTENT_TYPE, r.contentType());
             return new ResponseEntity<>(r.body(), h, r.status());
         }
-        Map<String, Object> doc = rcs.configuration(auth.subscriber(), auth.token(), auth.fresh());
-        boolean disabled = "0".equals(((Map<?, ?>) doc.get("Vers")).get("version"));
+        RcsConfiguration doc = rcs.configuration(auth.subscriber(), auth.token(), auth.fresh());
+        String version = doc.vers().version();
         subscribers.log(tenantId, p.get("terminal_id"), auth.subscriber().getImsi(), "RCS configuration", "autoconfig",
-                "served", disabled ? "RCS disabled for this line (version 0)" : "RCS configuration version " + ((Map<?, ?>) doc.get("Vers")).get("version"));
+                "served", "0".equals(version) ? "RCS disabled for this line (version 0)"
+                        : "RCS configuration version " + version);
         String accept = request.getHeader(HttpHeaders.ACCEPT);
         if (accept != null && accept.contains("application/json") && !accept.contains(XML)) {
             h.set(HttpHeaders.CONTENT_TYPE, "application/json");
             return new ResponseEntity<>(doc, h, 200);
         }
         h.set(HttpHeaders.CONTENT_TYPE, XML);
-        return new ResponseEntity<>(Ts43Xml.render(doc), h, 200);
+        return new ResponseEntity<>(Ts43Xml.render(mapper.valueToTree(doc)), h, 200);
     }
 
     /** RCC.14 names the SIM parameter {@code IMSI}; the shared authentication reads EAP_ID / token

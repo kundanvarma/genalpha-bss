@@ -1,10 +1,13 @@
 package com.bss.entitlement.controller;
 
 import com.bss.entitlement.api.ApiConstants;
+import com.bss.entitlement.dto.SubscriberUpsertRequest;
+import com.bss.entitlement.dto.Ts43Envelope;
 import com.bss.entitlement.security.TenantScope;
 import com.bss.entitlement.service.EcsService;
 import com.bss.entitlement.service.OidcService;
 import com.bss.entitlement.service.SubscriberService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,11 +61,13 @@ public class Ts43Controller {
     public ResponseEntity<Object> oidcCallback(@RequestParam(required = false) String code,
             @RequestParam(required = false) String state, @RequestParam(required = false) String error) {
         if (error != null || code == null) {
-            return ResponseEntity.status(403).body(Map.of("error", "sign-in failed" + (error == null ? "" : ": " + error)));
+            return ResponseEntity.status(403).body(
+                    new Ts43Envelope.Refusal("sign-in failed" + (error == null ? "" : ": " + error)));
         }
         return oidc.callback(code, state)
                 .map(r -> ResponseEntity.status(302).header(HttpHeaders.LOCATION, oidc.resumeUrl(r)).build())
-                .orElseGet(() -> ResponseEntity.status(403).body(Map.of("error", "no subscription for the signed-in customer")));
+                .orElseGet(() -> ResponseEntity.status(403).body(
+                        new Ts43Envelope.Refusal("no subscription for the signed-in customer")));
     }
 
     @PostMapping({ "", "/" })
@@ -88,7 +93,7 @@ public class Ts43Controller {
                     }
                 }
             } catch (Exception e) {
-                return ResponseEntity.badRequest().body(Map.of("error", "body must be JSON"));
+                return ResponseEntity.badRequest().body(new Ts43Envelope.Refusal("body must be JSON"));
             }
         }
         return reply(ecs.handle(tenantScope.currentTenantId(), params, relay, cookie(request)), request);
@@ -126,30 +131,24 @@ public class Ts43Controller {
     public ResponseEntity<Object> otherFlowDone(@PathVariable("name") String name, @RequestParam Map<String, String> form) {
         String imsi = form.get("imsi");
         if (imsi == null || imsi.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "imsi is required (ServiceFlow_UserData)"));
+            return ResponseEntity.badRequest().body(new Ts43Envelope.Refusal("imsi is required (ServiceFlow_UserData)"));
         }
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("imsi", imsi);
-        dto.put("termsAccepted", form.get("terms") != null);
-        return ResponseEntity.ok(subscribers.upsert(dto));
+        return ResponseEntity.ok(subscribers.upsert(
+                SubscriberUpsertRequest.ofFlow(imsi, null, form.get("terms") != null)));
     }
 
     @PostMapping("/flow/vowifi")
     public ResponseEntity<Object> vowifiFlowDone(@RequestParam Map<String, String> form) {
         String imsi = form.get("imsi");
         if (imsi == null || imsi.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "imsi is required (ServiceFlow_UserData)"));
+            return ResponseEntity.badRequest().body(new Ts43Envelope.Refusal("imsi is required (ServiceFlow_UserData)"));
         }
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("imsi", imsi);
-        dto.put("emergencyAddressConfirmed", true);
-        dto.put("termsAccepted", form.get("terms") != null);
-        return ResponseEntity.ok(subscribers.upsert(dto));
+        return ResponseEntity.ok(subscribers.upsert(
+                SubscriberUpsertRequest.ofFlow(imsi, true, form.get("terms") != null)));
     }
 
     /** JSON by default; TS.43's XML ({@code text/vnd.wap.connectivity-xml}) when the
      * client asks for it and not for JSON. The EAP relay and errors stay as they are. */
-    @SuppressWarnings("unchecked")
     private static ResponseEntity<Object> reply(EcsService.Reply r, HttpServletRequest request) {
         HttpHeaders h = new HttpHeaders();
         if (r.location() != null) {
@@ -160,9 +159,10 @@ public class Ts43Controller {
         }
         String accept = request.getHeader(HttpHeaders.ACCEPT);
         boolean wantsXml = accept != null && accept.contains("text/vnd.wap.connectivity-xml") && !accept.contains("application/json");
-        if (r.status() == 200 && "application/json".equals(r.contentType()) && wantsXml && r.body() instanceof Map<?, ?> m) {
+        if (r.status() == 200 && "application/json".equals(r.contentType())
+                && wantsXml && r.body() instanceof JsonNode n && n.isObject()) {
             h.set(HttpHeaders.CONTENT_TYPE, "text/vnd.wap.connectivity-xml");
-            return new ResponseEntity<>(com.bss.entitlement.service.Ts43Xml.render((Map<String, Object>) m), h, r.status());
+            return new ResponseEntity<>(com.bss.entitlement.service.Ts43Xml.render(n), h, r.status());
         }
         h.set(HttpHeaders.CONTENT_TYPE, r.contentType());
         return new ResponseEntity<>(r.body(), h, r.status());

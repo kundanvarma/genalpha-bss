@@ -1,5 +1,6 @@
 package com.bss.entitlement.service;
 
+import com.bss.entitlement.dto.OidcDescription;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.bss.entitlement.repository.EntitlementSubscriberRepository;
 import com.bss.entitlement.security.TenantRegistry;
@@ -18,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -199,11 +199,7 @@ public class OidcService {
         return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
-    public Map<String, Object> describe(String tenantId) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("available", available(tenantId));
-        m.put("clientId", clientId);
-        m.put("callback", callbackUrl());
-        return m;
+    public OidcDescription describe(String tenantId) {
+        return new OidcDescription(available(tenantId), clientId, callbackUrl());
     }
 }

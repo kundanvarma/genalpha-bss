@@ -2,14 +2,21 @@ package com.bss.basemigration.service;
 
 import com.bss.basemigration.exception.BadRequestException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
 
-/** JSON column plumbing: the plan's matrix, eligibility, trigger and
- *  jurisdiction pack live as documents on the row. */
+/**
+ * JSON column plumbing: the plan's matrix, eligibility, trigger and
+ * jurisdiction pack live as documents on the row. They go in as the operator
+ * wrote them and come back as they were stored — trees, never records, so a
+ * plan already on the books keeps the key order it was saved with.
+ * An unreadable or empty column reads as the empty document, as before.
+ */
 @Component
 public class Json {
 
@@ -27,25 +34,31 @@ public class Json {
         }
     }
 
-    public Map<String, Object> readMap(String json) {
+    public ObjectNode newObject() {
+        return objectMapper.createObjectNode();
+    }
+
+    public ObjectNode readObject(String json) {
         if (json == null || json.isBlank()) {
-            return Map.of();
+            return objectMapper.createObjectNode();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() { });
+            JsonNode node = objectMapper.readTree(json);
+            return node instanceof ObjectNode object ? object : objectMapper.createObjectNode();
         } catch (Exception e) {
-            return Map.of();
+            return objectMapper.createObjectNode();
         }
     }
 
-    public List<Map<String, Object>> readList(String json) {
+    public ArrayNode readArray(String json) {
         if (json == null || json.isBlank()) {
-            return List.of();
+            return objectMapper.createArrayNode();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() { });
+            JsonNode node = objectMapper.readTree(json);
+            return node instanceof ArrayNode array ? array : objectMapper.createArrayNode();
         } catch (Exception e) {
-            return List.of();
+            return objectMapper.createArrayNode();
         }
     }
 

@@ -1,6 +1,15 @@
 package com.bss.entitlement.controller;
 
 import com.bss.entitlement.api.ApiConstants;
+import com.bss.entitlement.dto.CompanionView;
+import com.bss.entitlement.dto.DeviceView;
+import com.bss.entitlement.dto.EcsRequestView;
+import com.bss.entitlement.dto.ReconfigureReceipt;
+import com.bss.entitlement.dto.ReconfigureRequest;
+import com.bss.entitlement.dto.RevokeReceipt;
+import com.bss.entitlement.dto.SubscriberDetail;
+import com.bss.entitlement.dto.SubscriberUpsertRequest;
+import com.bss.entitlement.dto.SubscriberView;
 import com.bss.entitlement.service.SubscriberService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The BSS face (house API, TMF-styled): subscriber bindings, what a line is
@@ -33,24 +41,24 @@ public class EntitlementAdminController {
     }
 
     @PutMapping("/subscriber")
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<SubscriberView> upsert(@RequestBody SubscriberUpsertRequest dto) {
         return ResponseEntity.status(HttpStatus.OK).body(subscribers.upsert(dto));
     }
 
     @GetMapping("/subscriber")
-    public List<Map<String, Object>> list(@RequestParam(required = false) String imsi,
+    public List<SubscriberView> list(@RequestParam(required = false) String imsi,
             @RequestParam(required = false) String partyId,
             @RequestParam(required = false) String serviceId) {
         return subscribers.list(imsi, partyId, serviceId);
     }
 
     @GetMapping("/subscriber/{imsi}")
-    public Map<String, Object> get(@PathVariable("imsi") String imsi) {
+    public SubscriberDetail get(@PathVariable("imsi") String imsi) {
         return subscribers.entitlements(imsi);
     }
 
     @GetMapping("/subscriber/{imsi}/entitlement")
-    public Map<String, Object> entitlements(@PathVariable("imsi") String imsi) {
+    public SubscriberDetail entitlements(@PathVariable("imsi") String imsi) {
         return subscribers.entitlements(imsi);
     }
 
@@ -61,30 +69,29 @@ public class EntitlementAdminController {
     }
 
     @PostMapping("/subscriber/{imsi}/reconfigure")
-    public Map<String, Object> reconfigure(@PathVariable("imsi") String imsi,
-            @RequestBody(required = false) Map<String, Object> body) {
-        List<String> apps = body != null && body.get("apps") instanceof List<?> list
-                ? list.stream().map(String::valueOf).toList() : List.of("ap2003", "ap2004", "ap2005");
-        return subscribers.reconfigure(imsi, apps);
+    public ReconfigureReceipt reconfigure(@PathVariable("imsi") String imsi,
+            @RequestBody(required = false) ReconfigureRequest body) {
+        return subscribers.reconfigure(imsi,
+                (body == null ? ReconfigureRequest.EMPTY : body).appsOrDefault());
     }
 
     @PostMapping("/subscriber/{imsi}/revokeTokens")
-    public Map<String, Object> revoke(@PathVariable("imsi") String imsi) {
+    public RevokeReceipt revoke(@PathVariable("imsi") String imsi) {
         return subscribers.revokeTokens(imsi);
     }
 
     @GetMapping("/device")
-    public List<Map<String, Object>> devices() {
+    public List<DeviceView> devices() {
         return subscribers.devices();
     }
 
     @GetMapping("/companionDevice")
-    public List<Map<String, Object>> companions() {
+    public List<CompanionView> companions() {
         return subscribers.companions();
     }
 
     @GetMapping("/ecsRequest")
-    public List<Map<String, Object>> requests(@RequestParam(required = false) String imsi) {
+    public List<EcsRequestView> requests(@RequestParam(required = false) String imsi) {
         return subscribers.requests(imsi);
     }
 }

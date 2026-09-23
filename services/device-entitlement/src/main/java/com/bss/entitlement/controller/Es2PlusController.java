@@ -1,6 +1,8 @@
 package com.bss.entitlement.controller;
 
 import com.bss.entitlement.api.ApiConstants;
+import com.bss.entitlement.dto.DownloadProgressInfo;
+import com.bss.entitlement.dto.Es2PlusReply;
 import com.bss.entitlement.security.TenantContext;
 import com.bss.entitlement.service.SubscriberService;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -8,9 +10,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * The SM-DP+ → operator notification (SGP.22 ES2+ §5.3.5
@@ -31,28 +30,13 @@ public class Es2PlusController {
     }
 
     @PostMapping("/{tenantId}/handleDownloadProgressInfo")
-    public Map<String, Object> progress(@PathVariable("tenantId") String tenantId, @RequestBody Map<String, Object> body) {
-        String iccid = str(body.get("iccid"));
-        String eid = str(body.get("eid"));
-        int point = 0;
-        try {
-            point = Integer.parseInt(String.valueOf(body.getOrDefault("notificationPointId", "0")));
-        } catch (NumberFormatException ignore) { /* stays 0 */ }
-        String status = null;
-        if (body.get("notificationPointStatus") instanceof Map<?, ?> nps && nps.get("status") != null) {
-            status = String.valueOf(nps.get("status"));
-        }
-        Map<String, Object> result;
+    public Es2PlusReply progress(@PathVariable("tenantId") String tenantId,
+            @RequestBody DownloadProgressInfo body) {
+        Es2PlusReply.ProfileProgress result;
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-            result = subscribers.profileProgress(tenantId, iccid, eid, point, status);
+            result = subscribers.profileProgress(tenantId, body.iccidText(), body.eidText(),
+                    body.point(), body.status());
         }
-        Map<String, Object> reply = new LinkedHashMap<>();
-        reply.put("header", Map.of("functionExecutionStatus", Map.of("status", "Executed-Success")));
-        reply.put("applied", result);
-        return reply;
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
+        return Es2PlusReply.executedSuccess(result);
     }
 }

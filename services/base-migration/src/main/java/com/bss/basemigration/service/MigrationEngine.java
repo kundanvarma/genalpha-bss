@@ -1,6 +1,8 @@
 package com.bss.basemigration.service;
 
 import com.bss.basemigration.client.OrderingClient;
+import com.bss.basemigration.dto.MigrationCustomerView;
+import com.bss.basemigration.dto.MigrationEvents;
 import com.bss.basemigration.entity.MigrationCustomer;
 import com.bss.basemigration.entity.MigrationPlan;
 import com.bss.basemigration.events.DomainEventPublisher;
@@ -9,6 +11,7 @@ import com.bss.basemigration.repository.MigrationPlanRepository;
 import com.bss.basemigration.security.TenantContext;
 import com.bss.basemigration.security.TenantRegistry;
 import com.bss.basemigration.tick.TickGuard;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -84,7 +87,8 @@ public class MigrationEngine {
                 plan.setState(MigrationPlan.RUNNING);
                 plan.setLastUpdate(OffsetDateTime.now(clock));
                 plans.save(plan);
-                events.publish("MigrationWaveStartedEvent", "migrationPlan", planResource(plan), tenantId);
+                events.publish("MigrationWaveStartedEvent", "migrationPlan",
+                        MigrationEvents.PlanEvent.of(plan), tenantId);
             }
             sendDueNotices(plan);
             emitDueOrders(plan);
@@ -107,11 +111,10 @@ public class MigrationEngine {
                     ? MigrationCustomer.EXIT_WINDOW : MigrationCustomer.NOTICED);
             customer.setLastUpdate(now);
             customers.save(customer);
-            Map<String, Object> resource = customerResource(customer);
-            resource.put("earliestOrderDate", now.plusDays(plan.getNoticeDays()).toString());
-            resource.put("changeSummary", changeSummary(customer));
             events.publish("CustomerMigrationNoticedEvent", "migrationCustomer",
-                    resource, plan.getTenantId());
+                    new MigrationEvents.CustomerNoticed(MigrationCustomerView.of(customer),
+                            now.plusDays(plan.getNoticeDays()).toString(), changeSummary(customer)),
+                    plan.getTenantId());
         }
     }
 
@@ -135,26 +138,27 @@ public class MigrationEngine {
             customer.setLastUpdate(now);
             customers.save(customer);
             try {
-                Map<String, Object> order = ordering.placeModifyOrder(
+                JsonNode order = ordering.placeModifyOrder(
                         customer.getPartyId(), customer.getProductId(),
                         customer.getTargetOfferingId(), customer.getTargetOfferingName(),
                         characteristicMapFor(plan, customer),
                         "base migration '" + plan.getName() + "' (" + plan.getId() + ")");
-                customer.setOrderRef(order == null ? null : String.valueOf(order.get("id")));
+                customer.setOrderRef(order == null ? null
+                        : com.bss.basemigration.dto.MigrationPlanRequest.text(order.get("id")));
                 customer.setState(MigrationCustomer.MIGRATED);
                 customer.setLastUpdate(OffsetDateTime.now(clock));
                 customers.save(customer);
                 plan.setConsecutiveFailures(0);
                 plans.save(plan);
                 events.publish("CustomerMigrationCompletedEvent", "migrationCustomer",
-                        customerResource(customer), plan.getTenantId());
+                        MigrationCustomerView.of(customer), plan.getTenantId());
             } catch (Exception e) {
                 customer.setState(MigrationCustomer.FAILED);
                 customer.setFailureReason(abbreviate(e.getMessage()));
                 customer.setLastUpdate(OffsetDateTime.now(clock));
                 customers.save(customer);
                 events.publish("CustomerMigrationFailedEvent", "migrationCustomer",
-                        customerResource(customer), plan.getTenantId());
+                        MigrationCustomerView.of(customer), plan.getTenantId());
                 plan.setConsecutiveFailures(plan.getConsecutiveFailures() + 1);
                 if (plan.getConsecutiveFailures() >= plan.getBreakerThreshold()) {
                     // the circuit breaker: stop the wave, keep the evidence
@@ -162,7 +166,7 @@ public class MigrationEngine {
                     plan.setLastUpdate(OffsetDateTime.now(clock));
                     plans.save(plan);
                     events.publish("MigrationWavePausedEvent", "migrationPlan",
-                            planResource(plan), plan.getTenantId());
+                            MigrationEvents.PlanEvent.of(plan), plan.getTenantId());
                     log.warn("plan '{}' PAUSED: {} consecutive order failures",
                             plan.getName(), plan.getConsecutiveFailures());
                     return;
@@ -191,11 +195,13 @@ public class MigrationEngine {
 
     private Map<String, Object> characteristicMapFor(MigrationPlan plan, MigrationCustomer customer) {
         // matrix row for this customer's source offering carries the carry-over map
-        for (Map<String, Object> row : json.readList(plan.getMatrixJson())) {
-            if (String.valueOf(row.get("sourceOfferingId")).equals(customer.getSourceOfferingId())
-                    && row.get("characteristicMap") instanceof Map<?, ?> chars) {
+        for (JsonNode row : json.readArray(plan.getMatrixJson())) {
+            JsonNode chars = row.get("characteristicMap");
+            if (com.bss.basemigration.dto.MigrationPlanRequest.text(row.get("sourceOfferingId"))
+                    .equals(customer.getSourceOfferingId()) && chars != null && chars.isObject()) {
                 Map<String, Object> out = new LinkedHashMap<>();
-                chars.forEach((k, v) -> out.put(String.valueOf(k), v));
+                chars.fields().forEachRemaining(e -> out.put(e.getKey(),
+                        e.getValue().isTextual() ? e.getValue().textValue() : e.getValue()));
                 return out;
             }
         }
@@ -210,47 +216,6 @@ public class MigrationEngine {
         return "Your plan '" + source + "' is changing to '" + target + "' (" + customer.getDeltaClass()
                 + " change)." + (customer.isExitRight()
                         ? " You may cancel penalty-free before the change takes effect." : "");
-    }
-
-    static Map<String, Object> planResource(MigrationPlan plan) {
-        Map<String, Object> resource = new LinkedHashMap<>();
-        resource.put("id", plan.getId());
-        resource.put("name", plan.getName());
-        resource.put("state", plan.getState());
-        resource.put("triggerType", plan.getTriggerType());
-        resource.put("noticeDays", plan.getNoticeDays());
-        resource.put("simulationRef", plan.getSimulationRef());
-        resource.put("consecutiveFailures", plan.getConsecutiveFailures());
-        return resource;
-    }
-
-    static Map<String, Object> customerResource(MigrationCustomer customer) {
-        Map<String, Object> resource = new LinkedHashMap<>();
-        resource.put("id", customer.getId());
-        resource.put("planId", customer.getPlanId());
-        resource.put("partyId", customer.getPartyId());
-        resource.put("productId", customer.getProductId());
-        resource.put("sourceOffering", Map.of("id", String.valueOf(customer.getSourceOfferingId()),
-                "name", customer.getSourceOfferingName() == null ? "" : customer.getSourceOfferingName()));
-        resource.put("targetOffering", Map.of("id", String.valueOf(customer.getTargetOfferingId()),
-                "name", customer.getTargetOfferingName() == null ? "" : customer.getTargetOfferingName()));
-        resource.put("deltaClass", customer.getDeltaClass());
-        resource.put("state", customer.getState());
-        resource.put("exitRight", customer.isExitRight());
-        resource.put("penaltyFreeExit", customer.isPenaltyFreeExit());
-        if (customer.getScheduledFor() != null) {
-            resource.put("scheduledFor", customer.getScheduledFor().toString());
-        }
-        if (customer.getNoticeSentAt() != null) {
-            resource.put("noticeSentAt", customer.getNoticeSentAt().toString());
-        }
-        if (customer.getOrderRef() != null) {
-            resource.put("orderRef", customer.getOrderRef());
-        }
-        if (customer.getFailureReason() != null) {
-            resource.put("failureReason", customer.getFailureReason());
-        }
-        return resource;
     }
 
     private static String abbreviate(String message) {

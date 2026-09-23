@@ -3,10 +3,14 @@ package com.bss.basemigration.service;
 import com.bss.basemigration.client.AgreementClient;
 import com.bss.basemigration.client.InventoryClient;
 import com.bss.basemigration.client.PartyClient;
+import com.bss.basemigration.dto.MigrationCustomerView;
+import com.bss.basemigration.dto.MigrationPlanRequest;
 import com.bss.basemigration.entity.MigrationCustomer;
 import com.bss.basemigration.entity.MigrationPlan;
 import com.bss.basemigration.events.DomainEventPublisher;
 import com.bss.basemigration.repository.MigrationCustomerRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -61,8 +65,8 @@ public class CandidateDiscovery {
     public int discoverBulk(MigrationPlan plan, boolean courtesy, OffsetDateTime scheduledFor) {
         List<Map<String, Object>> base = inventory.listActiveProducts();
         int created = 0;
-        for (Map<String, Object> row : json.readList(plan.getMatrixJson())) {
-            String source = String.valueOf(row.get("sourceOfferingId"));
+        for (JsonNode row : json.readArray(plan.getMatrixJson())) {
+            String source = MigrationPlanRequest.text(row.get("sourceOfferingId"));
             for (Map<String, Object> product : base) {
                 if (!(product.get("productOffering") instanceof Map<?, ?> ref)
                         || !source.equals(String.valueOf(ref.get("id")))) {
@@ -80,8 +84,8 @@ public class CandidateDiscovery {
     public int discoverForParty(MigrationPlan plan, String partyId, OffsetDateTime scheduledFor) {
         List<Map<String, Object>> owned = inventory.activeProductsOf(partyId);
         int created = 0;
-        for (Map<String, Object> row : json.readList(plan.getMatrixJson())) {
-            String source = String.valueOf(row.get("sourceOfferingId"));
+        for (JsonNode row : json.readArray(plan.getMatrixJson())) {
+            String source = MigrationPlanRequest.text(row.get("sourceOfferingId"));
             for (Map<String, Object> product : owned) {
                 if (!(product.get("productOffering") instanceof Map<?, ?> ref)
                         || !source.equals(String.valueOf(ref.get("id")))) {
@@ -96,7 +100,7 @@ public class CandidateDiscovery {
     }
 
     /** Apply eligibility to one (product, matrix row); create the journey row when it passes. */
-    private boolean candidate(MigrationPlan plan, Map<String, Object> matrixRow,
+    private boolean candidate(MigrationPlan plan, JsonNode matrixRow,
             Map<String, Object> product, boolean courtesy, OffsetDateTime scheduledFor) {
         String productId = String.valueOf(product.get("id"));
         String partyId = customerPartyIn(product);
@@ -104,7 +108,7 @@ public class CandidateDiscovery {
                 || customers.existsByTenantIdAndPlanIdAndProductId(plan.getTenantId(), plan.getId(), productId)) {
             return false;
         }
-        Map<String, Object> eligibility = json.readMap(plan.getEligibilityJson());
+        ObjectNode eligibility = json.readObject(plan.getEligibilityJson());
         if (listOf(eligibility.get("grandfatherPartyIds")).contains(partyId)
                 || json.readStrings(plan.getGrandfatheredJson()).contains(partyId)) {
             return false;
@@ -114,17 +118,17 @@ public class CandidateDiscovery {
             return false;
         }
 
-        String deltaClass = matrixRow.get("deltaClass") == null
-                ? "neutral" : String.valueOf(matrixRow.get("deltaClass"));
+        String deltaClass = !matrixRow.hasNonNull("deltaClass")
+                ? "neutral" : MigrationPlanRequest.text(matrixRow.get("deltaClass"));
         OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime effectiveSchedule = scheduledFor == null ? now : scheduledFor;
         boolean penaltyFreeExit = false;
 
-        String sourceOfferingId = String.valueOf(matrixRow.get("sourceOfferingId"));
+        String sourceOfferingId = MigrationPlanRequest.text(matrixRow.get("sourceOfferingId"));
         Optional<OffsetDateTime> binding = agreements.commitmentEnd(partyId, sourceOfferingId, now);
         if (binding.isPresent()) {
-            String inBinding = eligibility.get("inBinding") == null
-                    ? IN_BINDING_DEFER : String.valueOf(eligibility.get("inBinding"));
+            String inBinding = !eligibility.hasNonNull("inBinding")
+                    ? IN_BINDING_DEFER : MigrationPlanRequest.text(eligibility.get("inBinding"));
             switch (inBinding) {
                 case IN_BINDING_EXCLUDE -> {
                     return false;
@@ -148,9 +152,9 @@ public class CandidateDiscovery {
         row.setProductId(productId);
         row.setSourceOfferingId(sourceOfferingId);
         row.setSourceOfferingName(nameOf(product.get("productOffering")));
-        row.setTargetOfferingId(String.valueOf(matrixRow.get("targetOfferingId")));
-        row.setTargetOfferingName(matrixRow.get("targetOfferingName") == null
-                ? null : String.valueOf(matrixRow.get("targetOfferingName")));
+        row.setTargetOfferingId(MigrationPlanRequest.text(matrixRow.get("targetOfferingId")));
+        row.setTargetOfferingName(!matrixRow.hasNonNull("targetOfferingName")
+                ? null : MigrationPlanRequest.text(matrixRow.get("targetOfferingName")));
         row.setDeltaClass(deltaClass);
         row.setState(MigrationCustomer.SCHEDULED);
         row.setScheduledFor(effectiveSchedule);
@@ -161,7 +165,7 @@ public class CandidateDiscovery {
         row.setLastUpdate(now);
         customers.save(row);
         events.publish("CustomerMigrationScheduledEvent", "migrationCustomer",
-                MigrationEngine.customerResource(row), plan.getTenantId());
+                MigrationCustomerView.of(row), plan.getTenantId());
         log.info("plan '{}': scheduled {} ({} -> {}) for {}", plan.getName(), partyId,
                 row.getSourceOfferingName(), row.getTargetOfferingId(), effectiveSchedule);
         return true;
@@ -170,10 +174,9 @@ public class CandidateDiscovery {
     /** The exit right by delta class — the jurisdiction pack may override the
      *  default (detrimental grants it, beneficial/neutral do not). */
     boolean exitRightFor(MigrationPlan plan, String deltaClass) {
-        Map<String, Object> pack = json.readMap(plan.getJurisdictionJson());
-        if (pack.get("exitRightByDeltaClass") instanceof Map<?, ?> byClass
-                && byClass.get(deltaClass) != null) {
-            return Boolean.parseBoolean(String.valueOf(byClass.get(deltaClass)));
+        JsonNode byClass = json.readObject(plan.getJurisdictionJson()).get("exitRightByDeltaClass");
+        if (byClass != null && byClass.isObject() && byClass.hasNonNull(deltaClass)) {
+            return Boolean.parseBoolean(MigrationPlanRequest.text(byClass.get(deltaClass)));
         }
         return "detrimental".equals(deltaClass);
     }
@@ -219,7 +222,13 @@ public class CandidateDiscovery {
         return snapshot;
     }
 
-    private static List<String> listOf(Object raw) {
-        return raw instanceof List<?> l ? l.stream().map(String::valueOf).toList() : List.of();
+    /** A list the operator authored, read as the map read it — every entry through {@code String.valueOf}. */
+    private static List<String> listOf(JsonNode raw) {
+        if (raw == null || !raw.isArray()) {
+            return List.of();
+        }
+        List<String> out = new java.util.ArrayList<>();
+        raw.forEach(node -> out.add(MigrationPlanRequest.text(node)));
+        return out;
     }
 }

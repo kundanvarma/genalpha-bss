@@ -1,5 +1,8 @@
 package com.bss.entitlement.service;
 
+import com.bss.entitlement.dto.CompanionView;
+import com.bss.entitlement.dto.OdsaBlock;
+import com.bss.entitlement.dto.TransferView;
 import com.bss.entitlement.entity.CompanionDevice;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.bss.entitlement.entity.SubscriptionTransfer;
@@ -15,7 +18,6 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -62,72 +64,66 @@ public class OdsaService {
 
     /** Handle one ODSA app request. Returns the application block. */
     @Transactional
-    public Map<String, Object> handle(EntitlementSubscriber s, String app, Map<String, String> p) {
+    public OdsaBlock handle(EntitlementSubscriber s, String app, Map<String, String> p) {
         String operation = p.getOrDefault("operation", "AcquireConfiguration");
         Map<String, Boolean> f = decisions.features(s);
         boolean live = EntitlementSubscriber.ACTIVE.equals(s.getStatus());
-        Map<String, Object> out = new LinkedHashMap<>();
+        OdsaBlock.Draft out = new OdsaBlock.Draft();
         if ("ap2006".equals(app)) {
             boolean eligible = live && f.getOrDefault("companionesim", false);
             switch (operation) {
                 case "CheckEligibility" -> {
-                    out.put("CompanionAppEligibility", eligible ? "1" : "0");
-                    out.put("CompanionDeviceServices", "SharedNumber");
+                    out.companionEligibility(eligible ? "1" : "0", "SharedNumber");
                     if (!eligible) {
-                        out.put("NotEnabledURL", publicBaseUrl + "/ts43/flow/not-enabled");
-                        out.put("NotEnabledUserData", "reason=" + (live ? "plan" : "line"));
+                        out.notEnabled(publicBaseUrl + "/ts43/flow/not-enabled", "reason=" + (live ? "plan" : "line"));
                     }
-                    out.put("OperationResult", "1");
+                    out.operationResult("1");
                 }
                 case "ManageSubscription" -> manageCompanion(s, p, eligible, out);
                 case "ManageService" -> {
                     CompanionDevice c = companion(s, p.get("companion_terminal_id"));
                     if (c == null) {
-                        out.put("OperationResult", "104");
+                        out.operationResult("104");
                     } else {
                         String action = p.getOrDefault("companion_service_action", "1"); // 1 activate, 2 deactivate
                         c.setStatus("2".equals(action) ? CompanionDevice.SUBSCRIBED : CompanionDevice.ACTIVE);
                         c.setLastUpdate(OffsetDateTime.now());
                         companions.save(c);
-                        out.put("ServiceStatus", "2".equals(action) ? "3" : "1"); // 1 ACTIVATED, 3 DEACTIVATED
-                        out.put("OperationResult", "1");
+                        out.serviceStatus("2".equals(action) ? "3" : "1"); // 1 ACTIVATED, 3 DEACTIVATED
+                        out.operationResult("1");
                     }
                 }
                 case "AcquireConfiguration" -> {
-                    List<Map<String, Object>> configs = new ArrayList<>();
+                    List<OdsaBlock.CompanionConfigEntry> configs = new ArrayList<>();
                     for (CompanionDevice c : companions.findByTenantIdAndImsi(s.getTenantId(), s.getImsi())) {
                         if (p.get("companion_terminal_id") != null && !p.get("companion_terminal_id").equals(c.getCompanionTerminalId())) {
                             continue;
                         }
-                        Map<String, Object> cfg = new LinkedHashMap<>();
-                        cfg.put("ICCID", c.getIccid());
-                        cfg.put("CompanionDeviceService", "SharedNumber");
-                        cfg.put("ServiceStatus", serviceStatus(c.getStatus()));
-                        cfg.put("CompanionTerminalId", c.getCompanionTerminalId());
-                        configs.add(Map.of("CompanionConfiguration", cfg));
+                        configs.add(new OdsaBlock.CompanionConfigEntry(new OdsaBlock.CompanionConfiguration(
+                                c.getIccid(), "SharedNumber", serviceStatus(c.getStatus()), c.getCompanionTerminalId())));
                     }
-                    out.put("CompanionConfigurations", configs);
-                    out.put("OperationResult", "1");
+                    out.companionConfigurations(configs);
+                    out.operationResult("1");
                 }
-                default -> out.put("OperationResult", "101");
+                default -> out.operationResult("101");
             }
-            return out;
+            return out.freeze();
         }
         if ("ap2009".equals(app)) {
             boolean transferable = live && f.getOrDefault("esimtransfer", false);
             switch (operation) {
                 case "CheckEligibility" -> {
-                    out.put("PrimaryAppEligibility", live ? "1" : "0");
-                    out.put("OperationResult", "1");
+                    out.primaryEligibility(live ? "1" : "0");
+                    out.operationResult("1");
                 }
                 case "ManageSubscription" -> {
                     String type = p.getOrDefault("operation_type", "");
                     if ("3".equals(type)) { // TRANSFER SUBSCRIPTION
                         if (!transferable) {
-                            out.put("SubscriptionResult", "5"); // DISMISS
-                            out.put("MSG", Map.of("title", "eSIM transfer", "message",
-                                    "This plan does not allow moving the eSIM by yourself. Please contact us."));
-                            out.put("OperationResult", "1");
+                            out.subscriptionResult("5"); // DISMISS
+                            out.msg("eSIM transfer",
+                                    "This plan does not allow moving the eSIM by yourself. Please contact us.");
+                            out.operationResult("1");
                         } else {
                             SubscriptionTransfer t = new SubscriptionTransfer();
                             t.setId(UUID.randomUUID().toString());
@@ -154,43 +150,38 @@ public class OdsaService {
                             t.setCreatedAt(OffsetDateTime.now());
                             t.setLastUpdate(t.getCreatedAt());
                             transfers.save(t);
-                            events.publish("SubscriptionTransferRequestedEvent", "subscriptionTransfer", transferMap(t, s));
-                            out.put("SubscriptionResult", "2"); // DOWNLOAD PROFILE
-                            out.put("DownloadInfo", Map.of("ProfileIccid", t.getNewIccid(),
+                            events.publish("SubscriptionTransferRequestedEvent", "subscriptionTransfer", TransferView.of(t, s));
+                            out.subscriptionResult("2"); // DOWNLOAD PROFILE
+                            out.downloadInfo(Map.of("ProfileIccid", t.getNewIccid(),
                                     "ProfileActivationCode", Base64.getEncoder().encodeToString(t.getActivationCode().getBytes()),
                                     "ProfileSmdpAddress", t.getSmdpAddress()));
-                            out.put("OperationResult", "1");
+                            out.operationResult("1");
                         }
                     } else if ("0".equals(type)) { // SUBSCRIBE: a new primary eSIM needs a sale — websheet
-                        out.put("SubscriptionResult", "1");
-                        out.put("SubscriptionServiceURL", publicBaseUrl + "/ts43/flow/subscribe");
-                        out.put("SubscriptionServiceUserData", "imsi=" + s.getImsi());
-                        out.put("OperationResult", "1");
+                        out.subscriptionResult("1");
+                        out.subscriptionService(publicBaseUrl + "/ts43/flow/subscribe", "imsi=" + s.getImsi());
+                        out.operationResult("1");
                     } else {
-                        out.put("OperationResult", "101");
+                        out.operationResult("101");
                     }
                 }
                 case "AcquireConfiguration" -> {
-                    Map<String, Object> cfg = new LinkedHashMap<>();
-                    cfg.put("ICCID", s.getIccid());
-                    cfg.put("ServiceStatus", live ? "1" : "3");
-                    cfg.put("PolicyEnabled", "0");
-                    out.put("PrimaryConfiguration", cfg);
-                    out.put("OperationResult", "1");
+                    out.primaryConfiguration(new OdsaBlock.PrimaryConfiguration(
+                            s.getIccid(), live ? "1" : "3", "0"));
+                    out.operationResult("1");
                 }
-                default -> out.put("OperationResult", "101");
+                default -> out.operationResult("101");
             }
-            return out;
+            return out.freeze();
         }
-        out.put("OperationResult", "101");
-        return out;
+        return OdsaBlock.result("101");
     }
 
-    private void manageCompanion(EntitlementSubscriber s, Map<String, String> p, boolean eligible, Map<String, Object> out) {
+    private void manageCompanion(EntitlementSubscriber s, Map<String, String> p, boolean eligible, OdsaBlock.Draft out) {
         String type = p.getOrDefault("operation_type", "0");
         String terminalId = p.get("companion_terminal_id");
         if (terminalId == null || terminalId.isBlank()) {
-            out.put("OperationResult", "102");
+            out.operationResult("102");
             return;
         }
         if ("1".equals(type)) { // UNSUBSCRIBE
@@ -203,16 +194,16 @@ public class OdsaService {
                 c.setStatus(CompanionDevice.UNSUBSCRIBED);
                 c.setLastUpdate(OffsetDateTime.now());
                 companions.save(c);
-                events.publish("CompanionDeviceUnsubscribedEvent", "companionDevice", companionMap(c, s));
+                events.publish("CompanionDeviceUnsubscribedEvent", "companionDevice", CompanionView.of(c, s));
             }
-            out.put("SubscriptionResult", "3"); // DONE
-            out.put("OperationResult", "1");
+            out.subscriptionResult("3"); // DONE
+            out.operationResult("1");
             return;
         }
         if (!eligible) {
-            out.put("SubscriptionResult", "5"); // DISMISS
-            out.put("MSG", Map.of("title", "Companion device", "message", "This plan does not include a companion eSIM."));
-            out.put("OperationResult", "1");
+            out.subscriptionResult("5"); // DISMISS
+            out.msg("Companion device", "This plan does not include a companion eSIM.");
+            out.operationResult("1");
             return;
         }
         CompanionDevice c = companion(s, terminalId);
@@ -245,12 +236,12 @@ public class OdsaService {
         c.setStatus(CompanionDevice.SUBSCRIBED);
         c.setLastUpdate(OffsetDateTime.now());
         companions.save(c);
-        events.publish("CompanionDeviceSubscribedEvent", "companionDevice", companionMap(c, s));
-        out.put("SubscriptionResult", "2"); // DOWNLOAD PROFILE
-        out.put("DownloadInfo", Map.of("ProfileIccid", c.getIccid(),
+        events.publish("CompanionDeviceSubscribedEvent", "companionDevice", CompanionView.of(c, s));
+        out.subscriptionResult("2"); // DOWNLOAD PROFILE
+        out.downloadInfo(Map.of("ProfileIccid", c.getIccid(),
                 "ProfileActivationCode", Base64.getEncoder().encodeToString(c.getActivationCode().getBytes()),
                 "ProfileSmdpAddress", c.getSmdpAddress() == null ? smdp : c.getSmdpAddress()));
-        out.put("OperationResult", "1");
+        out.operationResult("1");
     }
 
     private CompanionDevice companion(EntitlementSubscriber s, String terminalId) {
@@ -281,45 +272,4 @@ public class OdsaService {
         return "LPA:1$" + smdp + "$" + iccid.substring(iccid.length() - 8).toUpperCase() + "-" + Integer.toHexString(RANDOM.nextInt(0xFFFFFF)).toUpperCase();
     }
 
-    public static Map<String, Object> companionMap(CompanionDevice c, EntitlementSubscriber s) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("imsi", c.getImsi());
-        m.put("msisdn", s.getMsisdn());
-        m.put("partyId", s.getPartyId());
-        m.put("serviceId", s.getServiceId());
-        m.put("companionTerminalId", c.getCompanionTerminalId());
-        m.put("eid", c.getEid());
-        m.put("iccid", c.getIccid());
-        m.put("vendor", c.getVendor());
-        m.put("model", c.getModel());
-        m.put("status", c.getStatus());
-        m.put("activationCode", c.getActivationCode());
-        m.put("matchingId", c.getMatchingId());
-        m.put("smdpAddress", c.getSmdpAddress());
-        m.put("profileState", c.getProfileState());
-        m.put("createdAt", c.getCreatedAt() == null ? null : c.getCreatedAt().toString());
-        m.put("lastUpdate", c.getLastUpdate() == null ? null : c.getLastUpdate().toString());
-        return m;
-    }
-
-    public static Map<String, Object> transferMap(SubscriptionTransfer t, EntitlementSubscriber s) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", t.getId());
-        m.put("imsi", t.getImsi());
-        m.put("msisdn", s.getMsisdn());
-        m.put("partyId", s.getPartyId());
-        m.put("serviceId", s.getServiceId());
-        m.put("oldTerminalId", t.getOldTerminalId());
-        m.put("targetTerminalId", t.getTargetTerminalId());
-        m.put("targetEid", t.getTargetEid());
-        m.put("newIccid", t.getNewIccid());
-        m.put("status", t.getStatus());
-        m.put("activationCode", t.getActivationCode());
-        m.put("matchingId", t.getMatchingId());
-        m.put("smdpAddress", t.getSmdpAddress());
-        m.put("profileState", t.getProfileState());
-        m.put("createdAt", t.getCreatedAt() == null ? null : t.getCreatedAt().toString());
-        return m;
-    }
 }

@@ -4,6 +4,14 @@ import com.bss.basemigration.api.ApiConstants;
 import com.bss.basemigration.api.PagedResult;
 import com.bss.basemigration.client.OrderingClient;
 import com.bss.basemigration.client.SimulationClient;
+import com.bss.basemigration.dto.AttachSimulationRequest;
+import com.bss.basemigration.dto.MigrationCustomerDetail;
+import com.bss.basemigration.dto.MigrationCustomerView;
+import com.bss.basemigration.dto.MigrationEvents;
+import com.bss.basemigration.dto.MigrationPlanRequest;
+import com.bss.basemigration.dto.MigrationPlanView;
+import com.bss.basemigration.dto.MigrationProgress;
+import com.bss.basemigration.dto.TriggerScanResult;
 import com.bss.basemigration.entity.MigrationCustomer;
 import com.bss.basemigration.entity.MigrationPlan;
 import com.bss.basemigration.events.DomainEventPublisher;
@@ -13,6 +21,9 @@ import com.bss.basemigration.exception.NotFoundException;
 import com.bss.basemigration.repository.MigrationCustomerRepository;
 import com.bss.basemigration.repository.MigrationPlanRepository;
 import com.bss.basemigration.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +33,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,13 +48,17 @@ import java.util.UUID;
 public class MigrationPlanService {
 
     private static final String RESOURCE = "migrationPlan";
-    private static final Set<String> DELTA_CLASSES = Set.of("beneficial", "neutral", "detrimental");
-    private static final Set<String> IN_BINDING = Set.of(CandidateDiscovery.IN_BINDING_DEFER,
-            CandidateDiscovery.IN_BINDING_EXCLUDE, CandidateDiscovery.IN_BINDING_FREE_EXIT);
-    private static final Set<String> TRIGGERS = Set.of(MigrationPlan.TRIGGER_BULK,
-            MigrationPlan.TRIGGER_AGE, MigrationPlan.TRIGGER_PROMO);
-    private static final Set<String> AGE_STRATEGIES = Set.of(TriggerScanner.STRATEGY_AUTO,
-            TriggerScanner.STRATEGY_GRANDFATHER);
+    // these four are PRINTED in refusals; a Set.of re-orders itself on every JVM
+    // start, so each is pinned to the order the message already has
+    private static final Set<String> DELTA_CLASSES = new LinkedHashSet<>(
+            List.of("beneficial", "neutral", "detrimental"));
+    private static final Set<String> IN_BINDING = new LinkedHashSet<>(
+            List.of(CandidateDiscovery.IN_BINDING_FREE_EXIT, CandidateDiscovery.IN_BINDING_EXCLUDE,
+                    CandidateDiscovery.IN_BINDING_DEFER));
+    private static final Set<String> TRIGGERS = new LinkedHashSet<>(
+            List.of(MigrationPlan.TRIGGER_PROMO, MigrationPlan.TRIGGER_AGE, MigrationPlan.TRIGGER_BULK));
+    private static final Set<String> AGE_STRATEGIES = new LinkedHashSet<>(
+            List.of(TriggerScanner.STRATEGY_AUTO, TriggerScanner.STRATEGY_GRANDFATHER));
 
     private final MigrationPlanRepository plans;
     private final MigrationCustomerRepository customers;
@@ -80,7 +96,7 @@ public class MigrationPlanService {
     // ---- plan CRUD ----
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public MigrationPlanView create(MigrationPlanRequest dto) {
         MigrationPlan plan = new MigrationPlan();
         plan.setId(UUID.randomUUID().toString());
         plan.setTenantId(tenantScope.currentTenantId());
@@ -93,19 +109,19 @@ public class MigrationPlanService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> list(int offset, int limit) {
+    public PagedResult<MigrationPlanView> list(int offset, int limit) {
         List<MigrationPlan> all = plans.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
-        List<Map<String, Object>> page = all.stream().skip(offset).limit(limit).map(this::toMap).toList();
+        List<MigrationPlanView> page = all.stream().skip(offset).limit(limit).map(this::toMap).toList();
         return new PagedResult<>(page, all.size());
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String id) {
+    public MigrationPlanView get(String id) {
         return toMap(find(id));
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+    public MigrationPlanView patch(String id, MigrationPlanRequest dto) {
         MigrationPlan plan = find(id);
         if (!MigrationPlan.DRAFT.equals(plan.getState())
                 && !MigrationPlan.SIMULATED.equals(plan.getState())) {
@@ -113,9 +129,7 @@ public class MigrationPlanService {
                     + " — only draft/simulated plans can be edited");
         }
         applyAndValidate(plan, dto, false);
-        if (MigrationPlan.SIMULATED.equals(plan.getState())
-                && (dto.containsKey("matrix") || dto.containsKey("eligibility")
-                        || dto.containsKey("trigger") || dto.containsKey("jurisdictionPack"))) {
+        if (MigrationPlan.SIMULATED.equals(plan.getState()) && dto.touchesSubstance()) {
             // the substance changed under the rehearsal — the receipt is stale
             plan.setState(MigrationPlan.DRAFT);
             plan.setSimulationRef(null);
@@ -137,14 +151,14 @@ public class MigrationPlanService {
     // ---- the rehearsal gate ----
 
     @Transactional
-    public Map<String, Object> attachSimulation(String id, Map<String, Object> body) {
+    public MigrationPlanView attachSimulation(String id, AttachSimulationRequest body) {
         MigrationPlan plan = find(id);
         if (!MigrationPlan.DRAFT.equals(plan.getState())
                 && !MigrationPlan.SIMULATED.equals(plan.getState())) {
             throw new ConflictException("plan '" + id + "' is " + plan.getState()
                     + " — a simulation attaches before arming");
         }
-        String ref = body.get("simulationRef") == null ? null : String.valueOf(body.get("simulationRef"));
+        String ref = body.ref();
         if (ref == null || ref.isBlank()) {
             throw new BadRequestException("simulationRef is required");
         }
@@ -160,7 +174,7 @@ public class MigrationPlanService {
     }
 
     @Transactional
-    public Map<String, Object> arm(String id) {
+    public MigrationPlanView arm(String id) {
         MigrationPlan plan = find(id);
         if (plan.getSimulationRef() == null || !MigrationPlan.SIMULATED.equals(plan.getState())) {
             // SIMULATE FIRST is codified, not advised
@@ -174,16 +188,13 @@ public class MigrationPlanService {
         plan.setState(MigrationPlan.ARMED);
         plan.setConsecutiveFailures(0);
         plan.setLastUpdate(OffsetDateTime.now(clock));
-        Map<String, Object> resource = MigrationEngine.planResource(plans.save(plan));
-        resource.put("customersDiscovered", discovered);
-        events.publish("MigrationPlanArmedEvent", RESOURCE, resource);
-        Map<String, Object> out = toMap(plan);
-        out.put("customersDiscovered", discovered);
-        return out;
+        events.publish("MigrationPlanArmedEvent", RESOURCE,
+                MigrationEvents.PlanEvent.of(plans.save(plan)).withDiscovered(discovered));
+        return toMap(plan).withDiscovered(discovered);
     }
 
     @Transactional
-    public Map<String, Object> pause(String id) {
+    public MigrationPlanView pause(String id) {
         MigrationPlan plan = find(id);
         if (!MigrationPlan.ARMED.equals(plan.getState())
                 && !MigrationPlan.RUNNING.equals(plan.getState())) {
@@ -191,12 +202,12 @@ public class MigrationPlanService {
         }
         plan.setState(MigrationPlan.PAUSED);
         plan.setLastUpdate(OffsetDateTime.now(clock));
-        events.publish("MigrationWavePausedEvent", RESOURCE, MigrationEngine.planResource(plan));
+        events.publish("MigrationWavePausedEvent", RESOURCE, MigrationEvents.PlanEvent.of(plan));
         return toMap(plans.save(plan));
     }
 
     @Transactional
-    public Map<String, Object> resume(String id) {
+    public MigrationPlanView resume(String id) {
         MigrationPlan plan = find(id);
         if (!MigrationPlan.PAUSED.equals(plan.getState())) {
             throw new ConflictException("only a paused plan can resume");
@@ -204,12 +215,12 @@ public class MigrationPlanService {
         plan.setState(MigrationPlan.RUNNING);
         plan.setConsecutiveFailures(0);
         plan.setLastUpdate(OffsetDateTime.now(clock));
-        events.publish("MigrationWaveStartedEvent", RESOURCE, MigrationEngine.planResource(plan));
+        events.publish("MigrationWaveStartedEvent", RESOURCE, MigrationEvents.PlanEvent.of(plan));
         return toMap(plans.save(plan));
     }
 
     @Transactional
-    public Map<String, Object> scanTriggers(String id) {
+    public TriggerScanResult scanTriggers(String id) {
         MigrationPlan plan = find(id);
         if (!MigrationPlan.ARMED.equals(plan.getState())
                 && !MigrationPlan.RUNNING.equals(plan.getState())) {
@@ -221,13 +232,13 @@ public class MigrationPlanService {
     // ---- customers ----
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> customers(String planId, String state, int offset, int limit) {
+    public PagedResult<MigrationCustomerDetail> customers(String planId, String state, int offset, int limit) {
         MigrationPlan plan = find(planId);
         List<MigrationCustomer> all = state == null || state.isBlank()
                 ? customers.findByTenantIdAndPlanIdOrderByCreatedAtAsc(plan.getTenantId(), plan.getId())
                 : customers.findByTenantIdAndPlanIdAndStateOrderByCreatedAtAsc(
                         plan.getTenantId(), plan.getId(), state);
-        List<Map<String, Object>> page = all.stream().skip(offset).limit(limit)
+        List<MigrationCustomerDetail> page = all.stream().skip(offset).limit(limit)
                 .map(this::customerToMap).toList();
         return new PagedResult<>(page, all.size());
     }
@@ -235,7 +246,7 @@ public class MigrationPlanService {
     /** The exercised exit: recorded penalty-free where the right applies;
      *  the actual termination is the ordering side's, downstream of the event. */
     @Transactional
-    public Map<String, Object> exit(String planId, String customerId) {
+    public MigrationCustomerDetail exit(String planId, String customerId) {
         MigrationPlan plan = find(planId);
         MigrationCustomer customer = findCustomer(plan, customerId);
         if (!Set.of(MigrationCustomer.SCHEDULED, MigrationCustomer.NOTICED,
@@ -248,43 +259,42 @@ public class MigrationPlanService {
         customer.setLastUpdate(OffsetDateTime.now(clock));
         customers.save(customer);
         events.publish("MigrationExitExercisedEvent", "migrationCustomer",
-                MigrationEngine.customerResource(customer));
+                MigrationCustomerView.of(customer));
         return customerToMap(customer);
     }
 
     /** The inverse modify order, from the pre-migration snapshot. */
     @Transactional
-    public Map<String, Object> rollback(String planId, String customerId) {
+    public MigrationCustomerDetail rollback(String planId, String customerId) {
         MigrationPlan plan = find(planId);
         MigrationCustomer customer = findCustomer(plan, customerId);
         if (!MigrationCustomer.MIGRATED.equals(customer.getState())) {
             throw new ConflictException("only a migrated customer can roll back");
         }
-        Map<String, Object> snapshot = json.readMap(customer.getSnapshotJson());
-        if (!(snapshot.get("productOffering") instanceof Map<?, ?> offering)
-                || offering.get("id") == null) {
+        JsonNode offering = json.readObject(customer.getSnapshotJson()).get("productOffering");
+        if (offering == null || !offering.isObject() || !offering.hasNonNull("id")) {
             throw new ConflictException("no usable pre-migration snapshot for customer '"
                     + customerId + "'");
         }
-        Map<String, Object> order = ordering.placeModifyOrder(
+        JsonNode order = ordering.placeModifyOrder(
                 customer.getPartyId(), customer.getProductId(),
-                String.valueOf(offering.get("id")),
-                offering.get("name") == null ? null : String.valueOf(offering.get("name")),
+                MigrationPlanRequest.text(offering.get("id")),
+                offering.hasNonNull("name") ? MigrationPlanRequest.text(offering.get("name")) : null,
                 Map.of(),
                 "rollback of base migration '" + plan.getName() + "' (" + plan.getId() + ")");
-        customer.setRollbackOrderRef(order == null ? null : String.valueOf(order.get("id")));
+        customer.setRollbackOrderRef(order == null ? null : MigrationPlanRequest.text(order.get("id")));
         customer.setState(MigrationCustomer.ROLLED_BACK);
         customer.setLastUpdate(OffsetDateTime.now(clock));
         customers.save(customer);
         events.publish("CustomerMigrationRolledBackEvent", "migrationCustomer",
-                MigrationEngine.customerResource(customer));
+                MigrationCustomerView.of(customer));
         return customerToMap(customer);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> progress(String planId) {
+    public MigrationProgress progress(String planId) {
         MigrationPlan plan = find(planId);
-        Map<String, Object> counts = new LinkedHashMap<>();
+        Map<String, Long> counts = new LinkedHashMap<>();
         long total = 0;
         for (String state : List.of(MigrationCustomer.SCHEDULED, MigrationCustomer.NOTICED,
                 MigrationCustomer.EXIT_WINDOW, MigrationCustomer.ORDER_EMITTED,
@@ -295,15 +305,9 @@ public class MigrationPlanService {
             counts.put(state, count);
             total += count;
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("planId", plan.getId());
-        out.put("name", plan.getName());
-        out.put("state", plan.getState());
-        out.put("consecutiveFailures", plan.getConsecutiveFailures());
-        out.put("totalCustomers", total);
-        out.put("byState", counts);
-        out.put("grandfatheredPartyIds", json.readStrings(plan.getGrandfatheredJson()));
-        return out;
+        return new MigrationProgress(plan.getId(), plan.getName(), plan.getState(),
+                plan.getConsecutiveFailures(), total, counts,
+                json.readStrings(plan.getGrandfatheredJson()));
     }
 
     // ---- internals ----
@@ -318,40 +322,43 @@ public class MigrationPlanService {
                 .orElseThrow(() -> NotFoundException.forResource("migrationCustomer", customerId));
     }
 
-    @SuppressWarnings("unchecked")
-    private void applyAndValidate(MigrationPlan plan, Map<String, Object> dto, boolean creating) {
-        if (dto.get("name") != null) {
-            plan.setName(String.valueOf(dto.get("name")));
+    private void applyAndValidate(MigrationPlan plan, MigrationPlanRequest dto, boolean creating) {
+        if (MigrationPlanRequest.given(dto.name())) {
+            plan.setName(MigrationPlanRequest.text(dto.name()));
         }
         if (creating && (plan.getName() == null || plan.getName().isBlank())) {
             throw new BadRequestException("name is required");
         }
 
-        if (dto.get("matrix") != null || creating) {
-            if (!(dto.get("matrix") instanceof List<?> rawMatrix) || rawMatrix.isEmpty()) {
+        if (MigrationPlanRequest.given(dto.matrix()) || creating) {
+            JsonNode rawMatrix = dto.matrix();
+            if (rawMatrix == null || !rawMatrix.isArray() || rawMatrix.isEmpty()) {
                 throw new BadRequestException(
                         "matrix [{sourceOfferingId, targetOfferingId, deltaClass}] is required");
             }
-            for (Object raw : rawMatrix) {
-                Map<String, Object> row = (Map<String, Object>) raw;
-                if (row.get("sourceOfferingId") == null || row.get("targetOfferingId") == null) {
+            JsonNode matrix = rawMatrix.deepCopy();
+            for (JsonNode raw : matrix) {
+                // a row that is not an object fails here exactly as the map cast did
+                ObjectNode row = (ObjectNode) raw;
+                if (!row.hasNonNull("sourceOfferingId") || !row.hasNonNull("targetOfferingId")) {
                     throw new BadRequestException(
                             "every matrix row needs sourceOfferingId and targetOfferingId");
                 }
-                Object deltaClass = row.getOrDefault("deltaClass", "neutral");
-                if (!DELTA_CLASSES.contains(String.valueOf(deltaClass))) {
+                JsonNode deltaClass = row.has("deltaClass") ? row.get("deltaClass") : null;
+                String named = deltaClass == null ? "neutral" : MigrationPlanRequest.text(deltaClass);
+                if (!DELTA_CLASSES.contains(named)) {
                     throw new BadRequestException("deltaClass must be one of " + DELTA_CLASSES);
                 }
-                row.put("deltaClass", deltaClass);
+                row.set("deltaClass", deltaClass == null ? TextNode.valueOf("neutral") : deltaClass);
             }
-            plan.setMatrixJson(json.write(rawMatrix));
+            plan.setMatrixJson(json.write(matrix));
         }
 
-        if (dto.get("eligibility") != null || (creating && plan.getEligibilityJson() == null)) {
-            Map<String, Object> eligibility = dto.get("eligibility") instanceof Map<?, ?> m
-                    ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();
-            String inBinding = String.valueOf(
-                    eligibility.getOrDefault("inBinding", CandidateDiscovery.IN_BINDING_DEFER));
+        if (MigrationPlanRequest.given(dto.eligibility()) || (creating && plan.getEligibilityJson() == null)) {
+            ObjectNode eligibility = objectOrEmpty(dto.eligibility());
+            String inBinding = eligibility.has("inBinding")
+                    ? MigrationPlanRequest.text(eligibility.get("inBinding"))
+                    : CandidateDiscovery.IN_BINDING_DEFER;
             if (!IN_BINDING.contains(inBinding)) {
                 throw new BadRequestException("eligibility.inBinding must be one of " + IN_BINDING);
             }
@@ -359,19 +366,20 @@ public class MigrationPlanService {
             plan.setEligibilityJson(json.write(eligibility));
         }
 
-        if (dto.get("trigger") != null || creating) {
-            Map<String, Object> trigger = dto.get("trigger") instanceof Map<?, ?> m
-                    ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();
-            String type = String.valueOf(trigger.getOrDefault("type", MigrationPlan.TRIGGER_BULK));
+        if (MigrationPlanRequest.given(dto.trigger()) || creating) {
+            ObjectNode trigger = objectOrEmpty(dto.trigger());
+            String type = trigger.has("type")
+                    ? MigrationPlanRequest.text(trigger.get("type")) : MigrationPlan.TRIGGER_BULK;
             if (!TRIGGERS.contains(type)) {
                 throw new BadRequestException("trigger.type must be one of " + TRIGGERS);
             }
             if (MigrationPlan.TRIGGER_AGE.equals(type)) {
-                if (!(trigger.get("ageYears") instanceof Number n) || n.intValue() <= 0) {
+                JsonNode ageYears = trigger.get("ageYears");
+                if (ageYears == null || !ageYears.isNumber() || ageYears.intValue() <= 0) {
                     throw new BadRequestException("an age-threshold trigger needs ageYears > 0");
                 }
-                String strategy = String.valueOf(
-                        trigger.getOrDefault("strategy", TriggerScanner.STRATEGY_AUTO));
+                String strategy = trigger.has("strategy")
+                        ? MigrationPlanRequest.text(trigger.get("strategy")) : TriggerScanner.STRATEGY_AUTO;
                 if (!AGE_STRATEGIES.contains(strategy)) {
                     throw new BadRequestException("trigger.strategy must be one of " + AGE_STRATEGIES);
                 }
@@ -379,7 +387,7 @@ public class MigrationPlanService {
             }
             if (MigrationPlan.TRIGGER_PROMO.equals(type)) {
                 try {
-                    LocalDate.parse(String.valueOf(trigger.get("endDate")));
+                    LocalDate.parse(MigrationPlanRequest.text(trigger.get("endDate")));
                 } catch (DateTimeParseException | NullPointerException e) {
                     throw new BadRequestException(
                             "a promo-expiry trigger needs an explicit endDate (YYYY-MM-DD)");
@@ -389,10 +397,10 @@ public class MigrationPlanService {
             plan.setTriggerJson(json.write(trigger));
         }
 
-        if (dto.get("jurisdictionPack") != null || creating) {
-            Map<String, Object> pack = dto.get("jurisdictionPack") instanceof Map<?, ?> m
-                    ? new LinkedHashMap<>((Map<String, Object>) m) : new LinkedHashMap<>();
-            int noticeDays = pack.get("noticeDays") instanceof Number n ? n.intValue() : 30;
+        if (MigrationPlanRequest.given(dto.jurisdictionPack()) || creating) {
+            ObjectNode pack = objectOrEmpty(dto.jurisdictionPack());
+            JsonNode days = pack.get("noticeDays");
+            int noticeDays = days != null && days.isNumber() ? days.intValue() : 30;
             if (noticeDays < 0) {
                 throw new BadRequestException("noticeDays must be >= 0");
             }
@@ -408,57 +416,49 @@ public class MigrationPlanService {
             plan.setJurisdictionJson(json.write(pack));
         }
 
-        if (dto.get("maxOrdersPerRun") instanceof Number n) {
-            if (n.intValue() < 1) {
+        if (MigrationPlanRequest.given(dto.maxOrdersPerRun()) && dto.maxOrdersPerRun().isNumber()) {
+            if (dto.maxOrdersPerRun().intValue() < 1) {
                 throw new BadRequestException("maxOrdersPerRun must be >= 1");
             }
-            plan.setMaxOrdersPerRun(n.intValue());
+            plan.setMaxOrdersPerRun(dto.maxOrdersPerRun().intValue());
         } else if (creating) {
             plan.setMaxOrdersPerRun(10);
         }
-        if (dto.get("breakerThreshold") instanceof Number n) {
-            if (n.intValue() < 1) {
+        if (MigrationPlanRequest.given(dto.breakerThreshold()) && dto.breakerThreshold().isNumber()) {
+            if (dto.breakerThreshold().intValue() < 1) {
                 throw new BadRequestException("breakerThreshold must be >= 1");
             }
-            plan.setBreakerThreshold(n.intValue());
+            plan.setBreakerThreshold(dto.breakerThreshold().intValue());
         } else if (creating) {
             plan.setBreakerThreshold(3);
         }
     }
 
-    private Map<String, Object> toMap(MigrationPlan plan) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", plan.getId());
-        out.put("href", plan.getHref());
-        out.put("name", plan.getName());
-        out.put("state", plan.getState());
-        out.put("matrix", json.readList(plan.getMatrixJson()));
-        out.put("eligibility", json.readMap(plan.getEligibilityJson()));
-        out.put("trigger", json.readMap(plan.getTriggerJson()));
-        out.put("jurisdictionPack", json.readMap(plan.getJurisdictionJson()));
-        out.put("noticeDays", plan.getNoticeDays());
-        out.put("grandfatheredPartyIds", json.readStrings(plan.getGrandfatheredJson()));
-        out.put("simulationRef", plan.getSimulationRef());
-        if (plan.getSimulationAttachedAt() != null) {
-            out.put("simulationAttachedAt", plan.getSimulationAttachedAt().toString());
-        }
-        out.put("maxOrdersPerRun", plan.getMaxOrdersPerRun());
-        out.put("breakerThreshold", plan.getBreakerThreshold());
-        out.put("consecutiveFailures", plan.getConsecutiveFailures());
-        out.put("createdAt", plan.getCreatedAt() == null ? null : plan.getCreatedAt().toString());
-        out.put("lastUpdate", plan.getLastUpdate() == null ? null : plan.getLastUpdate().toString());
-        out.put("@type", "MigrationPlan");
-        return out;
+    /** The operator's block, copied so validation never writes back into the request. */
+    private ObjectNode objectOrEmpty(JsonNode node) {
+        return node != null && node.isObject() ? (ObjectNode) node.deepCopy() : json.newObject();
     }
 
-    private Map<String, Object> customerToMap(MigrationCustomer customer) {
-        Map<String, Object> out = MigrationEngine.customerResource(customer);
-        if (customer.getRollbackOrderRef() != null) {
-            out.put("rollbackOrderRef", customer.getRollbackOrderRef());
-        }
-        out.put("snapshot", json.readMap(customer.getSnapshotJson()));
-        out.put("createdAt", customer.getCreatedAt() == null ? null : customer.getCreatedAt().toString());
-        out.put("@type", "MigrationCustomer");
-        return out;
+    private MigrationPlanView toMap(MigrationPlan plan) {
+        return new MigrationPlanView(plan.getId(), plan.getHref(), plan.getName(), plan.getState(),
+                json.readArray(plan.getMatrixJson()),
+                json.readObject(plan.getEligibilityJson()),
+                json.readObject(plan.getTriggerJson()),
+                json.readObject(plan.getJurisdictionJson()),
+                plan.getNoticeDays(), json.readStrings(plan.getGrandfatheredJson()),
+                plan.getSimulationRef(),
+                plan.getSimulationAttachedAt() == null ? null : plan.getSimulationAttachedAt().toString(),
+                plan.getMaxOrdersPerRun(), plan.getBreakerThreshold(), plan.getConsecutiveFailures(),
+                plan.getCreatedAt() == null ? null : plan.getCreatedAt().toString(),
+                plan.getLastUpdate() == null ? null : plan.getLastUpdate().toString(),
+                "MigrationPlan", null);
+    }
+
+    private MigrationCustomerDetail customerToMap(MigrationCustomer customer) {
+        return new MigrationCustomerDetail(MigrationCustomerView.of(customer),
+                customer.getRollbackOrderRef(),
+                json.readObject(customer.getSnapshotJson()),
+                customer.getCreatedAt() == null ? null : customer.getCreatedAt().toString(),
+                "MigrationCustomer");
     }
 }
