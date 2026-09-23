@@ -1,6 +1,10 @@
 package com.bss.appointment.privacy;
 
+import com.bss.appointment.dto.EraseReceipt;
+import com.bss.appointment.dto.EraseRequest;
+import com.bss.appointment.dto.PrivacyExport;
 import com.bss.appointment.entity.Appointment;
+import com.bss.appointment.exception.BadRequestException;
 import com.bss.appointment.repository.AppointmentRepository;
 import com.bss.appointment.security.TenantScope;
 import org.springframework.http.HttpStatus;
@@ -15,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
+
 
 /**
  * The GDPR corner of this service. EXPORT rides the caller's OWN token —
@@ -38,25 +42,31 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
-        List<Appointment> items = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", CATEGORY, "count", items.size(), "items", items);
+        return PrivacyExport.of(CATEGORY,
+                repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target));
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
-        List<Appointment> rows = repository.findByTenantIdAndOwnerPartyId(tenantScope.currentTenantId(), target);
+        // the map read this with String.valueOf, so a body with no party looked up the literal
+        // "null" and deleted nothing by luck; a real null matches owner_party_id IS NULL — every
+        // guest booking — so a nameless erasure is the 400 this door always meant
+        if (request == null || !request.names()) {
+            throw new BadRequestException("partyId is required");
+        }
+        List<Appointment> rows = repository.findByTenantIdAndOwnerPartyId(
+                tenantScope.currentTenantId(), request.partyId());
         repository.deleteAll(rows);
-        return Map.of("category", CATEGORY, "deleted", rows.size(), "retained", 0);
+        return EraseReceipt.of(CATEGORY, rows.size());
     }
 
     private String subject() {

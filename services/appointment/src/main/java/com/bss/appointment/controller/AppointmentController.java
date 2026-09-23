@@ -2,6 +2,11 @@ package com.bss.appointment.controller;
 
 import com.bss.appointment.api.ApiConstants;
 import com.bss.appointment.api.PagedResult;
+import com.bss.appointment.dto.AppointmentPatch;
+import com.bss.appointment.dto.AppointmentRequest;
+import com.bss.appointment.dto.AppointmentView;
+import com.bss.appointment.dto.SearchTimeSlotRequest;
+import com.bss.appointment.dto.SearchTimeSlotResult;
 import com.bss.appointment.service.AppointmentService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -19,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Slot availability is shop-window information (a guest sees install slots
@@ -37,17 +41,17 @@ public class AppointmentController {
     }
 
     @PostMapping("/searchTimeSlot")
-    public ResponseEntity<Map<String, Object>> searchTimeSlot(
-            @RequestBody(required = false) Map<String, Object> body) {
+    public ResponseEntity<SearchTimeSlotResult> searchTimeSlot(
+            @RequestBody(required = false) SearchTimeSlotRequest body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.searchTimeSlot(body));
     }
 
     @GetMapping("/appointment")
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<AppointmentView>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
             @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, relatedPartyId);
+        PagedResult<AppointmentView> result = service.findAll(offset, limit, relatedPartyId);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
@@ -55,19 +59,19 @@ public class AppointmentController {
     }
 
     @GetMapping("/appointment/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
+    public ResponseEntity<AppointmentView> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping("/appointment")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<AppointmentView> create(@RequestBody AppointmentRequest dto) {
+        AppointmentView created = service.create(dto);
+        return ResponseEntity.created(URI.create(String.valueOf(created.href()))).body(created);
     }
 
     @PatchMapping("/appointment/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                     @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<AppointmentView> patch(@PathVariable("id") String id,
+                                                 @RequestBody AppointmentPatch patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 }

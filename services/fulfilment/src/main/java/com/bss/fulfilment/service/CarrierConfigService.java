@@ -1,8 +1,13 @@
 package com.bss.fulfilment.service;
 
+import com.bss.fulfilment.dto.CarrierConfigRequest;
+import com.bss.fulfilment.dto.CarrierConfigView;
+import com.bss.fulfilment.dto.CarrierProbe;
+import com.bss.fulfilment.dto.Json;
 import com.bss.fulfilment.entity.CarrierConfig;
 import com.bss.fulfilment.repository.CarrierConfigRepository;
 import com.bss.fulfilment.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,9 +16,7 @@ import org.springframework.http.HttpStatus;
 
 import java.time.OffsetDateTime;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,9 +40,9 @@ public class CarrierConfigService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listForCurrentTenant() {
+    public List<CarrierConfigView> listForCurrentTenant() {
         return repository.findByTenantIdOrderByDisplayNameAsc(tenantScope.currentTenantId())
-                .stream().map(CarrierConfigService::toMap).toList();
+                .stream().map(CarrierConfigService::toView).toList();
     }
 
     /** The carrier a booking uses when the shopper hasn't picked one (C-P3): the
@@ -76,8 +79,9 @@ public class CarrierConfigService {
     }
 
     @Transactional
-    public Map<String, Object> upsert(Map<String, Object> dto) {
-        String carrier = str(dto.get("carrier"));
+    public CarrierConfigView upsert(CarrierConfigRequest body) {
+        CarrierConfigRequest dto = body == null ? CarrierConfigRequest.EMPTY : body;
+        String carrier = dto.carrierKey();
         if (carrier == null || !KNOWN.contains(carrier)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "carrier is required and must be one of " + KNOWN);
@@ -91,14 +95,14 @@ public class CarrierConfigService {
             fresh.setCreatedAt(OffsetDateTime.now());
             return fresh;
         });
-        cfg.setDisplayName(str(dto.getOrDefault("displayName", carrier)));
-        cfg.setBaseUrl(str(dto.get("baseUrl")));
-        cfg.setSecretRef(str(dto.get("secretRef")));
-        cfg.setMethods(json(dto.get("methods")));
-        cfg.setConfig(json(dto.get("config")));
-        cfg.setPostcodePrefix(str(dto.get("postcodePrefix")));
-        cfg.setDefault(Boolean.TRUE.equals(dto.get("isDefault")));
-        cfg.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));   // default true
+        cfg.setDisplayName(dto.displayNameOr(carrier));
+        cfg.setBaseUrl(Json.textOrNull(dto.baseUrl()));
+        cfg.setSecretRef(Json.textOrNull(dto.secretRef()));
+        cfg.setMethods(json(dto.methods()));
+        cfg.setConfig(json(dto.config()));
+        cfg.setPostcodePrefix(Json.textOrNull(dto.postcodePrefix()));
+        cfg.setDefault(dto.makeDefault());
+        cfg.setEnabled(dto.stayEnabled());                           // default true
         cfg.setLastUpdate(OffsetDateTime.now());
         // only one default per tenant
         if (cfg.isDefault()) {
@@ -109,7 +113,7 @@ public class CarrierConfigService {
                 }
             }
         }
-        return toMap(repository.save(cfg));
+        return toView(repository.save(cfg));
     }
 
     @Transactional
@@ -121,16 +125,12 @@ public class CarrierConfigService {
     /** Test connection: reachability of the configured base URL's /health with a
      * short timeout — never a booking. No base URL = nothing to probe, said so. */
     @Transactional(readOnly = true)
-    public Map<String, Object> testConnection(String carrier) {
+    public CarrierProbe testConnection(String carrier) {
         CarrierConfig cfg = repository.findByTenantIdAndCarrier(tenantScope.currentTenantId(), carrier)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "carrier '" + carrier + "' is not configured for this tenant"));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("carrier", carrier);
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
-            out.put("ok", true);
-            out.put("note", "no base URL configured — nothing to probe");
-            return out;
+            return CarrierProbe.nothingToProbe(carrier);
         }
         try {
             java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
@@ -139,22 +139,19 @@ public class CarrierConfigService {
                     java.net.http.HttpRequest.newBuilder(java.net.URI.create(cfg.getBaseUrl() + "/health"))
                             .timeout(java.time.Duration.ofSeconds(4)).GET().build(),
                     java.net.http.HttpResponse.BodyHandlers.discarding());
-            out.put("ok", resp.statusCode() < 500);
-            out.put("status", resp.statusCode());
-            out.put("note", "reachability probe of " + cfg.getBaseUrl() + "/health — not a booking");
+            return CarrierProbe.reached(carrier, resp.statusCode(), cfg.getBaseUrl());
         } catch (Exception e) {
-            out.put("ok", false);
-            out.put("note", "unreachable: " + e.getMessage());
+            return CarrierProbe.unreachable(carrier, e.getMessage());
         }
-        return out;
     }
 
-    private String json(Object v) {
-        if (v == null) {
+    /** A posted string is stored as it came; anything else is stored as its own JSON. */
+    private String json(JsonNode v) {
+        if (v == null || v.isNull()) {
             return null;
         }
-        if (v instanceof String s) {
-            return s;
+        if (v.isTextual()) {
+            return v.textValue();
         }
         try {
             return mapper.writeValueAsString(v);
@@ -163,22 +160,9 @@ public class CarrierConfigService {
         }
     }
 
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
-
     /** The secret is a reference only — the API key is never returned. */
-    private static Map<String, Object> toMap(CarrierConfig c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("carrier", c.getCarrier());
-        m.put("displayName", c.getDisplayName());
-        if (c.getBaseUrl() != null) m.put("baseUrl", c.getBaseUrl());
-        if (c.getSecretRef() != null) m.put("secretRef", c.getSecretRef());
-        if (c.getMethods() != null) m.put("methods", c.getMethods());
-        if (c.getPostcodePrefix() != null) m.put("postcodePrefix", c.getPostcodePrefix());
-        m.put("isDefault", c.isDefault());
-        m.put("enabled", c.isEnabled());
-        m.put("@type", "CarrierConfig");
-        return m;
+    private static CarrierConfigView toView(CarrierConfig c) {
+        return new CarrierConfigView(c.getCarrier(), c.getDisplayName(), c.getBaseUrl(),
+                c.getSecretRef(), c.getMethods(), c.getPostcodePrefix(), c.isDefault(), c.isEnabled());
     }
 }

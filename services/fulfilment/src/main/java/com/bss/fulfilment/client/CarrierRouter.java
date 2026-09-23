@@ -1,15 +1,16 @@
 package com.bss.fulfilment.client;
 
+import com.bss.fulfilment.dto.DeliveryOption;
 import com.bss.fulfilment.entity.CarrierConfig;
 import com.bss.fulfilment.service.CarrierConfigService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -67,7 +68,7 @@ public class CarrierRouter {
         }
     }
 
-    public List<Map<String, Object>> pickupPoints(String tenant, String carrier, String postcode) {
+    public List<JsonNode> pickupPoints(String tenant, String carrier, String postcode) {
         Optional<CarrierConfig> cfg = configs.forTenantAndCarrier(tenant, carrier);
         if (cfg.isEmpty()) {
             return List.of();
@@ -78,33 +79,27 @@ public class CarrierRouter {
 
     /** The shopper's delivery menu for a postcode: every enabled carrier × its
      * methods, with pickup points inlined. Empty menu → the built-in home default. */
-    public List<Map<String, Object>> deliveryOptions(String tenant, String postcode) {
-        List<Map<String, Object>> options = new ArrayList<>();
+    public List<DeliveryOption> deliveryOptions(String tenant, String postcode) {
+        List<DeliveryOption> options = new ArrayList<>();
         for (CarrierConfig cfg : configs.enabledForTenant(tenant)) {
             CarrierAdapter adapter = registry.get(cfg.getCarrier());
             for (String method : parseMethods(cfg.getMethods())) {
-                Map<String, Object> opt = new LinkedHashMap<>();
-                opt.put("method", method);
-                opt.put("carrier", cfg.getCarrier());
-                opt.put("carrierName", cfg.getDisplayName());
+                DeliveryOption opt = new DeliveryOption(method, cfg.getCarrier(),
+                        cfg.getDisplayName(), null, null);
                 if (("pickupPoint".equals(method) || "locker".equals(method)) && adapter != null) {
-                    opt.put("points", adapter.pickupPoints(cfg, postcode));
+                    opt = opt.withPoints(adapter.pickupPoints(cfg, postcode));
                 }
                 // Delivery tiers are the carrier config's, keyed by postcode prefix (longest
                 // wins): a coastal capital and a river-and-air hinterland are not one SLA.
                 String eta = etaFor(cfg, postcode);
                 if (eta != null) {
-                    opt.put("eta", eta);
+                    opt = opt.withEta(eta);
                 }
                 options.add(opt);
             }
         }
         if (options.isEmpty()) {
-            Map<String, Object> home = new LinkedHashMap<>();
-            home.put("method", "home");
-            home.put("carrier", null);
-            home.put("carrierName", "Helthjem");
-            options.add(home);
+            options.add(DeliveryOption.HOME);
         }
         return options;
     }

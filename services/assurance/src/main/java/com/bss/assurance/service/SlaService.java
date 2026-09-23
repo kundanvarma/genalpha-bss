@@ -1,11 +1,16 @@
 package com.bss.assurance.service;
 
 import com.bss.assurance.client.AgreementClient;
+import com.bss.assurance.dto.CustomerRef;
+import com.bss.assurance.dto.Json;
+import com.bss.assurance.dto.SlaView;
+import com.bss.assurance.dto.SlaViolationView;
 import com.bss.assurance.entity.ServiceProblem;
 import com.bss.assurance.entity.SlaViolation;
 import com.bss.assurance.events.DomainEventPublisher;
 import com.bss.assurance.repository.SlaViolationRepository;
 import com.bss.assurance.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +22,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -60,30 +63,30 @@ public class SlaService {
         String tenant = tenantScope.currentTenantId();
         long durationMinutes = Duration.between(problem.getCreatedAt(),
                 problem.getResolvedAt()).toMinutes();
-        List<Map<String, Object>> active = agreements.activeAgreements();
+        List<JsonNode> active = agreements.activeAgreements();
         log.info("SLA check: problem {} on {} ran {}m; {} agreements to check",
                 problem.getId(), problem.getAffectedObject(), durationMinutes, active.size());
-        for (Map<String, Object> agreement : active) {
-            if (!"active".equals(agreement.get("status"))) {
+        for (JsonNode agreement : active) {
+            if (!isText(agreement.get("status"), "active")) {
                 continue;
             }
-            Map<String, Object> sla = slaOf(agreement);
+            JsonNode sla = slaOf(agreement);
             if (sla == null
-                    || !String.valueOf(problem.getAffectedObject())
-                            .equals(sla.get("affectedObject"))) {
+                    || !isText(sla.get("affectedObject"),
+                            String.valueOf(problem.getAffectedObject()))) {
                 continue;
             }
             long threshold = longOf(sla.get("thresholdMinutes"), Long.MAX_VALUE);
             if (durationMinutes <= threshold) {
                 continue; // the promise held
             }
-            String agreementId = String.valueOf(agreement.get("id"));
+            String agreementId = Json.valueOf(agreement.get("id"));
             if (violations.existsByTenantIdAndAgreementIdAndProblemId(
                     tenant, agreementId, problem.getId())) {
                 continue; // at-least-once safety
             }
-            BigDecimal credit = new BigDecimal(String.valueOf(sla.getOrDefault("creditAmount", "0")));
-            BigDecimal cap = new BigDecimal(String.valueOf(sla.getOrDefault("capPerMonth", "0")));
+            BigDecimal credit = new BigDecimal(orDefault(sla, "creditAmount"));
+            BigDecimal cap = new BigDecimal(orDefault(sla, "capPerMonth"));
             OffsetDateTime monthStart = OffsetDateTime.now()
                     .with(TemporalAdjusters.firstDayOfMonth()).withHour(0).withMinute(0).withSecond(0);
             BigDecimal creditedThisMonth = violations
@@ -120,82 +123,78 @@ public class SlaService {
 
     /** The SLAs in force: projected live from the agreements that carry terms. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listSlas() {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Map<String, Object> agreement : agreements.activeAgreements()) {
-            Map<String, Object> sla = slaOf(agreement);
+    public List<SlaView> listSlas() {
+        List<SlaView> out = new ArrayList<>();
+        for (JsonNode agreement : agreements.activeAgreements()) {
+            JsonNode sla = slaOf(agreement);
             if (sla == null) {
                 continue;
             }
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", agreement.get("id"));
-            row.put("name", "SLA — " + agreement.get("name"));
-            row.put("state", agreement.get("status"));
-            row.put("relatedParty", agreement.get("engagedParty"));
-            row.put("template", sla);
-            row.put("@type", "SLA");
-            out.add(row);
+            out.add(new SlaView(agreement.get("id"), "SLA — " + Json.valueOf(agreement.get("name")),
+                    agreement.get("status"), agreement.get("engagedParty"), sla));
         }
         return out;
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listViolations() {
+    public List<SlaViolationView> listViolations() {
         return violations.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
                 .stream().map(this::view).toList();
     }
 
     /* ---------- internals ---------- */
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> slaOf(Map<String, Object> agreement) {
-        Object chars = agreement.get("characteristic");
-        if (chars instanceof Map<?, ?> m && m.get("sla") instanceof Map<?, ?> sla) {
-            return (Map<String, Object>) sla;
+    /** The terms, wherever the agreement carries them: a characteristic map, or a named entry. */
+    private JsonNode slaOf(JsonNode agreement) {
+        JsonNode chars = agreement.get("characteristic");
+        if (chars == null) {
+            return null;
         }
-        if (chars instanceof List<?> list) {
-            for (Object c : list) {
-                if (c instanceof Map<?, ?> cm && "sla".equals(cm.get("name"))
-                        && cm.get("value") instanceof Map<?, ?> sla) {
-                    return (Map<String, Object>) sla;
+        if (chars.isObject() && chars.path("sla").isObject()) {
+            return chars.get("sla");
+        }
+        if (chars.isArray()) {
+            for (JsonNode c : chars) {
+                if (c.isObject() && isText(c.get("name"), "sla") && c.path("value").isObject()) {
+                    return c.get("value");
                 }
             }
         }
         return null;
     }
 
-    private static String partyOf(Map<String, Object> agreement) {
-        if (agreement.get("engagedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> ref && ref.get("id") != null) {
-            return String.valueOf(ref.get("id"));
+    private static String partyOf(JsonNode agreement) {
+        JsonNode parties = agreement.get("engagedParty");
+        if (parties != null && parties.isArray() && !parties.isEmpty()
+                && parties.get(0).isObject() && parties.get(0).hasNonNull("id")) {
+            return Json.valueOf(parties.get(0).get("id"));
         }
         return null;
     }
 
-    private static long longOf(Object v, long dflt) {
+    /** The map compared with a String, so only a JSON string ever matched. */
+    private static boolean isText(JsonNode node, String expected) {
+        return node != null && node.isTextual() && expected.equals(node.textValue());
+    }
+
+    /** {@code getOrDefault(k, "0")}: a key present with a JSON null wins the null. */
+    private static String orDefault(JsonNode sla, String key) {
+        return sla.has(key) ? Json.valueOf(sla.get(key)) : "0";
+    }
+
+    private static long longOf(JsonNode v, long dflt) {
         try {
-            return v == null ? dflt : Long.parseLong(String.valueOf(v));
+            return v == null ? dflt : Long.parseLong(Json.valueOf(v));
         } catch (NumberFormatException e) {
             return dflt;
         }
     }
 
-    private Map<String, Object> view(SlaViolation v) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", v.getId());
-        map.put("agreementId", v.getAgreementId());
-        map.put("problemId", v.getProblemId());
-        map.put("affectedObject", v.getAffectedObject());
-        map.put("thresholdMinutes", v.getThresholdMinutes());
-        map.put("durationMinutes", v.getDurationMinutes());
-        map.put("creditAmount", v.getCreditAmount());
-        map.put("credited", v.isCredited());
-        map.put("note", v.getNote());
-        if (v.getPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", v.getPartyId(), "role", "customer")));
-        }
-        map.put("createdAt", v.getCreatedAt());
-        map.put("@type", "SlaViolation");
-        return map;
+    private SlaViolationView view(SlaViolation v) {
+        return new SlaViolationView(v.getId(), v.getAgreementId(), v.getProblemId(),
+                v.getAffectedObject(), v.getThresholdMinutes(), v.getDurationMinutes(),
+                v.getCreditAmount(), v.isCredited(), v.getNote(),
+                v.getPartyId() == null ? null : List.of(CustomerRef.customer(v.getPartyId())),
+                v.getCreatedAt());
     }
 }

@@ -1,5 +1,7 @@
 package com.bss.appointment.provider;
 
+import com.bss.appointment.dto.PartyRef;
+import com.bss.appointment.dto.TimeWindow;
 import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.exception.ProviderUnavailableException;
 import com.bss.appointment.schedule.ScheduleConfig;
@@ -89,8 +91,7 @@ public class Tmf646ScheduleProvider implements ScheduleProvider {
     public Booking book(ScheduleConfig cfg, BookingRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("@type", "Appointment");
-        body.put("validFor", Map.of("startDateTime", request.start().toString(),
-                "endDateTime", request.end().toString()));
+        body.put("validFor", new TimeWindow(request.start().toString(), request.end().toString()));
         if (request.description() != null) {
             body.put("description", request.description());
         }
@@ -104,8 +105,7 @@ public class Tmf646ScheduleProvider implements ScheduleProvider {
             body.put("relatedEntity", request.relatedEntity());
         }
         if (request.partyId() != null) {
-            body.put("relatedParty", List.of(Map.of("id", request.partyId(), "role", "customer",
-                    "@referredType", "Individual")));
+            body.put("relatedParty", List.of(PartyRef.customer(request.partyId())));
         }
         body.put("externalId", "bss:" + request.tenantId());
         JsonNode root = call(cfg, () -> client(cfg).post().uri("/appointment")

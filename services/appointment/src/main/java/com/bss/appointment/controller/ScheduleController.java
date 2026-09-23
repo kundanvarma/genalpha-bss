@@ -1,6 +1,11 @@
 package com.bss.appointment.controller;
 
 import com.bss.appointment.api.ApiConstants;
+import com.bss.appointment.dto.ProbeResult;
+import com.bss.appointment.dto.ScheduleConfigRequest;
+import com.bss.appointment.dto.ScheduleConfigView;
+import com.bss.appointment.dto.TechnicianRequest;
+import com.bss.appointment.dto.TechnicianView;
 import com.bss.appointment.provider.ScheduleProviders;
 import com.bss.appointment.schedule.ScheduleService;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The operator's side of installation scheduling (appointment:admin): the
@@ -39,43 +43,43 @@ public class ScheduleController {
 
     /** Reachability probe of the configured provider — never books anything. */
     @PostMapping("/scheduleConfig/test")
-    public ResponseEntity<Map<String, Object>> test() {
+    public ResponseEntity<ProbeResult> test() {
         var cfg = service.current();
         var probe = providers.forConfig(cfg).probe(cfg);
-        return ResponseEntity.ok(Map.of("provider", cfg.getProvider(), "ok", probe.ok(), "detail", probe.detail()));
+        return ResponseEntity.ok(new ProbeResult(probe.ok(), probe.detail(), cfg.getProvider()));
     }
 
     @GetMapping("/scheduleConfig")
-    public ResponseEntity<Map<String, Object>> config() {
-        return ResponseEntity.ok(service.toMap(service.current()));
+    public ResponseEntity<ScheduleConfigView> config() {
+        return ResponseEntity.ok(service.toView(service.current()));
     }
 
     @PutMapping("/scheduleConfig")
-    public ResponseEntity<Map<String, Object>> saveConfig(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ScheduleConfigView> saveConfig(@RequestBody ScheduleConfigRequest dto) {
         return ResponseEntity.ok(service.saveConfig(dto));
     }
 
     @GetMapping("/technician")
-    public ResponseEntity<List<Map<String, Object>>> technicians() {
-        List<Map<String, Object>> items = service.listTechnicians();
+    public ResponseEntity<List<TechnicianView>> technicians() {
+        List<TechnicianView> items = service.listTechnicians();
         return ResponseEntity.ok().header("X-Total-Count", String.valueOf(items.size())).body(items);
     }
 
     @GetMapping("/technician/{id}")
-    public ResponseEntity<Map<String, Object>> technician(@PathVariable("id") String id) {
+    public ResponseEntity<TechnicianView> technician(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.technician(id));
     }
 
     @PostMapping("/technician")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.createTechnician(dto);
-        return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH + "/technician/" + created.get("id")))
+    public ResponseEntity<TechnicianView> create(@RequestBody TechnicianRequest dto) {
+        TechnicianView created = service.createTechnician(dto);
+        return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH + "/technician/" + created.id()))
                 .body(created);
     }
 
     @PatchMapping("/technician/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-                                                     @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<TechnicianView> patch(@PathVariable("id") String id,
+                                                @RequestBody TechnicianRequest dto) {
         return ResponseEntity.ok(service.patchTechnician(id, dto));
     }
 

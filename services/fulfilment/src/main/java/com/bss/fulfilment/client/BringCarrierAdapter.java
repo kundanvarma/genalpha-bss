@@ -1,6 +1,9 @@
 package com.bss.fulfilment.client;
 
+import com.bss.fulfilment.dto.PickupPoint;
 import com.bss.fulfilment.entity.CarrierConfig;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -24,6 +27,7 @@ public class BringCarrierAdapter implements CarrierAdapter {
     private static final Logger log = LoggerFactory.getLogger(BringCarrierAdapter.class);
 
     private final RestClient.Builder builder;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public BringCarrierAdapter(RestClient.Builder builder) {
         this.builder = builder;
@@ -43,12 +47,13 @@ public class BringCarrierAdapter implements CarrierAdapter {
         // A pickup-point booking sets the pickupPoint id (Bring's 'parties.pickupPoint');
         // home delivery omits it. serviceLevel carries the method for the mock's log.
         boolean pickup = delivery != null && delivery.isPickup() && delivery.pickupPointId() != null;
-        Map<String, Object> body = new java.util.LinkedHashMap<>(Map.of(
-                "shippingOrderId", nz(r.shippingOrderId()),
-                "tenantId", nz(r.tenantId()),
-                "callbackUrl", nz(r.callbackUrl()),
-                "recipientPartyId", nz(r.recipientPartyId()),
-                "serviceLevel", pickup ? "PICKUP_POINT" : nz(r.serviceLevel())));
+        // a LinkedHashMap seeded from Map.of keeps Map.of's per-JVM order: put the keys in order
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("shippingOrderId", nz(r.shippingOrderId()));
+        body.put("tenantId", nz(r.tenantId()));
+        body.put("callbackUrl", nz(r.callbackUrl()));
+        body.put("recipientPartyId", nz(r.recipientPartyId()));
+        body.put("serviceLevel", pickup ? "PICKUP_POINT" : nz(r.serviceLevel()));
         if (pickup) {
             body.put("pickupPoint", delivery.pickupPointId());
         }
@@ -68,26 +73,23 @@ public class BringCarrierAdapter implements CarrierAdapter {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> pickupPoints(CarrierConfig cfg, String postcode) {
+    public List<JsonNode> pickupPoints(CarrierConfig cfg, String postcode) {
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank() || postcode == null) {
             return List.of();
         }
         try {
-            Map<String, Object> resp = client(cfg).get()
+            String resp = client(cfg).get()
                     .uri("/pickuppoint/{country}/postalCode/{pc}.json", "NO", postcode)
-                    .retrieve().body(Map.class);
-            Object points = resp == null ? null : resp.get("pickupPoint");
-            List<Map<String, Object>> out = new ArrayList<>();
-            if (points instanceof List<?> list) {
-                for (Object o : list) {
-                    if (o instanceof Map<?, ?> p) {
-                        Map<String, Object> pt = new LinkedHashMap<>();
-                        pt.put("id", p.get("id"));
-                        pt.put("name", p.get("name"));
-                        pt.put("address", p.get("address"));
-                        pt.put("openingHours", p.get("openingHours"));
-                        out.add(pt);
+                    .retrieve().body(String.class);
+            JsonNode points = mapper.readTree(resp == null ? "{}" : resp).path("pickupPoint");
+            List<JsonNode> out = new ArrayList<>();
+            if (points.isArray()) {
+                for (JsonNode p : points) {
+                    if (p.isObject()) {
+                        // Bring's own document normalised to the four facts a shopper picks from;
+                        // a key Bring does not send is written as null, as the map wrote it
+                        out.add(mapper.valueToTree(new PickupPoint(node(p, "id"), node(p, "name"),
+                                node(p, "address"), node(p, "openingHours"))));
                     }
                 }
             }
@@ -96,6 +98,10 @@ public class BringCarrierAdapter implements CarrierAdapter {
             log.warn("bring pickup-point lookup failed for {}: {}", postcode, e.getMessage());
             return List.of();
         }
+    }
+
+    private static JsonNode node(JsonNode p, String key) {
+        return p.has(key) ? p.get(key) : null;
     }
 
     private RestClient client(CarrierConfig cfg) {

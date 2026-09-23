@@ -4,6 +4,7 @@ import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.repository.AppointmentRepository;
 import com.bss.appointment.schedule.ScheduleConfig;
 import com.bss.appointment.schedule.ScheduleService;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
@@ -72,14 +73,20 @@ public class RosterScheduleProvider implements ScheduleProvider {
 
     /** TMF646 requestedTimeSlot: when the caller asks about specific windows, answer only those. */
     private static boolean withinRequested(OffsetDateTime start, SlotRequest request) {
-        if (request.requestedTimeSlot() == null || request.requestedTimeSlot().isEmpty()) {
+        JsonNode asked = request.requestedTimeSlot();
+        if (asked == null || asked.isEmpty()) {
             return true;
         }
-        for (var slot : request.requestedTimeSlot()) {
-            Object vf = slot.get("validFor");
-            if (vf instanceof java.util.Map<?, ?> m && m.get("startDateTime") != null && m.get("endDateTime") != null) {
-                OffsetDateTime from = OffsetDateTime.parse(String.valueOf(m.get("startDateTime")));
-                OffsetDateTime to = OffsetDateTime.parse(String.valueOf(m.get("endDateTime")));
+        for (JsonNode slot : asked) {
+            if (!slot.isObject()) {
+                // the map path cast every element to Map and answered 500 for anything else;
+                // typing is not the moment to improve a refusal, so the fault stays where it was
+                throw new ClassCastException("requestedTimeSlot element is not an object");
+            }
+            JsonNode vf = slot.path("validFor");
+            if (vf.isObject() && vf.hasNonNull("startDateTime") && vf.hasNonNull("endDateTime")) {
+                OffsetDateTime from = OffsetDateTime.parse(vf.get("startDateTime").asText());
+                OffsetDateTime to = OffsetDateTime.parse(vf.get("endDateTime").asText());
                 if (!start.isBefore(from) && start.isBefore(to)) {
                     return true;
                 }

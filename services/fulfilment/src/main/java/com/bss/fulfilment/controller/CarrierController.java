@@ -2,6 +2,11 @@ package com.bss.fulfilment.controller;
 
 import com.bss.fulfilment.api.ApiConstants;
 import com.bss.fulfilment.client.CarrierRouter;
+import com.bss.fulfilment.dto.CarrierConfigRequest;
+import com.bss.fulfilment.dto.CarrierConfigView;
+import com.bss.fulfilment.dto.CarrierProbe;
+import com.bss.fulfilment.dto.DeliveryOption;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.bss.fulfilment.security.TenantScope;
 import com.bss.fulfilment.service.CarrierConfigService;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The operator's carrier menu (per tenant) + pickup-point search. GET lists /
@@ -37,12 +41,12 @@ public class CarrierController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<CarrierConfigView>> list() {
         return ResponseEntity.ok(service.listForCurrentTenant());
     }
 
     @PutMapping
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<CarrierConfigView> upsert(@RequestBody CarrierConfigRequest dto) {
         return ResponseEntity.ok(service.upsert(dto));
     }
 
@@ -55,13 +59,13 @@ public class CarrierController {
     /** Test connection — a reachability probe of the configured base URL
      * (GET /health, short timeout); never books anything. */
     @org.springframework.web.bind.annotation.PostMapping("/{carrier}/test")
-    public ResponseEntity<Map<String, Object>> test(@PathVariable String carrier) {
+    public ResponseEntity<CarrierProbe> test(@PathVariable String carrier) {
         return ResponseEntity.ok(service.testConnection(carrier));
     }
 
     /** Pickup points near a postcode for a configured carrier (empty if none). */
     @GetMapping("/pickupPoints")
-    public ResponseEntity<List<Map<String, Object>>> pickupPoints(
+    public ResponseEntity<List<JsonNode>> pickupPoints(
             @RequestParam String carrier, @RequestParam String postcode) {
         return ResponseEntity.ok(router.pickupPoints(tenantScope.currentTenantId(), carrier, postcode));
     }
@@ -69,7 +73,7 @@ public class CarrierController {
     /** The shopper's delivery menu for a postcode (home + pickup points) — anonymous,
      * so guest checkout can offer it. Empty menu → the built-in home default. */
     @GetMapping("/deliveryOptions")
-    public ResponseEntity<List<Map<String, Object>>> deliveryOptions(
+    public ResponseEntity<List<DeliveryOption>> deliveryOptions(
             @RequestParam(required = false) String postcode) {
         return ResponseEntity.ok(router.deliveryOptions(tenantScope.currentTenantId(), postcode));
     }

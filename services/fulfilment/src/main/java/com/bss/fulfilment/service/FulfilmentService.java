@@ -2,6 +2,13 @@ package com.bss.fulfilment.service;
 
 import com.bss.fulfilment.client.LogisticsClient;
 import com.bss.fulfilment.client.OrderingClient;
+import com.bss.fulfilment.dto.AppointmentRef;
+import com.bss.fulfilment.dto.CarrierEvent;
+import com.bss.fulfilment.dto.PartyRef;
+import com.bss.fulfilment.dto.ShippingOrderView;
+import com.bss.fulfilment.dto.ShippingPatch;
+import com.bss.fulfilment.dto.WorkOrderView;
+import com.bss.fulfilment.dto.WorkPatch;
 import com.bss.fulfilment.entity.ShippingOrder;
 import com.bss.fulfilment.entity.WorkOrder;
 import com.bss.fulfilment.events.DomainEventPublisher;
@@ -11,6 +18,7 @@ import com.bss.fulfilment.repository.ShippingOrderRepository;
 import com.bss.fulfilment.repository.WorkOrderRepository;
 import com.bss.fulfilment.security.PartyScope;
 import com.bss.fulfilment.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -119,10 +126,11 @@ public class FulfilmentService {
      * order — the parent order rolls up from there.
      */
     @Transactional
-    public void onCarrierEvent(Map<String, Object> event) {
-        String tenant = event.get("tenantId") == null ? "genalpha" : String.valueOf(event.get("tenantId"));
-        String shippingOrderId = String.valueOf(event.get("shippingOrderId"));
-        String status = String.valueOf(event.get("status"));
+    public void onCarrierEvent(CarrierEvent body) {
+        CarrierEvent event = body == null ? CarrierEvent.EMPTY : body;
+        String tenant = event.tenant("genalpha");
+        String shippingOrderId = event.parcelId();
+        String status = event.statusValue();
         try (com.bss.fulfilment.security.TenantContext ignored =
                 com.bss.fulfilment.security.TenantContext.actAs(tenant)) {
             ShippingOrder so = shippingOrders.findByIdAndTenantId(shippingOrderId, tenant).orElse(null);
@@ -150,15 +158,14 @@ public class FulfilmentService {
     }
 
     /** Complete each shipped item on the product order (C2 per-item rollup). */
-    @SuppressWarnings("unchecked")
     private void completeShippedItems(ShippingOrder so) {
-        Object items = readJson(so.getItemsJson());
-        if (!(items instanceof List<?> list)) {
+        JsonNode items = readJson(so.getItemsJson());
+        if (!items.isArray()) {
             return;
         }
-        for (Object o : list) {
-            if (o instanceof Map<?, ?> item && item.get("id") != null) {
-                ordering.updateItemState(so.getProductOrderId(), String.valueOf(item.get("id")), "completed");
+        for (JsonNode item : items) {
+            if (item.isObject() && item.hasNonNull("id")) {
+                ordering.updateItemState(so.getProductOrderId(), item.get("id").asText(), "completed");
             }
         }
     }
@@ -188,7 +195,7 @@ public class FulfilmentService {
     /* ---------- the warehouse / installer face ---------- */
 
     @Transactional
-    public Map<String, Object> patchShipping(String id, Map<String, Object> dto) {
+    public ShippingOrderView patchShipping(String id, ShippingPatch body) {
         // customers hold ordering:write for their OWN orders — but nobody
         // party-scoped drives the warehouse. Staff/partner machines only.
         partyScope.scopedPartyId().ifPresent(p -> {
@@ -199,7 +206,8 @@ public class FulfilmentService {
         String tenant = tenantScope.currentTenantId();
         ShippingOrder so = shippingOrders.findByIdAndTenantId(id, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("ShippingOrder", id));
-        String state = String.valueOf(dto.get("state"));
+        ShippingPatch dto = body == null ? ShippingPatch.EMPTY : body;
+        String state = dto.stateValue();
         if (!SHIPPING_STATES.contains(state)) {
             throw new BadRequestException("state must be one of " + SHIPPING_STATES);
         }
@@ -207,8 +215,8 @@ public class FulfilmentService {
             throw new BadRequestException("shipping order is terminal (" + so.getState() + ")");
         }
         so.setState(state);
-        if (dto.get("trackingRef") != null) {
-            so.setTrackingRef(String.valueOf(dto.get("trackingRef")));
+        if (dto.trackingRefValue() != null) {
+            so.setTrackingRef(dto.trackingRefValue());
         }
         so.setLastUpdate(OffsetDateTime.now());
         shippingOrders.save(so);
@@ -218,7 +226,7 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Map<String, Object> patchWork(String id, Map<String, Object> dto) {
+    public WorkOrderView patchWork(String id, WorkPatch body) {
         // customers hold ordering:write for their OWN orders — but nobody
         // party-scoped drives the warehouse. Staff/partner machines only.
         partyScope.scopedPartyId().ifPresent(p -> {
@@ -229,7 +237,8 @@ public class FulfilmentService {
         String tenant = tenantScope.currentTenantId();
         WorkOrder wo = workOrders.findByIdAndTenantId(id, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("WorkOrder", id));
-        String state = String.valueOf(dto.get("state"));
+        WorkPatch dto = body == null ? WorkPatch.EMPTY : body;
+        String state = dto.stateValue();
         if (!WORK_STATES.contains(state)) {
             throw new BadRequestException("state must be one of " + WORK_STATES);
         }
@@ -237,8 +246,8 @@ public class FulfilmentService {
             throw new BadRequestException("work order is terminal (" + wo.getState() + ")");
         }
         wo.setState(state);
-        if (dto.get("note") != null) {
-            wo.setNote(String.valueOf(dto.get("note")));
+        if (dto.noteValue() != null) {
+            wo.setNote(dto.noteValue());
         }
         wo.setLastUpdate(OffsetDateTime.now());
         workOrders.save(wo);
@@ -271,7 +280,7 @@ public class FulfilmentService {
     /* ---------- reads (party-scoped: track-my-delivery for free) ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listShipping() {
+    public List<ShippingOrderView> listShipping() {
         String tenant = tenantScope.currentTenantId();
         return partyScope.scopedPartyId()
                 .map(own -> shippingOrders.findByTenantIdAndOwnerPartyIdOrderByCreatedAtDesc(tenant, own))
@@ -280,7 +289,7 @@ public class FulfilmentService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listWork() {
+    public List<WorkOrderView> listWork() {
         String tenant = tenantScope.currentTenantId();
         return partyScope.scopedPartyId()
                 .map(own -> workOrders.findByTenantIdAndOwnerPartyIdOrderByCreatedAtDesc(tenant, own))
@@ -289,7 +298,7 @@ public class FulfilmentService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> shippingById(String id) {
+    public ShippingOrderView shippingById(String id) {
         ShippingOrder so = shippingOrders.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("ShippingOrder", id));
         requireOwn(so.getOwnerPartyId(), "ShippingOrder", id);
@@ -297,7 +306,7 @@ public class FulfilmentService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> workById(String id) {
+    public WorkOrderView workById(String id) {
         WorkOrder wo = workOrders.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("WorkOrder", id));
         requireOwn(wo.getOwnerPartyId(), "WorkOrder", id);
@@ -361,61 +370,36 @@ public class FulfilmentService {
         return null;
     }
 
-    private Map<String, Object> shippingView(ShippingOrder so) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", so.getId());
-        map.put("href", "/tmf-api/shippingOrderManagement/v4/shippingOrder/" + so.getId());
-        map.put("productOrderId", so.getProductOrderId());
-        map.put("state", so.getState());
-        map.put("shippingOrderItem", readJson(so.getItemsJson()));
-        map.put("place", readJson(so.getPlaceJson()));
-        if (so.getTrackingRef() != null) {
-            map.put("trackingRef", so.getTrackingRef());
-        }
-        if (so.getCarrier() != null) {
-            map.put("carrier", so.getCarrier());
-        }
-        // A real "Track your parcel" deep-link into the carrier's own app, so a
-        // customer follows the parcel where they always would (Posten/Bring &c.).
-        // The carrier_config may override the template; otherwise well-known
-        // Nordic carrier patterns keyed on the display name.
-        String trackUrl = trackingUrlFor(so);
-        if (trackUrl != null) {
-            map.put("trackingUrl", trackUrl);
-        }
-        if (so.getDeliveryMethod() != null) {
-            map.put("deliveryMethod", so.getDeliveryMethod());
-        }
-        if (so.getPickupPoint() != null) {
-            map.put("pickupPoint", so.getPickupPoint());
-        }
-        if (so.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", so.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("createdAt", so.getCreatedAt());
-        map.put("@type", "ShippingOrder");
-        return map;
+    private ShippingOrderView shippingView(ShippingOrder so) {
+        // trackingUrl is a real "Track your parcel" deep-link into the carrier's own
+        // app, so a customer follows the parcel where they always would.
+        return new ShippingOrderView(
+                so.getId(),
+                "/tmf-api/shippingOrderManagement/v4/shippingOrder/" + so.getId(),
+                so.getProductOrderId(),
+                so.getState(),
+                readJson(so.getItemsJson()),
+                readJson(so.getPlaceJson()),
+                so.getTrackingRef(),
+                so.getCarrier(),
+                trackingUrlFor(so),
+                so.getDeliveryMethod(),
+                so.getPickupPoint(),
+                so.getOwnerPartyId() == null ? null : List.of(PartyRef.customer(so.getOwnerPartyId())),
+                so.getCreatedAt());
     }
 
-    private Map<String, Object> workView(WorkOrder wo) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", wo.getId());
-        map.put("href", "/tmf-api/shippingOrderManagement/v4/workOrder/" + wo.getId());
-        map.put("productOrderId", wo.getProductOrderId());
-        if (wo.getAppointmentId() != null) {
-            map.put("appointment", Map.of("id", wo.getAppointmentId(), "@referredType", "Appointment"));
-        }
-        map.put("state", wo.getState());
-        map.put("place", readJson(wo.getPlaceJson()));
-        if (wo.getNote() != null) {
-            map.put("note", wo.getNote());
-        }
-        if (wo.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", wo.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("createdAt", wo.getCreatedAt());
-        map.put("@type", "WorkOrder");
-        return map;
+    private WorkOrderView workView(WorkOrder wo) {
+        return new WorkOrderView(
+                wo.getId(),
+                "/tmf-api/shippingOrderManagement/v4/workOrder/" + wo.getId(),
+                wo.getProductOrderId(),
+                wo.getAppointmentId() == null ? null : AppointmentRef.of(wo.getAppointmentId()),
+                wo.getState(),
+                readJson(wo.getPlaceJson()),
+                wo.getNote(),
+                wo.getOwnerPartyId() == null ? null : List.of(PartyRef.customer(wo.getOwnerPartyId())),
+                wo.getCreatedAt());
     }
 
     private String writeJson(Object o) {
@@ -426,11 +410,12 @@ public class FulfilmentService {
         }
     }
 
-    private Object readJson(String s) {
+    /** An absent or unreadable column answered an empty list; it still does. */
+    private JsonNode readJson(String s) {
         try {
-            return s == null ? List.of() : objectMapper.readValue(s, Object.class);
+            return s == null ? objectMapper.createArrayNode() : objectMapper.readTree(s);
         } catch (Exception e) {
-            return List.of();
+            return objectMapper.createArrayNode();
         }
     }
 }

@@ -1,13 +1,13 @@
 package com.bss.assurance.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
-import java.util.Map;
 
 /** SLA terms live on agreements — read under the machine identity. */
 @Component
@@ -31,15 +31,16 @@ public class AgreementClient {
      * because the tenant grew. Server-side status filter + offset paging,
      * the same pattern intelligence's client always used.
      */
-    public List<Map<String, Object>> activeAgreements() {
-        List<Map<String, Object>> all = new java.util.ArrayList<>();
+    public List<JsonNode> activeAgreements() {
+        List<JsonNode> all = new java.util.ArrayList<>();
         try {
             for (int offset = 0; offset < 10_000; offset += 100) {
                 String body = agreement.get()
                         .uri("/tmf-api/agreementManagement/v4/agreement?status=active&limit=100&offset=" + offset)
                         .retrieve().body(String.class);
-                List<Map<String, Object>> page = objectMapper.readValue(body,
-                        new TypeReference<List<Map<String, Object>>>() { });
+                // a sibling component's documents: trees, never re-shaped here
+                List<JsonNode> page = objectMapper.readValue(body,
+                        new TypeReference<List<JsonNode>>() { });
                 all.addAll(page);
                 if (page.size() < 100) {
                     break;

@@ -1,9 +1,15 @@
 package com.bss.appointment.schedule;
 
+import com.bss.appointment.dto.Json;
+import com.bss.appointment.dto.ScheduleConfigRequest;
+import com.bss.appointment.dto.ScheduleConfigView;
+import com.bss.appointment.dto.TechnicianRequest;
+import com.bss.appointment.dto.TechnicianView;
 import com.bss.appointment.exception.BadRequestException;
 import com.bss.appointment.exception.NotFoundException;
 import com.bss.appointment.security.TenantRegistry;
 import com.bss.appointment.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +22,10 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -35,8 +41,13 @@ import java.util.stream.Collectors;
 @Service
 public class ScheduleService {
 
-    /** Provider keys this build ships (the ScheduleProvider beans); validated here so a typo never silently falls back. */
-    public static final Set<String> KNOWN_PROVIDERS = Set.of("roster", "tmf646");
+    /**
+     * Provider keys this build ships (the ScheduleProvider beans); validated here so a typo never
+     * silently falls back. The refusal message prints this table, so the order is pinned to the one
+     * the wire already has — a {@code Set.of} re-salts itself on every JVM start.
+     */
+    public static final Set<String> KNOWN_PROVIDERS =
+            Collections.unmodifiableSet(new LinkedHashSet<>(List.of("tmf646", "roster")));
 
     private static final Set<String> DAYS = Arrays.stream(DayOfWeek.values())
             .map(ScheduleService::key).collect(Collectors.toSet());
@@ -74,84 +85,81 @@ public class ScheduleService {
     }
 
     @Transactional
-    public Map<String, Object> saveConfig(Map<String, Object> dto) {
+    public ScheduleConfigView saveConfig(ScheduleConfigRequest dto) {
         ScheduleConfig cfg = current();
-        if (dto.containsKey("timezone")) {
-            cfg.setTimezone(requireZone(String.valueOf(dto.get("timezone"))).getId());
+        if (Json.present(dto.timezone())) {
+            cfg.setTimezone(requireZone(Json.valueOf(dto.timezone())).getId());
         }
-        if (dto.containsKey("workingDays")) {
-            cfg.setWorkingDays(requireDays(dto.get("workingDays")));
+        if (Json.present(dto.workingDays())) {
+            cfg.setWorkingDays(requireDays(dto.workingDays()));
         }
-        if (dto.containsKey("slotStarts")) {
-            cfg.setSlotStarts(requireTimes(dto.get("slotStarts")));
+        if (Json.present(dto.slotStarts())) {
+            cfg.setSlotStarts(requireTimes(dto.slotStarts()));
         }
-        if (dto.containsKey("slotHours")) {
-            cfg.setSlotHours(requireRange(dto.get("slotHours"), 1, 12, "slotHours"));
+        if (Json.present(dto.slotHours())) {
+            cfg.setSlotHours(requireRange(dto.slotHours(), 1, 12, "slotHours"));
         }
-        if (dto.containsKey("daysAhead")) {
-            cfg.setDaysAhead(requireRange(dto.get("daysAhead"), 1, 90, "daysAhead"));
+        if (Json.present(dto.daysAhead())) {
+            cfg.setDaysAhead(requireRange(dto.daysAhead(), 1, 90, "daysAhead"));
         }
-        if (dto.containsKey("defaultCapacity")) {
-            cfg.setDefaultCapacity(requireRange(dto.get("defaultCapacity"), 0, 500, "defaultCapacity"));
+        if (Json.present(dto.defaultCapacity())) {
+            cfg.setDefaultCapacity(requireRange(dto.defaultCapacity(), 0, 500, "defaultCapacity"));
         }
-        if (dto.containsKey("provider")) {
-            String p = dto.get("provider") == null ? "roster" : String.valueOf(dto.get("provider")).trim();
+        if (Json.present(dto.provider())) {
+            // an explicit null asked for the roster back: the map's get answered null for both
+            String p = Json.textOrNull(dto.provider()) == null ? "roster" : Json.valueOf(dto.provider()).trim();
             if (!KNOWN_PROVIDERS.contains(p)) {
                 throw new BadRequestException("provider must be one of " + KNOWN_PROVIDERS);
             }
             cfg.setProvider(p);
         }
-        if (dto.containsKey("providerUrl")) {
-            String u = dto.get("providerUrl") == null ? null : String.valueOf(dto.get("providerUrl")).trim();
+        if (Json.present(dto.providerUrl())) {
+            String u = trimmedOrNull(dto.providerUrl());
             if (u != null && !u.isBlank() && !(u.startsWith("http://") || u.startsWith("https://"))) {
                 throw new BadRequestException("providerUrl must be an http(s) URL");
             }
             cfg.setProviderUrl(u == null || u.isBlank() ? null : u.replaceAll("/+$", ""));
         }
-        if (dto.containsKey("providerSecretRef")) {
-            String ref = dto.get("providerSecretRef") == null ? null : String.valueOf(dto.get("providerSecretRef")).trim();
+        if (Json.present(dto.providerSecretRef())) {
+            String ref = trimmedOrNull(dto.providerSecretRef());
             if (ref != null && !ref.isBlank() && !ref.matches("[A-Z][A-Z0-9_]*")) {
                 throw new BadRequestException("providerSecretRef names an environment variable (UPPER_SNAKE), never the secret");
             }
             cfg.setProviderSecretRef(ref == null || ref.isBlank() ? null : ref);
         }
-        if (dto.containsKey("providerCategory")) {
-            String c = dto.get("providerCategory") == null ? null : String.valueOf(dto.get("providerCategory")).trim();
+        if (Json.present(dto.providerCategory())) {
+            String c = trimmedOrNull(dto.providerCategory());
             cfg.setProviderCategory(c == null || c.isBlank() ? null : c);
         }
         if (!"roster".equals(cfg.getProvider()) && (cfg.getProviderUrl() == null || cfg.getProviderUrl().isBlank())) {
             throw new BadRequestException("provider '" + cfg.getProvider() + "' needs a providerUrl");
         }
         cfg.setLastUpdate(OffsetDateTime.now());
-        return toMap(configs.save(cfg));
+        return toView(configs.save(cfg));
     }
 
-    public Map<String, Object> toMap(ScheduleConfig cfg) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("tenantId", cfg.getTenantId());
-        map.put("timezone", cfg.getTimezone());
-        map.put("workingDays", split(cfg.getWorkingDays()));
-        map.put("slotStarts", split(cfg.getSlotStarts()));
-        map.put("slotHours", cfg.getSlotHours());
-        map.put("daysAhead", cfg.getDaysAhead());
-        map.put("defaultCapacity", cfg.getDefaultCapacity());
-        map.put("rosterSize", technicians.findByTenantIdOrderByName(cfg.getTenantId()).stream()
-                .filter(Technician::isActive).count());
-        map.put("capacityMode", !"roster".equals(cfg.getProvider()) ? "provider"
-                : technicians.findByTenantIdOrderByName(cfg.getTenantId()).isEmpty() ? "flat" : "roster");
-        map.put("provider", cfg.getProvider());
-        if (cfg.getProviderUrl() != null) {
-            map.put("providerUrl", cfg.getProviderUrl());
-        }
-        if (cfg.getProviderSecretRef() != null) {
-            map.put("providerSecretRef", cfg.getProviderSecretRef());
-        }
-        if (cfg.getProviderCategory() != null) {
-            map.put("providerCategory", cfg.getProviderCategory());
-        }
-        map.put("lastUpdate", cfg.getLastUpdate());
-        map.put("@type", "ScheduleConfig");
-        return map;
+    public ScheduleConfigView toView(ScheduleConfig cfg) {
+        List<Technician> roster = technicians.findByTenantIdOrderByName(cfg.getTenantId());
+        return new ScheduleConfigView(
+                cfg.getTenantId(),
+                cfg.getTimezone(),
+                split(cfg.getWorkingDays()),
+                split(cfg.getSlotStarts()),
+                cfg.getSlotHours(),
+                cfg.getDaysAhead(),
+                cfg.getDefaultCapacity(),
+                roster.stream().filter(Technician::isActive).count(),
+                !"roster".equals(cfg.getProvider()) ? "provider" : roster.isEmpty() ? "flat" : "roster",
+                cfg.getProvider(),
+                cfg.getProviderUrl(),
+                cfg.getProviderSecretRef(),
+                cfg.getProviderCategory(),
+                cfg.getLastUpdate());
+    }
+
+    private static String trimmedOrNull(JsonNode node) {
+        String v = Json.textOrNull(node);
+        return v == null ? null : v.trim();
     }
 
     /* ---------- capacity ---------- */
@@ -218,20 +226,21 @@ public class ScheduleService {
     /* ---------- technicians ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listTechnicians() {
+    public List<TechnicianView> listTechnicians() {
         return technicians.findByTenantIdOrderByName(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(ScheduleService::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> technician(String id) {
-        return toMap(technicians.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public TechnicianView technician(String id) {
+        return toView(technicians.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Technician", id)));
     }
 
     @Transactional
-    public Map<String, Object> createTechnician(Map<String, Object> dto) {
-        if (dto.get("name") == null || String.valueOf(dto.get("name")).isBlank()) {
+    public TechnicianView createTechnician(TechnicianRequest body) {
+        TechnicianRequest dto = body == null ? TechnicianRequest.EMPTY : body;
+        if (!dto.named()) {
             throw new BadRequestException("name is required");
         }
         Technician t = new Technician();
@@ -239,15 +248,15 @@ public class ScheduleService {
         t.setTenantId(tenantScope.currentTenantId());
         t.setCreationDate(OffsetDateTime.now());
         apply(t, dto);
-        return toMap(technicians.save(t));
+        return toView(technicians.save(t));
     }
 
     @Transactional
-    public Map<String, Object> patchTechnician(String id, Map<String, Object> dto) {
+    public TechnicianView patchTechnician(String id, TechnicianRequest body) {
         Technician t = technicians.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Technician", id));
-        apply(t, dto);
-        return toMap(technicians.save(t));
+        apply(t, body == null ? TechnicianRequest.EMPTY : body);
+        return toView(technicians.save(t));
     }
 
     @Transactional
@@ -257,50 +266,46 @@ public class ScheduleService {
         technicians.delete(t);
     }
 
-    private void apply(Technician t, Map<String, Object> dto) {
-        if (dto.containsKey("name")) {
-            t.setName(String.valueOf(dto.get("name")));
+    private void apply(Technician t, TechnicianRequest dto) {
+        if (Json.present(dto.name())) {
+            t.setName(Json.valueOf(dto.name()));
         }
-        if (dto.containsKey("skills")) {
-            t.setSkills(dto.get("skills") == null ? null : join(dto.get("skills")));
+        if (Json.present(dto.skills())) {
+            t.setSkills(Json.textOrNull(dto.skills()) == null ? null : Json.join(dto.skills()));
         }
-        if (dto.containsKey("zone")) {
-            t.setZone(dto.get("zone") == null ? null : String.valueOf(dto.get("zone")));
+        if (Json.present(dto.zone())) {
+            t.setZone(Json.textOrNull(dto.zone()));
         }
-        if (dto.containsKey("workingDays")) {
-            t.setWorkingDays(requireDays(dto.get("workingDays")));
+        if (Json.present(dto.workingDays())) {
+            t.setWorkingDays(requireDays(dto.workingDays()));
         }
-        if (dto.containsKey("startTime")) {
-            t.setStartTime(requireTime(String.valueOf(dto.get("startTime"))));
+        if (Json.present(dto.startTime())) {
+            t.setStartTime(requireTime(Json.valueOf(dto.startTime())));
         }
-        if (dto.containsKey("endTime")) {
-            t.setEndTime(requireTime(String.valueOf(dto.get("endTime"))));
+        if (Json.present(dto.endTime())) {
+            t.setEndTime(requireTime(Json.valueOf(dto.endTime())));
         }
         if (LocalTime.parse(t.getStartTime()).compareTo(LocalTime.parse(t.getEndTime())) >= 0) {
             throw new BadRequestException("startTime must be before endTime");
         }
-        if (dto.containsKey("active")) {
-            t.setActive(Boolean.parseBoolean(String.valueOf(dto.get("active"))));
+        if (Json.present(dto.active())) {
+            t.setActive(Boolean.parseBoolean(Json.valueOf(dto.active())));
         }
         t.setLastUpdate(OffsetDateTime.now());
     }
 
-    private Map<String, Object> toMap(Technician t) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", t.getId());
-        map.put("name", t.getName());
-        map.put("skills", t.getSkills() == null ? List.of() : split(t.getSkills()));
-        if (t.getZone() != null) {
-            map.put("zone", t.getZone());
-        }
-        map.put("workingDays", split(t.getWorkingDays()));
-        map.put("startTime", t.getStartTime());
-        map.put("endTime", t.getEndTime());
-        map.put("active", t.isActive());
-        map.put("creationDate", t.getCreationDate());
-        map.put("lastUpdate", t.getLastUpdate());
-        map.put("@type", "Technician");
-        return map;
+    private static TechnicianView toView(Technician t) {
+        return new TechnicianView(
+                t.getId(),
+                t.getName(),
+                t.getSkills() == null ? List.of() : split(t.getSkills()),
+                t.getZone(),
+                split(t.getWorkingDays()),
+                t.getStartTime(),
+                t.getEndTime(),
+                t.isActive(),
+                t.getCreationDate(),
+                t.getLastUpdate());
     }
 
     /* ---------- validation helpers ---------- */
@@ -314,13 +319,6 @@ public class ScheduleService {
                 : Arrays.stream(csv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
-    private static String join(Object value) {
-        if (value instanceof List<?> list) {
-            return list.stream().map(String::valueOf).map(String::trim).collect(Collectors.joining(","));
-        }
-        return String.valueOf(value);
-    }
-
     private static ZoneId requireZone(String id) {
         try {
             return ZoneId.of(id);
@@ -329,16 +327,16 @@ public class ScheduleService {
         }
     }
 
-    private static String requireDays(Object value) {
-        List<String> days = split(join(value)).stream().map(s -> s.toUpperCase(Locale.ROOT)).toList();
+    private static String requireDays(JsonNode value) {
+        List<String> days = split(Json.join(value)).stream().map(s -> s.toUpperCase(Locale.ROOT)).toList();
         if (days.isEmpty() || !DAYS.containsAll(days)) {
             throw new BadRequestException("workingDays must be a list of MON..SUN");
         }
         return String.join(",", days);
     }
 
-    private static String requireTimes(Object value) {
-        List<String> times = split(join(value)).stream().map(ScheduleService::requireTime).toList();
+    private static String requireTimes(JsonNode value) {
+        List<String> times = split(Json.join(value)).stream().map(ScheduleService::requireTime).toList();
         if (times.isEmpty()) {
             throw new BadRequestException("slotStarts needs at least one HH:mm");
         }
@@ -353,10 +351,10 @@ public class ScheduleService {
         }
     }
 
-    private static int requireRange(Object value, int min, int max, String field) {
+    private static int requireRange(JsonNode value, int min, int max, String field) {
         int n;
         try {
-            n = Integer.parseInt(String.valueOf(value));
+            n = Integer.parseInt(Json.valueOf(value));
         } catch (NumberFormatException e) {
             throw new BadRequestException(field + " must be a number");
         }

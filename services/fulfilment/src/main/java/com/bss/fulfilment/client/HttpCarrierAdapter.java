@@ -97,7 +97,7 @@ public class HttpCarrierAdapter implements CarrierAdapter {
     }
 
     @Override
-    public List<Map<String, Object>> pickupPoints(CarrierConfig cfg, String postcode) {
+    public List<JsonNode> pickupPoints(CarrierConfig cfg, String postcode) {
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank() || postcode == null) {
             return List.of();
         }
@@ -109,10 +109,11 @@ public class HttpCarrierAdapter implements CarrierAdapter {
             JsonNode root = mapper.readTree(resp == null ? "[]" : resp);
             String pointer = text(c, "pointsPointer", "");
             JsonNode arr = pointer.isBlank() ? root : root.at(pointer);
-            List<Map<String, Object>> out = new ArrayList<>();
+            // the operator's own carrier document, passed through: its shape IS the contract here
+            List<JsonNode> out = new ArrayList<>();
             if (arr.isArray()) {
                 for (JsonNode p : arr) {
-                    out.add(mapper.convertValue(p, Map.class));
+                    out.add(p);
                 }
             }
             return out;
