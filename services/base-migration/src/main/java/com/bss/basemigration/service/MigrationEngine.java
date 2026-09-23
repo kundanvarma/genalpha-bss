@@ -143,8 +143,10 @@ public class MigrationEngine {
                         customer.getTargetOfferingId(), customer.getTargetOfferingName(),
                         characteristicMapFor(plan, customer),
                         "base migration '" + plan.getName() + "' (" + plan.getId() + ")");
-                customer.setOrderRef(order == null ? null
-                        : com.bss.basemigration.dto.MigrationPlanRequest.text(order.get("id")));
+                // an order without an id is no order reference: store nothing rather than
+                // the literal text "null", which reads like a real reference on the desk
+                com.fasterxml.jackson.databind.JsonNode placedId = order == null ? null : order.get("id");
+                customer.setOrderRef(placedId == null || placedId.isNull() ? null : placedId.asText());
                 customer.setState(MigrationCustomer.MIGRATED);
                 customer.setLastUpdate(OffsetDateTime.now(clock));
                 customers.save(customer);

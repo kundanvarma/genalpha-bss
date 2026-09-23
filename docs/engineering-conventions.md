@@ -186,6 +186,32 @@ with its suites green.
 | README rows, the capability map and the architecture diagrams follow every shipped component. | Review at arc end. |
 | Decisions that lock a design get an ADR in `docs/adr/`. | Review. |
 
+## 9. Identifiers that may be missing
+
+`String.valueOf(map.get("id"))` on a value that is absent produces the four
+characters `null`, not an absence. Today the fleet has ~370 such reads, and
+they **fail closed**: a lookup for the id `"null"` matches nothing, so the
+caller gets a 404 or an empty list.
+
+The danger is the *next* change. When one of these is typed honestly, the
+missing value becomes a real `null`, and a derived query turns that into
+`WHERE column IS NULL` — which matches every row that never had one. That is
+not theory: the typing arc introduced and caught it six times, and two of
+those would have been serious. Confirming a payment with an empty body
+returned another customer's payment; an erase request with no party would
+have deleted every guest booking, and in another service 149 ownerless
+tickets. Two more minted a tenant and a realm literally named `null`.
+
+| Rule | Check |
+|---|---|
+| A request body's identifier is **declared on a record** and a missing one is **refused explicitly** (400), never defaulted, never stringified. | `ops/arch/ratchet.sh` counts `String.valueOf(x.get("…id…"))` per service; the count may only fall. |
+| An identifier read out of a foreign document is read null-safely (`node.isNull()` first) and stored as an absence, not as text. | Review; the same ratchet count. |
+| Never hand a possibly-null identifier to a derived query. If it can be absent, branch before the query. | Review. The failure is silent: the query succeeds and matches the wrong rows. |
+
+The ratchet number is therefore a **ceiling on future risk**, not a count of
+present bugs. It exists so that the next person who types one of these is
+forced to decide what a missing identifier means.
+
 ## 8. What we deliberately do not do
 
 - No business logic in front ends, no shared database, no free-form pricing formulas, no prompt-only guardrails.
