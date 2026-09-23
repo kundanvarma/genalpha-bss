@@ -35,3 +35,7 @@ bss:
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
         wholesale-order-secret: test-wholesale-secret-b
+  wholesale:
+    # the door tests post a retailer callback; name its host so the
+    # URL policy admits it, the way a real federation would
+    callback-allowed-hosts: seeker.test

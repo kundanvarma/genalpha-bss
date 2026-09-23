@@ -97,6 +97,14 @@ bss:
       novafibre: ${SONATA_NOVAFIBRE_URL:http://localhost:8104}
       novafibre-tenant: ${SONATA_NOVAFIBRE_TENANT:nova}
     callback-base: ${WHOLESALE_CALLBACK_BASE:http://localhost:8080}
+    # Where a retailer's order callback may point. The URL arrives in the
+    # order body and we POST to it from inside the fleet's network, so an
+    # unrestricted one is a request-forgery primitive. Comma-separated
+    # hosts; EMPTY MEANS NO CALLBACK IS SENT, which is the safe direction
+    # for a notification. A host that resolves to loopback or link-local
+    # is refused even when named, which is why this is a service name and
+    # not localhost.
+    callback-allowed-hosts: ${WHOLESALE_CALLBACK_ALLOWED_HOSTS:service-orchestration}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}
     enabled: ${PORTING_ENABLED:true}

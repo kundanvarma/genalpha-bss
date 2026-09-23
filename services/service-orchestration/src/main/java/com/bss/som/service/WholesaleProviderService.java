@@ -42,6 +42,8 @@ public class WholesaleProviderService {
     private final TickGuard tickGuard;
     private final DomainEventPublisher events;
     private final RestClient.Builder restBuilder;
+    /** where a retailer's callback may point — the URL is their string, not ours */
+    private final com.bss.som.security.CallbackUrlPolicy callbackPolicy;
     private final long activateMs;
     private final double rateL3;
     private final double rateL2;
@@ -49,6 +51,7 @@ public class WholesaleProviderService {
     public WholesaleProviderService(ProviderAccessOrderRepository orders, TenantScope tenantScope,
             TenantRegistry tenants, TickGuard tickGuard, DomainEventPublisher events,
             RestClient.Builder restBuilder,
+            com.bss.som.security.CallbackUrlPolicy callbackPolicy,
             @Value("${bss.wholesale.provider-activate-ms:5000}") long activateMs,
             @Value("${bss.wholesale.provider-rate-l3:22.00}") double rateL3,
             @Value("${bss.wholesale.provider-rate-l2:15.00}") double rateL2) {
@@ -58,6 +61,7 @@ public class WholesaleProviderService {
         this.tickGuard = tickGuard;
         this.events = events;
         this.restBuilder = restBuilder;
+        this.callbackPolicy = callbackPolicy;
         this.activateMs = activateMs;
         this.rateL3 = rateL3;
         this.rateL2 = rateL2;
@@ -107,6 +111,11 @@ public class WholesaleProviderService {
     @Transactional
     public ProviderAccessOrder acceptOrder(String buyerRef, String callbackUrl, String retailerPartyId,
             String accessLayer, Integer bandwidthMbps, String postCode) {
+        if (callbackUrl != null && !callbackUrl.isBlank()) {
+            // a URL we will fetch from inside the network: check it before it is
+            // stored, so the retailer learns now rather than never being called
+            callbackPolicy.requireAllowed(callbackUrl);
+        }
         String tenant = tenantScope.currentTenantId();
         ProviderAccessOrder o = new ProviderAccessOrder();
         o.setId(UUID.randomUUID().toString());
@@ -171,6 +180,11 @@ public class WholesaleProviderService {
 
     private void notifyRetailer(ProviderAccessOrder o) {
         if (o.getCallbackUrl() == null || o.getCallbackUrl().isBlank()) {
+            return;
+        }
+        if (!callbackPolicy.allows(o.getCallbackUrl())) {
+            // a row stored before the policy existed, or a host since removed
+            // from the list: the order still completes, the notice does not go
             return;
         }
         try {
