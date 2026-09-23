@@ -4,14 +4,18 @@ name: CI
 # somebody else's repository, and this workflow has a checkout of our source
 # and a Maven cache to hand.
 #
-# Coverage: every module is COMPILED and PACKAGED here, and every image is
-# built. Tests still run for five services only. That is the remaining gap and
-# it is a real one -- the ordering mock drift and the duplicate migration
-# version that broke the fleet both sat in modules whose tests CI never ran.
-# Turning on `mvn verify` for the whole reactor needs one local proof run
-# first, because several modules carry Testcontainers tests that have never
-# executed anywhere: they skip when Docker is absent, and a CI runner has
-# Docker. Switching the step without that proof would just paint CI red.
+# Coverage: every module, every test. This used to be five services of
+# forty-two, which meant a green tick said very little -- the ordering mock
+# drift and the duplicate migration version that broke the fleet both sat in
+# modules CI never compiled.
+#
+# The 29 Testcontainers tests (the only ones that meet real Postgres) run here
+# too. They had never executed anywhere, because they skip when Docker is
+# absent and a laptop's Colima is not reachable to them. A local proof run
+# with Docker spelled out found what they had been hiding: twelve stale
+# migration counts, a request that predated a mandatory field, and a set of
+# tests copy-pasted into the wrong component. Those are fixed; this is the
+# check that stops them going stale again.
 
 on:
   push:
@@ -28,19 +32,10 @@ permissions:
   contents: read
 
 jobs:
-  tested:
-    name: ${{ matrix.service }} (build, test)
+  tests:
+    name: Every module, every test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - product-catalog
-          - product-ordering
-          - product-inventory
-          - party-account
-          - gateway
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -50,12 +45,16 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+      # One reactor: shared modules compile once, and every module's tests run.
+      # A runner has native Docker, so the Testcontainers tests need none of
+      # the coaxing a laptop does (see CLAUDE.md).
       - name: Build and test
-        run: mvn -B verify -pl services/${{ matrix.service }} -am
+        run: mvn -B verify
 
-  everything-builds:
-    name: Every module packages, every image builds
+  images:
+    name: Every service image builds
     runs-on: ubuntu-latest
+    needs: tests
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -66,12 +65,10 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-      # One reactor: shared modules compile once. This is what catches a module
-      # that no longer compiles, or two migrations sharing a version -- neither
-      # of which the five-service matrix could ever see.
-      - name: Package every module
-        run: mvn -B -T 1C package -DskipTests
       # The images copy a HOST-built jar, so the jars have to exist first.
+      # Tests already ran in the job above; this one proves the Dockerfiles.
+      - name: Package the jars
+        run: mvn -B -T 1C package -DskipTests
       - name: Build each image
         run: |
           set -euo pipefail

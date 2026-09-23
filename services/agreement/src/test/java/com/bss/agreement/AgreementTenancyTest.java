@@ -40,7 +40,9 @@ class AgreementTenancyTest {
     void agreementsNeverCrossTenants() throws Exception {
         MvcResult created = mockMvc.perform(post(BASE + "/agreement").with(staffOf(ISSUER_A))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"tenant-a terms\"}"))
+                        // TMF651 makes the type mandatory; this request predates that rule and
+                        // has been failing unseen ever since, because nothing ran it
+                        .content("{\"name\": \"tenant-a terms\", \"agreementType\": \"commercial\"}"))
                 .andExpect(status().isCreated()).andReturn();
         String id = JsonPath.read(created.getResponse().getContentAsString(), "$.id");
 

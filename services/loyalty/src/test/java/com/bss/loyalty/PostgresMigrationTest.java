@@ -56,9 +56,12 @@ class PostgresMigrationTest {
         Integer tables = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema = 'public'
-                  AND table_name IN ('agreement', 'event_outbox')
+                  AND table_name IN ('loyalty_program', 'loyalty_member',
+                                     'loyalty_transaction', 'event_outbox')
                 """, Integer.class);
-        assertThat(tables).isEqualTo(2);
+        // This asked for an 'agreement' table until now — scaffolding residue
+        // from the component loyalty was cloned from, which no run ever caught.
+        assertThat(tables).isEqualTo(4);
     }
 
     /** Both locations apply on real Postgres: vendor-neutral plus postgres-only. */
