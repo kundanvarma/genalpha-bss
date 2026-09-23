@@ -1088,5 +1088,9 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART_TARANGA:}
         ai-base-url-smart: ${AI_BASE_URL_SMART_TARANGA:}
         ai-api-key-smart: ${AI_API_KEY_SMART_TARANGA:}
-        # the vendor's own demo tenant: copilots may see raw context
-        ai-raw-exposure: true
+        # Raw exposure sends the UNREDACTED prompt to the model. This tenant is
+        # the one that is publicly reachable on the hosted box AND wired to a
+        # real Anthropic key, so it was the worst possible place to leave it on.
+        # Redacted by default like every other tenant; an operator who wants raw
+        # context sets AI_RAW_EXPOSURE_TARANGA=true and the ledger row says so.
+        ai-raw-exposure: ${AI_RAW_EXPOSURE_TARANGA:false}
