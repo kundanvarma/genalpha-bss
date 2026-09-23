@@ -79,6 +79,13 @@ services:
     container_name: bss-product-catalog
     restart: unless-stopped
     environment:
+      # the agent-commerce demo opt-in — see the gateway service. tenants.yml
+      # is READ BY 41 SERVICES, so a ${VAR:default} in it resolves per
+      # container: every service that reads a key needs the same variable, or
+      # two services disagree about the same tenant. This one serves /acp/product_feed.
+      AGENT_COMMERCE: ${AGENT_COMMERCE:-full}
+      AGENT_COMMERCE_NOVA: ${AGENT_COMMERCE_NOVA:-discovery}
+      AGENT_COMMERCE_TARANGA: ${AGENT_COMMERCE_TARANGA:-full}
       LEGACY_CATALOG_BASE_URL: http://mock-legacy:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
@@ -290,6 +297,10 @@ services:
     container_name: bss-shopping-cart
     restart: unless-stopped
     environment:
+      # agent-commerce demo opt-in (this one serves /acp/checkout_sessions)
+      AGENT_COMMERCE: ${AGENT_COMMERCE:-full}
+      AGENT_COMMERCE_NOVA: ${AGENT_COMMERCE_NOVA:-discovery}
+      AGENT_COMMERCE_TARANGA: ${AGENT_COMMERCE_TARANGA:-full}
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/shopping_cart
@@ -1122,6 +1133,10 @@ services:
     container_name: bss-user-roles
     restart: unless-stopped
     environment:
+      # agent-commerce demo opt-in (this one mints the delegated agent token)
+      AGENT_COMMERCE: ${AGENT_COMMERCE:-full}
+      AGENT_COMMERCE_NOVA: ${AGENT_COMMERCE_NOVA:-discovery}
+      AGENT_COMMERCE_TARANGA: ${AGENT_COMMERCE_TARANGA:-full}
       # operator-as-a-form: master admin + template + writable registry file
       BSS_ONBOARDING_KEYCLOAK_BASE: http://keycloak:8080
       BSS_ONBOARDING_ADMIN_USER: admin
@@ -1912,6 +1927,14 @@ services:
     environment:
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      # Agentic commerce is dark by default everywhere (application.yml and
+      # tenants.yml both default off). THIS is the demo opt-in: the laptop
+      # fleet shows the capability, a real deployment has to ask for it.
+      # agentic_commerce_test, agent_configurator_test and wrapped_legacy_test
+      # need these; a production install sets them per tenant, or not at all.
+      AGENT_COMMERCE: ${AGENT_COMMERCE:-full}
+      AGENT_COMMERCE_NOVA: ${AGENT_COMMERCE_NOVA:-discovery}
+      AGENT_COMMERCE_TARANGA: ${AGENT_COMMERCE_TARANGA:-full}
       # dev clocks: partner rate window small enough for a suite to trip
       # 25/2s: a young fleet renders a page in one burst of ~20 anonymous
       # calls — the old 10/2s ceiling was tuned when slow pages self-paced.

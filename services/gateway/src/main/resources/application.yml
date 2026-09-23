@@ -420,7 +420,11 @@ bss:
         brand-color: "#0E7C7B"
         locale: en
         currency: EUR
-        agent-commerce: ${AGENT_COMMERCE:full}
+        # Agentic commerce is DARK unless an operator switches it on. The
+        # application default is the production default: a deployment that
+        # forgets this variable gets the safe answer, not the demo answer.
+        # The laptop fleet opts in explicitly (docker-compose.yml, gateway).
+        agent-commerce: ${AGENT_COMMERCE:off}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
@@ -428,7 +432,7 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
-        agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
+        agent-commerce: ${AGENT_COMMERCE_NOVA:off}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
 
 management:
