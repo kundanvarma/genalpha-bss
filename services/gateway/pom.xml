@@ -74,7 +74,7 @@
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>mockwebserver</artifactId>
             <!-- Boot 3.5 no longer manages okhttp in its BOM -->
-            <version>4.12.0</version>
+            <version>5.5.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
