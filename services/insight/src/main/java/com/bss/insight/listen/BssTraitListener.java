@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.insight.api.Wire.idOf;
+import static com.bss.insight.api.Wire.textOf;
 
 /**
  * The BSS-native feature store's ingest: the operator's OWN domain events become
@@ -49,8 +51,7 @@ public class BssTraitListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             // A customer's email, denormalised for BATCH activation (no per-row
@@ -59,7 +60,7 @@ public class BssTraitListener {
                     || "IndividualAttributeValueChangeEvent".equals(eventType)) {
                 if (event.get("individual") instanceof Map<?, ?> ind) {
                     Map<String, Object> individual = (Map<String, Object>) ind;
-                    String partyId = individual.get("id") == null ? null : String.valueOf(individual.get("id"));
+                    String partyId = idOf(individual);
                     String email = emailOf(individual);
                     String region = individual.get("region") == null ? null : String.valueOf(individual.get("region"));
                     if (partyId != null) {
@@ -80,14 +81,16 @@ public class BssTraitListener {
                 if (event.get("customerBill") instanceof Map<?, ?> bm
                         && "settled".equals(String.valueOf(((Map<String, Object>) bm).get("state")))) {
                     Map<String, Object> bill = (Map<String, Object>) bm;
-                    String billId = String.valueOf(bill.get("id"));
+                    // a bill without an id cannot extend the streak: every such bill would be
+                    // "the last bill" and dedupe against each other
+                    String billId = idOf(bill);
                     String party = null;
                     for (Object rp : bill.get("relatedParty") instanceof java.util.List<?> l ? l : java.util.List.of()) {
                         if (rp instanceof Map<?, ?> pm && "customer".equals(pm.get("role"))) {
-                            party = String.valueOf(pm.get("id"));
+                            party = idOf(pm);
                         }
                     }
-                    if (party != null) {
+                    if (party != null && billId != null) {
                         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                             String last = traits.valueOf(party, "streak_last_bill").orElse(null);
                             if (!billId.equals(last)) {
@@ -107,7 +110,7 @@ public class BssTraitListener {
             if ("CltvScoredEvent".equals(eventType)) {
                 Map<String, Object> cltv = event.get("cltvScore") instanceof Map<?, ?> v
                         ? (Map<String, Object>) v : Map.of();
-                String partyId = cltv.get("partyId") == null ? null : String.valueOf(cltv.get("partyId"));
+                String partyId = textOf(cltv, "partyId");
                 if (partyId != null && cltv.get("cltv") != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                         traits.setTrait(partyId, "cltv", String.valueOf(cltv.get("cltv")));
@@ -122,7 +125,7 @@ public class BssTraitListener {
             if ("PartyAddressVerifiedEvent".equals(eventType)) {
                 Map<String, Object> ver = event.get("addressVerification") instanceof Map<?, ?> v
                         ? (Map<String, Object>) v : Map.of();
-                String partyId = ver.get("partyId") == null ? null : String.valueOf(ver.get("partyId"));
+                String partyId = textOf(ver, "partyId");
                 Map<String, Object> reg = ver.get("registeredAddress") instanceof Map<?, ?> ra
                         ? (Map<String, Object>) ra : Map.of();
                 if (partyId != null) {
@@ -139,7 +142,7 @@ public class BssTraitListener {
             // own traits (industry…), marked so org audiences resolve only orgs.
             if ("OrganizationCreateEvent".equals(eventType) || "OrganizationAttributeValueChangeEvent".equals(eventType)) {
                 Map<String, Object> org = resourceOf(event);
-                String orgId = org == null || org.get("id") == null ? null : String.valueOf(org.get("id"));
+                String orgId = idOf(org);
                 if (orgId != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                         traits.setTrait(orgId, "_entity", "organization");
@@ -177,8 +180,8 @@ public class BssTraitListener {
             // is what "customers on an iPhone 15" means live, incl. BYOD (no purchase).
             if ("DeviceDetectedEvent".equals(eventType)) {
                 Map<String, Object> r = resourceOf(event);
-                String party = r == null || r.get("partyId") == null ? null : String.valueOf(r.get("partyId"));
-                String model = r == null || r.get("deviceModel") == null ? null : String.valueOf(r.get("deviceModel"));
+                String party = textOf(r, "partyId");
+                String model = textOf(r, "deviceModel");
                 if (party != null && model != null && !model.isBlank()) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                         traits.setTrait(party, "deviceModel", model);
@@ -202,8 +205,8 @@ public class BssTraitListener {
             // (keyed by the engagement resource's partyId, not relatedParty).
             if ("EmailEngagedEvent".equals(eventType)) {
                 Map<String, Object> r = resourceOf(event);
-                String party = r == null || r.get("partyId") == null ? null : String.valueOf(r.get("partyId"));
-                String eng = r == null || r.get("engagement") == null ? null : String.valueOf(r.get("engagement"));
+                String party = textOf(r, "partyId");
+                String eng = textOf(r, "engagement");
                 if (party != null && eng != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                         traits.setTrait(party, "emailEngagement", "click".equals(eng) ? "clicked" : "opened");
@@ -315,12 +318,12 @@ public class BssTraitListener {
         if (product.get("relatedParty") instanceof List<?> parties) {
             String first = null;
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null) {
-                    String id = String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null) {
                     if (first == null) {
                         first = id;
                     }
-                    String role = String.valueOf(ref.get("role"));
+                    String role = textOf(p, "role");
                     if ("owner".equalsIgnoreCase(role) || "customer".equalsIgnoreCase(role)) {
                         return id;
                     }
@@ -335,9 +338,9 @@ public class BssTraitListener {
     private String customerOf(Map<String, Object> po) {
         if (po.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))
-                        && ref.get("id") != null) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return id;
                 }
             }
         }

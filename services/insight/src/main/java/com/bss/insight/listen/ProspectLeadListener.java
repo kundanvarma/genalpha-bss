@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.insight.api.Wire.textOf;
 
 /**
  * Inbound leads become nurture prospects. When Sales captures a lead — a social
@@ -40,8 +41,7 @@ public class ProspectLeadListener {
             if (!"SalesLeadCreateEvent".equals(String.valueOf(envelope.get("eventType")))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             if (!(event.get("salesLead") instanceof Map<?, ?> leadRaw)) {

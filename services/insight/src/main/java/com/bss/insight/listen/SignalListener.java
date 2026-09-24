@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.insight.api.Wire.idOf;
+import static com.bss.insight.api.Wire.textOf;
 
 /**
  * Internal sources feed the signal store themselves (SI-P1): a trouble
@@ -41,13 +43,13 @@ public class SignalListener {
             if (!"TroubleTicketCreateEvent".equals(String.valueOf(envelope.get("eventType")))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             Map<String, Object> ticket = event.get("troubleTicket") instanceof Map<?, ?> t
                     ? (Map<String, Object>) t : null;
-            if (ticket == null || ticket.get("id") == null) {
+            String ticketId = idOf(ticket);
+            if (ticketId == null) {
                 return;
             }
             String name = ticket.get("name") == null ? "" : String.valueOf(ticket.get("name"));
@@ -57,17 +59,14 @@ public class SignalListener {
             if (text.isBlank()) {
                 return;
             }
-            String partyId = null;
-            if (ticket.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                    && parties.get(0) instanceof Map<?, ?> p && p.get("id") != null) {
-                partyId = String.valueOf(p.get("id"));
-            }
+            String partyId = ticket.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                    ? idOf(parties.get(0)) : null;
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 com.fasterxml.jackson.databind.node.ObjectNode context = null;
                 if (ticket.get("severity") != null) {
                     context = objectMapper.createObjectNode().put("severity", String.valueOf(ticket.get("severity")));
                 }
-                signals.ingest(new com.bss.insight.dto.SignalInput("ticket", text, String.valueOf(ticket.get("id")),
+                signals.ingest(new com.bss.insight.dto.SignalInput("ticket", text, ticketId,
                         partyId, "support", null, context));
             }
         } catch (Exception e) {
