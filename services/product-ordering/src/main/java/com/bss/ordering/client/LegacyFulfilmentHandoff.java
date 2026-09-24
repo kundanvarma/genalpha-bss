@@ -43,7 +43,7 @@ public class LegacyFulfilmentHandoff {
         }
         for (Map<String, Object> item : items) {
             Object off = item.get("productOffering");
-            String offId = off instanceof Map<?, ?> m ? String.valueOf(m.get("id")) : "";
+            String offId = off instanceof Map<?, ?> m && m.get("id") != null ? m.get("id").toString() : "";
             if (!offId.startsWith(PREFIX)) {
                 continue;
             }
