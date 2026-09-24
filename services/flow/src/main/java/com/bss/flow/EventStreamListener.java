@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.flow.Wire.idOf;
+import static com.bss.flow.Wire.textOf;
 
 /**
  * The ear on the whole bus: one pattern subscription to every bss.*.events
@@ -39,8 +41,7 @@ public class EventStreamListener {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON);
             String source = componentOf(topic);
             String eventType = String.valueOf(envelope.getOrDefault("eventType", "Event"));
-            String tenant = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenant = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
 
             broadcaster.broadcast(new FlowMove(
                     String.valueOf(envelope.getOrDefault("eventId", "")),
@@ -79,12 +80,13 @@ public class EventStreamListener {
         }
         for (Object value : ((Map<String, Object>) event).values()) {
             if (value instanceof Map<?, ?> resource) {
-                if (resource.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                        && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-                    return "party " + mask(String.valueOf(party.get("id")));
+                String partyId = partyOf(resource);
+                if (partyId != null) {
+                    return "party " + mask(partyId);
                 }
-                if (resource.get("id") != null) {
-                    return "#" + mask(String.valueOf(resource.get("id")));
+                String resourceId = idOf(resource);
+                if (resourceId != null) {
+                    return "#" + mask(resourceId);
                 }
             }
         }
@@ -119,29 +121,21 @@ public class EventStreamListener {
             return FlowMove.CorrelationKeys.NONE;
         }
         // party — the through-line across most events
+        String resourceId = idOf(resource); // every key below is null when absent, never the text "null"
         String party = partyOf(resource);
-        if (party == null && resource.get("partyId") != null) {
-            party = String.valueOf(resource.get("partyId"));
+        if (party == null) {
+            party = textOf(resource, "partyId");
         }
         // order
-        String order = null;
-        if (eventType.startsWith("ProductOrder") && resource.get("id") != null) {
-            order = String.valueOf(resource.get("id"));
-        } else if (resource.get("productOrderId") != null) {
-            order = String.valueOf(resource.get("productOrderId"));
-        } else if (resource.get("productOrder") instanceof Map<?, ?> po && po.get("id") != null) {
-            order = String.valueOf(po.get("id"));
-        }
+        String orderRef = textOf(resource, "productOrderId");
+        String order = eventType.startsWith("ProductOrder") && resourceId != null ? resourceId
+                : orderRef != null ? orderRef
+                : idOf(resource.get("productOrder"));
         // intent
-        String intent = null;
-        if ("IntentCreateEvent".equals(eventType) && resource.get("id") != null) {
-            intent = String.valueOf(resource.get("id"));
-        } else if (resource.get("intent") instanceof Map<?, ?> in && in.get("id") != null) {
-            intent = String.valueOf(in.get("id"));
-        }
+        String intent = "IntentCreateEvent".equals(eventType) && resourceId != null ? resourceId
+                : idOf(resource.get("intent"));
         // quote
-        String quote = eventType.startsWith("Quote") && resource.get("id") != null
-                ? String.valueOf(resource.get("id")) : null;
+        String quote = eventType.startsWith("Quote") ? resourceId : null;
         // network object (delivery path / affected object) for the assurance stages
         String object = null;
         if (resource.get("affectedObject") != null) {
@@ -153,11 +147,8 @@ public class EventStreamListener {
     }
 
     @SuppressWarnings("unchecked")
-    private static String partyOf(Map<String, Object> resource) {
-        if (resource.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            return String.valueOf(party.get("id"));
-        }
-        return null;
+    private static String partyOf(Map<?, ?> resource) {
+        return resource.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                ? idOf(parties.get(0)) : null;
     }
 }

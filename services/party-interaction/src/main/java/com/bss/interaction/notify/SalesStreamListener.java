@@ -11,6 +11,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.interaction.api.Wire.idOf;
+import static com.bss.interaction.api.Wire.textOf;
 
 /**
  * Sales on the 360: when a deal we're working is WITH a party we already know
@@ -45,13 +47,12 @@ public class SalesStreamListener {
             if (!"SalesActivityCreateEvent".equals(envelope.get("eventType"))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
             Map<String, Object> activity = event.get("salesActivity") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
-            String party = activity.get("partyId") == null ? null : String.valueOf(activity.get("partyId"));
+            String party = textOf(activity, "partyId");
             if (party == null || activity.get("note") == null) {
                 return; // pure-prospect activity, or nothing to say — not on the 360
             }
@@ -60,7 +61,11 @@ public class SalesStreamListener {
             String type = String.valueOf(activity.get("type"));
             String channel = "call".equals(type) ? "phone" : "email".equals(type) ? "email" : "sales";
             String description = "Sales (" + deal + "): " + activity.get("note");
-            String sourceRef = String.valueOf(activity.get("id"));
+            String sourceRef = idOf(activity);
+            if (sourceRef == null) {
+                log.warn("sales activity without an id — no touchpoint minted");
+                return;
+            }
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 interactions.mintTouchpoint(sourceRef, "sales", description, channel, party);
             }

@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.inventory.api.Wire.idOf;
 
 @Service
 public class ProductService {
@@ -85,10 +86,15 @@ public class ProductService {
         if (memberLink == null || !"active".equals(memberLink.get("status"))) {
             throw NotFoundException.forResource(RESOURCE, memberId);
         }
-        String payerId = String.valueOf(memberLink.get("id"));
+        String payerId = idOf(memberLink);
+        if (payerId == null) {
+            // a link that names no payer: nobody is its payer, nobody its admin — it
+            // used to name the payer "null", and an admin link without an id matched it
+            throw NotFoundException.forResource(RESOURCE, memberId);
+        }
         boolean callerIsPayer = callerId.equals(payerId);
         boolean callerIsAdmin = !callerIsPayer && partyClient.householdLinkOf(callerId)
-                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> payerId.equals(idOf(l)))
                 .filter(l -> "active".equals(l.get("status")))
                 .filter(l -> "admin".equals(l.get("role")))
                 .isPresent();
@@ -292,7 +298,8 @@ public class ProductService {
         }
         return relatedParty.stream()
                 .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                .map(p -> String.valueOf(p.get("id")))
+                .map(com.bss.inventory.api.Wire::idOf)
+                .filter(java.util.Objects::nonNull) // a customer ref without an id owns nothing
                 .findFirst()
                 .orElse(null);
     }

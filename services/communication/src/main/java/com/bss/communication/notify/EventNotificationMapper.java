@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import static com.bss.communication.api.Wire.idOf;
+import static com.bss.communication.api.Wire.textOf;
 
 /**
  * The editorial desk: which domain events deserve a customer notification,
@@ -397,9 +399,9 @@ public class EventNotificationMapper {
     private Optional<String> payer(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "payer".equalsIgnoreCase(String.valueOf(ref.get("role")))
-                        && ref.get("id") != null) {
-                    return Optional.of(String.valueOf(ref.get("id")));
+                String id = idOf(p);
+                if (id != null && "payer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return Optional.of(id);
                 }
             }
         }
@@ -409,9 +411,9 @@ public class EventNotificationMapper {
     private Optional<String> partyWithRole(Map<String, Object> resource, String role) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && role.equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return Optional.of(String.valueOf(ref.get("id")));
+                String id = idOf(p);
+                if (id != null && role.equalsIgnoreCase(textOf(p, "role"))) {
+                    return Optional.of(id);
                 }
             }
         }
@@ -419,8 +421,7 @@ public class EventNotificationMapper {
     }
 
     private Optional<String> partyIn(Map<String, Object> resource, String key) {
-        return resource.get(key) instanceof Map<?, ?> m && m.get("id") != null
-                ? Optional.of(String.valueOf(m.get("id"))) : Optional.empty();
+        return Optional.ofNullable(idOf(resource.get(key)));
     }
 
     private String nameIn(Map<String, Object> resource, String key) {
@@ -460,9 +461,9 @@ public class EventNotificationMapper {
     private Optional<String> customer(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))
-                        && ref.get("id") != null) {
-                    return Optional.of(String.valueOf(ref.get("id")));
+                String id = idOf(p);
+                if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return Optional.of(id);
                 }
             }
         }

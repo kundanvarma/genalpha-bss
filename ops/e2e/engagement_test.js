@@ -35,7 +35,7 @@ async function token(ctx, realm, user, pass) {
   /* ---------- send a message, then the ESP reports an open ---------- */
   const msg = await (await ctx.post(MSG, { headers: H(nova), data: { messageType: 'email', subject: `hi ${run}`, content: 'open me', relatedParty: [{ id: login.id, role: 'customer' }] } })).json();
   if (!msg.id) fail('message send failed: ' + JSON.stringify(msg));
-  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-key', 'Content-Type': 'application/json' },
+  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-webhook-dev', 'Content-Type': 'application/json' },
     data: [{ event: 'open', email, custom_args: { tenant: 'nova', messageId: msg.id } }] });
   console.log('OK a message was sent and the ESP reported an OPEN');
 

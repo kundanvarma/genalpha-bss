@@ -6,6 +6,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.communication.api.Wire.idOf;
 
 /**
  * Reads a party's display fields so templates can greet a customer by name and,
@@ -47,8 +48,9 @@ public class PartyLookupClient {
             if (person != null) {
                 if (person.get("givenName") != null) out.put("party.firstName", String.valueOf(person.get("givenName")));
                 if (person.get("familyName") != null) out.put("party.lastName", String.valueOf(person.get("familyName")));
-                if (person.get("organization") instanceof Map<?, ?> org && org.get("id") != null) {
-                    out.putAll(orgTokens(tenantId, String.valueOf(org.get("id"))));
+                String orgId = idOf(person.get("organization"));
+                if (orgId != null) {
+                    out.putAll(orgTokens(tenantId, orgId));
                 }
                 return out;
             }

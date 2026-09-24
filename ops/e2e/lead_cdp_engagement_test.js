@@ -33,7 +33,7 @@ async function token(ctx) {
   const msg = await (await ctx.post(MSG, { headers: H, data: {
     messageType: 'email', toEmail: ENGAGED, subject: `hello ${run}`, content: 'open me' } })).json();
   if (!msg.id) fail('prospect reach failed: ' + JSON.stringify(msg));
-  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-key', 'Content-Type': 'application/json' },
+  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-webhook-dev', 'Content-Type': 'application/json' },
     data: [{ event: 'open', email: ENGAGED, custom_args: { tenant: 'nova', messageId: msg.id } }] });
   console.log('OK reached a prospect and recorded an OPEN (the martech engagement loop)');
 

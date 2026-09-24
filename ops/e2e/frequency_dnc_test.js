@@ -66,7 +66,7 @@ async function token(ctx, realm, user, pass) {
     { email: E, source: src, lawfulBasis: 'opt-in' }, { email: E2, source: src, lawfulBasis: 'opt-in' } ] } });
 
   // the ESP reports an unsubscribe for E -> communication suppresses it
-  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-key', 'Content-Type': 'application/json' },
+  await ctx.post(`${API}/esp/v1/event`, { headers: { 'X-Esp-Token': 'nova-esp-webhook-dev', 'Content-Type': 'application/json' },
     data: [{ event: 'unsubscribe', email: E, custom_args: { tenant: 'nova', messageId: `m-${run}` } }] });
   let suppressed = false;
   for (let i = 0; i < 10; i++) {
