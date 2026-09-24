@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import static com.bss.recommendation.api.Wire.idOf;
 
 /**
  * TMF680: what should this customer see next? Candidate selection is a
@@ -48,8 +49,9 @@ public class RecommendationService {
         }
         Set<String> owned = new HashSet<>();
         for (Map<String, Object> product : inventory.productsOf(party)) {
-            if (product.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
-                owned.add(String.valueOf(ref.get("id")));
+            String offeringId = idOf(product.get("productOffering"));
+            if (offeringId != null) {
+                owned.add(offeringId);
             }
         }
         // FUSION: the customer's consented browsing interests (from the
@@ -62,7 +64,7 @@ public class RecommendationService {
                         .anyMatch(c -> c instanceof Map<?, ?> m
                                 && interests.contains(String.valueOf(m.get("name"))));
         List<Map<String, Object>> candidates = ranker.rank(catalog.activeOfferings().stream()
-                .filter(o -> !owned.contains(String.valueOf(o.get("id"))))
+                .filter(o -> !owned.contains(idOf(o)))
                 .filter(o -> !Boolean.FALSE.equals(o.get("isSellable")))
                 .toList())
                 .stream()

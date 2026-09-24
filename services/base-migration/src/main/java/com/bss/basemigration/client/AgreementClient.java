@@ -10,6 +10,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import static com.bss.basemigration.api.Wire.idOf;
 
 /**
  * TMF651 view of commitments: an in-binding customer is treated per the
@@ -56,8 +57,7 @@ public class AgreementClient {
                 continue;
             }
             for (Object it : items) {
-                if (it instanceof Map<?, ?> m && m.get("productOffering") instanceof Map<?, ?> off
-                        && offeringId.equals(String.valueOf(off.get("id")))
+                if (it instanceof Map<?, ?> m && offeringId.equals(idOf(m.get("productOffering")))
                         && (latest == null || end.isAfter(latest))) {
                     latest = end;
                 }

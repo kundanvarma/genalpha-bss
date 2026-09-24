@@ -24,6 +24,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import static com.bss.basemigration.api.Wire.idOf;
 
 /**
  * The rule triggers, scanned daily (and on demand per plan):
@@ -111,9 +112,9 @@ public class TriggerScanner {
         int grandfathered = 0;
         List<String> flagged = new ArrayList<>(json.readStrings(plan.getGrandfatheredJson()));
         for (Map<String, Object> individual : parties.listIndividuals()) {
-            String partyId = String.valueOf(individual.get("id"));
+            String partyId = idOf(individual);
             LocalDate birth = parseDate(String.valueOf(individual.get("birthDate")));
-            if (birth == null || ageYears < 0) {
+            if (partyId == null || birth == null || ageYears < 0) {
                 continue;
             }
             LocalDate thresholdBirthday = birth.plusYears(ageYears);

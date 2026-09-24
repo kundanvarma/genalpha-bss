@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.recommendation.api.Wire.idOf;
+import static com.bss.recommendation.api.Wire.textOf;
 
 /**
  * "CUSTOMERS WHO BOUGHT THIS ALSO BOUGHT" — item-to-item market-basket
@@ -103,8 +105,7 @@ public class AffinityRecommender {
         try {
             for (Map<String, Object> product : inventory.allProducts()) {
                 String owner = ownerOf(product);
-                String offering = product.get("productOffering") instanceof Map<?, ?> ref
-                        && ref.get("id") != null ? String.valueOf(ref.get("id")) : null;
+                String offering = idOf(product.get("productOffering"));
                 if (owner != null && offering != null) {
                     byOwner.computeIfAbsent(owner, k -> new HashSet<>()).add(offering);
                 }
@@ -122,10 +123,9 @@ public class AffinityRecommender {
             return null;
         }
         for (Object p : parties) {
-            if (p instanceof Map<?, ?> party
-                    && "customer".equalsIgnoreCase(String.valueOf(party.get("role")))
-                    && party.get("id") != null) {
-                return String.valueOf(party.get("id"));
+            String id = idOf(p);
+            if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                return id;
             }
         }
         return null;
@@ -135,8 +135,9 @@ public class AffinityRecommender {
         Map<String, String> names = new HashMap<>();
         try {
             for (Map<String, Object> o : catalog.activeOfferings()) {
-                if (o.get("id") != null) {
-                    names.put(String.valueOf(o.get("id")), String.valueOf(o.get("name")));
+                String id = idOf(o);
+                if (id != null) {
+                    names.put(id, String.valueOf(o.get("name")));
                 }
             }
         } catch (RuntimeException ignored) {

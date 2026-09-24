@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.process.api.Wire.idOf;
+import static com.bss.process.api.Wire.textOf;
 
 /**
  * The projection's ears: ordering and SOM events become process-flow
@@ -60,8 +62,7 @@ public class OrderEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> resource = envelope.get("event") instanceof Map<?, ?> event
                     ? event.values().stream().filter(v -> v instanceof Map)
                             .map(v -> (Map<String, Object>) v).findFirst().orElse(Map.of())
@@ -69,15 +70,17 @@ public class OrderEventListener {
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 switch (eventType) {
                     case "ProductOrderCreateEvent" -> {
-                        String orderId = String.valueOf(resource.get("id"));
-                        if (!"null".equals(orderId)) {
+                        String orderId = idOf(resource);
+                        if (orderId != null) {
                             service.onOrderCreated(orderId, partyOf(resource),
                                     isPhysical(resource), resource);
                         }
                     }
                     case "ProductOrderStateChangeEvent" -> {
-                        String orderId = String.valueOf(resource.get("id"));
-                        String state = String.valueOf(resource.get("state"));
+                        // the one case that had no guard: a state change on no order used
+                        // to journal a milestone onto the flow of the order "null"
+                        String orderId = idOf(resource);
+                        String state = orderId == null ? "" : String.valueOf(resource.get("state"));
                         switch (state) {
                             case "completed" -> service.onMilestone(orderId, "completed",
                                     eventType, topic, resource);
@@ -90,8 +93,8 @@ public class OrderEventListener {
                     }
                     case "ShippingOrderCreateEvent", "ShippingOrderStateChangeEvent",
                          "WorkOrderCreateEvent", "WorkOrderStateChangeEvent" -> {
-                        String orderId = String.valueOf(resource.get("productOrderId"));
-                        if (!"null".equals(orderId)) {
+                        String orderId = textOf(resource, "productOrderId");
+                        if (orderId != null) {
                             // milestones journal onto the flow's timeline; 'delivered'
                             // also completes the physical 'fulfilled' task
                             if ("delivered".equals(resource.get("state"))) {
@@ -102,15 +105,15 @@ public class OrderEventListener {
                         }
                     }
                     case "ServiceOrderStateChangeEvent" -> {
-                        String orderId = String.valueOf(resource.get("productOrderId"));
-                        if (!"null".equals(orderId) && "completed".equals(resource.get("state"))) {
+                        String orderId = textOf(resource, "productOrderId");
+                        if (orderId != null && "completed".equals(resource.get("state"))) {
                             // physical flows: fulfilment implicitly done when SOM provisions
                             service.onMilestone(orderId, "provisioned", eventType, topic, resource);
                         }
                     }
                     case "ProductOfferingGovernanceEvent" -> {
-                        String offeringId = String.valueOf(resource.get("id"));
-                        if (!"null".equals(offeringId)) {
+                        String offeringId = idOf(resource);
+                        if (offeringId != null) {
                             service.onGovernance(offeringId, String.valueOf(resource.get("action")), resource, topic);
                         }
                     }
@@ -125,10 +128,10 @@ public class OrderEventListener {
     private static String partyOf(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && (ref.get("role") == null
-                            || "customer".equalsIgnoreCase(String.valueOf(ref.get("role"))))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                String role = textOf(p, "role");
+                if (id != null && (role == null || "customer".equalsIgnoreCase(role))) {
+                    return id;
                 }
             }
         }
