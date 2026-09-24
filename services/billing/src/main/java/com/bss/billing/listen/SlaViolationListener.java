@@ -53,8 +53,8 @@ public class SlaViolationListener {
             if (!"SlaViolationEvent".equals(envelope.get("eventType"))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             Map<String, Object> violation = envelope.get("event") instanceof Map<?, ?> event
                     && event.get("slaViolation") instanceof Map<?, ?> v
                     ? (Map<String, Object>) v : Map.of();
@@ -65,15 +65,23 @@ public class SlaViolationListener {
             if (amount.signum() <= 0) {
                 return;
             }
-            String violationId = String.valueOf(violation.get("id"));
-            String party = null;
+            Object rawViolationId = violation.get("id");
+            if (rawViolationId == null) {
+                return;   // no id — nothing to key the credit by
+            }
+            String violationId = rawViolationId.toString();
+            // `party == null` could never fire here: String.valueOf turns an
+            // absent id into the TEXT "null", and an SLA credit was then booked
+            // against a party by that name. Read the object, test the object.
+            Object rawParty = null;
             if (violation.get("relatedParty") instanceof java.util.List<?> parties
                     && !parties.isEmpty() && parties.get(0) instanceof Map<?, ?> ref) {
-                party = String.valueOf(ref.get("id"));
+                rawParty = ref.get("id");
             }
-            if (party == null) {
+            if (rawParty == null) {
                 return;
             }
+            String party = rawParty.toString();
             String reason = "SLA violation " + violationId + " — resolution "
                     + violation.get("durationMinutes") + "m exceeded the promised "
                     + violation.get("thresholdMinutes") + "m on " + violation.get("affectedObject")
