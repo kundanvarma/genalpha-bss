@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.campaign.api.Wire.idOf;
 
 /**
  * Attributed revenue = the monthly recurring price of what was ordered,
@@ -61,12 +62,12 @@ public class RestCatalogClient implements CatalogClient {
                     .retrieve().body(Map.class);
             if (offering != null && offering.get("productOfferingPrice") instanceof List<?> refs) {
                 for (Object ref : refs) {
-                    if (!(ref instanceof Map<?, ?> r) || r.get("id") == null) {
+                    String priceId = idOf(ref);
+                    if (priceId == null) {
                         continue;
                     }
                     Map<String, Object> price = restClient.get()
-                            .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice/{id}",
-                                    String.valueOf(r.get("id")))
+                            .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice/{id}", priceId)
                             .header("X-Tenant-Id", tenantId)
                             .retrieve().body(Map.class);
                     if (price != null && "recurring".equals(price.get("priceType"))

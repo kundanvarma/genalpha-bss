@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import static com.bss.fulfilment.api.Wire.idOf;
+import static com.bss.fulfilment.api.Wire.textOf;
 
 /** Births: a physical order mints the parcel; an install booking mints the visit. */
 @Component
@@ -46,8 +48,7 @@ public class FulfilmentEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> resource = envelope.get("event") instanceof Map<?, ?> event
                     ? event.values().stream().filter(v -> v instanceof Map)
                             .map(v -> (Map<String, Object>) v).findFirst().orElse(Map.of())
@@ -63,23 +64,25 @@ public class FulfilmentEventListener {
                     }
                     Object place = physicalItems.isEmpty() ? null
                             : ((Map<String, Object>) physicalItems.get(0).get("product")).get("place");
-                    if (!physicalItems.isEmpty() && resource.get("id") != null) {
-                        service.onPhysicalOrder(String.valueOf(resource.get("id")),
+                    String physicalOrderId = idOf(resource);
+                    if (!physicalItems.isEmpty() && physicalOrderId != null) {
+                        service.onPhysicalOrder(physicalOrderId,
                                 partyOf(resource), physicalItems, place);
                     }
                 } else if ("AppointmentCreateEvent".equals(eventType)) {
                     String orderId = null;
                     if (resource.get("relatedEntity") instanceof List<?> refs) {
                         for (Object r : refs) {
-                            if (r instanceof Map<?, ?> ref
-                                    && "ProductOrder".equals(ref.get("@referredType"))
-                                    && ref.get("id") != null) {
-                                orderId = String.valueOf(ref.get("id"));
+                            String refId = idOf(r);
+                            if (r instanceof Map<?, ?> ref && "ProductOrder".equals(ref.get("@referredType"))
+                                    && refId != null) {
+                                orderId = refId;
                             }
                         }
                     }
-                    if (orderId != null && resource.get("id") != null) {
-                        service.onInstallAppointment(String.valueOf(resource.get("id")),
+                    String appointmentId = idOf(resource);
+                    if (orderId != null && appointmentId != null) {
+                        service.onInstallAppointment(appointmentId,
                                 orderId, partyOf(resource), resource.get("place"));
                     }
                 }
@@ -145,16 +148,13 @@ public class FulfilmentEventListener {
     private static String partyOf(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && (ref.get("role") == null
-                            || "customer".equalsIgnoreCase(String.valueOf(ref.get("role"))))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                String role = textOf(p, "role");
+                if (id != null && (role == null || "customer".equalsIgnoreCase(role))) {
+                    return id;
                 }
             }
         }
-        if (resource.get("ownerPartyId") != null) {
-            return String.valueOf(resource.get("ownerPartyId"));
-        }
-        return null;
+        return textOf(resource, "ownerPartyId");
     }
 }

@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.qualification.api.Wire.idOf;
 
 /**
  * TMF679 check: each qualification item names an offering and a place. An
@@ -53,9 +54,7 @@ public class QualificationService {
 
     private Map<String, Object> qualifyItem(Map<String, Object> item) {
         Map<String, Object> result = new HashMap<>(item);
-        String offeringId = item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null
-                ? String.valueOf(ref.get("id"))
-                : null;
+        String offeringId = idOf(item.get("productOffering"));
         String offeringName = item.get("productOffering") instanceof Map<?, ?> ref && ref.get("name") != null
                 ? String.valueOf(ref.get("name"))
                 : offeringId;

@@ -25,6 +25,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.qualification.api.Wire.idOf;
+import static com.bss.qualification.api.Wire.textOf;
 
 /**
  * TMF679 task face for R18-era clients: productOfferingQualification as a
@@ -125,8 +127,7 @@ public class LegacyPoqController {
                     && !partyMatches(view, unquote(relatedPartyId), unquote(relatedPartyRole))) {
                 continue;
             }
-            if (channelId != null && !(view.get("channel") instanceof Map<?, ?> ch
-                    && unquote(channelId).equals(String.valueOf(ch.get("id"))))) {
+            if (channelId != null && !unquote(channelId).equals(idOf(view.get("channel")))) {
                 continue;
             }
             out.add(project(view, fields));
@@ -170,8 +171,8 @@ public class LegacyPoqController {
         }
         for (Object p : parties) {
             if (p instanceof Map<?, ?> ref
-                    && (id == null || String.valueOf(ref.get("id")).equals(id))
-                    && (role == null || String.valueOf(ref.get("role")).equals(role))) {
+                    && (id == null || id.equals(idOf(ref)))
+                    && (role == null || role.equals(textOf(ref, "role")))) {
                 return true;
             }
         }

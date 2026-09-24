@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.campaign.api.Wire.idOf;
+import static com.bss.campaign.api.Wire.textOf;
 
 /**
  * The martech ear: every business event flows past; active campaigns decide
@@ -49,21 +51,19 @@ public class BusinessEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             Map<String, Object> resource = event.values().stream()
                     .filter(v -> v instanceof Map).map(v -> (Map<String, Object>) v)
                     .findFirst().orElse(Map.of());
             String party = partyOf(resource);
-            if (party == null && eventType != null && eventType.startsWith("Individual")
-                    && resource.get("id") != null) {
+            if (party == null && eventType != null && eventType.startsWith("Individual")) {
                 // Registration/identity events carry the party AS the resource
                 // (no relatedParty) — the individual's own id is the party. This
                 // is what lets an onboarding journey trigger the moment someone
                 // signs up.
-                party = String.valueOf(resource.get("id"));
+                party = idOf(resource); // an individual without an id is nobody to enrol
             }
             if (party == null) {
                 return;
@@ -140,10 +140,10 @@ public class BusinessEventListener {
     private String partyOf(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && (ref.get("role") == null
-                            || "customer".equalsIgnoreCase(String.valueOf(ref.get("role"))))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                String role = textOf(p, "role");
+                if (id != null && (role == null || "customer".equalsIgnoreCase(role))) {
+                    return id;
                 }
             }
         }

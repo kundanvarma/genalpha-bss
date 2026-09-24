@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.campaign.api.Wire.textOf;
 
 /**
  * The journey engine: sequences as DATA. Steps are a list — message, wait —
@@ -728,19 +729,19 @@ public class JourneyService {
         if (journey.getName() != null) context.put("source", journey.getName());
         if (serviceNotice) context.put("category", Journey.TRANSACTIONAL);
         com.bss.campaign.client.CommunicationClient.SendOutcome outcome;
-        if (message.get("templateRef") != null) {
-            outcome = communication.sendTemplated(enrollment.getPartyId(),
-                    String.valueOf(message.get("templateRef")),
-                    message.get("locale") == null ? null : String.valueOf(message.get("locale")),
-                    message.get("channel") == null ? null : String.valueOf(message.get("channel")),
+        String templateRef = textOf(message, "templateRef");
+        if (templateRef != null) {
+            outcome = communication.sendTemplated(enrollment.getPartyId(), templateRef,
+                    textOf(message, "locale"), textOf(message, "channel"),
                     context);
         } else {
             String content = String.valueOf(message.get("content"));
             if (message.get("promotionCode") != null) {
                 content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
             }
-            outcome = communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")),
-                    content, message.get("channel") == null ? null : String.valueOf(message.get("channel")), context);
+            outcome = communication.send(enrollment.getPartyId(),
+                    java.util.Objects.requireNonNullElse(textOf(message, "subject"), ""),
+                    content, textOf(message, "channel"), context);
         }
         // Communication has guardrails of its own (frequency cap, opt-out) and
         // declines with a 200 — the postpone-not-drop rule must hold HERE too,
