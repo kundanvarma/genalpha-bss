@@ -76,23 +76,26 @@ public class GovernanceController {
     }
 
     /** Set (or update) this tenant's spend ceiling and kill-switch. */
+    /** The spend ceiling and kill-switch, every field optional: absent means unchanged. */
+    public record BudgetRequest(Long budgetMicros, Integer windowHours, Boolean enabled, Integer maxWorkers) { }
+
     @PostMapping("/budget")
-    public ResponseEntity<Map<String, Object>> setBudget(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> setBudget(@RequestBody BudgetRequest body) {
         String tenant = tenantScope.currentTenantId();
         AiBudget budget = budgets.findByTenantId(tenant).orElseGet(AiBudget::new);
         budget.setTenantId(tenant);
-        if (body.get("budgetMicros") != null) {
-            budget.setBudgetMicros(Long.parseLong(String.valueOf(body.get("budgetMicros"))));
+        if (body.budgetMicros() != null) {
+            budget.setBudgetMicros(body.budgetMicros());
         }
-        if (body.get("windowHours") != null) {
-            budget.setWindowHours(Integer.parseInt(String.valueOf(body.get("windowHours"))));
+        if (body.windowHours() != null) {
+            budget.setWindowHours(body.windowHours());
         }
-        if (body.get("enabled") != null) {
-            budget.setEnabled(Boolean.parseBoolean(String.valueOf(body.get("enabled"))));
+        if (body.enabled() != null) {
+            budget.setEnabled(body.enabled());
         }
-        if (body.get("maxWorkers") != null) {
+        if (body.maxWorkers() != null) {
             // the crew ceiling: surge staffing never grows past it (0 = unlimited)
-            budget.setMaxWorkers(Integer.parseInt(String.valueOf(body.get("maxWorkers"))));
+            budget.setMaxWorkers(body.maxWorkers());
         }
         budget.setLastUpdate(OffsetDateTime.now());
         budgets.save(budget);

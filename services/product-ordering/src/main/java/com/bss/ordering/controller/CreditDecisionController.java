@@ -45,17 +45,19 @@ public class CreditDecisionController {
     }
 
     /** {ref, decision: approve|review|decline|frozen (empty clears)}. */
+    /** The mock bureau's lever: which reference, which verdict (null clears it). */
+    public record MockOutcome(String ref, String decision) { }
+
     @PostMapping("/mockOutcome")
-    public ResponseEntity<Map<String, Object>> mockOutcome(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> mockOutcome(@RequestBody MockOutcome body) {
         requireBackOffice();
         MockBureauDriver driver = mockDriver.orElseThrow(
                 () -> new OrderValidationException("no mock bureau driver in this deployment"));
-        Object rawRef = body == null ? null : body.get("ref");
-        String ref = rawRef == null ? null : rawRef.toString();
+        String ref = body.ref();
         if (ref == null || ref.isBlank()) {
             throw new OrderValidationException("ref is required");
         }
-        String decision = body.get("decision") == null ? null : String.valueOf(body.get("decision"));
+        String decision = body.decision();
         driver.setOutcome(ref, decision);
         return ResponseEntity.ok(Map.of("ref", ref, "decision", decision == null ? "cleared" : decision));
     }

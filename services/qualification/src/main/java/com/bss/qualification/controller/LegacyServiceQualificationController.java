@@ -3,6 +3,7 @@ package com.bss.qualification.controller;
 import com.bss.qualification.entity.LegacyServiceQualification;
 import com.bss.qualification.dto.CheckItemView;
 import com.bss.qualification.dto.CheckServiceQualificationView;
+import com.bss.qualification.dto.ServiceQualificationDocument;
 import com.bss.qualification.dto.ServiceQualificationRequest;
 import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
@@ -55,8 +56,12 @@ public class LegacyServiceQualificationController {
 
     @PostMapping("/serviceQualification")
     @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        if (!(dto.get("serviceQualificationItem") instanceof List<?> items) || items.isEmpty()) {
+    public ResponseEntity<Map<String, Object>> create(@RequestBody ServiceQualificationDocument body) {
+        // the envelope is typed and refuses what the server owns (id, state, tenant);
+        // the TMF body under it stays open, as the R18 kit requires
+        Map<String, Object> dto = body.toDocument();
+        List<Map<String, Object>> items = body.serviceQualificationItem();
+        if (items == null || items.isEmpty()) {
             throw new BadRequestException(
                     "serviceQualificationItem is required — a qualification qualifies SOMETHING");
         }
@@ -94,7 +99,7 @@ public class LegacyServiceQualificationController {
         String id = UUID.randomUUID().toString();
         task.setId(id);
         task.setTenantId(tenantScope.currentTenantId());
-        task.setExternalId(textOf(dto, "externalId"));
+        task.setExternalId(body.externalId());
         task.setState("done");
         Map<String, Object> doc = new LinkedHashMap<>(dto);
         doc.put("serviceQualificationItem", outItems);

@@ -3,6 +3,7 @@ package com.bss.qualification.controller;
 import com.bss.qualification.api.ApiConstants;
 import com.bss.qualification.entity.LegacyPoq;
 import com.bss.qualification.dto.PoqCheckRequest;
+import com.bss.qualification.dto.PoqDocument;
 import com.bss.qualification.dto.PoqCheckResult;
 import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
@@ -52,9 +53,12 @@ public class LegacyPoqController {
 
     @PostMapping({PATH, PATH + "/"})
     @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        if (!(dto.get("productOfferingQualificationItem") instanceof List<?> items)
-                || items.isEmpty()) {
+    public ResponseEntity<Map<String, Object>> create(@RequestBody PoqDocument body) {
+        // the envelope is typed and refuses what the server owns (id, state, tenant);
+        // the TMF body under it stays open, as the R18 kit requires
+        Map<String, Object> dto = body.toDocument();
+        List<Map<String, Object>> items = body.productOfferingQualificationItem();
+        if (items == null || items.isEmpty()) {
             throw new BadRequestException("productOfferingQualificationItem is required — "
                     + "a qualification qualifies SOMETHING");
         }

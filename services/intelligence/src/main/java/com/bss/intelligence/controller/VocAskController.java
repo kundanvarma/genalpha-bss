@@ -44,9 +44,12 @@ public class VocAskController {
         this.objectMapper = objectMapper;
     }
 
+    /** The one thing a VoC question carries. */
+    public record VocQuestion(String question) { }
+
     @PostMapping("/ask")
-    public ResponseEntity<Map<String, Object>> ask(@RequestBody Map<String, Object> body) {
-        String question = body.get("question") == null ? "" : String.valueOf(body.get("question")).trim();
+    public ResponseEntity<Map<String, Object>> ask(@RequestBody VocQuestion body) {
+        String question = body.question() == null ? "" : body.question().trim();
         if (question.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "question is required");
         }
