@@ -215,8 +215,10 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             // new owner on the SAME plan, and its remaining data follows it
             String offeringName = idOf(product.get("productOffering"));
             if (offeringName == null) {
+                // the ids come off the wire: logged without line breaks so a
+                // crafted one cannot forge a log line (CodeQL java/log-injection)
                 log.warn("SigScale OCS: product {} for service {} names no offering — transfer not mirrored",
-                        product.get("id"), serviceId);
+                        oneLine(idOf(product)), oneLine(serviceId));
                 return;
             }
             double allowance = parse(characteristic(product, "bssAllowanceGB"));
@@ -494,6 +496,11 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             throw new IllegalStateException("SigScale OCS created a product but returned no id");
         }
         return id;
+    }
+
+    /** A wire value made safe for one log line: control characters (line breaks above all) replaced. */
+    private static String oneLine(String value) {
+        return value == null ? null : value.replaceAll("[\\p{Cntrl}]", "?");
     }
 
     static List<String> realizingServices(Map<String, Object> product) {
