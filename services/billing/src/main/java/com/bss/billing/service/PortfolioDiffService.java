@@ -37,8 +37,12 @@ public class PortfolioDiffService {
         Map<String, String> unitCache = new HashMap<>();
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
             for (Map<String, Object> o : catalog.allOfferings()) {
+                Object rawId = o.get("id");
+                if (rawId == null) {
+                    continue;   // an offering with no id cannot be priced
+                }
                 String name = String.valueOf(o.get("name"));
-                String id = String.valueOf(o.get("id"));
+                String id = rawId.toString();
                 try {
                     BigDecimal monthly = runService.monthlyFor(id, new TreeMap<>(), unitCache);
                     if (monthly != null && monthly.signum() > 0) {

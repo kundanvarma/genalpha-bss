@@ -328,9 +328,10 @@ public class RestDownstreamClients {
                     Map<String, Object> person = rest.get()
                             .uri("/tmf-api/party/v4/individual/{id}", partyId)
                             .retrieve().body(Map.class);
-                    if (person != null && person.get("organization") instanceof Map<?, ?> org
-                            && org.get("id") != null) {
-                        return java.util.Optional.of(String.valueOf(org.get("id")));
+                    Object orgId = person != null && person.get("organization") instanceof Map<?, ?> org
+                            ? org.get("id") : null;
+                    if (orgId != null) {
+                        return java.util.Optional.of(orgId.toString());
                     }
                     return java.util.Optional.empty();
                 } catch (RestClientException e) {
@@ -436,7 +437,15 @@ public class RestDownstreamClients {
                                     "reference", reference,
                                     "correlatorId", correlatorId))
                             .retrieve().body(Map.class);
-                    return String.valueOf(created.get("id"));
+                    Object paymentId = created == null ? null : created.get("id");
+                    if (paymentId == null) {
+                        // the comment below is the rule; this is it applied. A
+                        // payment whose id we never got is not a payment we can
+                        // reference, and "null" is not an id.
+                        throw new DownstreamException(
+                                "payment service returned no id for the bank payment", null);
+                    }
+                    return paymentId.toString();
                 } catch (RestClientException e) {
                     // money is fail-closed: no phantom payments on a flaky wire
                     throw new DownstreamException("payment service refused the bank payment", e);
@@ -509,9 +518,10 @@ public class RestDownstreamClients {
                                 "email", contactOf(party, "email", "emailAddress"),
                                 "phone", contactOf(party, "mobile", "phoneNumber")))
                         .retrieve().body(Map.class);
-                return answer == null || answer.get("aliasRef") == null
+                Object aliasRef = answer == null ? null : answer.get("aliasRef");
+                return aliasRef == null
                         ? java.util.Optional.empty()
-                        : java.util.Optional.of(String.valueOf(answer.get("aliasRef")));
+                        : java.util.Optional.of(aliasRef.toString());
             } catch (RestClientException e) {
                 // no answer is a MISS: the chain falls to the next channel
                 return java.util.Optional.empty();
