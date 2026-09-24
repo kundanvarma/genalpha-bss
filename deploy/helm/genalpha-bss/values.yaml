@@ -148,12 +148,19 @@ services:
   # a REAL OCS behind the same seam: SigScale OCS (Apache-2.0), 3GPP Diameter
   # Ro/Gy with TM Forum APIs; tenants opt in via tenants.yml ocs-provider.
   # Image built from integrations/sigscale-ocs. Its mnesia database lives in
-  # /home/otp/db — give the pod a PersistentVolume in production (this chart's
-  # generic app template has none), and keep the pod's hostname stable: the
-  # Erlang node is named after it and the database is bound to that name.
+  # /home/otp/db and is bound to the Erlang node name, which is the pod's
+  # hostname — so this one renders as a StatefulSet with a volume claim per
+  # replica (stable name, durable disk). persistence.enabled: false turns it
+  # back into a stateless Deployment, which is fine for a demo and loses the
+  # charging state on every restart; do not run the real OCS that way.
   sigscale-ocs:
     db: ""
     healthPath: /health
+    persistence:
+      enabled: true
+      mountPath: /home/otp/db
+      size: 2Gi
+      storageClass: ""
     extraEnv:
       OCS_ADMIN_USER: bss
       OCS_ADMIN_PASSWORD: bss-secret
