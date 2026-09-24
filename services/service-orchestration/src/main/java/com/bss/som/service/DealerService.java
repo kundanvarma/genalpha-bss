@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * THE DEALER CHANNEL (the CSP + external-retail model (think Elkjøp/Power)): retail chains sell our
@@ -227,7 +228,12 @@ public class DealerService {
         Map<String, Object> customer = party.individualByEmail(dto.customerEmail())
                 .orElseThrow(() -> new BadRequestException(
                         "no customer with that email — ask them to register in the app first"));
-        String customerId = String.valueOf(customer.get("id"));
+        String customerId = idOf(customer);
+        if (customerId == null) {
+            // party answered with a record that names nobody — that is party's
+            // fault, not the clerk's, and no order is placed for customer "null"
+            throw new IllegalStateException("the customer record for that email carries no id — sale not placed");
+        }
         String orderId = placeDealerOrder(dealer, customerId, dto.store(), dto.offeringId(), dto.offeringName(),
                 dto.device());
         return new SaleReceipt(orderId, customerId);

@@ -8,6 +8,8 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.som.mapper.Wire.textOf;
+import com.bss.som.mapper.Wire;
 
 /**
  * The generic {@code http} OCS adapter: the plain subscriber/rate-plan REST
@@ -90,12 +92,12 @@ public class RestOcsProvisioningClient implements OcsProviderAdapter {
             return;
         }
         try {
-            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
-            if (sub == null) {
+            String subscriberId = subscriberIdOf(restClient, tenantId, serviceId);
+            if (subscriberId == null) {
                 log.warn("OCS: no subscriber for service {} — plan change not mirrored", serviceId);
                 return;
             }
-            restClient.patch().uri("/subscribers/{id}", String.valueOf(sub.get("id")))
+            restClient.patch().uri("/subscribers/{id}", subscriberId)
                     .header("Content-Type", "application/json")
                     .body(Map.of("ratePlanId", chargingSpecId))
                     .retrieve().toBodilessEntity();
@@ -123,12 +125,12 @@ public class RestOcsProvisioningClient implements OcsProviderAdapter {
             return;
         }
         try {
-            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
-            if (sub == null) {
+            String subscriberId = subscriberIdOf(restClient, tenantId, serviceId);
+            if (subscriberId == null) {
                 log.warn("OCS: no subscriber for service {} — transfer not mirrored", serviceId);
                 return;
             }
-            restClient.patch().uri("/subscribers/{id}", String.valueOf(sub.get("id")))
+            restClient.patch().uri("/subscribers/{id}", subscriberId)
                     .header("Content-Type", "application/json")
                     .body(Map.of("partyId", newPartyId))
                     .retrieve().toBodilessEntity();
@@ -145,12 +147,12 @@ public class RestOcsProvisioningClient implements OcsProviderAdapter {
             return;
         }
         try {
-            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
-            if (sub == null) {
+            String subscriberId = subscriberIdOf(restClient, tenantId, serviceId);
+            if (subscriberId == null) {
                 log.warn("OCS: no subscriber for service {} — {} not mirrored", serviceId, action);
                 return;
             }
-            restClient.post().uri("/subscribers/{id}/" + action, String.valueOf(sub.get("id")))
+            restClient.post().uri("/subscribers/{id}/" + action, subscriberId)
                     .retrieve().toBodilessEntity();
             log.info("OCS: charging {} for service {}", action + "ed", serviceId);
         } catch (RuntimeException e) {
@@ -159,13 +161,16 @@ public class RestOcsProvisioningClient implements OcsProviderAdapter {
         }
     }
 
+    /** The OCS subscriber id behind a service, or null when the OCS knows no such line (or one without an id). */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> subscriber(RestClient restClient, String tenantId, String serviceId) {
+    private String subscriberIdOf(RestClient restClient, String tenantId, String serviceId) {
         List<Map<String, Object>> subs = restClient.get()
                 .uri("/subscribers?tenantId={t}", tenantId)
                 .retrieve().body(List.class);
         return subs == null ? null : subs.stream()
-                .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
+                .filter(s -> serviceId.equals(textOf(s, "serviceId")))
+                .map(Wire::idOf)
+                .filter(java.util.Objects::nonNull)
                 .findFirst().orElse(null);
     }
 }

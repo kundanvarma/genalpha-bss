@@ -6,6 +6,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
+import static com.bss.som.mapper.Wire.idOf;
 
 @Component
 public class RestOrderingClient implements OrderingClient {
@@ -30,7 +31,13 @@ public class RestOrderingClient implements OrderingClient {
                     .header("Content-Type", "application/json")
                     .body(productOrder)
                     .retrieve().body(Map.class);
-            return String.valueOf(created.get("id"));
+            String id = idOf(created);
+            if (id == null) {
+                // the sale is not placed until ordering says which order it is;
+                // "null" is not an order the counter can complete or hand over
+                throw new IllegalStateException("ordering accepted the dealer sale but returned no order id");
+            }
+            return id;
         } catch (RestClientException e) {
             throw new IllegalStateException("ordering refused the dealer sale", e);
         }

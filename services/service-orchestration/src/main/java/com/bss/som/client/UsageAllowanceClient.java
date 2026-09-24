@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * The overage tier table the usage component holds for an offering (TMF635 allowance with
@@ -36,8 +37,7 @@ public class UsageAllowanceClient {
                     .retrieve().body(LIST);
             List<Map<String, Object>> out = new ArrayList<>();
             for (Map<String, Object> a : rows == null ? List.<Map<String, Object>>of() : rows) {
-                Object ref = a.get("productOffering");
-                if (ref instanceof Map<?, ?> r && offeringId.equals(String.valueOf(r.get("id")))
+                if (offeringId.equals(idOf(a.get("productOffering")))
                         && a.get("overageTier") instanceof List<?> tiers) {
                     for (Object t : tiers) {
                         if (t instanceof Map<?, ?> m) {
