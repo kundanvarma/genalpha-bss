@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.communication.api.Wire.textOf;
 
 /**
  * Where the event architecture becomes visible: this listener drinks from the
@@ -42,12 +43,18 @@ public class EventStreamListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            String eventId = String.valueOf(envelope.get("eventId"));
+            String eventId = textOf(envelope, "eventId");
+            if (eventId == null) {
+                // the event id IS the idempotency key: without one, every such event
+                // used to mint under "null" and only the first ever got through
+                log.warn("event without an eventId — no notification minted: {}", envelope.get("eventType"));
+                return;
+            }
             String eventType = String.valueOf(envelope.get("eventType"));
             // Envelope tenant keeps the notification inside the tenant that
             // produced the event; pre-tenancy events carry none and land in
             // the default tenant.
-            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
+            String tenantId = textOf(envelope, "tenantId");
             @SuppressWarnings("unchecked")
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : null;

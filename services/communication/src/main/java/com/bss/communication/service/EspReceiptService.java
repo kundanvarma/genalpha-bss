@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import static com.bss.communication.api.Wire.textOf;
 
 /**
  * The ESP answers back: providers batch delivery events (SendGrid's Event
@@ -134,7 +135,7 @@ public class EspReceiptService {
                 || args.get("tenant") == null || args.get("messageId") == null) {
             return false;
         }
-        String tenantId = String.valueOf(args.get("tenant"));
+        String tenantId = textOf(args, "tenant");
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !credentialAccepted(tenant, tenantId, token)) {
             log.warn("esp receipt rejected: wrong credential for tenant '{}'", tenantId);
@@ -148,7 +149,7 @@ public class EspReceiptService {
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
             transactions.executeWithoutResult(tx -> {
                 CommunicationMessage message = messages
-                        .findByIdAndTenantId(String.valueOf(args.get("messageId")), tenantId).orElse(null);
+                        .findByIdAndTenantId(textOf(args, "messageId"), tenantId).orElse(null);
                 if (message != null) {
                     message.setDeliveryStatus(verdict.length() > 32 ? verdict.substring(0, 32) : verdict);
                     message.setLastUpdate(OffsetDateTime.now());

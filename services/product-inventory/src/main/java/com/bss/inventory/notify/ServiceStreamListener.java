@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.inventory.api.Wire.idOf;
+import static com.bss.inventory.api.Wire.textOf;
 
 /**
  * When a service is ceased, the installed product must END with it —
@@ -42,8 +44,7 @@ public class ServiceStreamListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String type = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
             if ("ServiceTerminatedEvent".equals(type)) {
@@ -56,7 +57,7 @@ public class ServiceStreamListener {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     products.closeForTerminatedService(tenantId, owner,
                             String.valueOf(service.get("name")),
-                            service.get("id") == null ? null : String.valueOf(service.get("id")));
+                            idOf(service));
                 }
             } else if ("ServiceTransferredEvent".equals(type)) {
                 Map<String, Object> transfer = event.get("serviceTransfer") instanceof Map<?, ?> m
@@ -69,7 +70,7 @@ public class ServiceStreamListener {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     products.transferForService(tenantId, from, to,
                             String.valueOf(transfer.get("name")),
-                            transfer.get("id") == null ? null : String.valueOf(transfer.get("id")));
+                            idOf(transfer));
                 }
             }
         } catch (Exception e) {
@@ -80,9 +81,9 @@ public class ServiceStreamListener {
     private String roleOf(Map<String, Object> resource, String role) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && role.equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null && role.equalsIgnoreCase(textOf(p, "role"))) {
+                    return id;
                 }
             }
         }
@@ -92,9 +93,9 @@ public class ServiceStreamListener {
     private String partyOf(Map<String, Object> service) {
         if (service.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return id;
                 }
             }
         }

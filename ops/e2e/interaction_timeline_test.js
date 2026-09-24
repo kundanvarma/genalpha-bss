@@ -60,7 +60,7 @@ async function token(ctx, realm, user, pass) {
 
   /* ---------- 2. an open and a click close the loop on the same timeline ---------- */
   const esp = (event) => ctx.post(`${API}/esp/v1/event`, {
-    headers: { 'X-Esp-Token': 'nova-esp-key', 'Content-Type': 'application/json' },
+    headers: { 'X-Esp-Token': 'nova-esp-webhook-dev', 'Content-Type': 'application/json' },
     data: [{ event, email, custom_args: { tenant: 'nova', messageId: msg.id } }] });
   await esp('open');
   const opened = await timelineHas((d) => d === 'Email opened');

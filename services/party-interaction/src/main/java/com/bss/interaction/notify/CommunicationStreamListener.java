@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.interaction.api.Wire.idOf;
+import static com.bss.interaction.api.Wire.textOf;
 
 /**
  * The OMNICHANNEL ear: every customer message the communication component
@@ -45,8 +47,7 @@ public class CommunicationStreamListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
             if ("CommunicationMessageCreateEvent".equals(eventType)) {
@@ -75,9 +76,15 @@ public class CommunicationStreamListener {
         String description = source != null
                 ? "Marketing (" + source + "): " + message.get("subject")
                 : "Message sent: " + message.get("subject");
+        String sourceRef = textOf(envelope, "eventId");
+        if (sourceRef == null) {
+            // the source ref is the touchpoint's once-only key: under "null" only the first
+            // id-less message ever reached the 360
+            log.warn("communication event without an eventId — no touchpoint minted");
+            return;
+        }
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-            interactions.mintTouchpoint(String.valueOf(envelope.get("eventId")),
-                    "communication", description, channel, party);
+            interactions.mintTouchpoint(sourceRef, "communication", description, channel, party);
         }
     }
 
@@ -85,24 +92,28 @@ public class CommunicationStreamListener {
     private void onEngagement(Map<String, Object> envelope, Map<String, Object> event, String tenantId) {
         Map<String, Object> engagement = event.get("engagement") instanceof Map<?, ?> m
                 ? castMap(m) : Map.of();
-        String party = engagement.get("partyId") == null ? null : String.valueOf(engagement.get("partyId"));
+        String party = textOf(engagement, "partyId");
         String verdict = String.valueOf(engagement.get("engagement"));
         if (party == null || (!"open".equals(verdict) && !"click".equals(verdict))) {
             return;
         }
         String description = "click".equals(verdict) ? "Email clicked" : "Email opened";
+        String sourceRef = textOf(envelope, "eventId");
+        if (sourceRef == null) {
+            log.warn("engagement event without an eventId — no touchpoint minted");
+            return;
+        }
         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-            interactions.mintTouchpoint(String.valueOf(envelope.get("eventId")),
-                    "communication", description, "email", party);
+            interactions.mintTouchpoint(sourceRef, "communication", description, "email", party);
         }
     }
 
     private String partyOf(Map<String, Object> message) {
         if (message.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return id;
                 }
             }
         }
