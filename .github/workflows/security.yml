@@ -91,3 +91,70 @@ jobs:
       # once; none was a bug, and together they cost more than a bug.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: ops/arch/claims.sh
+
+  deploy-validation:
+    name: Deploy validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The README said the Helm chart had run on live k3s/EKS/AKS but was
+      # "not template-verified", and no workflow rendered it or touched
+      # Terraform. So the chart and the stacks could break and the only
+      # discovery would be an operator's failed install. These are STATIC
+      # checks: no cluster, no cloud account, no credentials, ~1 minute.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.16.3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.10.5
+          terraform_wrapper: false
+
+      - name: Helm lint
+        run: helm lint deploy/helm/genalpha-bss
+
+      # Render with BOTH value sets: the soak values are a real deployment
+      # shape and a template can be valid for one and broken for the other.
+      - name: Helm template renders
+        run: |
+          set -euo pipefail
+          helm template bss deploy/helm/genalpha-bss > /tmp/default.yaml
+          helm template bss deploy/helm/genalpha-bss \
+            -f deploy/helm/genalpha-bss/values-soak.yaml > /tmp/soak.yaml
+          wc -l /tmp/default.yaml /tmp/soak.yaml
+
+      # Rendering is not validity: a manifest can render and still name a field
+      # Kubernetes has never had. kubeconform checks it against the real schema
+      # for the version deploy/terraform/aws/variables.tf actually targets.
+      - name: Kubernetes schema validation
+        run: |
+          set -euo pipefail
+          # read the whole variable block, not a fixed window: comments sit
+          # between `type` and `default`, and an -A3 grep silently returned
+          # empty (caught by dry-running this job before committing it)
+          KV=$(sed -n '/variable "kubernetes_version"/,/^}/p' \
+               deploy/terraform/aws/variables.tf \
+               | grep -oE 'default *= *"[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+')
+          [ -n "$KV" ] || { echo "could not read kubernetes_version from variables.tf" >&2; exit 1; }
+          echo "validating against Kubernetes ${KV}.0 (from variables.tf)"
+          curl -fsSL -o /tmp/kc.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kc.tar.gz -C /tmp kubeconform
+          for f in /tmp/default.yaml /tmp/soak.yaml; do
+            echo "::group::$f"
+            /tmp/kubeconform -strict -summary -kubernetes-version "${KV}.0" < "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Terraform formatted and valid
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive deploy/terraform
+          for stack in deploy/terraform/*/; do
+            echo "::group::$stack"
+            terraform -chdir="$stack" init -backend=false -no-color
+            terraform -chdir="$stack" validate -no-color
+            echo "::endgroup::"
+          done

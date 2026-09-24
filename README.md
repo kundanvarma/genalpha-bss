@@ -499,7 +499,11 @@ helm install genalpha-bss deploy/helm/genalpha-bss -f my-modules.yaml
 
 Terraform stacks for EKS and AKS live under `deploy/terraform`.
 
-**The chart is not template-verified — it has run, on three live clusters.** Local k3s, then
+**The chart is template-verified AND it has run on three live clusters.** Every pull request
+lints it, renders it with both value sets and validates all 103 rendered resources against the
+Kubernetes schema for the version `deploy/terraform/aws/variables.tf` targets, and checks the
+Terraform stacks are formatted and valid (`Deploy validation` in `.github/workflows/security.yml`
+— static, no cluster, no credentials). Beyond that it has RUN: local k3s, then
 **AWS EKS** (Graviton nodes, RDS), then **Azure AKS** (Flexible Server, ACR) — each with the
 same images, the same in-cluster Kafka/Keycloak, the same smoke, and billing at **two replicas**
 holding a single set of tick leases (the P0 scale-out safety, proven live against a managed

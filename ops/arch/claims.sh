@@ -140,6 +140,7 @@ while IFS='|' read -r phrase invocation; do
 done <<'CLAIMS'
 accessibility enforced in ci|a11y_test
 the architecture ratchet is green in ci|ratchet.sh
+the chart is template-verified|kubeconform
 CLAIMS
 
 # --------------------------------------------------------------- verdict ----
