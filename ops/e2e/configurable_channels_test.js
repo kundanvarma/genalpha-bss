@@ -61,6 +61,8 @@ const check = async (offeringId, chars, quantity = 1) => (await call('POST', `${
     for (const row of rows) {
       const colour = ((row.stockedProduct || {}).productCharacteristic || []).find((c) => c.name === 'boxColour')?.value;
       if (colour === 'Black') await call('PATCH', `${API}/tmf-api/productStockManagement/v4/productStock/${row.id}`, staff, { stockedQuantity: { amount: 25, units: 'unit' } });
+      // Icy Blue is SOLD OUT by seed; guest_test tops any row it borrows back up by 40, so put it back
+      if (colour === 'Icy Blue') await call('PATCH', `${API}/tmf-api/productStockManagement/v4/productStock/${row.id}`, staff, { stockedQuantity: { amount: 0, units: 'unit' } });
     }
   }
 
