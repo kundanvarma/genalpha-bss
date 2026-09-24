@@ -38,19 +38,23 @@ async function token() {
     }
   }
 
-  let retired = 0;
+  // Offerings: DELETE, not retire. Retiring kept every dead run's fixtures on
+  // the shelf for ever — 105 retired rows by 24 Sep 2026, most of the first
+  // catalog page — and everything that reads "the first 100" (suites and, until
+  // that day, the quote service) lost the real offerings behind them.
+  // Collect first, delete after: deleting while paging shifts the offsets.
+  const debris = [];
   for (let offset = 0; ; offset += 100) {
     const page = await get(`/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset=${offset}`);
     if (!Array.isArray(page) || !page.length) break;
-    for (const o of page) {
-      if (stale(o.name) && o.lifecycleStatus === 'Active') {
-        await fetch(`${API}/tmf-api/productCatalogManagement/v4/productOffering/${o.id}`, {
-          method: 'PATCH', headers: H, body: JSON.stringify({ lifecycleStatus: 'Retired' }),
-        }).catch(() => {});
-        retired++;
-      }
-    }
+    for (const o of page) if (stale(o.name)) debris.push(o.id);
     if (page.length < 100) break;
   }
-  console.log(`debris sweep: ${paused} stale journeys/campaigns paused, ${retired} stale offerings retired`);
+  let deleted = 0;
+  for (const id of debris) {
+    const r = await fetch(`${API}/tmf-api/productCatalogManagement/v4/productOffering/${id}`, {
+      method: 'DELETE', headers: H }).catch(() => null);
+    if (r && r.ok) deleted++;
+  }
+  console.log(`debris sweep: ${paused} stale journeys/campaigns paused, ${deleted}/${debris.length} stale offerings deleted`);
 })().catch((e) => { console.error('debris sweep skipped:', e.message); });

@@ -35,9 +35,7 @@ public class WholesaleRateCardClient {
     public Map<String, Rate> rateCard() {
         Map<String, Rate> card = new LinkedHashMap<>();
         try {
-            List<Map<String, Object>> offerings = restClient.get()
-                    .uri(CAT + "/productOffering?limit=100").retrieve().body(List.class);
-            for (Map<String, Object> off : offerings == null ? List.<Map<String, Object>>of() : offerings) {
+            for (Map<String, Object> off : allOfferings()) {
                 String category = off.get("category") instanceof List<?> cs && !cs.isEmpty()
                         && cs.get(0) instanceof Map<?, ?> c0 ? String.valueOf(c0.get("name")) : "";
                 if (!"Wholesale access".equals(category)) {
@@ -66,14 +64,34 @@ public class WholesaleRateCardClient {
         return card;
     }
 
+    /**
+     * Every offering, page by page: the catalog serves 100 per page and the
+     * wholesale rows sat past the first hundred on a grown catalog, which
+     * made the rate card empty and the retail price null — silently.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> allOfferings() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 10_000; offset += 100) {
+            List<Map<String, Object>> page = restClient.get()
+                    .uri(CAT + "/productOffering?limit=100&offset={o}", offset).retrieve().body(List.class);
+            if (page == null || page.isEmpty()) {
+                break;
+            }
+            all.addAll(page);
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
+    }
+
     /** The retail fibre monthly, for the margin — the recurring price of the
      *  named retail offering. Null if unavailable. */
     @SuppressWarnings("unchecked")
     public Double retailMonthly(String offeringName) {
         try {
-            List<Map<String, Object>> offerings = restClient.get()
-                    .uri(CAT + "/productOffering?limit=100").retrieve().body(List.class);
-            for (Map<String, Object> off : offerings == null ? List.<Map<String, Object>>of() : offerings) {
+            for (Map<String, Object> off : allOfferings()) {
                 if (offeringName.equals(off.get("name"))) {
                     return firstRecurringPrice(off);
                 }

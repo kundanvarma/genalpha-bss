@@ -45,14 +45,28 @@ public class RestCommerceClients {
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
         return () -> {
+            // the catalog serves 100 per page and a living shelf is longer: read
+            // every page, or the offerings past the first hundred are never recommended
+            List<Map<String, Object>> all = new java.util.ArrayList<>();
             try {
-                return rest.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active")
-                        .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
-                        });
+                for (int offset = 0; offset < 10_000; offset += 100) {
+                    List<Map<String, Object>> page = rest.get()
+                            .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active&offset={o}",
+                                    offset)
+                            .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                            });
+                    if (page == null || page.isEmpty()) {
+                        break;
+                    }
+                    all.addAll(page);
+                    if (page.size() < 100) {
+                        break;
+                    }
+                }
             } catch (RestClientException e) {
                 throw new IllegalStateException("product-catalog is unreachable", e);
             }
+            return all;
         };
     }
 
