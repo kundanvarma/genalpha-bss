@@ -4,7 +4,7 @@ import java.util.Map;
 
 /**
  * Reading identifiers off TM Forum wire maps without minting the text
- * {@code "null"}: {@code String.valueOf(map.get("id"))} turns a missing id into
+ * {@code "null"}: {@code String.valueOf} of a map's {@code get("id")} turns a missing id into
  * a four-letter id that then serves, owns, and gets charged. Every reader here
  * reads the value once and gets {@code null} back when there is none, so the
  * caller decides what a missing id means instead of a downstream system.
