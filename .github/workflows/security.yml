@@ -123,7 +123,15 @@ jobs:
           helm template bss deploy/helm/genalpha-bss > /tmp/default.yaml
           helm template bss deploy/helm/genalpha-bss \
             -f deploy/helm/genalpha-bss/values-soak.yaml > /tmp/soak.yaml
-          wc -l /tmp/default.yaml /tmp/soak.yaml
+          # the production values must render with a pinned tag...
+          helm template bss deploy/helm/genalpha-bss \
+            -f deploy/helm/genalpha-bss/values-production.yaml > /tmp/production.yaml
+          # ...and must REFUSE "latest" — a guard nobody has seen fail is not a guard
+          if helm template bss deploy/helm/genalpha-bss \
+              -f deploy/helm/genalpha-bss/values-production.yaml --set image.tag=latest >/dev/null 2>&1; then
+            echo "production values rendered with image.tag=latest — the guard is gone"; exit 1
+          fi
+          wc -l /tmp/default.yaml /tmp/soak.yaml /tmp/production.yaml
 
       # Rendering is not validity: a manifest can render and still name a field
       # Kubernetes has never had. kubeconform checks it against the real schema
@@ -142,7 +150,7 @@ jobs:
           curl -fsSL -o /tmp/kc.tar.gz \
             https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
           tar -xzf /tmp/kc.tar.gz -C /tmp kubeconform
-          for f in /tmp/default.yaml /tmp/soak.yaml; do
+          for f in /tmp/default.yaml /tmp/soak.yaml /tmp/production.yaml; do
             echo "::group::$f"
             /tmp/kubeconform -strict -summary -kubernetes-version "${KV}.0" < "$f"
             echo "::endgroup::"
