@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * The digital workforce: a task queue DERIVED live from the backlogs that
@@ -179,7 +180,10 @@ public class WorkforceService {
     private List<OpenTask> derive() {
         List<OpenTask> out = new ArrayList<>();
         for (Map<String, Object> ticket : bss.unworkedTickets()) {
-            String id = String.valueOf(ticket.get("id"));
+            String id = idOf(ticket);
+            if (id == null) {
+                continue; // a task nobody can open or complete is not a task
+            }
             out.add(OpenTask.of(KIND_TICKET, id,
                     "[" + ticket.getOrDefault("severity", "-") + "] "
                             + ticket.getOrDefault("name", "trouble ticket")));
@@ -199,7 +203,10 @@ public class WorkforceService {
                             + " · opened " + ageMin + "m ago · asOf " + OffsetDateTime.now()));
         }
         for (Map<String, Object> cash : bss.unappliedCash()) {
-            String id = String.valueOf(cash.get("id"));
+            String id = idOf(cash);
+            if (id == null) {
+                continue;
+            }
             Object amount = cash.get("amount");
             out.add(OpenTask.of(KIND_CASH, id,
                     "unapplied " + (amount == null ? "payment" : amount) + " — "
@@ -230,7 +237,7 @@ public class WorkforceService {
             }
         } else if (KIND_CASH.equals(row.getKind())) {
             boolean stillParked = bss.unappliedCash().stream()
-                    .anyMatch(r -> row.getSubjectRef().equals(String.valueOf(r.get("id"))));
+                    .anyMatch(r -> row.getSubjectRef().equals(idOf(r)));
             if (stillParked) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "the payment is still on the unapplied worklist — apply it before "

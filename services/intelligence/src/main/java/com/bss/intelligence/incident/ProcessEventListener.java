@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /** The agent's trigger: a taskFlow going FAILED on the process bus. */
 @Component
@@ -38,8 +39,7 @@ public class ProcessEventListener {
             if (!"TaskFlowStateChangeEvent".equals(envelope.get("eventType"))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> task = envelope.get("event") instanceof Map<?, ?> event
                     && event.get("taskFlow") instanceof Map<?, ?> t
                     ? (Map<String, Object>) t : Map.of();

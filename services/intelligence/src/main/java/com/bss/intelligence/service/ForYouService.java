@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * THE INDIVIDUALIZED SHOP: the signed-in customer's own "For you" rail.
@@ -72,8 +73,9 @@ public class ForYouService {
 
         List<OfferRef> rail = new ArrayList<>();
         for (Map<String, Object> item : candidates) {
-            if (item.get("offering") instanceof Map<?, ?> off && off.get("id") != null) {
-                rail.add(new OfferRef(String.valueOf(off.get("id")), String.valueOf(off.get("name"))));
+            String offeringId = idOf(item.get("offering"));
+            if (offeringId != null && item.get("offering") instanceof Map<?, ?> off) {
+                rail.add(new OfferRef(offeringId, String.valueOf(off.get("name"))));
                 if (rail.size() == RAIL_SIZE) {
                     break;
                 }
@@ -125,9 +127,9 @@ public class ForYouService {
             }
             double value = a.get("allowance") instanceof Map<?, ?> al
                     ? numberOf(al.get("value")) : 0;
-            if (value > current && value < nextValue
-                    && a.get("productOffering") instanceof Map<?, ?> off
-                    && off.get("id") != null) {
+            String rungId = idOf(a.get("productOffering"));
+            if (value > current && value < nextValue && rungId != null
+                    && a.get("productOffering") instanceof Map<?, ?> off) {
                 nextValue = value;
                 // some ladder rows carry no offering name — the card still
                 // links to the real offering; the label stays descriptive
@@ -137,7 +139,7 @@ public class ForYouService {
                                 + String.valueOf(a.get("allowance") instanceof Map<?, ?> al2
                                         ? al2.get("units") : "") + " plan"
                         : String.valueOf(name);
-                nextRung = new OfferRef(String.valueOf(off.get("id")), label);
+                nextRung = new OfferRef(rungId, label);
             }
         }
         if (nextRung == null) {

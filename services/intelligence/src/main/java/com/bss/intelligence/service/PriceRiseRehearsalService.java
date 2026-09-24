@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * REGULATORY REHEARSAL: in right-to-exit markets a price rise opens an exit
@@ -42,8 +43,9 @@ public class PriceRiseRehearsalService {
                 continue;
             }
             for (Map<String, Object> rp : (List<Map<String, Object>>) p.getOrDefault("relatedParty", List.of())) {
-                if ("customer".equalsIgnoreCase(String.valueOf(rp.get("role")))) {
-                    cohort.add(String.valueOf(rp.get("id")));
+                String partyId = idOf(rp);
+                if (partyId != null && "customer".equalsIgnoreCase(String.valueOf(rp.get("role")))) {
+                    cohort.add(partyId); // a customer ref without an id is nobody in the cohort
                 }
             }
         }
@@ -61,8 +63,10 @@ public class PriceRiseRehearsalService {
             }
             for (Map<String, Object> pr : (List<Map<String, Object>>) o.getOrDefault("productOfferingPrice", List.of())) {
                 Map<String, Object> full = null;
+                // a price reference without an id matches nothing — not every price without one
+                String priceId = idOf(pr);
                 for (Map<String, Object> cand : bss.offeringPrices()) {
-                    if (String.valueOf(cand.get("id")).equals(String.valueOf(pr.get("id")))) {
+                    if (priceId != null && priceId.equals(idOf(cand))) {
                         full = cand;
                         break;
                     }

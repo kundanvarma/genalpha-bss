@@ -11,6 +11,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /**
  * The product copilot: a product owner CHATS about the product they want to
@@ -228,7 +229,7 @@ public class ProductCopilotService {
                 for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
                     String ref = String.valueOf(refObj);
                     for (Map<String, Object> price : prices) {
-                        if (ref.equals(String.valueOf(price.get("ref")))
+                        if (ref.equals(textOf(price, "ref"))
                                 && "recurring".equals(String.valueOf(price.get("priceType")))
                                 && !(price.get("prodSpecCharValueUse") instanceof List<?> c && !c.isEmpty())
                                 && price.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
@@ -321,7 +322,7 @@ public class ProductCopilotService {
         for (Map<String, Object> offering : offerings) {
             Map<String, Object> spec = null;
             for (Map<String, Object> s : specs) {
-                if (String.valueOf(s.get("ref")).equals(String.valueOf(offering.get("specRef")))) {
+                if (refers(s, offering)) {
                     spec = s;
                 }
             }
@@ -331,7 +332,7 @@ public class ProductCopilotService {
             List<Map<String, Object>> chars = listOf(spec.get("productSpecCharacteristic"));
             for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
                 for (Map<String, Object> price : prices) {
-                    if (!String.valueOf(refObj).equals(String.valueOf(price.get("ref")))) {
+                    if (refObj == null || !String.valueOf(refObj).equals(textOf(price, "ref"))) {
                         continue;
                     }
                     for (Map<String, Object> pla : listOf(price.get("pricingLogicAlgorithm"))) {
@@ -370,7 +371,7 @@ public class ProductCopilotService {
         for (Map<String, Object> offering : offerings) {
             Map<String, Object> spec = null;
             for (Map<String, Object> s : specs) {
-                if (String.valueOf(s.get("ref")).equals(String.valueOf(offering.get("specRef")))) {
+                if (refers(s, offering)) {
                     spec = s;
                 }
             }
@@ -380,7 +381,7 @@ public class ProductCopilotService {
             List<Map<String, Object>> chars = listOf(spec.get("productSpecCharacteristic"));
             for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
                 for (Map<String, Object> price : prices) {
-                    if (!String.valueOf(refObj).equals(String.valueOf(price.get("ref")))) {
+                    if (refObj == null || !String.valueOf(refObj).equals(textOf(price, "ref"))) {
                         continue;
                     }
                     for (Map<String, Object> cond : listOf(price.get("prodSpecCharValueUse"))) {
@@ -510,4 +511,13 @@ public class ProductCopilotService {
         return s.length() <= CONTEXT_CHARS ? s : s.substring(0, CONTEXT_CHARS);
     }
 
+    /**
+     * A spec is the offering's spec when both name the same ref. A missing ref
+     * on either side matches nothing — it used to match every other missing
+     * ref, because "null" equals "null".
+     */
+    private static boolean refers(Map<String, Object> spec, Map<String, Object> offering) {
+        String ref = textOf(spec, "ref");
+        return ref != null && ref.equals(textOf(offering, "specRef"));
+    }
 }

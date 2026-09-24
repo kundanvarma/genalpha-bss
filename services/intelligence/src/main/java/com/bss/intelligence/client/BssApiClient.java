@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * Read-only machine access to the BSS APIs the scorer needs, always with
@@ -120,7 +121,7 @@ public class BssApiClient {
                     .body(body).retrieve().body(String.class);
             Map<String, Object> ticket =
                     objectMapper.readValue(created, new TypeReference<Map<String, Object>>() { });
-            return ticket == null ? null : String.valueOf(ticket.get("id"));
+            return idOf(ticket); // no id = no ticket to point at, not one called "null"
         } catch (Exception e) {
             return null;
         }

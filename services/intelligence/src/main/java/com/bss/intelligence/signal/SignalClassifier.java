@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * The classification battery (SI-P3). Pulls unclassified signals from the
@@ -108,7 +109,11 @@ public class SignalClassifier {
         int dropped = 0;
         List<Map<String, Object>> pending = bss.unclassifiedSignals();
         for (Map<String, Object> signal : pending.subList(0, Math.min(pending.size(), batchCap))) {
-            String id = String.valueOf(signal.get("id"));
+            String id = idOf(signal);
+            if (id == null) {
+                dropped++; // a signal with no id cannot be written back as classified
+                continue;
+            }
             // Tvilling T-P2: the model reads the TWIN when one exists — the
             // frontier thinks at full power about a person who does not
             // exist; quotes return in twin-space and the STORE re-anchors
