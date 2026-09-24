@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.entitlement.api.Wire.textOf;
 
 /**
  * ES2+ over JSON (SGP.22 §6.5): {@code POST <base>/gsma/rsp2/es2plus/<function>}
@@ -89,17 +90,19 @@ public class RestSmdpClient implements SmdpClient {
             if (ordered == null) {
                 return Optional.empty();
             }
-            String allocated = ordered.get("iccid") == null ? iccid : String.valueOf(ordered.get("iccid"));
+            String allocatedIccid = textOf(ordered, "iccid");
+            String allocated = allocatedIccid == null ? iccid : allocatedIccid;
             Map<String, Object> confirm = new LinkedHashMap<>(header(b));
             confirm.put("iccid", allocated);
             if (eid != null) confirm.put("eid", eid);
             confirm.put("releaseFlag", true);
             Map<String, Object> confirmed = call(b, "confirmOrder", confirm);
-            if (confirmed == null || confirmed.get("matchingId") == null) {
-                return Optional.empty();
+            String matchingId = textOf(confirmed, "matchingId");
+            if (matchingId == null) {
+                return Optional.empty(); // no matching id, no downloadable profile
             }
-            String address = confirmed.get("smdpAddress") == null ? b.address() : String.valueOf(confirmed.get("smdpAddress"));
-            return Optional.of(new Profile(allocated, String.valueOf(confirmed.get("matchingId")), address));
+            String smdpAddress = textOf(confirmed, "smdpAddress");
+            return Optional.of(new Profile(allocated, matchingId, smdpAddress == null ? b.address() : smdpAddress));
         } catch (RuntimeException e) {
             log.warn("SM-DP+ order failed for tenant {} (eid {}): {}", tenantId, eid, e.getMessage());
             return Optional.empty();

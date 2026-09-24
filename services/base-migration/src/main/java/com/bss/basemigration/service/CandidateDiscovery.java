@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import static com.bss.basemigration.api.Wire.idOf;
+import static com.bss.basemigration.api.Wire.textOf;
 
 /**
  * Who does this plan actually touch? On arm (and on trigger scans) the
@@ -68,8 +70,7 @@ public class CandidateDiscovery {
         for (JsonNode row : json.readArray(plan.getMatrixJson())) {
             String source = MigrationPlanRequest.text(row.get("sourceOfferingId"));
             for (Map<String, Object> product : base) {
-                if (!(product.get("productOffering") instanceof Map<?, ?> ref)
-                        || !source.equals(String.valueOf(ref.get("id")))) {
+                if (!source.equals(idOf(product.get("productOffering")))) {
                     continue;
                 }
                 if (candidate(plan, row, product, courtesy, scheduledFor)) {
@@ -87,8 +88,7 @@ public class CandidateDiscovery {
         for (JsonNode row : json.readArray(plan.getMatrixJson())) {
             String source = MigrationPlanRequest.text(row.get("sourceOfferingId"));
             for (Map<String, Object> product : owned) {
-                if (!(product.get("productOffering") instanceof Map<?, ?> ref)
-                        || !source.equals(String.valueOf(ref.get("id")))) {
+                if (!source.equals(idOf(product.get("productOffering")))) {
                     continue;
                 }
                 if (candidate(plan, row, product, false, scheduledFor)) {
@@ -102,9 +102,9 @@ public class CandidateDiscovery {
     /** Apply eligibility to one (product, matrix row); create the journey row when it passes. */
     private boolean candidate(MigrationPlan plan, JsonNode matrixRow,
             Map<String, Object> product, boolean courtesy, OffsetDateTime scheduledFor) {
-        String productId = String.valueOf(product.get("id"));
+        String productId = idOf(product);
         String partyId = customerPartyIn(product);
-        if (partyId == null
+        if (productId == null || partyId == null // a product without an id cannot be journeyed once
                 || customers.existsByTenantIdAndPlanIdAndProductId(plan.getTenantId(), plan.getId(), productId)) {
             return false;
         }
@@ -197,9 +197,9 @@ public class CandidateDiscovery {
             return null;
         }
         for (Object rp : related) {
-            if (rp instanceof Map<?, ?> m && "customer".equalsIgnoreCase(String.valueOf(m.get("role")))
-                    && m.get("id") != null) {
-                return String.valueOf(m.get("id"));
+            String id = idOf(rp);
+            if (id != null && "customer".equalsIgnoreCase(textOf(rp, "role"))) {
+                return id;
             }
         }
         return null;

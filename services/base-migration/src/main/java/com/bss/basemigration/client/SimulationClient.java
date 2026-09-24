@@ -7,6 +7,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.basemigration.api.Wire.idOf;
 
 /**
  * The rehearsal gate's witness: a plan may only arm with a simulation
@@ -34,6 +35,6 @@ public class SimulationClient {
         if (reports == null) {
             return false;
         }
-        return reports.stream().anyMatch(r -> simulationRef.equals(String.valueOf(r.get("id"))));
+        return reports.stream().anyMatch(r -> simulationRef.equals(idOf(r)));
     }
 }

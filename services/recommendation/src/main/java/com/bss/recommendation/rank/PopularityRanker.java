@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.recommendation.api.Wire.idOf;
 
 /**
  * The first data-driven ranker: what this tenant's customers actually adopt.
@@ -47,7 +48,7 @@ public class PopularityRanker implements Ranker {
         return candidates.stream()
                 .sorted(Comparator
                         .comparing((Map<String, Object> o) -> !Boolean.TRUE.equals(o.get("isBundle")))
-                        .thenComparing(o -> -owners.getOrDefault(String.valueOf(o.get("id")), 0L)))
+                        .thenComparing(o -> -owners.getOrDefault(idOf(o), 0L)))
                 .toList();
     }
 
@@ -60,8 +61,9 @@ public class PopularityRanker implements Ranker {
         Map<String, Long> owners = new HashMap<>();
         try {
             for (Map<String, Object> product : inventory.allProducts()) {
-                if (product.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
-                    owners.merge(String.valueOf(ref.get("id")), 1L, Long::sum);
+                String offeringId = idOf(product.get("productOffering"));
+                if (offeringId != null) {
+                    owners.merge(offeringId, 1L, Long::sum);
                 }
             }
         } catch (Exception e) {

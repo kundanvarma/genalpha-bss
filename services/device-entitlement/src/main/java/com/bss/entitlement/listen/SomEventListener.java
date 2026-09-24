@@ -11,6 +11,8 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.entitlement.api.Wire.idOf;
+import static com.bss.entitlement.api.Wire.textOf;
 
 /**
  * The line's state follows the orchestrator: a suspended line loses its
@@ -38,7 +40,7 @@ public class SomEventListener {
         try {
             Map<?, ?> envelope = objectMapper.readValue(message, Map.class);
             String type = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
+            String tenantId = textOf(envelope, "tenantId");
             Object payload = envelope.get("event") != null ? envelope.get("event") : envelope.get("payload");
             if (tenantId == null || !(payload instanceof Map<?, ?> p)) {
                 return;
@@ -47,11 +49,10 @@ public class SomEventListener {
                 // the orchestrator swapped the line's SIM: an eSIM transfer we asked for
                 // completes; any other replacement was re-bound by the orchestrator itself
                 Object sim = p.get("sim") instanceof Map<?, ?> m ? m : p;
-                if (sim instanceof Map<?, ?> s && s.get("serviceId") != null) {
+                String replacedService = textOf(sim, "serviceId");
+                if (replacedService != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                        subscribers.simReplaced(tenantId, String.valueOf(s.get("serviceId")),
-                                s.get("reason") == null ? null : String.valueOf(s.get("reason")),
-                                s.get("transferId") == null ? null : String.valueOf(s.get("transferId")));
+                        subscribers.simReplaced(tenantId, replacedService, textOf(sim, "reason"), textOf(sim, "transferId"));
                     }
                 }
                 return;
@@ -65,11 +66,8 @@ public class SomEventListener {
             if (status == null) {
                 return;
             }
-            String serviceId = null;
             Object service = p.get("service") != null ? p.get("service") : p;
-            if (service instanceof Map<?, ?> s && s.get("id") != null) {
-                serviceId = String.valueOf(s.get("id"));
-            }
+            String serviceId = idOf(service);
             if (serviceId == null) {
                 return;
             }

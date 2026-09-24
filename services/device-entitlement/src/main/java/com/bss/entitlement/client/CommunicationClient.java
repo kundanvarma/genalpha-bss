@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.entitlement.api.Wire.idOf;
 
 /**
  * Server-initiated entitlement refresh (TS.43 §2.6) rides the communication
@@ -52,7 +53,7 @@ public class CommunicationClient {
         try {
             Map<?, ?> reply = restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
                     .header("Content-Type", "application/json").body(body).retrieve().body(Map.class);
-            return reply == null || reply.get("id") == null ? null : String.valueOf(reply.get("id"));
+            return idOf(reply);
         } catch (RuntimeException e) {
             log.warn("entitlement refresh over {} not sent to party {} ({})", channel, partyId, e.getMessage());
             return null;
