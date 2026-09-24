@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * Next best offer, honestly assembled: the TMF680 ranking (already fused
@@ -57,8 +58,9 @@ public class NextBestOfferService {
         String answer = governor.complete("next-best-offer",
                 com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, user.toString());
         Map<String, Object> parsed = parse(answer);
-        OfferRef first = candidates.get(0).get("offering") instanceof Map<?, ?> off
-                ? new OfferRef(String.valueOf(off.get("id")), String.valueOf(off.get("name")))
+        String firstId = idOf(candidates.get(0).get("offering"));
+        OfferRef first = firstId != null && candidates.get(0).get("offering") instanceof Map<?, ?> off
+                ? new OfferRef(firstId, String.valueOf(off.get("name")))
                 : OfferRef.NONE;
         OfferRef offer;
         String reason;

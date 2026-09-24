@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /**
  * A completed port-out is the strongest churn signal there is: a customer who
@@ -42,8 +44,7 @@ public class PortOutChurnListener {
             if (!"PortingOrderStateChangeEvent".equals(envelope.get("eventType"))) {
                 return;
             }
-            String tenant = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenant = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             Object porting = event.values().stream().filter(v -> v instanceof Map).findFirst().orElse(null);
@@ -68,10 +69,7 @@ public class PortOutChurnListener {
 
     @SuppressWarnings("unchecked")
     private static String partyOf(Map<String, Object> order) {
-        if (order.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> p && p.get("id") != null) {
-            return String.valueOf(p.get("id"));
-        }
-        return null;
+        return order.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                ? idOf(parties.get(0)) : null;
     }
 }

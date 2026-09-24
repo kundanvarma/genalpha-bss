@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * Ask the knowledge base: retrieve first, then let the model answer FROM the
@@ -102,7 +103,7 @@ public class KnowledgeAskService {
         for (Map<String, Object> a : top) {
             context.append("TITLE: ").append(a.get("title")).append('\n')
                     .append(a.get("body")).append("\n---\n");
-            sources.add(new KnowledgeSource(String.valueOf(a.get("id")), String.valueOf(a.get("title"))));
+            sources.add(new KnowledgeSource(idOf(a), String.valueOf(a.get("title"))));
         }
         String where = screen == null || screen.isBlank() ? ""
                 : " The person is asking from the screen \"" + screenName(screen) + "\" of this BSS;"
@@ -167,7 +168,7 @@ public class KnowledgeAskService {
         if (paged) {
             for (Map<String, Object> a : byWords) {
                 if (hasTag(a, screen)) {
-                    ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+                    shelve(ordered, a);
                 }
             }
         }
@@ -178,21 +179,31 @@ public class KnowledgeAskService {
             if (reserved >= SHELF_SLOTS) {
                 break;
             }
-            if (ordered.putIfAbsent(String.valueOf(a.get("id")), a) == null) {
+            if (shelve(ordered, a)) {
                 reserved++;
             }
         }
         // 3. the rest of the keyword hits, then the content-word hits, then the rest of the shelf
         for (Map<String, Object> a : byWords) {
-            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+            shelve(ordered, a);
         }
         for (Map<String, Object> a : byGist) {
-            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+            shelve(ordered, a);
         }
         for (Map<String, Object> a : shelf) {
-            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+            shelve(ordered, a);
         }
         return new Retrieval(new ArrayList<>(ordered.values()), !byWords.isEmpty() || !byGist.isEmpty());
+    }
+
+    /**
+     * Put an article on the shelf once, keyed by its id; true when it was new
+     * there. An article without an id is not shelved — before, every such
+     * article collapsed onto the one key "null" and the last one won.
+     */
+    private static boolean shelve(Map<String, Map<String, Object>> ordered, Map<String, Object> article) {
+        String id = idOf(article);
+        return id != null && ordered.putIfAbsent(id, article) == null;
     }
 
     /** How many of the TOP articles the asker's own screen may claim before keyword hits fill the rest. */

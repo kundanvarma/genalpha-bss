@@ -18,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.intelligence.api.Wire.idOf;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /**
  * Deliberately NOT an LLM: churn and next-best-offer signals come from
@@ -250,9 +252,9 @@ public class ChurnScorer {
     private static String customerOf(Object engagedParty) {
         if (engagedParty instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null
-                        && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    return String.valueOf(ref.get("id"));
+                String id = idOf(p);
+                if (id != null && "customer".equalsIgnoreCase(textOf(p, "role"))) {
+                    return id;
                 }
             }
         }

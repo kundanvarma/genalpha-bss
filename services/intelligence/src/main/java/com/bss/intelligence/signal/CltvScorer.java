@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * CLTV the structural way (SI-P4): the number a bolt-on listening tool must
@@ -118,8 +119,9 @@ public class CltvScorer {
     private static String engagedParty(Object engaged) {
         if (engaged instanceof List<?> list) {
             for (Object entry : list) {
-                if (entry instanceof Map<?, ?> m && m.get("id") != null) {
-                    return String.valueOf(m.get("id"));
+                String id = idOf(entry);
+                if (id != null) {
+                    return id;
                 }
             }
         }

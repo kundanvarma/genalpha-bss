@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * P1 of the commercial simulator: SIMULATE THE MONEY BEFORE YOU MOVE IT.
@@ -76,12 +77,18 @@ public class PriceSimService {
         List<Map<String, Object>> offerings = bss.offerings();
         Map<String, Map<String, Object>> priceById = new HashMap<>();
         for (Map<String, Object> p : bss.offeringPrices()) {
-            priceById.put(String.valueOf(p.get("id")), p);
+            String priceId = idOf(p);
+            if (priceId != null) {
+                priceById.put(priceId, p);
+            }
         }
         Map<String, BigDecimal> allowanceGb = new HashMap<>();   // offeringId -> GB
         for (Map<String, Object> a : bss.usageAllowances()) {
             if (a.get("productOffering") instanceof Map<?, ?> po && a.get("allowance") instanceof Map<?, ?> al) {
-                allowanceGb.put(String.valueOf(po.get("id")), num(al.get("value")));
+                String offeringId = idOf(po);
+                if (offeringId != null) {
+                    allowanceGb.put(offeringId, num(al.get("value")));
+                }
             }
         }
         BigDecimal dataRate = null;                              // wholesale NOK-or-EUR per GB
@@ -105,9 +112,9 @@ public class PriceSimService {
             String name = String.valueOf(ref.get("name"));
             subsByOffering.merge(name, 1, Integer::sum);
             for (Object rp : product.get("relatedParty") instanceof List<?> l ? l : List.of()) {
-                if (rp instanceof Map<?, ?> m && m.get("id") != null) {
-                    ownersByOffering.computeIfAbsent(name, k -> new HashSet<>())
-                            .add(String.valueOf(m.get("id")));
+                String ownerId = idOf(rp);
+                if (ownerId != null) {
+                    ownersByOffering.computeIfAbsent(name, k -> new HashSet<>()).add(ownerId);
                 }
             }
         }
@@ -142,7 +149,7 @@ public class PriceSimService {
                     .map(a -> a.getPartyId()).distinct().count();
             totalChurnRisk += churnRisk;
 
-            BigDecimal gb = allowanceGb.get(String.valueOf(offering.get("id")));
+            BigDecimal gb = allowanceGb.get(idOf(offering));
             BigDecimal cost = dataRate != null && gb != null ? gb.multiply(dataRate) : null;
             BigDecimal churnedAnnual = null;
             if (churnPct != null && proposed.compareTo(current) > 0) {
@@ -236,7 +243,7 @@ public class PriceSimService {
             if (!(ref instanceof Map<?, ?> r)) {
                 continue;
             }
-            Map<String, Object> price = priceById.get(String.valueOf(r.get("id")));
+            Map<String, Object> price = priceById.get(idOf(r));
             if (price != null && "recurring".equals(price.get("priceType"))
                     && price.get("price") instanceof Map<?, ?> p) {
                 return num(p.get("value"));
@@ -248,7 +255,7 @@ public class PriceSimService {
     private String currencyOf(Map<String, Object> offering, Map<String, Map<String, Object>> priceById) {
         for (Object ref : offering.get("productOfferingPrice") instanceof List<?> l ? l : List.of()) {
             if (ref instanceof Map<?, ?> r) {
-                Map<String, Object> price = priceById.get(String.valueOf(r.get("id")));
+                Map<String, Object> price = priceById.get(idOf(r));
                 if (price != null && price.get("price") instanceof Map<?, ?> p && p.get("unit") != null) {
                     return String.valueOf(p.get("unit"));
                 }

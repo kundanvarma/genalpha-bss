@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.intelligence.api.Wire.idOf;
 
 /**
  * G2 — THE RIGHT-PLAN GUARANTEE: the honest-machine move nobody in the
@@ -58,13 +59,16 @@ public class FairPlayService {
         Map<String, BigDecimal> priceByOffering = new HashMap<>();
         Map<String, Map<String, Object>> priceById = new HashMap<>();
         for (Map<String, Object> p : bss.offeringPrices()) {
-            priceById.put(String.valueOf(p.get("id")), p);
+            String priceId = idOf(p);
+            if (priceId != null) {
+                priceById.put(priceId, p);
+            }
         }
         List<Map<String, Object>> offerings = bss.offerings();
         for (Map<String, Object> o : offerings) {
             for (Object ref : o.get("productOfferingPrice") instanceof List<?> l ? l : List.of()) {
                 if (ref instanceof Map<?, ?> r) {
-                    Map<String, Object> price = priceById.get(String.valueOf(r.get("id")));
+                    Map<String, Object> price = priceById.get(idOf(r));
                     if (price != null && "recurring".equals(price.get("priceType"))
                             && price.get("price") instanceof Map<?, ?> money && money.get("value") != null) {
                         priceByOffering.put(String.valueOf(o.get("name")),
@@ -77,16 +81,18 @@ public class FairPlayService {
         Map<String, String> usageTypeByOfferingId = new HashMap<>();
         for (Map<String, Object> a : bss.usageAllowances()) {
             if (a.get("productOffering") instanceof Map<?, ?> po && a.get("allowance") instanceof Map<?, ?> al) {
-                allowanceByOfferingId.put(String.valueOf(po.get("id")),
-                        new BigDecimal(String.valueOf(al.get("value"))));
-                usageTypeByOfferingId.put(String.valueOf(po.get("id")),
-                        String.valueOf(a.get("usageType")));
+                String offeringId = idOf(po);
+                if (offeringId == null) {
+                    continue; // an allowance that names no offering belongs to no plan
+                }
+                allowanceByOfferingId.put(offeringId, new BigDecimal(String.valueOf(al.get("value"))));
+                usageTypeByOfferingId.put(offeringId, String.valueOf(a.get("usageType")));
             }
         }
         Map<String, String> offeringIdByName = new HashMap<>();
         Map<String, String> categoryByName = new HashMap<>();
         for (Map<String, Object> o : offerings) {
-            offeringIdByName.put(String.valueOf(o.get("name")), String.valueOf(o.get("id")));
+            offeringIdByName.put(String.valueOf(o.get("name")), idOf(o));
             if (o.get("category") instanceof List<?> cats && !cats.isEmpty()
                     && cats.get(0) instanceof Map<?, ?> c0) {
                 categoryByName.put(String.valueOf(o.get("name")), String.valueOf(c0.get("name")));
@@ -99,13 +105,14 @@ public class FairPlayService {
             if (!(product.get("productOffering") instanceof Map<?, ?> ref)) {
                 continue;
             }
-            String offeringId = String.valueOf(ref.get("id"));
+            String offeringId = idOf(ref);
             if (!allowanceByOfferingId.containsKey(offeringId)) {
                 continue;
             }
             for (Object rp : product.get("relatedParty") instanceof List<?> l ? l : List.of()) {
-                if (rp instanceof Map<?, ?> pm && pm.get("id") != null) {
-                    plansByOwner.computeIfAbsent(String.valueOf(pm.get("id")), k -> new ArrayList<>())
+                String ownerId = idOf(rp);
+                if (ownerId != null) {
+                    plansByOwner.computeIfAbsent(ownerId, k -> new ArrayList<>())
                             .add(String.valueOf(ref.get("name")));
                 }
             }

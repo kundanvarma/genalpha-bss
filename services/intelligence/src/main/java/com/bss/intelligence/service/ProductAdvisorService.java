@@ -20,6 +20,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import static com.bss.intelligence.api.Wire.idOf;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /**
  * THE PRODUCT ADVISOR: reads the operator's OWN data and the MARKET, and
@@ -97,9 +99,8 @@ public class ProductAdvisorService {
             String party = null;
             if (product.get("relatedParty") instanceof List<?> parties) {
                 for (Object p : parties) {
-                    if (p instanceof Map<?, ?> ref
-                            && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                        party = String.valueOf(ref.get("id"));
+                    if ("customer".equalsIgnoreCase(textOf(p, "role"))) {
+                        party = idOf(p); // a customer ref without an id names nobody
                     }
                 }
             }
@@ -231,18 +232,22 @@ public class ProductAdvisorService {
                         "productOfferingPrice", List.of(Map.of("id", price.get("id"),
                                 "name", proposal.name() + " monthly"))))
                 .retrieve().body(Map.class);
-        log.info("advisor proposal adopted as DRAFT offering {} ('{}', In study)",
-                draft.get("id"), proposal.name());
+        String draftId = idOf(draft);
+        if (draftId == null) {
+            // nothing to record, nothing to hand back: an adoption without a draft id is a failure
+            throw new IllegalStateException("the catalog created the draft offering but returned no id");
+        }
+        log.info("advisor proposal adopted as DRAFT offering {} ('{}', In study)", draftId, proposal.name());
         // the AGENT ACTION on the governance ledger: which AI wrote what,
         // to which resource — not just what it said
         governor.recordAction("advisor-adopt", "catalog.createDraftOffering",
-                String.valueOf(draft.get("id")), "ok");
+                draftId, "ok");
         if (proposal.decisionId() != null) {
             // the product owner's adoption is the proposal's outcome
             Map<String, Object> outcome = new LinkedHashMap<>();
             outcome.put("decisionId", proposal.decisionId());
             outcome.put("outcome", "adopted");
-            outcome.put("value", draft.get("id"));
+            outcome.put("value", draftId);
             outcome.put("observedAt", java.time.OffsetDateTime.now().toString());
             outcome.put("@type", "DecisionOutcome");
             try {
@@ -251,7 +256,7 @@ public class ProductAdvisorService {
                 log.debug("advisor adoption not logged as an outcome: {}", e.getMessage());
             }
         }
-        return new AdoptReceipt(String.valueOf(draft.get("id")), "In study");
+        return new AdoptReceipt(draftId, "In study");
     }
 
     private Map<String, Object> finding(String kind, String offering, String insight,
@@ -328,13 +333,13 @@ public class ProductAdvisorService {
             return BigDecimal.ZERO;
         }
         for (Object ref : refs) {
-            if (!(ref instanceof Map<?, ?> r) || r.get("id") == null) {
+            String priceId = idOf(ref);
+            if (priceId == null) {
                 continue;
             }
             try {
                 Map<String, Object> price = catalog.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice/{id}",
-                                String.valueOf(r.get("id")))
+                        .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice/{id}", priceId)
                         .retrieve().body(Map.class);
                 if (price != null && "recurring".equals(price.get("priceType"))
                         && price.get("price") instanceof Map<?, ?> p && p.get("value") != null) {

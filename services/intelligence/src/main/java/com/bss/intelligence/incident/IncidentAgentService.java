@@ -16,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.intelligence.api.Wire.idOf;
+import static com.bss.intelligence.api.Wire.textOf;
 
 /**
  * The process incident agent, L0: a failed taskFlow triggers CONTEXT
@@ -62,8 +64,8 @@ public class IncidentAgentService {
     @Transactional
     public void onTaskFailed(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String flowId = String.valueOf(event.get("processFlowId"));
-        if ("null".equals(flowId) || traces.existsByTenantIdAndProcessFlowId(tenant, flowId)) {
+        String flowId = textOf(event, "processFlowId");
+        if (flowId == null || traces.existsByTenantIdAndProcessFlowId(tenant, flowId)) {
             return; // one investigation per flow; at-least-once delivery is free
         }
         String specCode = String.valueOf(event.getOrDefault("specCode", "unknown"));
@@ -301,11 +303,8 @@ public class IncidentAgentService {
     }
 
     private static String partyOf(Map<String, Object> event) {
-        if (event.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> ref && ref.get("id") != null) {
-            return String.valueOf(ref.get("id"));
-        }
-        return null;
+        return event.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                ? idOf(parties.get(0)) : null;
     }
 
     private static String str(Object o) {
