@@ -1,0 +1,16 @@
+# Production values: what a release-reproducible deployment must set on top
+# of values.yaml. Rendering with image.tag "latest" FAILS on purpose.
+#
+#   helm upgrade --install bss deploy/helm/genalpha-bss \
+#     -f deploy/helm/genalpha-bss/values-production.yaml \
+#     --set image.prefix=ghcr.io/<org>/genalpha-bss/ \
+#     --set image.tag=<release git sha>        # or a digest-pinned tag
+#
+# The release note links this SHA to the image digests, the CycloneDX SBOMs
+# and the image scans that CI produced for it (ci.yml, "Every service image
+# builds": artifacts sboms-<sha> and image-scans-<sha>).
+production: true
+image:
+  # CI proves this file renders with a placeholder; a real deployment sets the SHA.
+  tag: "0000000000000000000000000000000000000000"
+  pullPolicy: Always

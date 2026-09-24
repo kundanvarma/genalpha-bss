@@ -55,7 +55,7 @@ jobs:
     name: Every service image builds
     runs-on: ubuntu-latest
     needs: tests
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -86,3 +86,49 @@ jobs:
             echo "images failed to build:$failed"
             exit 1
           fi
+      # SUPPLY-CHAIN EVIDENCE (TAR-18): every built image gets a CycloneDX SBOM
+      # and a vulnerability scan of its final filesystem — OS packages and the
+      # base image included, which Java dependency review never sees. The
+      # artifacts are the release's evidence, keyed by the source SHA. The scan
+      # is REPORT-ONLY for now (exit-code 0): the policy that turns a severity
+      # into a red build is set once the first reports have been read, not
+      # guessed — a gate that fires on day one on the base image's backlog
+      # gets disabled by lunchtime.
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - name: Install trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+      - name: SBOM and scan each image
+        run: |
+          set -uo pipefail
+          mkdir -p sboms scans
+          {
+            echo "## Image supply-chain evidence for ${{ github.sha }}"
+            echo
+            echo "| image | SBOM components | CRITICAL | HIGH |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for dir in services/*/; do
+            svc="$(basename "$dir")"
+            [ -f "$dir/Dockerfile" ] || continue
+            img="bss/$svc:${{ github.sha }}"
+            syft "$img" -o cyclonedx-json > "sboms/$svc.cdx.json" 2>/dev/null || echo "{}" > "sboms/$svc.cdx.json"
+            n=$(python3 -c "import json; print(len(json.load(open('sboms/$svc.cdx.json')).get('components', [])))")
+            trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 \
+              --format json --output "scans/$svc.json" "$img" >/dev/null 2>&1 || echo '{"Results":[]}' > "scans/$svc.json"
+            c=$(python3 -c "import json; r=json.load(open('scans/$svc.json')); v=[x for res in r.get('Results',[]) for x in (res.get('Vulnerabilities') or [])]; print(sum(1 for x in v if x['Severity']=='CRITICAL'))")
+            h=$(python3 -c "import json; r=json.load(open('scans/$svc.json')); v=[x for res in r.get('Results',[]) for x in (res.get('Vulnerabilities') or [])]; print(sum(1 for x in v if x['Severity']=='HIGH'))")
+            echo "| $svc | $n | $c | $h |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Upload SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sboms-${{ github.sha }}
+          path: sboms/
+          retention-days: 90
+      - name: Upload image scans
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-scans-${{ github.sha }}
+          path: scans/
+          retention-days: 90

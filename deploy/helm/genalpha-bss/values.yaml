@@ -6,6 +6,13 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+# A production deployment is release-reproducible or it does not render:
+# with production: true the chart refuses image.tag "latest" (pin the release
+# SHA or a digest — see values-production.yaml) so the same declared
+# deployment always resolves to the same bytes, and a rollback means
+# something. Off by default so the laptop and the demo box keep working.
+production: false
+
 replicas: 1
 
 # Cross-cutting endpoints. Defaults target the in-cluster dependencies below;
