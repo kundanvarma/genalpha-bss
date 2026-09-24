@@ -94,11 +94,25 @@ public class DownstreamClients {
                 .retrieve().body(String.class));
     }
 
-    /** The catalog's offerings (an array; empty when unreadable). */
+    /**
+     * The catalog's offerings — ALL of them (an array; empty when unreadable).
+     * The catalog serves at most 100 per page and a living catalog holds more
+     * (175 on the demo fleet, most of them retired): reading one page and
+     * indexing it by name quietly lost every offering past the first hundred,
+     * so an intent's proposed "Stadium 5G Slice" was "not in the catalog".
+     */
     public JsonNode offerings() {
-        return parseList(catalog.get()
-                .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100")
-                .retrieve().body(String.class));
+        com.fasterxml.jackson.databind.node.ArrayNode all = objectMapper.createArrayNode();
+        for (int offset = 0; offset < 10_000; offset += 100) {
+            JsonNode page = parseList(catalog.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset=" + offset)
+                    .retrieve().body(String.class));
+            all.addAll((com.fasterxml.jackson.databind.node.ArrayNode) page);
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
     }
 
     public JsonNode offeringPrice(String priceId) {
