@@ -51,6 +51,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.usage.api.Wire.idOf;
+import static com.bss.usage.api.Wire.textOf;
 
 /**
  * The BSS side of charging. Ingest is the mediation/OCS seam — production
@@ -708,10 +710,15 @@ public class UsageService {
             return;
         }
         String tenantId = tenantScope.currentTenantId();
-        String orderId = String.valueOf(productOrder.get("id"));
+        String orderId = idOf(productOrder);
+        if (orderId == null) {
+            return; // a boost is once per ORDER; an order with no id cannot be once
+        }
+        // the customer party WITH an id — a reference without one credits nobody
         String owner = productOrder.get("relatedParty") instanceof List<?> parties ? parties.stream()
-                .filter(p -> p instanceof Map<?, ?> m && "customer".equalsIgnoreCase(String.valueOf(m.get("role"))))
-                .map(p -> String.valueOf(((Map<String, Object>) p).get("id")))
+                .filter(p -> "customer".equalsIgnoreCase(textOf(p, "role")))
+                .map(com.bss.usage.api.Wire::idOf)
+                .filter(java.util.Objects::nonNull)
                 .findFirst().orElse(null) : null;
         if (owner == null) {
             return;
@@ -740,16 +747,14 @@ public class UsageService {
             return;
         }
         for (Map<String, Object> item : items) {
-            if (item.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null
-                    && !"modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
+            String offeringId = idOf(item.get("productOffering"));
+            if (offeringId != null && !"modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
                 int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
                 // a 'zone' spec characteristic turns the boost into a travel
                 // pass: time-boxed (passValidityDays, default 7) + zone-locked
-                Map<String, String> levers = catalogClient.specCharacteristicsOf(
-                        String.valueOf(off.get("id")));
+                Map<String, String> levers = catalogClient.specCharacteristicsOf(offeringId);
                 String zone = levers.get("zone");
-                for (UsageAllowance rule : allowances.findByTenantIdAndProductOfferingId(
-                        tenantId, String.valueOf(off.get("id")))) {
+                for (UsageAllowance rule : allowances.findByTenantIdAndProductOfferingId(tenantId, offeringId)) {
                     if (!rule.isBoost()) {
                         continue;
                     }
@@ -807,11 +812,16 @@ public class UsageService {
             throw new com.bss.usage.exception.NotFoundException(
                     "UsageConsumptionReport for '" + requestedPartyId + "' not found");
         }
-        String payerId = String.valueOf(member.get("id"));
+        String payerId = idOf(member);
+        if (payerId == null) {
+            // a child link that names no payer: nobody is its payer, nobody its admin
+            throw new com.bss.usage.exception.NotFoundException(
+                    "UsageConsumptionReport for '" + requestedPartyId + "' not found");
+        }
         boolean callerIsPayer = callerId.equals(payerId);
         boolean callerIsAdmin = !callerIsPayer && partyClient.individualOf(callerId)
                 .map(UsageService::linkOf)
-                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> payerId.equals(idOf(l)))
                 .filter(l -> "active".equals(l.get("status")))
                 .filter(l -> "admin".equals(l.get("role")))
                 .isPresent();
@@ -1139,14 +1149,17 @@ public class UsageService {
     /** Same household: shared payer, or one side IS the other's payer. */
     private static boolean sameHousehold(String giverId, Map<String, Object> giverLink,
             String receiverId, Map<String, Object> receiverLink) {
-        if (active(giverLink) && active(receiverLink)
-                && String.valueOf(giverLink.get("id")).equals(String.valueOf(receiverLink.get("id")))) {
+        // two links that name no payer are NOT the same household — "null" used
+        // to equal "null" here, and strangers could gift each other data
+        String giverPayer = idOf(giverLink);
+        String receiverPayer = idOf(receiverLink);
+        if (active(giverLink) && active(receiverLink) && giverPayer != null && giverPayer.equals(receiverPayer)) {
             return true;
         }
-        if (active(giverLink) && receiverId.equals(String.valueOf(giverLink.get("id")))) {
+        if (active(giverLink) && receiverId.equals(giverPayer)) {
             return true;
         }
-        return active(receiverLink) && giverId.equals(String.valueOf(receiverLink.get("id")));
+        return active(receiverLink) && giverId.equals(receiverPayer);
     }
 
     private static String nameOf(Map<String, Object> individual) {

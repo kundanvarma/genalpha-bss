@@ -4,6 +4,7 @@ import com.bss.usage.client.PartyClient;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.usage.api.Wire.idOf;
 
 /**
  * The household-role checks the gifting move already relies on, shared by the
@@ -32,7 +33,7 @@ public class HouseholdGuard {
         }
         Map<String, Object> link = linkOf(callerId);
         return active(link) && "admin".equals(link.get("role"))
-                && ownerId.equals(String.valueOf(link.get("id")));
+                && ownerId.equals(idOf(link));
     }
 
     /** partyId is the owner, or an ACTIVE member of the owner's household. */
@@ -41,7 +42,7 @@ public class HouseholdGuard {
             return true;
         }
         Map<String, Object> link = linkOf(partyId);
-        return active(link) && ownerId.equals(String.valueOf(link.get("id")));
+        return active(link) && ownerId.equals(idOf(link));
     }
 
     /** Caller is the payer or an ACTIVE admin of the household the ACTIVE CHILD belongs to. */
@@ -50,7 +51,10 @@ public class HouseholdGuard {
         if (!active(childLink) || !"child".equals(childLink.get("role"))) {
             return false;
         }
-        return managesHousehold(callerId, String.valueOf(childLink.get("id")));
+        // a child link that names no payer belongs to no household anyone can run —
+        // it used to name the payer "null", and an admin link without an id ran it
+        String payerId = idOf(childLink);
+        return payerId != null && managesHousehold(callerId, payerId);
     }
 
     @SuppressWarnings("unchecked")
