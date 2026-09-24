@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -95,7 +96,12 @@ class BaseMigrationApiTest {
 
     static class MutableClock extends Clock {
 
-        private volatile Instant instant = Instant.now();
+        // Mirrors ClockConfig: millisecond ticks, because a clock finer than
+        // the timestamp column makes a just-written row look like the future.
+        // Before this the fake clock was a bare Instant.now() — microseconds on
+        // macOS, NANOSECONDS on Linux — so these tests passed on every laptop
+        // and failed on every CI runner.
+        private volatile Instant instant = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
         void advance(Duration duration) {
             instant = instant.plus(duration);
@@ -114,35 +120,6 @@ class BaseMigrationApiTest {
         @Override
         public Instant instant() {
             return instant;
-        }
-    }
-
-    /**
-     * CI-ONLY DIAGNOSTICS (added 2026-09-24).
-     *
-     * `circuitBreaker_…` and `sunsetJourney_…` fail in GitHub Actions and have
-     * never once failed locally — not under reversed class order, four random
-     * method orders, TZ=UTC, `verify` instead of `test`, or with Testcontainers
-     * actually running. Both failures say the same thing: the engine did
-     * nothing. Nobody can fix a test they cannot reproduce, so this prints the
-     * state the assertions depend on, on EVERY run — a green CI log and a red
-     * one can then be diffed, which is faster than another hypothesis.
-     *
-     * Delete this once the cause is known. It asserts nothing.
-     */
-    private void dumpState(String label, String planId, RequestPostProcessor as) {
-        try {
-            String plan = mockMvc.perform(get(BASE + "/migrationPlan/" + planId).with(as))
-                    .andReturn().getResponse().getContentAsString();
-            String all = mockMvc.perform(get(BASE + "/migrationPlan/" + planId + "/customer")
-                    .with(as)).andReturn().getResponse().getContentAsString();
-            System.out.println("[diag] " + label
-                    + "\n[diag]   clock   = " + clock.instant() + " (zone " + clock.getZone() + ")"
-                    + "\n[diag]   wall    = " + java.time.Instant.now()
-                    + "\n[diag]   plan    = " + plan
-                    + "\n[diag]   customers = " + all);
-        } catch (Exception e) {
-            System.out.println("[diag] " + label + " — could not read state: " + e);
         }
     }
 
@@ -232,7 +209,6 @@ class BaseMigrationApiTest {
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
             engine.runTenant("genalpha");
         }
-        dumpState("sunsetJourney after tick 1 — expecting paula-1 in exit-window", planId, readOnly());
         mockMvc.perform(get(BASE + "/migrationPlan/" + planId + "/customer?state=exit-window")
                         .with(readOnly()))
                 .andExpect(jsonPath("$[0].partyId").value("paula-1"))
@@ -329,7 +305,6 @@ class BaseMigrationApiTest {
         }
 
         // Two consecutive failures >= threshold: the wave PAUSES itself.
-        dumpState("circuitBreaker after runTenant — expecting paused, 2 failures", planId, staff);
         mockMvc.perform(get(BASE + "/migrationPlan/" + planId).with(staff))
                 .andExpect(jsonPath("$.state").value("paused"))
                 .andExpect(jsonPath("$.consecutiveFailures").value(2));
