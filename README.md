@@ -254,6 +254,7 @@ intentional hardened gaps (payment, communication) — in
 - 🧅 **[The overlay strategy](docs/overlay-gtm.md)** — a full next-generation BSS sufficient to be an operator's ONLY one, that can also START as the agentic layer on top of an existing estate: a legacy stack is just another per-tenant seam, never-two-writers data mastery, and the strangler-fig roadmap where the next brand launches natively in minutes — PROVEN by suite #67: a wrapped legacy stack federated, sold from, handed fulfilment, and worked by the digital workforce with the legacy system as the source of truth
 - 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
+- 🔗 **[How the commercial catalog reaches SOM and ROM](docs/catalog-to-provisioning.md)** — where provisioning intent lives today (category, spec characteristics, relationships → TMF641 service orders and TMF639 resources), what OSM / Vlocity / Amdocs / ServiceNow do instead (three catalog layers, decomposition as data), and the three steps that put a real CFS/RFS layer in — with the gap stated honestly
 - 🧩 **[ODA Composer](https://kundanvarma.github.io/genalpha-bss/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
 
 ## A look at it
