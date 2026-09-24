@@ -498,9 +498,9 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
         return id;
     }
 
-    /** A wire value made safe for one log line: control characters (line breaks above all) replaced. */
+    /** A wire value made safe for one log line: its line breaks replaced, so it cannot forge a second line. */
     private static String oneLine(String value) {
-        return value == null ? null : value.replaceAll("[\\p{Cntrl}]", "?");
+        return value == null ? null : value.replace('\n', '_').replace('\r', '_');
     }
 
     static List<String> realizingServices(Map<String, Object> product) {
