@@ -39,8 +39,8 @@ public class ClubShareEventListener {
             if (!"ClubShareAccruedEvent".equals(String.valueOf(envelope.get("eventType")))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             Map<String, Object> share = BillingEventListener.resource(envelope, "clubShare");
             if (share != null) {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {

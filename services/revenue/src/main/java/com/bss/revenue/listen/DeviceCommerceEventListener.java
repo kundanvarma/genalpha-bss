@@ -41,8 +41,8 @@ public class DeviceCommerceEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String type = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             switch (type) {
                 case "DeviceAgreementActivated" -> {
                     Map<String, Object> agreement = BillingEventListener.resource(envelope, "deviceAgreement");

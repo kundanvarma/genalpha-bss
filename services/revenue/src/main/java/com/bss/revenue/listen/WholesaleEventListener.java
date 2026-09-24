@@ -45,8 +45,8 @@ public class WholesaleEventListener {
             if (!"active".equals(wao.get("state"))) {
                 return; // only a live access line is a cost we owe
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 revenue.postWholesaleCogs(wao);
             }
