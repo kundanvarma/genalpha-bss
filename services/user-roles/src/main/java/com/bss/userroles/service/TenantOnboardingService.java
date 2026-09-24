@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import static com.bss.userroles.api.Wire.idOf;
 
 /**
  * OPERATOR-AS-A-FORM: everything ops/onboard-tenant.sh does, as a
@@ -916,7 +917,7 @@ public class TenantOnboardingService {
                     .header("Content-Type", "application/json")
                     .body(Map.of("name", categoryName, "lifecycleStatus", "Active"))
                     .retrieve().body(Map.class);
-            categoryId = String.valueOf(cat.get("id"));
+            categoryId = idOf(cat); // no id = no category to file the shelf under (the rows below know)
         } catch (Exception e) {
             log.warn("prospect category skipped: {}", e.getMessage());
         }
@@ -951,7 +952,12 @@ public class TenantOnboardingService {
                         .header("Content-Type", "application/json")
                         .body(offBody)
                         .retrieve().body(Map.class);
-                offeringByName.put(offName, String.valueOf(off.get("id")));
+                String createdId = idOf(off);
+                if (createdId == null) {
+                    log.warn("a prospect shelf row was created without an id — not on the shelf");
+                } else {
+                    offeringByName.put(offName, createdId);
+                }
             } catch (Exception e) {
                 log.warn("prospect shelf row skipped '{}': {}", offName, e.getMessage());
             }
@@ -1203,15 +1209,18 @@ public class TenantOnboardingService {
     private Map<String, Object> createRemapped(String base, String path, String token,
             Map<String, Object> src, Map<String, String> ids) {
         Map<String, Object> body = new java.util.LinkedHashMap<>((Map<String, Object>) remapIds(src, ids));
-        String oldId = String.valueOf(src.get("id"));
+        String oldId = idOf(src);
         body.remove("id");
         try {
             Map<String, Object> created = rest.post().uri(base + path)
                     .header("Authorization", "Bearer " + token)
                     .header("Content-Type", "application/json")
                     .body(body).retrieve().body(Map.class);
-            if (created != null && created.get("id") != null) {
-                ids.put(oldId, String.valueOf(created.get("id")));
+            String createdId = idOf(created);
+            if (createdId != null) {
+                if (oldId != null) {
+                    ids.put(oldId, createdId);
+                }
                 return created;
             }
         } catch (Exception e) {

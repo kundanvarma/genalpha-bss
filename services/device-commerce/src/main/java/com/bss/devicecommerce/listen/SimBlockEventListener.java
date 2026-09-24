@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 import java.util.Set;
+import static com.bss.devicecommerce.api.Wire.textOf;
 
 /**
  * Lost/stolen → blacklist seam: a SIM replaced for reason lost/stolen
@@ -53,9 +54,8 @@ public class SimBlockEventListener {
             if (!BLACKLIST_REASONS.contains(reason) || sim.get("serviceId") == null) {
                 return;
             }
-            String serviceId = String.valueOf(sim.get("serviceId"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String serviceId = textOf(sim, "serviceId");
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             String sourceRef = "sim-block:" + envelope.getOrDefault("eventId", serviceId);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 var affected = agreements.findByTenantIdAndSubscriptionRefAndStatus(

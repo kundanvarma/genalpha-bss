@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import static com.bss.devicecommerce.api.Wire.textOf;
 
 /**
  * The withdrawal clock's ear: the same parcel-DELIVERED event that
@@ -49,9 +50,8 @@ public class FulfilmentEventListener {
                     || shippingOrder.get("productOrderId") == null) {
                 return;
             }
-            String orderRef = String.valueOf(shippingOrder.get("productOrderId"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String orderRef = textOf(shippingOrder, "productOrderId");
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 for (DeviceAgreement a : agreements.findByTenantIdAndOrderRef(tenantId, orderRef)) {
                     if (a.getDeliveredAt() == null) {

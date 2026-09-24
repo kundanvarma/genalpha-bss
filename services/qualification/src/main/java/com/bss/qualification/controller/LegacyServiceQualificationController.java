@@ -27,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.qualification.api.Wire.idOf;
+import static com.bss.qualification.api.Wire.textOf;
 
 /**
  * TMF645 v3 face for R18-era clients: serviceQualification as a TASK
@@ -92,8 +94,7 @@ public class LegacyServiceQualificationController {
         String id = UUID.randomUUID().toString();
         task.setId(id);
         task.setTenantId(tenantScope.currentTenantId());
-        task.setExternalId(dto.get("externalId") == null ? null
-                : String.valueOf(dto.get("externalId")));
+        task.setExternalId(textOf(dto, "externalId"));
         task.setState("done");
         Map<String, Object> doc = new LinkedHashMap<>(dto);
         doc.put("serviceQualificationItem", outItems);
@@ -167,8 +168,8 @@ public class LegacyServiceQualificationController {
         }
         for (Object p : parties) {
             if (p instanceof Map<?, ?> ref
-                    && (id == null || String.valueOf(ref.get("id")).equals(id))
-                    && (role == null || String.valueOf(ref.get("role")).equals(role))) {
+                    && (id == null || id.equals(idOf(ref)))
+                    && (role == null || role.equals(textOf(ref, "role")))) {
                 return true;
             }
         }

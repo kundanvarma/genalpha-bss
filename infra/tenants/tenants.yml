@@ -686,88 +686,6 @@ bss:
         # the process is redacted; the caller still sees real values, because
         # the placeholders are reversed on the way back.
         ai-raw-exposure: false
-      - id: aurora
-        issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
-        jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
-        token-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/token
-        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
-        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
-        # The secret this tenant's Online Charging System signs its northbound
-        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
-        # door believes the tenant the body names only because the body verifies
-        # against THAT tenant's secret. Dev defaults here, same shape as
-        # ocs-password; set the env from a secret store for anything real.
-        ocs-notify-secret: ${OCS_NOTIFY_SECRET_AURORA:ocs-notify-aurora-dev}
-        # The credential on this operator's WHOLESALE doors: an access
-        # seeker signs its MEF Sonata order with it, and the activation
-        # callback we hand a fibre owner carries a token derived from it.
-        # Dev defaults here, same shape as ocs-password.
-        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_AURORA:wholesale-aurora-dev}
-        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_AURORA:none}
-        bill-distribution-url: ${BILL_DISTRIBUTION_URL_AURORA:}
-        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_AURORA:}
-        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_AURORA:ehf}
-        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_AURORA:einvoice}
-        bank-token: ${BANK_TOKEN_AURORA:}
-        social-api-url: ${SOCIAL_API_URL_AURORA:}
-        social-access-token: ${SOCIAL_ACCESS_TOKEN_AURORA:}
-        social-provider: ${SOCIAL_PROVIDER_AURORA:mock}
-        social-api-version: ${SOCIAL_API_VERSION_AURORA:v21.0}
-        social-account-id: ${SOCIAL_ACCOUNT_ID_AURORA:}
-        social-ig-user-id: ${SOCIAL_IG_USER_ID_AURORA:}
-        social-ads-token: ${SOCIAL_ADS_TOKEN_AURORA:}
-        delivery-provider: ${DELIVERY_PROVIDER_AURORA:internal}
-        esp-url: ${ESP_URL_AURORA:}
-        esp-api-key: ${ESP_API_KEY_AURORA:}
-        # what the provider signs delivery receipts WITH — separate from the
-        # sending key above, so a leaked outbound key opens no inbound door
-        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_AURORA:}
-        # signs this operator's one-click unsubscribe links; per tenant so one
-        # operator's link is never mintable or honourable by another
-        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_AURORA:unsub-aurora-dev}
-        esp-from: ${ESP_FROM_AURORA:}
-        brand-name: Aurora Tele Nord
-        brand-color: "#AA3366"
-        locale: "sv"
-        currency: SEK
-        timezone: Europe/Oslo
-        country: "NO"
-        porting-gateway: nrdb
-        business-sales: true
-        agent-commerce: "off"
-        ai-visibility: "search-only"
-        hosts: [shop.aurora.localhost, csr.aurora.localhost, console.aurora.localhost, biz.aurora.localhost]
-        analytics-provider: ${ANALYTICS_PROVIDER_AURORA:internal}
-        analytics-mp-url: ${ANALYTICS_MP_URL_AURORA:https://www.google-analytics.com}
-        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_AURORA:}
-        analytics-api-secret: ${ANALYTICS_API_SECRET_AURORA:}
-        analytics-data-url: ${ANALYTICS_DATA_URL_AURORA:}
-        analytics-property-id: ${ANALYTICS_PROPERTY_ID_AURORA:}
-        analytics-data-token: ${ANALYTICS_DATA_TOKEN_AURORA:}
-        ai-provider: ${AI_PROVIDER_AURORA:}
-        ai-base-url: ${AI_BASE_URL_AURORA:}
-        ai-api-key: ${AI_API_KEY_AURORA:}
-        ai-model: ${AI_MODEL_AURORA:}
-        pim-base-url: ${PIM_BASE_URL_AURORA:}
-        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_AURORA:}
-        dnc-url: ${DNC_URL_AURORA:}
-        dnc-token: ${DNC_TOKEN_AURORA:}
-        market-feed-url: ${MARKET_FEED_URL_AURORA:}
-        speech-url: ${SPEECH_URL_AURORA:}
-        speech-token: ${SPEECH_TOKEN_AURORA:}
-        market-feed-token: ${MARKET_FEED_TOKEN_AURORA:}
-        ai-model-fast: ${AI_MODEL_FAST_AURORA:}
-        ai-model-smart: ${AI_MODEL_SMART_AURORA:}
-        ai-provider-fast: ${AI_PROVIDER_FAST_AURORA:}
-        ai-base-url-fast: ${AI_BASE_URL_FAST_AURORA:}
-        ai-api-key-fast: ${AI_API_KEY_FAST_AURORA:}
-        ai-provider-smart: ${AI_PROVIDER_SMART_AURORA:}
-        ai-base-url-smart: ${AI_BASE_URL_SMART_AURORA:}
-        ai-api-key-smart: ${AI_API_KEY_SMART_AURORA:}
-        # T-P3: raw exposure is OPT-IN. Off here means every prompt leaving
-        # the process is redacted; the caller still sees real values, because
-        # the placeholders are reversed on the way back.
-        ai-raw-exposure: false
       - id: fjord
         issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
         jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
@@ -1094,3 +1012,85 @@ bss:
         # Redacted by default like every other tenant; an operator who wants raw
         # context sets AI_RAW_EXPOSURE_TARANGA=true and the ledger row says so.
         ai-raw-exposure: ${AI_RAW_EXPOSURE_TARANGA:false}
+      - id: aurora
+        issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
+        jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET_AURORA:l2Rj6OgVxbVqTUVSsJxQyJJ-usWPXcIGluq1SRq5hjcTyFJ-HZZIbHuiJCv3jOnx}
+        # The secret this tenant's Online Charging System signs its northbound
+        # notifications with (POST /internal/ocs/**). Per tenant on purpose: the
+        # door believes the tenant the body names only because the body verifies
+        # against THAT tenant's secret. Dev defaults here, same shape as
+        # ocs-password; set the env from a secret store for anything real.
+        ocs-notify-secret: ${OCS_NOTIFY_SECRET_AURORA:ocs-notify-nova-dev}
+        # The credential on this operator's WHOLESALE doors: an access
+        # seeker signs its MEF Sonata order with it, and the activation
+        # callback we hand a fibre owner carries a token derived from it.
+        # Dev defaults here, same shape as ocs-password.
+        wholesale-order-secret: ${WHOLESALE_ORDER_SECRET_AURORA:wholesale-nova-dev}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_AURORA:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_AURORA:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_AURORA:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_AURORA:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_AURORA:einvoice}
+        bank-token: ${BANK_TOKEN_AURORA:}
+        social-api-url: ${SOCIAL_API_URL_AURORA:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_AURORA:}
+        social-provider: ${SOCIAL_PROVIDER_AURORA:mock}
+        social-api-version: ${SOCIAL_API_VERSION_AURORA:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_AURORA:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_AURORA:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_AURORA:}
+        delivery-provider: ${DELIVERY_PROVIDER_AURORA:internal}
+        esp-url: ${ESP_URL_AURORA:}
+        esp-api-key: ${ESP_API_KEY_AURORA:}
+        # what the provider signs delivery receipts WITH — separate from the
+        # sending key above, so a leaked outbound key opens no inbound door
+        esp-webhook-secret: ${ESP_WEBHOOK_SECRET_AURORA:}
+        # signs this operator's one-click unsubscribe links; per tenant so one
+        # operator's link is never mintable or honourable by another
+        unsubscribe-secret: ${UNSUBSCRIBE_SECRET_AURORA:unsub-nova-dev}
+        esp-from: ${ESP_FROM_AURORA:}
+        brand-name: "Aurora Tele Nord"
+        brand-color: "#AA3366"
+        locale: "sv"
+        currency: SEK
+        timezone: Europe/Oslo
+        country: "NO"
+        porting-gateway: nrdb
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.aurora.localhost, csr.aurora.localhost, console.aurora.localhost, biz.aurora.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_AURORA:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_AURORA:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_AURORA:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_AURORA:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_AURORA:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_AURORA:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_AURORA:}
+        ai-provider: ${AI_PROVIDER_AURORA:}
+        ai-base-url: ${AI_BASE_URL_AURORA:}
+        ai-api-key: ${AI_API_KEY_AURORA:}
+        ai-model: ${AI_MODEL_AURORA:}
+        pim-base-url: ${PIM_BASE_URL_AURORA:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_AURORA:}
+        dnc-url: ${DNC_URL_AURORA:}
+        dnc-token: ${DNC_TOKEN_AURORA:}
+        market-feed-url: ${MARKET_FEED_URL_AURORA:}
+        speech-url: ${SPEECH_URL_AURORA:}
+        speech-token: ${SPEECH_TOKEN_AURORA:}
+        market-feed-token: ${MARKET_FEED_TOKEN_AURORA:}
+        ai-model-fast: ${AI_MODEL_FAST_AURORA:}
+        ai-model-smart: ${AI_MODEL_SMART_AURORA:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_AURORA:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_AURORA:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_AURORA:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_AURORA:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_AURORA:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_AURORA:}
+        # T-P3: raw exposure is OPT-IN. Off here means every prompt leaving
+        # the process is redacted; the caller still sees real values, because
+        # the placeholders are reversed on the way back.
+        ai-raw-exposure: false
