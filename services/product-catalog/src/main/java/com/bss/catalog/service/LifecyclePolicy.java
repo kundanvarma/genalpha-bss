@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * L1 — the lifecycle's TEETH, server-side. The deep pass found that draft
@@ -85,7 +86,7 @@ public class LifecyclePolicy {
         if (channel == null || dto.getChannel() == null || dto.getChannel().isEmpty()) {
             return true;
         }
-        return dto.getChannel().stream().anyMatch(c -> c != null && channel.equals(String.valueOf(c.get("id"))));
+        return dto.getChannel().stream().anyMatch(c -> channel.equals(idOf(c)));
     }
 
     private static boolean inChannel(String channelJson, String channel) {

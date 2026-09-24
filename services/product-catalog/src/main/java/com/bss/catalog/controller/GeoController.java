@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * GENERATIVE DISCOVERABILITY (GEO): the crawler-facing face of the shop.
@@ -181,13 +182,14 @@ public class GeoController {
                         Function.identity(), (a, b) -> a));
         List<ProductOfferingPriceDto> resolved = refs.stream()
                 .map(ref -> {
-                    ProductOfferingPriceDto hit = index.get(String.valueOf(ref.get("id")));
+                    String priceId = idOf(ref);
+                    ProductOfferingPriceDto hit = index.get(priceId);
                     if (hit != null) {
                         return hit;
                     }
                     if (ref.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
                         ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
-                        dto.setId(String.valueOf(ref.get("id")));
+                        dto.setId(priceId);
                         dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
                         dto.setPrice(com.bss.catalog.dto.Money.of(p));
                         return dto;

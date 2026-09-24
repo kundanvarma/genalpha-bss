@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * TMF760 Product Configuration — THE oracle every channel asks. Given an
@@ -167,11 +168,13 @@ public class ConfiguratorService {
         for (Map<String, Object> member : listOf(bundle.getBundledProductOffering())) {
             if (isChoiceGroup(member)) {
                 choiceGroups.add(member);
+                // a member or option without an id is nobody's member: it must never
+                // let a selected "null" through as part of the bundle
                 for (Map<String, Object> opt : listOf(member.get("options"))) {
-                    memberIds.add(String.valueOf(opt.get("id")));
+                    memberIds.add(idOf(opt));
                 }
             } else {
-                memberIds.add(String.valueOf(member.get("id")));
+                memberIds.add(idOf(member));
             }
         }
         for (String id : selected) {
@@ -184,7 +187,7 @@ public class ConfiguratorService {
             long lower = longOf(group.get("numberRelOfferLowerLimit"), 1);
             long upper = longOf(group.get("numberRelOfferUpperLimit"), 1);
             long chosen = listOf(group.get("options")).stream()
-                    .map(o -> String.valueOf(o.get("id"))).filter(selected::contains).count();
+                    .map(o -> idOf(o)).filter(selected::contains).count();
             if (chosen < lower || chosen > upper) {
                 String need = lower == upper ? "exactly " + lower : "between " + lower + " and " + upper;
                 reject(messages, reasons, "cardinality", "bundle '" + bundle.getName() + "': '" + group.get("name")
@@ -218,7 +221,7 @@ public class ConfiguratorService {
         // 5. relationships: excludes rejects, requires blocks or suggests an action
         for (Map<String, Object> rel : priceOnly ? List.<Map<String, Object>>of() : listOf(bundle.getProductOfferingRelationship())) {
             String type = String.valueOf(rel.getOrDefault("relationshipType", "")).toLowerCase();
-            String relId = String.valueOf(rel.get("id"));
+            String relId = idOf(rel);
             String relName = rel.get("name") == null ? relId : String.valueOf(rel.get("name"));
             String role = String.valueOf(rel.getOrDefault("role", "prompt")).toLowerCase();
             if ("excludes".equals(type) && selected.contains(relId)) {
@@ -356,7 +359,8 @@ public class ConfiguratorService {
         for (ProductOfferingDto offering : all) {
             int qty = offering == bundle ? quantity : 1;
             for (Map<String, Object> ref : listOf(offering.getProductOfferingPrice())) {
-                ProductOfferingPriceDto price = findPrice(String.valueOf(ref.get("id")));
+                String priceId = idOf(ref);
+                ProductOfferingPriceDto price = priceId == null ? null : findPrice(priceId);
                 if (price == null || !priceApplies(price, picks) || !inWindow(price, now)) {
                     continue;
                 }
@@ -527,7 +531,7 @@ public class ConfiguratorService {
     private ChoiceGroup choiceGroupView(Map<String, Object> group) {
         List<ChoiceOption> options = new ArrayList<>();
         for (Map<String, Object> ref : listOf(group.get("options"))) {
-            options.add(optionView(String.valueOf(ref.get("id")), ref));
+            options.add(optionView(idOf(ref), ref));
         }
         return new ChoiceGroup(str(group.get("name")), longOf(group.get("numberRelOfferLowerLimit"), 1),
                 longOf(group.get("numberRelOfferUpperLimit"), 1), str(group.get("default")), options, "BundledProductOfferingChoice");
@@ -593,7 +597,8 @@ public class ConfiguratorService {
     private List<PriceView> priceViewsOf(ProductOfferingDto offering) {
         List<PriceView> out = new ArrayList<>();
         for (Map<String, Object> ref : listOf(offering.getProductOfferingPrice())) {
-            ProductOfferingPriceDto price = findPrice(String.valueOf(ref.get("id")));
+            String priceId = idOf(ref);
+            ProductOfferingPriceDto price = priceId == null ? null : findPrice(priceId);
             if (price == null) {
                 continue;
             }
@@ -609,9 +614,10 @@ public class ConfiguratorService {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> rel : listOf(offering.getProductOfferingRelationship())) {
             Map<String, Object> view = new LinkedHashMap<>(rel);
-            if (view.get("name") == null && view.get("id") != null) {
+            String relId = idOf(view);
+            if (view.get("name") == null && relId != null) {
                 try {
-                    view.put("name", offerings.findById(String.valueOf(view.get("id"))).getName());
+                    view.put("name", offerings.findById(relId).getName());
                 } catch (RuntimeException e) {
                     // keep the id
                 }

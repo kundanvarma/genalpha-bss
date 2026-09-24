@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * The registered sales channels — the ONLY values a ProductOffering.channel
@@ -42,7 +43,7 @@ public class Channels {
             return;
         }
         for (Map<String, Object> c : channel) {
-            requireKnownId(c == null || c.get("id") == null ? null : String.valueOf(c.get("id")));
+            requireKnownId(idOf(c));
         }
     }
 

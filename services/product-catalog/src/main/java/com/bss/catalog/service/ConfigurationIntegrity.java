@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * A configurable product is one offering whose SPECIFICATION declares the choices and whose PRICES condition on
@@ -78,8 +79,8 @@ public class ConfigurationIntegrity {
             declaredRaw.put(String.valueOf(c.get("name")), raws);
         }
         for (Map<String, Object> ref : priceRefs) {
-            String priceId = ref == null || ref.get("id") == null ? "" : String.valueOf(ref.get("id"));
-            if (priceId.isBlank()) {
+            String priceId = idOf(ref);
+            if (priceId == null || priceId.isBlank()) {
                 continue;
             }
             var price = prices.findByIdAndTenantId(priceId, tenant).orElse(null);
