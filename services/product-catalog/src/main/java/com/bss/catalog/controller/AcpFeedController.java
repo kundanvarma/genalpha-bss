@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * The Agentic Commerce Protocol product feed: the tenant's active catalog
@@ -115,7 +116,8 @@ public class AcpFeedController {
         }
         List<ProductOfferingPriceDto> resolved = refs.stream()
                 .map(ref -> {
-                    ProductOfferingPriceDto indexed = priceIndex.get(String.valueOf(ref.get("id")));
+                    String priceId = idOf(ref);
+                    ProductOfferingPriceDto indexed = priceIndex.get(priceId);
                     if (indexed != null) {
                         return indexed;
                     }
@@ -123,7 +125,7 @@ public class AcpFeedController {
                     // the ref itself — build a DTO from it
                     if (ref.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
                         ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
-                        dto.setId(String.valueOf(ref.get("id")));
+                        dto.setId(priceId);
                         dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
                         dto.setPrice(Money.of(p));
                         return dto;

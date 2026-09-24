@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * Intent-to-launch governance — the decision between "someone wrote an offer"
@@ -432,7 +433,8 @@ public class LaunchGovernanceService {
         if (body.channel() != null && !body.channel().isEmpty()) {
             List<EntityRef> list = new ArrayList<>();
             for (JsonNode o : body.channel()) {
-                String cid = o.isObject() ? String.valueOf(o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asText()) : o.asText();
+                // an object without an id is NO channel (requireKnownId refuses null by name), not the channel "null"
+                String cid = o.isObject() ? (o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asText()) : o.asText();
                 String name = Channels.REGISTERED.stream().filter(r -> r.get("id").equals(cid)).findFirst()
                         .map(r -> r.get("name")).orElse(null);
                 list.add(EntityRef.of(cid, name));
@@ -559,8 +561,9 @@ public class LaunchGovernanceService {
             if (c.get("name") != null) {
                 categories.add(String.valueOf(c.get("name")).toLowerCase(Locale.ROOT));
             }
-            if (c.get("id") != null) {
-                categoryIds.add(String.valueOf(c.get("id")));
+            String categoryId = idOf(c);
+            if (categoryId != null) {
+                categoryIds.add(categoryId);
             }
         }
         // price: the lowest recurring charge if there is one, else the lowest one-time
@@ -568,10 +571,11 @@ public class LaunchGovernanceService {
         Double oneTime = null;
         String currency = null;
         for (Map<String, Object> ref : nullSafe(dto.getProductOfferingPrice())) {
-            if (ref.get("id") == null) {
+            String priceId = idOf(ref);
+            if (priceId == null) {
                 continue;
             }
-            ProductOfferingPrice p = prices.findByIdAndTenantId(String.valueOf(ref.get("id")), scope.currentTenantId()).orElse(null);
+            ProductOfferingPrice p = prices.findByIdAndTenantId(priceId, scope.currentTenantId()).orElse(null);
             if (p == null) {
                 continue;
             }
@@ -614,8 +618,9 @@ public class LaunchGovernanceService {
         }
         List<String> channels = new ArrayList<>();
         for (Map<String, Object> c : nullSafe(dto.getChannel())) {
-            if (c.get("id") != null) {
-                channels.add(String.valueOf(c.get("id")));
+            String channelId = idOf(c);
+            if (channelId != null) {
+                channels.add(channelId);
             }
         }
         if (channels.isEmpty()) {
