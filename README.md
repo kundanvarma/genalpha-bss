@@ -17,7 +17,7 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 40 ODA components speaking TMF Open APIs natively
-- 227 end-to-end browser suites; 28 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- 227 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
 - Accessibility enforced in CI: axe-core runs the full WCAG 2.2 AA ruleset across every channel at zero violations — the storefront scan is a pull-request gate (`.github/workflows/browser-proof.yml`), all five channels run in the proof run, and each tenant's brand colour is auto-shaded to stay legible — accessibility that can't silently rot between releases
 - Best-of-breed growth & journey orchestration: onboarding-triggered journeys with named stages, reusable localized message templates, multi-channel delivery (in-app/email/SMS/push), saved rule-tree audiences, a full node graph (message · wait · wait-for-event · decision · exit), a visual canvas with live per-node counts, AI-drafted journeys (governed + audited), and real-time next-best-action arbitration with an explainable decision log — governed by default (consent, frequency caps, quiet hours, holdout-measured lift). **[Step-by-step operator guide →](docs/growth-guide.md)**
 - A **BSS-native CDP** — no reverse-ETL, no second database: audiences are built from the operational event bus you already run (a completed order, a new bill, a loyalty-tier change *is* the trait), across four populations (customers · consent-gated prospects · B2B organizations · anonymous visitors for retargeting). One connector activates the same audience to **Meta *and* Google** (SHA-256 hashed, DNC-filtered, async), inbound **social care** turns negative/support DMs into TMF621 trouble tickets over the bus, and a **portfolio attribution** report shows holdout-measured lift and **incremental** revenue across every campaign and journey — with a hard honesty rule: no control group, no lift claimed. **[Step-by-step martech guide →](docs/martech-guide.md)**
@@ -224,7 +224,7 @@ modeled IMSI range, and a console Mobile-wholesale pane; retail rating untouched
 
 </details>
 
-**Twenty-eight official TM Forum CTKs pass with zero failures** — every published kit that matches
+**Twenty-eight official TM Forum CTKs certified at zero failures** — each on the dataset of its day, with the current grown-dataset status beside it in the scorecard — every published kit that matches
 a face this fleet serves: the five core (TMF620/622/632/637/666), TMF663 shopping-cart, TMF669
 party-role, TMF687 product-stock, TMF635 usage, TMF677 usage-consumption, TMF678 customer-bill,
 TMF683 party-interaction, TMF654 prepay-balance (the charging FACADE — the OCS behind the seam
@@ -519,7 +519,7 @@ difference table — are in [architecture.md §5](docs/architecture.md) and
 
 ## Stack
 
-Java 17 source, Java 25 runtime image · Spring Boot 3.5.7 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
+Java 17 source, Java 25 runtime image (the PR smoke boots the real images, so the runtime JDK is what the browser proof runs against) · Spring Boot 3.5.7 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
 (+ RLS) · Flyway · Kafka (transactional outbox) · Keycloak 26 (dev IdP) · React + Vite ·
 Playwright · Helm · Terraform · GitHub Actions.
 
