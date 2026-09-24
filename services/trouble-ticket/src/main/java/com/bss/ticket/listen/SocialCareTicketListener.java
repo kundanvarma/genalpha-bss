@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.ticket.api.Wire.textOf;
 
 /**
  * Social care closes the loop: insight triages inbound social DMs and, when one
@@ -50,8 +51,7 @@ public class SocialCareTicketListener {
             if (!"SocialCareTicketRequested".equals(String.valueOf(envelope.get("eventType")))) {
                 return; // this topic carries every insight event; we only want care requests
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             Map<String, Object> req = resourceOf(event);

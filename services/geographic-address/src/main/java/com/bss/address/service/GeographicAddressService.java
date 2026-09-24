@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import static com.bss.address.api.Wire.idOf;
 
 /**
  * TMF673: one place that knows what a deliverable address looks like.
@@ -171,7 +172,7 @@ public class GeographicAddressService {
         // nobody can plant a verified-address event on a party they don't
         // hold, and it never mis-attributes to the caller either.
         String callerSub = jwt.getToken().getSubject();
-        String claimedParty = partyRaw.get("id") == null ? null : String.valueOf(partyRaw.get("id"));
+        String claimedParty = idOf(partyRaw);
         boolean backOffice = auth.getAuthorities().stream()
                 .anyMatch(a -> "address:write".equals(a.getAuthority()));
         String partyId = claimedParty == null ? callerSub : (backOffice ? claimedParty : null);

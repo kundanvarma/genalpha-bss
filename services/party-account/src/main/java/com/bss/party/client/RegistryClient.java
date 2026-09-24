@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.party.api.Wire.textOf;
 
 /**
  * The national-registry seam, re-sync face: person fetch by stable ref and
@@ -93,11 +94,12 @@ public class RegistryClient {
                 return List.of();
             }
             return resp.stream()
-                    .filter(e -> e.get("seq") instanceof Number)
+                    // a feed row that names no person is about nobody — skipped, never applied to "null"
+                    .filter(e -> e.get("seq") instanceof Number && e.get("personRef") != null)
                     .map(e -> new FeedEvent(
                             ((Number) e.get("seq")).longValue(),
                             String.valueOf(e.get("type")),
-                            String.valueOf(e.get("personRef")),
+                            textOf(e, "personRef"),
                             e.get("payload") instanceof Map<?, ?> p
                                     ? (Map<String, Object>) p : Map.of()))
                     .sorted(java.util.Comparator.comparingLong(FeedEvent::seq))

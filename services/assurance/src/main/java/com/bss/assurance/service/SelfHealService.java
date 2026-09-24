@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.assurance.api.Wire.idOf;
 
 /**
  * The autonomy moment of the AI-slice story: a fibre cut hits mid-match
@@ -40,8 +41,11 @@ public class SelfHealService {
         String target = "edge:gpu-site-" + site;
         int healed = 0;
         for (Map<String, Object> service : clients.servicesOnPath(affectedObject)) {
+            String serviceId = idOf(service);
+            if (serviceId == null) {
+                continue; // a service on the path without an id cannot be migrated — it used to migrate "null"
+            }
             try {
-                String serviceId = String.valueOf(service.get("id"));
                 clients.migrate(serviceId, target);
                 String party = ownerOf(service);
                 clients.openTicket(
@@ -67,10 +71,7 @@ public class SelfHealService {
     }
 
     private static String ownerOf(Map<String, Object> service) {
-        if (service.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            return String.valueOf(party.get("id"));
-        }
-        return null;
+        return service.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                ? idOf(parties.get(0)) : null;
     }
 }

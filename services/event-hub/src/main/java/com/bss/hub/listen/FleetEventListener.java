@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.hub.api.Wire.textOf;
 
 /** The ear on everything: every bss.*.events envelope, fanned to listeners. */
 @Component
@@ -33,8 +34,7 @@ public class FleetEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             hub.onFleetEvent(tenantId, eventType, payload);
         } catch (Exception e) {
             log.warn("hub: skipping unprocessable event: {}", e.getMessage());

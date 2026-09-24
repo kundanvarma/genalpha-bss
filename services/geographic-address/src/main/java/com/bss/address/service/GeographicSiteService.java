@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import static com.bss.address.api.Wire.idOf;
 
 /**
  * TMF674, the house way: the site LEANS on TMF673 next door — its place is
@@ -58,7 +59,7 @@ public class GeographicSiteService {
     public List<GeographicSiteView> findAll(String relatedPartyId) {
         return sites.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(s -> relatedPartyId == null || readParties(s.getRelatedPartyJson())
-                        .stream().anyMatch(p -> relatedPartyId.equals(String.valueOf(p.get("id")))))
+                        .stream().anyMatch(p -> relatedPartyId.equals(idOf(p))))
                 .map(this::toView).toList();
     }
 
@@ -145,8 +146,7 @@ public class GeographicSiteService {
         if (place instanceof List<?> list && !list.isEmpty()) {
             place = list.get(0);
         }
-        return place instanceof Map<?, ?> ref && ref.get("id") != null
-                ? String.valueOf(ref.get("id")) : null;
+        return idOf(place);
     }
 
     private GeographicSiteView toView(GeographicSite s) {
