@@ -38,23 +38,25 @@ public class BillingEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             if ("CustomerBillCreateEvent".equals(eventType)) {
                 Map<String, Object> bill = resource(envelope, "customerBill");
-                if (bill.get("id") == null) {
-                    return;
+                Object billId = bill.get("id");
+                if (billId == null) {
+                    return;   // a bill with no id posts nothing to the subledger
                 }
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                    revenue.postBill(String.valueOf(bill.get("id")), bill);
+                    revenue.postBill(billId.toString(), bill);
                 }
             } else if ("CreditNoteIssuedEvent".equals(eventType)) {
                 Map<String, Object> creditNote = resource(envelope, "creditNote");
                 // REFUNDED notes moved money via the PSP — the refund event
                 // books that; only REDUCED notes book contra-revenue here
-                if ("reduced".equals(creditNote.get("settlement")) && creditNote.get("id") != null) {
+                Object noteId = creditNote.get("id");
+                if ("reduced".equals(creditNote.get("settlement")) && noteId != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                        revenue.postCreditNote(String.valueOf(creditNote.get("id")), creditNote);
+                        revenue.postCreditNote(noteId.toString(), creditNote);
                     }
                 }
             }

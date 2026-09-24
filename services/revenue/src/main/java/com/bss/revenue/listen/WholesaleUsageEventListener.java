@@ -40,8 +40,8 @@ public class WholesaleUsageEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String type = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             if ("WholesaleUsageRatedEvent".equals(type)) {
                 // seeker side: the MVNO owes its host — book COGS
                 Map<String, Object> row = BillingEventListener.resource(envelope, "wholesaleUsageLedger");

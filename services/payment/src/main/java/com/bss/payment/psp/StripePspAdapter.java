@@ -53,8 +53,15 @@ public class StripePspAdapter implements PspAdapter {
                 .body(form).retrieve().body(Map.class);
         String status = String.valueOf(intent.get("status"));
         String label = labelOf(intent);
+        // An approval carries the id CAPTURE will use: capture() POSTs to
+        // /v1/payment_intents/{code}/capture, so an absent id would send the
+        // literal "null" to Stripe and the money would go nowhere with an
+        // approved-looking receipt. No id, no approval.
+        Object intentId = intent == null ? null : intent.get("id");
         return switch (status) {
-            case "requires_capture" -> Authorization.approved(String.valueOf(intent.get("id")), label);
+            case "requires_capture" -> intentId == null
+                    ? Authorization.declined(label, "Stripe returned no payment_intent id")
+                    : Authorization.approved(String.valueOf(intentId), label);
             case "requires_action" -> Authorization.challenge(
                     nextActionUrl(intent), label);
             default -> Authorization.declined(label, "Stripe status: " + status);
@@ -74,8 +81,9 @@ public class StripePspAdapter implements PspAdapter {
     public Refund refund(String authorizationCode, BigDecimal amount, String currency) {
         Map<String, Object> res = stripe.post().uri("/v1/refunds")
                 .body("payment_intent=" + authorizationCode).retrieve().body(Map.class);
-        boolean ok = res.get("id") != null;
-        return new Refund(ok, ok ? String.valueOf(res.get("id")) : null,
+        Object refundId = res == null ? null : res.get("id");
+        boolean ok = refundId != null;
+        return new Refund(ok, ok ? refundId.toString() : null,
                 ok ? null : "refund failed");
     }
 

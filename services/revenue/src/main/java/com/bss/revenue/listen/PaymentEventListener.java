@@ -41,13 +41,14 @@ public class PaymentEventListener {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventType = String.valueOf(envelope.get("eventType"));
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            Object rawTenant = envelope.get("tenantId");
+            String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 if ("PaymentStateChangeEvent".equals(eventType)) {
                     Map<String, Object> payment = BillingEventListener.resource(envelope, "payment");
-                    if ("captured".equals(payment.get("status")) && payment.get("id") != null) {
-                        revenue.postCash(String.valueOf(payment.get("id")), "captured", payment);
+                    Object paymentId = payment.get("id");
+                    if ("captured".equals(payment.get("status")) && paymentId != null) {
+                        revenue.postCash(paymentId.toString(), "captured", payment);
                     }
                 } else if ("PaymentRefundEvent".equals(eventType)) {
                     Map<String, Object> refund = BillingEventListener.resource(envelope, "refund");
