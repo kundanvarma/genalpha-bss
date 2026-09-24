@@ -235,7 +235,7 @@ public class RevenueService {
                 line("ar", null, value, paymentId, "Payment applied"));
         saveBalanced(tenant, sourceRef, "payment",
                 (bnpl ? "BNPL receivable — " : "Cash received — ") + paymentId, currency,
-                payment.get("ownerPartyId") == null ? partyOf(payment) : String.valueOf(payment.get("ownerPartyId")),
+                ownerOf(payment),
                 posting);
         return true;
     }
@@ -250,9 +250,13 @@ public class RevenueService {
     @Transactional
     public boolean postWholesaleCogs(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "wholesale:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("ratePerLine") == null) {
@@ -281,9 +285,13 @@ public class RevenueService {
     @Transactional
     public boolean postMobileWholesaleCogs(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "mobile-wholesale:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("amount") == null) {
@@ -313,10 +321,14 @@ public class RevenueService {
     @Transactional
     public boolean postMobileWholesaleCogsDelta(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         Object count = event.getOrDefault("rerateCount", 0);
         String sourceRef = "mobile-wholesale-rerate:" + id + ":" + count;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("delta") == null) {
@@ -351,10 +363,14 @@ public class RevenueService {
     @Transactional
     public boolean postMobileWholesaleRevenueDelta(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         Object count = event.getOrDefault("rerateCount", 0);
         String sourceRef = "mobile-wholesale-provider-rerate:" + id + ":" + count;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("delta") == null) {
@@ -390,10 +406,13 @@ public class RevenueService {
     @Transactional
     public boolean postClubShare(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String conversionId = String.valueOf(event.get("conversionId"));
+        Object rawConversionId = event.get("conversionId");
+        if (rawConversionId == null) {
+            return false;   // no conversionId on the event — nothing to key a posting by
+        }
+        String conversionId = rawConversionId.toString();
         String sourceRef = "club-share:" + conversionId;
-        if (conversionId == null || "null".equals(conversionId)
-                || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("amount") == null) {
@@ -422,9 +441,13 @@ public class RevenueService {
     @Transactional
     public boolean postMobileWholesaleRevenue(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "mobile-wholesale-rev:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (event.get("amount") == null) {
@@ -457,9 +480,13 @@ public class RevenueService {
     @Transactional
     public boolean postDeviceAgreementActivated(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "device-activation:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (!"OPERATOR_BOOK".equals(event.get("financingModel"))) {
@@ -488,10 +515,14 @@ public class RevenueService {
     @Transactional
     public boolean postDeviceContractAssetUnwind(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("agreementId"));
+        Object rawId = event.get("agreementId");
+        if (rawId == null) {
+            return false;   // no agreementId on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         Object no = event.getOrDefault("installmentNo", 0);
         String sourceRef = "device-unwind:" + id + ":" + no;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         BigDecimal amount = money(event.get("unwindAmount"));
@@ -515,9 +546,13 @@ public class RevenueService {
     @Transactional
     public boolean postDeviceEtf(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "device-etf:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         BigDecimal etf = money(event.get("etfAmount"));
@@ -551,9 +586,13 @@ public class RevenueService {
     @Transactional
     public boolean postDeviceSwap(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "device-swap:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (!"OPERATOR_BOOK".equals(event.get("financingModel"))) {
@@ -602,9 +641,13 @@ public class RevenueService {
     @Transactional
     public boolean postDevicePayout(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String id = String.valueOf(event.get("id"));
+        Object rawId = event.get("id");
+        if (rawId == null) {
+            return false;   // no id on the event — nothing to key a posting by
+        }
+        String id = rawId.toString();
         String sourceRef = "device-payout:" + id;
-        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         if (!"THIRD_PARTY_LOAN".equals(event.get("financingModel"))) {
@@ -640,10 +683,13 @@ public class RevenueService {
     @Transactional
     public boolean postDeviceWithdrawal(Map<String, Object> event) {
         String tenant = tenantScope.currentTenantId();
-        String agreementRef = String.valueOf(event.get("agreementRef"));
+        Object rawAgreementRef = event.get("agreementRef");
+        if (rawAgreementRef == null) {
+            return false;   // no agreementRef on the event — nothing to key a posting by
+        }
+        String agreementRef = rawAgreementRef.toString();
         String sourceRef = "device-withdrawal:" + agreementRef;
-        if (agreementRef == null || "null".equals(agreementRef)
-                || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
         BigDecimal subsidy = "OPERATOR_BOOK".equals(event.get("financingModel"))
@@ -1007,8 +1053,9 @@ public class RevenueService {
             String party = null;
             if (a.get("engagedParty") instanceof List<?> parties) {
                 for (Object p2 : parties) {
-                    if (p2 instanceof Map<?, ?> ref && ref.get("id") != null) {
-                        party = String.valueOf(ref.get("id"));
+                    Object refId = p2 instanceof Map<?, ?> ref ? ref.get("id") : null;
+                    if (refId != null) {
+                        party = refId.toString();
                         break;
                     }
                 }
@@ -1374,11 +1421,18 @@ public class RevenueService {
         return null;
     }
 
+    /** The payment's own owner if it names one, else the related party. */
+    private static String ownerOf(Map<String, Object> payment) {
+        Object owner = payment.get("ownerPartyId");
+        return owner == null ? partyOf(payment) : owner.toString();
+    }
+
     private static String partyOf(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && ref.get("id") != null) {
-                    return String.valueOf(ref.get("id"));
+                Object refId = p instanceof Map<?, ?> ref ? ref.get("id") : null;
+                if (refId != null) {
+                    return refId.toString();
                 }
             }
         }

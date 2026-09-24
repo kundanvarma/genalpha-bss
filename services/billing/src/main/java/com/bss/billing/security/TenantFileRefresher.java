@@ -52,7 +52,12 @@ public class TenantFileRefresher {
             Map<String, Object> bss = (Map<String, Object>) root.get("bss");
             Map<String, Object> block = (Map<String, Object>) bss.get("tenants");
             for (Map<String, Object> entry : (List<Map<String, Object>>) block.get("registry")) {
-                String id = String.valueOf(entry.get("id"));
+                Object rawId = entry.get("id");
+                if (rawId == null || String.valueOf(rawId).isBlank()) {
+                    log.warn("tenant entry without an 'id' in {} — skipped: {}", file, entry.keySet());
+                    continue;
+                }
+                String id = String.valueOf(rawId);
                 Object existing = tenants.byId(id);
                 if (existing != null) {
                     // LIVE MUTATION for a serving tenant: seams, brand and

@@ -122,7 +122,11 @@ public class ShadowBillingService {
             if (last == null) {
                 continue;   // never billed — nothing to drift from
             }
-            String productId = String.valueOf(product.get("id"));
+            Object rawProductId = product.get("id");
+            if (rawProductId == null) {
+                continue;   // no id — it cannot be matched to a billed line
+            }
+            String productId = rawProductId.toString();
             List<AppliedBillingRate> billRates = ratesOfBill.computeIfAbsent(last.getId(),
                     b -> rates.findByTenantIdAndBillId(tenant, b));
             AppliedBillingRate billed = billRates.stream()
@@ -131,7 +135,11 @@ public class ShadowBillingService {
             if (billed == null || billed.getAmountValue() == null) {
                 continue;   // this product wasn't a line on the last bill (new since)
             }
-            String offeringId = String.valueOf(ref.get("id"));
+            Object rawOfferingId = ref.get("id");
+            if (rawOfferingId == null) {
+                continue;   // no offering to price against
+            }
+            String offeringId = rawOfferingId.toString();
             BigDecimal current = priceCache.computeIfAbsent(
                     offeringId + "|" + runService.charsOf(product),
                     k -> runService.monthlyFor(offeringId, runService.charsOf(product), unitCache));
@@ -216,8 +224,9 @@ public class ShadowBillingService {
 
     private String ownerOf(Map<String, Object> product) {
         for (Object rp : product.get("relatedParty") instanceof List<?> l ? l : List.of()) {
-            if (rp instanceof Map<?, ?> m && m.get("id") != null) {
-                return String.valueOf(m.get("id"));
+            Object id = rp instanceof Map<?, ?> m ? m.get("id") : null;
+            if (id != null) {
+                return id.toString();
             }
         }
         return null;
