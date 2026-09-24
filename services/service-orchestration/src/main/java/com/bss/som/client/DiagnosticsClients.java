@@ -9,6 +9,7 @@ import org.springframework.web.client.RestClient;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import static com.bss.som.mapper.Wire.textOf;
 
 /**
  * What a LINE DIAGNOSIS needs to see, fail-open on every leg: the open
@@ -62,7 +63,7 @@ public class DiagnosticsClients {
                     .uri("/subscribers?tenantId={t}", tenantId)
                     .retrieve().body(List.class);
             return subs == null ? Optional.empty() : subs.stream()
-                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
+                    .filter(s -> serviceId.equals(textOf(s, "serviceId")))
                     .findFirst()
                     .flatMap(s -> s.get("buckets") instanceof List<?> buckets && !buckets.isEmpty()
                             ? Optional.of((Map<String, Object>) buckets.get(0)) : Optional.empty());

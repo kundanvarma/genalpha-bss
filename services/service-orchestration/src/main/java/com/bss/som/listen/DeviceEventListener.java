@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.som.mapper.Wire.textOf;
 
 /**
  * The network's device truth (EIR: IMEI/TAC → model) reaches the SOM so a line
@@ -39,16 +40,17 @@ public class DeviceEventListener {
             if (!"DeviceDetectedEvent".equals(String.valueOf(envelope.get("eventType")))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha" : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
             Map<String, Object> resource = event.values().stream().filter(v -> v instanceof Map)
                     .map(v -> (Map<String, Object>) v).findFirst().orElse(Map.of());
-            if (resource.get("partyId") == null || resource.get("deviceModel") == null) {
+            String partyId = textOf(resource, "partyId");
+            String deviceModel = textOf(resource, "deviceModel");
+            if (partyId == null || deviceModel == null) {
                 return;
             }
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                orchestration.onDeviceDetected(tenantId, String.valueOf(resource.get("partyId")),
-                        String.valueOf(resource.get("deviceModel")));
+                orchestration.onDeviceDetected(tenantId, partyId, deviceModel);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable device event: {}", e.getMessage());

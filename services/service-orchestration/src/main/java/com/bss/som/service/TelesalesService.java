@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * THE TELESALES CHANNEL: an outbound partner (their dialer or ours)
@@ -92,8 +93,10 @@ public class TelesalesService {
         if (email == null || email.isBlank()) {
             throw new BadRequestException("customerEmail is required — the offer is confirmed by that identity");
         }
-        Map<String, Object> customer = party.individualByEmail(email).orElse(null);
-        if (customer == null && dto.prospectName() == null) {
+        // a customer record without an id is no identity yet: the offer then
+        // goes the COLD way and identity arrives when they register
+        String customerId = idOf(party.individualByEmail(email).orElse(null));
+        if (customerId == null && dto.prospectName() == null) {
             throw new BadRequestException(
                     "no customer with that email — for a COLD prospect, send prospectName too");
         }
@@ -107,8 +110,8 @@ public class TelesalesService {
         offer.setTenantId(tenant);
         offer.setDealerOrgId(dealer.getDealerOrgId());
         offer.setStore(dto.campaign() == null ? dealer.getName() : dto.campaign());
-        if (customer != null) {
-            offer.setCustomerId(String.valueOf(customer.get("id")));
+        if (customerId != null) {
+            offer.setCustomerId(customerId);
         } else {
             // COLD: no identity yet — the offer remembers who was called;
             // identity arrives when they register with this email

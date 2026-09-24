@@ -8,6 +8,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import static com.bss.som.mapper.Wire.textOf;
 
 /**
  * The telesales dial list reads its audience from insight — the SAME
@@ -36,7 +37,7 @@ public class InsightClient {
                             .queryParam("segment", segment).build())
                     .retrieve().body(List.class);
             return members == null ? List.of()
-                    : members.stream().map(m -> String.valueOf(m.get("partyId"))).toList();
+                    : members.stream().map(m -> textOf(m, "partyId")).filter(java.util.Objects::nonNull).toList();
         } catch (Exception e) {
             log.warn("segment '{}' unreadable — the dial list stays empty: {}", segment, e.getMessage());
             return List.of();

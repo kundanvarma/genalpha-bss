@@ -19,6 +19,8 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.som.mapper.Wire.idOf;
+import static com.bss.som.mapper.Wire.textOf;
 
 /**
  * The phone moved its subscription to a new eSIM through the entitlement
@@ -56,19 +58,19 @@ public class EntitlementEventListener {
             if (!"SubscriptionTransferRequestedEvent".equals(envelope.get("eventType"))) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
+            String tenantId = textOf(envelope, "tenantId");
             Object payload = envelope.get("event");
             if (tenantId == null || !(payload instanceof Map<?, ?> p) || !(p.get("subscriptionTransfer") instanceof Map<?, ?> t)) {
                 return;
             }
-            String serviceId = t.get("serviceId") == null ? null : String.valueOf(t.get("serviceId"));
-            String newIccid = t.get("newIccid") == null ? null : String.valueOf(t.get("newIccid"));
-            String eid = t.get("targetEid") == null ? null : String.valueOf(t.get("targetEid"));
+            String serviceId = textOf(t, "serviceId");
+            String newIccid = textOf(t, "newIccid");
+            String eid = textOf(t, "targetEid");
             if (serviceId == null || newIccid == null) {
                 return;
             }
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                transfer(tenantId, serviceId, newIccid, eid, String.valueOf(t.get("id")));
+                transfer(tenantId, serviceId, newIccid, eid, idOf(t));
             }
         } catch (Exception e) {
             log.warn("eSIM transfer not applied ({})", e.getMessage());

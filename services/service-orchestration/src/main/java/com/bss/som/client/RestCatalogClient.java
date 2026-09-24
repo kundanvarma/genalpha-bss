@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.som.mapper.Wire.idOf;
 
 @Component
 public class RestCatalogClient implements CatalogClient {
@@ -90,12 +91,12 @@ public class RestCatalogClient implements CatalogClient {
             Map<String, Object> offering = restClient.get()
                     .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                     .retrieve().body(Map.class);
-            Object specRef = offering == null ? null : offering.get("productSpecification");
-            if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+            String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+            if (specId == null) {
                 return java.util.List.of();
             }
             Map<String, Object> spec = restClient.get()
-                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", String.valueOf(ref.get("id")))
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
                     .retrieve().body(Map.class);
             if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
                 for (Object c : chars) {
@@ -123,12 +124,12 @@ public class RestCatalogClient implements CatalogClient {
             Map<String, Object> offering = restClient.get()
                     .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                     .retrieve().body(Map.class);
-            Object specRef = offering == null ? null : offering.get("productSpecification");
-            if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+            String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+            if (specId == null) {
                 return Optional.empty();
             }
             Map<String, Object> spec = restClient.get()
-                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", String.valueOf(ref.get("id")))
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
                     .retrieve().body(Map.class);
             String profile = null;
             Integer hours = null;
@@ -172,13 +173,12 @@ public class RestCatalogClient implements CatalogClient {
                 Map<String, Object> offering = restClient.get()
                         .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                         .retrieve().body(Map.class);
-                Object specRef = offering == null ? null : offering.get("productSpecification");
-                if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+                String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+                if (specId == null) {
                     return Optional.empty();
                 }
                 Map<String, Object> spec = restClient.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}",
-                                String.valueOf(ref.get("id")))
+                        .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
                         .retrieve().body(Map.class);
                 if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
                     for (Object o : chars) {

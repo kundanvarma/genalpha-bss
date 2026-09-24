@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.som.mapper.Wire.textOf;
 
 /**
  * The BSS→SOM handoff: new product orders arrive as events and the SOM
@@ -43,8 +44,7 @@ public class OrderEventListener {
             if (!"ProductOrderCreateEvent".equals(type) && !"ProductOrderStateChangeEvent".equals(type)) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             Object order = event.get("productOrder");

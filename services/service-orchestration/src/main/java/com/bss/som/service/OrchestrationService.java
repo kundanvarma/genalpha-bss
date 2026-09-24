@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * The thin SOM: a new product order decomposes into one service order per
@@ -130,7 +131,15 @@ public class OrchestrationService {
     @SuppressWarnings("unchecked")
     public void orchestrate(Map<String, Object> productOrder) {
         String tenant = tenantScope.currentTenantId();
-        String productOrderId = String.valueOf(productOrder.get("id"));
+        String productOrderId = idOf(productOrder);
+        if (productOrderId == null) {
+            // an order without an id cannot be orchestrated once, so it is not
+            // orchestrated at all: every service order it minted would share
+            // the id "null", and the once-per-order guard would then drop every
+            // later such event silently
+            log.warn("product order event without an id — not orchestrated: {}", productOrder.keySet());
+            return;
+        }
         String state = String.valueOf(productOrder.get("state"));
         // acknowledged = fresh digital order; completed = physical fulfilment
         // just finished, so its digital services provision NOW. Either way,
@@ -148,11 +157,11 @@ public class OrchestrationService {
         if ((!"acknowledged".equals(state) && !fulfilled) || alreadyOrchestrated) {
             return;
         }
-        String owner = null;
-        if (productOrder.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> ref) {
-            owner = String.valueOf(ref.get("id"));
-        }
+        // a party reference without an id gives NO owner (every downstream
+        // check is null-safe), never an owner literally called "null" that then
+        // holds the line, earns the entitlement and is charged for the usage
+        String owner = productOrder.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                ? idOf(parties.get(0)) : null;
         List<Map<String, Object>> items = new ArrayList<>();
         collectItems((List<Map<String, Object>>) productOrder.get("productOrderItem"), items);
         // Plan changes (action=modify) never create a service or draw a
@@ -176,14 +185,14 @@ public class OrchestrationService {
         // these; when the base activates instantly, so may the dependent.
         java.util.Set<String> placedItemIds = new java.util.HashSet<>();
         for (Map<String, Object> it : items) {
-            if (it.get("id") != null && it.get("product") instanceof Map<?, ?> pr
-                    && pr.get("place") != null) {
-                placedItemIds.add(String.valueOf(it.get("id")));
+            String placedId = idOf(it);
+            if (placedId != null && it.get("product") instanceof Map<?, ?> pr && pr.get("place") != null) {
+                placedItemIds.add(placedId);
             }
         }
         boolean anyUnreported = false;
         for (Map<String, Object> item : items) {
-            String itemId = item.get("id") != null ? String.valueOf(item.get("id")) : null;
+            String itemId = idOf(item);
             boolean deferred = item.get("product") instanceof Map<?, ?> product && product.get("place") != null;
             // Choose-your-number: the shopper's picked MSISDN rides the item as
             // a product characteristic — honored below IF still free.
@@ -199,20 +208,18 @@ public class OrchestrationService {
             }
             final String wish = wishNumber;
             Map<String, Object> offering = (Map<String, Object>) item.get("productOffering");
+            String offeringId = idOf(offering); // null when the item names no offering
             // the SERVICE must carry the offering's real name (the product
             // record does, and downstream correlates the two by it) — an
             // order item that names only the id gets the name from the catalog
             String name = offering != null && offering.get("name") != null
                     ? String.valueOf(offering.get("name"))
-                    : offering != null && offering.get("id") != null
-                            ? catalog.nameOf(String.valueOf(offering.get("id"))).orElse("service")
-                            : "service";
+                    : offeringId != null ? catalog.nameOf(offeringId).orElse("service") : "service";
             // The catalog category decides FULFILMENT, not just placement:
             // insurance is billing-only (no service at all), partner services
             // activate with the partner, security toggles a feature. Anything
             // else — or an unreachable catalog — is a network line, as always.
-            String category = catalog.categoryOf(offering == null || offering.get("id") == null
-                    ? null : String.valueOf(offering.get("id"))).orElse("");
+            String category = catalog.categoryOf(offeringId).orElse("");
             if ("Insurance".equals(category) || "Top-ups".equals(category)) {
                 // insurance covers, top-ups boost an allowance — neither is a
                 // service; they bill, and that's the whole story. Nothing to
@@ -220,7 +227,6 @@ public class OrchestrationService {
                 // intent — a BOOST PASS: the customer's mobile line rides a
                 // priority slice for the pass's hours. The core enforces the
                 // window; the line's record carries it so everyone can see it.
-                String offeringId = offering == null || offering.get("id") == null ? null : String.valueOf(offering.get("id"));
                 final String passName = name;
                 final String passOwner = owner;
                 catalog.sliceIntentOf(offeringId).ifPresent(intent ->
@@ -251,9 +257,10 @@ public class OrchestrationService {
             boolean reliesOnPending = false;
             if (item.get("orderItemRelationship") instanceof List<?> rels) {
                 for (Object r : rels) {
-                    if (r instanceof Map<?, ?> rel
+                    String reliedOn = idOf(r);
+                    if (r instanceof Map<?, ?> rel && reliedOn != null
                             && "reliesOn".equals(String.valueOf(rel.get("relationshipType")))
-                            && placedItemIds.contains(String.valueOf(rel.get("id")))) {
+                            && placedItemIds.contains(reliedOn)) {
                         reliesOnPending = true;
                     }
                 }
@@ -270,8 +277,7 @@ public class OrchestrationService {
             so.setProductOrderId(productOrderId);
             so.setOwnerPartyId(owner);
             so.setItemName(name);
-            so.setOfferingId(offering == null || offering.get("id") == null ? null
-                    : String.valueOf(offering.get("id")));
+            so.setOfferingId(offeringId);
             so.setCreatedAt(OffsetDateTime.now());
             so.setLastUpdate(OffsetDateTime.now());
             serviceOrders.save(so);
@@ -552,19 +558,20 @@ public class OrchestrationService {
                 if ("dealer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
                     dealerRef = (Map<String, Object>) ref;
                 } else if ("customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    customerId = String.valueOf(ref.get("id"));
+                    customerId = idOf(ref); // a customer ref without an id names nobody
                 }
             }
         }
-        if (dealerRef == null) {
-            return;
+        String dealerOrgId = idOf(dealerRef);
+        if (dealerOrgId == null) {
+            return; // a dealer role with no id attributes the sale to no one
         }
         com.bss.som.entity.DealerAgreement agreement = dealerAgreements
-                .findByTenantIdAndDealerOrgId(tenant, String.valueOf(dealerRef.get("id")))
+                .findByTenantIdAndDealerOrgId(tenant, dealerOrgId)
                 .orElse(null);
         if (agreement == null) {
             log.warn("order {} names dealer {} but no agreement exists — no commission",
-                    productOrderId, dealerRef.get("id"));
+                    productOrderId, dealerOrgId);
             return;
         }
         com.bss.som.entity.CommissionEntry entry = new com.bss.som.entity.CommissionEntry();
@@ -644,11 +651,9 @@ public class OrchestrationService {
         for (Map<String, Object> item : modifies) {
             String newName = item.get("productOffering") instanceof Map<?, ?> o && o.get("name") != null
                     ? String.valueOf(o.get("name")) : null;
-            String serviceId = null;
-            if (item.get("product") instanceof Map<?, ?> p && p.get("realizingService") instanceof List<?> rs
-                    && !rs.isEmpty() && rs.get(0) instanceof Map<?, ?> ref && ref.get("id") != null) {
-                serviceId = String.valueOf(ref.get("id"));
-            }
+            String serviceId = item.get("product") instanceof Map<?, ?> p
+                    && p.get("realizingService") instanceof List<?> rs && !rs.isEmpty()
+                    ? idOf(rs.get(0)) : null;
             if (newName == null || serviceId == null) {
                 continue;
             }
@@ -658,8 +663,7 @@ public class OrchestrationService {
             List<Map<String, Object>> newChars = item.get("product") instanceof Map<?, ?> mp
                     && ((Map<String, Object>) mp).get("productCharacteristic") instanceof List<?> mc
                     ? (List<Map<String, Object>>) mc : null;
-            String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
-                    && off.get("id") != null ? String.valueOf(off.get("id")) : null;
+            String modifyOfferingId = idOf(item.get("productOffering"));
             services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
                 if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
                     log.warn("modify order names service {} owned by another party — change skipped",
@@ -753,7 +757,7 @@ public class OrchestrationService {
         wo.setTenantId(tenant);
         wo.setProductOrderId(productOrderId);
         wo.setServiceId(serviceId);
-        wo.setOrderItemId(item.get("id") == null ? null : String.valueOf(item.get("id")));
+        wo.setOrderItemId(idOf(item));
         wo.setOwnerPartyId(owner);
         wo.setAccessOwner(accessOwner);
         wo.setAccessLayer(accessLayer);

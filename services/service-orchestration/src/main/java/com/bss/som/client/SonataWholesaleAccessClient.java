@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClientException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * The real (HTTP) access-seeker adapter: places the order on the owner's MEF LSO
@@ -108,7 +109,7 @@ public class SonataWholesaleAccessClient implements WholesaleAccessClient {
                         }
                     })
                     .body(json).retrieve().body(Map.class);
-            String id = resp == null ? null : String.valueOf(resp.get("id"));
+            String id = idOf(resp); // no id = no external reference, not one called "null"
             log.info("Sonata: {} acknowledged access order {} (buyerRef {})", accessOwner, id, buyerRef);
             return new AccessOrderResult(id, WholesaleAccessOrder.IN_PROGRESS);
         } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {

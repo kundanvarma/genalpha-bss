@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.som.mapper.Wire.idOf;
 
 /**
  * The {@code sigscale} OCS adapter: SigScale OCS (open source, Apache-2.0)
@@ -117,7 +118,7 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             Map<String, Object> product = createProduct(c, tenantId, partyId, serviceId, chargingSpecId,
                     allowanceGbOf(offer), zeroRatedApps);
             String identity = identityOf(tenantId, serviceId);
-            linkService(c, identity, String.valueOf(product.get("id")));
+            linkService(c, identity, productIdOf(product));
             log.info("SigScale OCS: service {} provisioned as product {} on '{}' ({} GB), charging identity {}{}",
                     serviceId, product.get("id"), chargingSpecId, allowanceGbOf(offer), identity,
                     zeroRatedApps == null || zeroRatedApps.isEmpty() ? "" : " zero-rating " + zeroRatedApps);
@@ -212,9 +213,14 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             // a SigScale product is never patched (a patch rewrites it and drops
             // its bucket links): the line's subscription is re-created under the
             // new owner on the SAME plan, and its remaining data follows it
+            String offeringName = idOf(product.get("productOffering"));
+            if (offeringName == null) {
+                log.warn("SigScale OCS: product {} for service {} names no offering — transfer not mirrored",
+                        product.get("id"), serviceId);
+                return;
+            }
             double allowance = parse(characteristic(product, "bssAllowanceGB"));
-            String freshId = replaceProduct(c, tenantId, serviceId, product,
-                    String.valueOf(((Map<?, ?>) product.get("productOffering")).get("id")),
+            String freshId = replaceProduct(c, tenantId, serviceId, product, offeringName,
                     newPartyId, allowance, remainingOctets(product));
             log.info("SigScale OCS: service {} now charges to party {} (product {} → {})", serviceId, newPartyId,
                     product.get("id"), freshId);
@@ -235,7 +241,7 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             String offeringName, String partyId, double allowanceGb, double carryOctets) {
         List<String> zero = splitCsv(characteristic(old, "bssZeroRatedApps"));
         Map<String, Object> fresh = createProduct(c, tenantId, partyId, serviceId, offeringName, allowanceGb, zero);
-        String freshId = String.valueOf(fresh.get("id"));
+        String freshId = productIdOf(fresh);
         List<String> identities = realizingServices(old);
         for (String identity : identities) {
             patch(c, SERVICES + "/service/" + identity,
@@ -477,13 +483,27 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
         return -1;
     }
 
+    /**
+     * The id the OCS gave a product it just created. An answer without one is
+     * a failed provisioning, reported as such — never a line linked to the
+     * product "null".
+     */
+    private static String productIdOf(Map<String, Object> created) {
+        String id = idOf(created);
+        if (id == null) {
+            throw new IllegalStateException("SigScale OCS created a product but returned no id");
+        }
+        return id;
+    }
+
     static List<String> realizingServices(Map<String, Object> product) {
         List<String> ids = new ArrayList<>();
         Object rs = product == null ? null : product.get("realizingService");
         if (rs instanceof List<?> list) {
             for (Object o : list) {
-                if (o instanceof Map<?, ?> m && m.get("id") != null) {
-                    ids.add(String.valueOf(m.get("id")));
+                String id = idOf(o);
+                if (id != null) {
+                    ids.add(id);
                 }
             }
         }
