@@ -117,6 +117,11 @@ for n in $CTK_CLAIMED; do
 done
 grep -qiE "CTKs certified" README.md \
   || fail "README must say the CTKs are CERTIFIED (each on the dataset of its day), not that they pass now — see docs/ctk-conformance.md's drift note"
+# Every suite a document NAMES must exist: a renamed suite must not leave a
+# stale name behind as a "proof" (the semantic-maturity table cites suites).
+for f in $(grep -ohE '`[a-z0-9_]+_test`' docs/ctk-conformance.md docs/capability-map.md 2>/dev/null | tr -d '`' | sort -u); do
+  [ -f "ops/e2e/$f.js" ] || fail "docs cite suite '$f' but ops/e2e/$f.js does not exist"
+done
 
 # ------------------------------------------------------------ gates bite ----
 # A gate that cannot fail is worse than no gate: it is believed. Every script
