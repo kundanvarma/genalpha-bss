@@ -1,14 +1,21 @@
 {{- range $name, $svc := .Values.services }}
 {{- if ne $svc.enabled false }}
+{{- /* A service that keeps state on disk (SigScale's mnesia database, bound
+       to the Erlang node name) renders as a StatefulSet: a stable hostname
+       and a volume claim per replica. Everything else is a Deployment. */}}
+{{- $stateful := and $svc.persistence $svc.persistence.enabled }}
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: {{ if $stateful }}StatefulSet{{ else }}Deployment{{ end }}
 metadata:
   name: {{ $name }}
   labels:
     app.kubernetes.io/name: {{ $name }}
     app.kubernetes.io/part-of: genalpha-bss
 spec:
+  {{- if $stateful }}
+  serviceName: {{ $name }}
+  {{- end }}
   # per-service override first (the P0 tick locks make >1 safe), then the
   # chart-wide default
   replicas: {{ $svc.replicas | default $.Values.replicas }}
@@ -96,6 +103,24 @@ spec:
             periodSeconds: 15
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
+          {{- if $stateful }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ $svc.persistence.mountPath | quote }}
+          {{- end }}
+  {{- if $stateful }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if $svc.persistence.storageClass }}
+        storageClassName: {{ $svc.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $svc.persistence.size | default "2Gi" | quote }}
+  {{- end }}
 ---
 apiVersion: v1
 kind: Service
