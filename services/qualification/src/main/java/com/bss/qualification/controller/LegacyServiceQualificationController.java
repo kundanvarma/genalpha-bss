@@ -59,7 +59,7 @@ public class LegacyServiceQualificationController {
     public ResponseEntity<Map<String, Object>> create(@RequestBody ServiceQualificationDocument body) {
         // the envelope is typed and refuses what the server owns (id, state, tenant);
         // the TMF body under it stays open, as the R18 kit requires
-        Map<String, Object> dto = body.toDocument();
+        Map<String, Object> dto = new LinkedHashMap<>(body.toDocument());
         List<Map<String, Object>> items = body.serviceQualificationItem();
         if (items == null || items.isEmpty()) {
             throw new BadRequestException(
