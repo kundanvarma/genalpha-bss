@@ -12,7 +12,7 @@ prove it.
 mvn -q package -DskipTests && docker compose build && docker compose up -d
 ```
 
-→ [Quickstart](#quickstart) (demo data + every persona login) · [CTK scorecard](docs/ctk-conformance.md) · [the proof run — 87/87, attempts on record](https://kundanvarma.github.io/genalpha-bss/proof-run.html) · [guided demo](#a-look-at-it) · [Growth guide](docs/growth-guide.md) · [Martech guide](docs/martech-guide.md)
+→ [Quickstart](#quickstart) (demo data + every persona login) · [CTK scorecard](docs/ctk-conformance.md) · [the proof run — every suite, attempts on record](https://kundanvarma.github.io/genalpha-bss/proof-run.html) · [guided demo](#a-look-at-it) · [Growth guide](docs/growth-guide.md) · [Martech guide](docs/martech-guide.md)
 
 **At a glance**
 

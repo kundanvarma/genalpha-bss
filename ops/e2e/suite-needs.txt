@@ -1,0 +1,34 @@
+# suite -> compose services it needs UP beyond the core (space-separated).
+# The proof runner starts them before the suite (idempotent) and waits for
+# health. Learned the expensive way on 24 Sep 2026: eight red suites in one
+# night were nothing but a stopped downstream — "UnresolvedAddress", 502
+# "party-account is unreachable", "reading 'id'" — and every one was green
+# the moment its service ran. A suite's needs are data, here, not memory.
+agentic_workforce_test      trouble-ticket mock-legacy
+ai_slice_test               quote assurance mock-5gc intelligence
+audience_scheduler_test     bss-bridge insight
+audience_snapshot_test      bss-bridge insight
+audience_sql_test           bss-bridge insight
+b2b_test                    communication quote
+bss_traits_test             bss-bridge insight
+campaign_lifecycle_test     campaign
+copilot_experience_test     intelligence mock-llm
+copilot_test                intelligence mock-llm
+decision_log_test           campaign insight
+device_commerce_test        revenue device-commerce
+device_entitlement_test     device-entitlement mock-ts43-device mock-smdp mock-hss
+engagement_test             communication insight
+family_phase2_test          communication
+frequency_dnc_test          mock-social communication
+fulfilment_test             fulfilment mock-bring mock-postnord mock-logistics
+interaction_timeline_test   communication party-interaction campaign
+knowledge_help_test         knowledge intelligence
+lead_cdp_engagement_test    quote insight communication
+loyalty_test                loyalty
+omnichannel_test            campaign party-interaction communication
+process_memory_test         process trouble-ticket
+referral_test               campaign revenue usage
+registry_address_test       geographic-address mock-freg insight
+signal_intelligence_test    intelligence mock-servicedesk campaign
+telesales_test              mock-dnc party-interaction insight service-orchestration
+wholesale_open_access_test  agreement qualification service-orchestration

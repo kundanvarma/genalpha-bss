@@ -27,7 +27,7 @@ set -u
 cd "$(dirname "$0")/.."
 export PATH=/opt/homebrew/bin:$PATH
 
-# the suites are Playwright — make sure it is installed before we judge 87
+# the suites are Playwright — make sure it is installed before we judge all
 # of them (a fresh clone has no node_modules; this is idempotent and quick)
 if [ ! -d ops/e2e/node_modules/playwright ]; then
   echo "[$(date +%H:%M:%S)] installing Playwright for the suites ..."
@@ -69,7 +69,38 @@ wait_ready() {
   return 1
 }
 
+# A suite's downstreams, from ops/e2e/suite-needs.txt: start them (idempotent
+# on a fleet that already has them) and wait until each reports healthy. A
+# suite that fails because its service was not running is not a finding.
+ensure_needs() {
+  local needs
+  needs=$(awk -v s="$1" '$1==s {$1=""; print}' ops/e2e/suite-needs.txt 2>/dev/null)
+  [ -z "$needs" ] && return 0
+  # shellcheck disable=SC2086
+  docker compose up -d --no-deps $needs >/dev/null 2>&1 || true
+  for svc in $needs; do
+    local c="bss-$svc" i
+    for i in $(seq 1 24); do
+      case "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$c" 2>/dev/null)" in
+        healthy|running) break ;;
+      esac
+      sleep 5
+    done
+  done
+}
+
+# infra/tenants/tenants.yml is a git-tracked FIXTURE that the onboarding suites
+# (operator_form, third_operator) rewrite through the API — third_operator
+# re-onboards "fjord" as a clone of nova and fjord's ai-visibility flips from
+# dark to search-only, which made geo_discoverability red on every run. The
+# committed file is the truth: restore it after the preamble and at the end.
+restore_tenants_fixture() {
+  git checkout -- infra/tenants/tenants.yml 2>/dev/null || return 0
+  echo "[$(date +%H:%M:%S)] tenants.yml restored from git (the fleet re-reads it within a refresh interval)"
+}
+
 before_suite() {
+  ensure_needs "$1"
   case "$1" in
     closed_loop_test|workforce_runtime_test)
       # both drive the controller itself; agentic_workforce needs it PARKED
@@ -133,6 +164,7 @@ docker stop bss-worker-controller >/dev/null 2>&1 || true
 node ops/e2e/debris_sweep.js || true
 
 for s in $PREAMBLE; do run_one "$s"; done
+restore_tenants_fixture
 for f in ops/e2e/*_test.js; do
   name=$(basename "$f" .js)
   case " $PREAMBLE " in *" $name "*) continue;; esac
@@ -159,6 +191,7 @@ TOTAL=$(awk -F'\t' '{ seen[$1] = 1 } END { n = 0; for (s in seen) n++; print n }
 FLAKY_N=$(printf '%s' "$FLAKY_LIST" | grep -c . || true)
 FAILED_N=$(printf '%s' "$FAILED_LIST" | grep -c . || true)
 
+restore_tenants_fixture
 echo "PROOF-RUN COMPLETE: $CLEAN/$TOTAL clean · $FLAKY_N flaky · $FAILED_N failed"
 [ "$FLAKY_N" -gt 0 ] && { echo "FLAKY (passed only on retry):"; echo "$FLAKY_LIST"; }
 [ "$FAILED_N" -gt 0 ] && { echo "FAILED:"; echo "$FAILED_LIST"; }
