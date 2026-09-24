@@ -10,6 +10,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.insight.api.Wire.textOf;
 
 /**
  * Lands every service's decisions and outcomes in the log. Same doctrine as
@@ -41,7 +42,7 @@ public class DecisionLogListener {
             if (!"DecisionRecordedEvent".equals(type) && !"DecisionOutcomeEvent".equals(type)) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha" : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 if ("DecisionRecordedEvent".equals(type)) {
@@ -50,8 +51,7 @@ public class DecisionLogListener {
                 } else {
                     Map<String, Object> outcome = event.get("decisionOutcome") instanceof Map<?, ?> o
                             ? (Map<String, Object>) o : Map.of();
-                    decisions.outcome(tenantId, outcome.get("decisionId") == null ? null
-                            : String.valueOf(outcome.get("decisionId")), String.valueOf(outcome.get("outcome")),
+                    decisions.outcome(tenantId, textOf(outcome, "decisionId"), String.valueOf(outcome.get("outcome")),
                             outcome.get("value"), outcome.get("observedAt"));
                 }
             }

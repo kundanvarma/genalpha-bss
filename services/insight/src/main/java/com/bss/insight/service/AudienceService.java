@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import static com.bss.insight.api.Wire.textOf;
 
 /**
  * Saved audiences with a criteria tree, evaluated against the consented,
@@ -290,7 +291,7 @@ public class AudienceService {
             return "(" + allTraitParties() + " EXCEPT " + compile(m.get("not"), ctx) + ")";
         }
         int i = ctx.n++;
-        String key = String.valueOf(m.get("key"));
+        String key = textOf(m, "key"); // a rule without a key binds null and matches no trait, not the trait "null"
         String op = m.get("op") == null ? "eq" : String.valueOf(m.get("op"));
         String value = String.valueOf(m.get("value"));
         ctx.params.put("k" + i, key);
@@ -461,7 +462,7 @@ public class AudienceService {
         return switch (type) {
             case "interest" -> interests.contains(value);            // first-party behaviour
             case "audience" -> ga4.contains(value);                  // analytics-computed audience
-            case "trait" -> matchesTrait(traitsByKey.get(String.valueOf(m.get("key"))),
+            case "trait" -> matchesTrait(traitsByKey.get(textOf(m, "key")),
                     m.get("op") == null ? "eq" : String.valueOf(m.get("op")), value); // BSS-native customer data
             case "source" -> hasValue(traitsByKey.get("source"), value);   // prospect: where the lead came from
             case "consent" -> hasValue(traitsByKey.get("consent"), value); // prospect: consent state
