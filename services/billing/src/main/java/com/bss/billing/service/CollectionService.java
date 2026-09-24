@@ -334,10 +334,11 @@ public class CollectionService {
     private void enforce(String tenantId, CollectionCase c, String mode) {
         List<String> enforced = new ArrayList<>(readEnforced(c));
         for (Map<String, Object> service : som.servicesOf(c.getAccountId())) {
-            String serviceId = String.valueOf(service.get("id"));
-            if (!"active".equals(service.get("state"))) {
-                continue;
+            Object rawServiceId = service.get("id");
+            if (rawServiceId == null || !"active".equals(service.get("state"))) {
+                continue;   // no id: there is nothing we could enforce against
             }
+            String serviceId = rawServiceId.toString();
             if ("restrict".equals(mode)) {
                 // emergency numbers stay reachable — the whitelist is not optional
                 som.restrict(serviceId, "nonpayment", Map.of(
@@ -762,7 +763,7 @@ public class CollectionService {
                 steps.add(new Step(
                         Integer.parseInt(String.valueOf(s.get("offsetDays"))),
                         action,
-                        s.get("templateId") == null ? null : String.valueOf(s.get("templateId")),
+                        templateIdOf(s),
                         s.get("feeType") == null ? "none" : String.valueOf(s.get("feeType")),
                         s.get("feeAmount") == null ? null
                                 : new BigDecimal(String.valueOf(s.get("feeAmount")))));
@@ -836,5 +837,11 @@ public class CollectionService {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalArgumentException("unserializable JSON", e);
         }
+    }
+
+    /** A dunning step's template id, or null — never the text "null". */
+    private static String templateIdOf(Map<String, Object> step) {
+        Object id = step.get("templateId");
+        return id == null ? null : id.toString();
     }
 }

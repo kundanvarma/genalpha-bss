@@ -151,10 +151,7 @@ public class BillingRunService {
         // Owner -> their active products, owner derived from the customer related party.
         Map<String, List<Map<String, Object>>> byOwner = new LinkedHashMap<>();
         for (Map<String, Object> product : inventory.activeProducts()) {
-            String owner = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
-                    .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                    .map(p -> String.valueOf(p.get("id")))
-                    .findFirst().orElse(null);
+            String owner = customerPartyId(product);
             if (owner != null) {
                 byOwner.computeIfAbsent(owner, k -> new ArrayList<>()).add(product);
             }
@@ -176,7 +173,10 @@ public class BillingRunService {
                         .getOrDefault("relatedParty", List.of())).stream()
                         .filter(p -> "payer".equalsIgnoreCase(String.valueOf(p.get("role"))))
                         .findFirst().orElse(null);
-                String payer = payerParty == null ? ownerId : String.valueOf(payerParty.get("id"));
+                // a payer party with no id is not a different payer — fall
+                // back to the owner rather than billing someone called "null"
+                String payerId = idOf(payerParty);
+                String payer = payerId == null ? ownerId : payerId;
                 if (!payer.equals(ownerId)) {
                     // HOUSEHOLD vs B2B: a payer can be a person (parent pays
                     // for the child) — only Organization payers make an ORG
@@ -219,7 +219,7 @@ public class BillingRunService {
                 if (!(offeringRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
                     continue;
                 }
-                String offeringId = String.valueOf(ref.get("id"));
+                String offeringId = ref.get("id").toString();
                 if (!categoriesOf(offeringId, categoryCache).contains("devices")) {
                     continue;
                 }
@@ -229,13 +229,15 @@ public class BillingRunService {
                 if (monthly.compareTo(cap) <= 0) {
                     continue;
                 }
-                String deviceOwner = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
-                        .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(null);
+                String deviceOwner = customerPartyId(product);
                 if (deviceOwner == null) {
                     continue;
                 }
-                companyShareOf.put(String.valueOf(product.get("id")), cap);
+                String deviceProductId = idOf(product);
+                if (deviceProductId == null) {
+                    continue;   // no id: its cap would key on "null" and collide
+                }
+                companyShareOf.put(deviceProductId, cap);
                 AppliedBillingRate excess = new AppliedBillingRate();
                 excess.setId(UUID.randomUUID().toString());
                 excess.setTenantId(tenantId);
@@ -471,7 +473,7 @@ public class BillingRunService {
                 if (!(offeringRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
                     continue;
                 }
-                String offeringId = String.valueOf(ref.get("id"));
+                String offeringId = ref.get("id").toString();
                 java.util.TreeMap<String, String> productChars = charsOf(product);
                 BigDecimal monthly = priceCache.computeIfAbsent(offeringId + "|" + productChars,
                         k -> monthlyFor(offeringId, productChars, unitCache));
@@ -480,10 +482,9 @@ public class BillingRunService {
                 }
                 unit = unitCache.getOrDefault(offeringId, unit);
                 // Device co-pay: the company bill carries only its share.
-                BigDecimal companyShare = companyShareOf.get(String.valueOf(product.get("id")));
-                String ownerParty = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
-                        .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey());
+                BigDecimal companyShare = companyShareOf.get(idOf(product));
+                String ownerParty = java.util.Objects.requireNonNullElse(
+                        customerPartyId(product), owner.getKey());
                 // MID-CYCLE FAIRNESS: each plan pays for its own days, and a
                 // product pays only from the day it STARTED. The period is
                 // split into segments — [start..change) at the old plan,
@@ -1085,5 +1086,33 @@ public class BillingRunService {
         rate.setOwnerPartyId(ownerParty);
         rate.setRateDate(OffsetDateTime.now());
         return rate;
+    }
+
+    /**
+     * The id of this product's CUSTOMER-role related party, or null when there
+     * is none and when the one there carries no id.
+     *
+     * The stream this replaces mapped each party id through String.valueOf
+     * and ended in orElse(null) — and orElse only fires on an EMPTY stream, so a
+     * customer party present but id-less produced the text "null", which then
+     * passed every `!= null` guard downstream. Products belonging to different
+     * customers grouped under one owner called "null" and billed as one
+     * account.
+     */
+    @SuppressWarnings("unchecked")
+    private static String customerPartyId(Map<String, Object> product) {
+        for (Object p : (List<Object>) product.getOrDefault("relatedParty", List.of())) {
+            if (p instanceof Map<?, ?> m && "customer".equalsIgnoreCase(String.valueOf(m.get("role")))) {
+                Object id = m.get("id");
+                return id == null ? null : id.toString();
+            }
+        }
+        return null;
+    }
+
+    /** A map's id as text, or null — never the four characters "null". */
+    private static String idOf(Map<String, Object> resource) {
+        Object id = resource == null ? null : resource.get("id");
+        return id == null ? null : id.toString();
     }
 }
