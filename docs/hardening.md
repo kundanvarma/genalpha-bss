@@ -170,6 +170,10 @@ per-deployment, per-merchant, attested by a QSA) but **"PAN-free by
 construction — SAQ A / A-EP scope, receipts in the repo."**
 
 ### Still open — the honest remainder
+
+*Every row below, and every "must add" above, is an owned line in
+[production-acceptance.md](production-acceptance.md) — the checklist a launch
+is signed off against.*
 | | |
 |---|---|
 | P1.5 | ~~live multi-replica k8s soak~~ **DONE 2026-07-21** — the Helm chart ran on live k3s: 21 pods Ready, billing at 2 replicas with ONE set of tick leases, requests served through the in-cluster gateway ([k8s-soak-plan.md](k8s-soak-plan.md) has the receipts and the three drifts the soak caught); OpenTelemetry tracing (agent + collector cost RAM the demo VM lacks); concurrent billing partitions; Alertmanager routing |
