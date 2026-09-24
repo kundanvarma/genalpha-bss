@@ -238,8 +238,7 @@ public class ProductOrderService {
             return false;
         }
         for (Map<String, Object> item : modifies) {
-            String productId = item.get("product") instanceof Map<?, ?> p && p.get("id") != null
-                    ? String.valueOf(p.get("id")) : null;
+            String productId = idOf(item.get("product"));
             if (productId == null) {
                 throw new OrderValidationException(
                         "a modify item must reference the product it changes (product.id)");
@@ -256,8 +255,7 @@ public class ProductOrderService {
                 throw new OrderValidationException(
                         "product '" + productId + "' does not belong to the ordering customer");
             }
-            String newOfferingId = item.get("productOffering") instanceof Map<?, ?> o && o.get("id") != null
-                    ? String.valueOf(o.get("id")) : null;
+            String newOfferingId = idOf(item.get("productOffering"));
             if (newOfferingId == null) {
                 throw new OrderValidationException("a modify item must name the new productOffering");
             }
@@ -268,8 +266,7 @@ public class ProductOrderService {
                 throw new OrderValidationException(
                         "changing a plan to a bundle is not supported — order the bundle separately");
             }
-            String currentOfferingId = product.get("productOffering") instanceof Map<?, ?> cur
-                    && cur.get("id") != null ? String.valueOf(cur.get("id")) : null;
+            String currentOfferingId = idOf(product.get("productOffering"));
             if (newOfferingId.equals(currentOfferingId)) {
                 // Same offering → a CHARACTERISTIC change: an in-place upgrade or
                 // downgrade (broadband speed, TV screens/points). Allowed when the
@@ -349,8 +346,7 @@ public class ProductOrderService {
     private Map<String, List<Object>> allowedCharacteristicValues(String offeringId) {
         Map<String, List<Object>> out = new java.util.LinkedHashMap<>();
         Map<String, Object> detail = catalogClient.findOfferingDetail(offeringId).orElse(null);
-        String specId = detail != null && detail.get("productSpecification") instanceof Map<?, ?> s
-                && s.get("id") != null ? String.valueOf(s.get("id")) : null;
+        String specId = detail == null ? null : idOf(detail.get("productSpecification"));
         if (specId == null) {
             return out;
         }
@@ -413,7 +409,7 @@ public class ProductOrderService {
             }
             for (Object it : items) {
                 if (it instanceof Map<?, ?> m && m.get("productOffering") instanceof Map<?, ?> off
-                        && offeringId.equals(String.valueOf(off.get("id")))) {
+                        && offeringId.equals(idOf(off))) {
                     throw new OrderValidationException("'" + productName
                             + "' is under a commitment until " + end.toLocalDate()
                             + " and cannot be changed yet");
@@ -543,7 +539,7 @@ public class ProductOrderService {
             return false;
         }
         for (Map<String, Object> item : items) {
-            if (itemId.equals(String.valueOf(item.get("id")))) {
+            if (itemId.equals(idOf(item))) {
                 item.put("state", newState);
                 if (realizingService != null && !realizingService.isEmpty()) {
                     Map<String, Object> product = item.get("product") instanceof Map<?, ?> p
@@ -647,16 +643,16 @@ public class ProductOrderService {
             if (!(item.get("productOffering") instanceof Map<?, ?> off) || off.get("id") == null) {
                 continue;
             }
-            CatalogClient.OfferingRef bundle = catalogClient.findOffering(String.valueOf(off.get("id"))).orElse(null);
+            CatalogClient.OfferingRef bundle = catalogClient.findOffering(off.get("id").toString()).orElse(null);
             if (bundle == null || !bundle.bundle() || bundle.choiceGroups().isEmpty()) {
                 continue;
             }
             Set<String> selected = new java.util.HashSet<>();
             if (item.get("productOrderItem") instanceof List<?> children) {
                 for (Object child : children) {
-                    if (child instanceof Map<?, ?> cm && cm.get("productOffering") instanceof Map<?, ?> po
-                            && po.get("id") != null) {
-                        selected.add(String.valueOf(po.get("id")));
+                    String selectedId = child instanceof Map<?, ?> cm ? idOf(cm.get("productOffering")) : null;
+                    if (selectedId != null) {
+                        selected.add(selectedId);
                     }
                 }
             }
@@ -665,8 +661,8 @@ public class ProductOrderService {
                 int upper = intOf(group.get("numberRelOfferUpperLimit"), 1);
                 int chosen = 0;
                 for (Object option : (List<Object>) group.get("options")) {
-                    if (option instanceof Map<?, ?> om && om.get("id") != null
-                            && selected.contains(String.valueOf(om.get("id")))) {
+                    String optionId = idOf(option);
+                    if (optionId != null && selected.contains(optionId)) {
                         chosen++;
                     }
                 }
@@ -710,7 +706,7 @@ public class ProductOrderService {
             if (!(item.get("productOffering") instanceof Map<?, ?> off) || off.get("id") == null) {
                 continue;
             }
-            String offeringId = String.valueOf(off.get("id"));
+            String offeringId = off.get("id").toString();
             Map<String, Object> detail = detailCache.computeIfAbsent(offeringId,
                     id -> catalogClient.findOfferingDetail(id).orElse(null));
             if (detail == null || !Boolean.TRUE.equals(detail.get("isBundle"))) {
@@ -724,8 +720,9 @@ public class ProductOrderService {
                     ? new java.util.ArrayList<>((List<Map<String, Object>>) c) : new java.util.ArrayList<>();
             Set<String> present = new java.util.HashSet<>();
             for (Map<String, Object> child : children) {
-                if (child.get("productOffering") instanceof Map<?, ?> po && po.get("id") != null) {
-                    present.add(String.valueOf(po.get("id")));
+                String presentId = idOf(child.get("productOffering"));
+                if (presentId != null) {
+                    present.add(presentId);
                 }
             }
             for (Map<String, Object> member : members) {
@@ -739,7 +736,7 @@ public class ProductOrderService {
                 if (lower == 0) {
                     continue;
                 }
-                String memberId = member.get("id") == null ? null : String.valueOf(member.get("id"));
+                String memberId = idOf(member);
                 if (memberId == null || present.contains(memberId)) {
                     continue;
                 }
@@ -775,8 +772,7 @@ public class ProductOrderService {
                     "simType".equals(String.valueOf(c.get("name")))
                             && "physical".equals(String.valueOf(c.get("value"))));
             for (Map<String, Object> child : children) {
-                String childOffering = child.get("productOffering") instanceof Map<?, ?> po
-                        && po.get("id") != null ? String.valueOf(po.get("id")) : null;
+                String childOffering = idOf(child.get("productOffering"));
                 if (childOffering == null) {
                     continue;
                 }
@@ -865,7 +861,7 @@ public class ProductOrderService {
             String internetItemId = null;
             for (Map<String, Object> child : children) {
                 if ("internet".equals(child.get("componentType"))) {
-                    internetItemId = child.get("id") == null ? null : String.valueOf(child.get("id"));
+                    internetItemId = idOf(child);
                     break;
                 }
             }
@@ -1052,7 +1048,7 @@ public class ProductOrderService {
                 List<Map<String, Object>> chars = item.get("product") instanceof Map<?, ?> product
                         && product.get("productCharacteristic") instanceof List<?> pcs
                         ? (List<Map<String, Object>>) pcs : null;
-                into.add(new ItemRef(String.valueOf(ref.get("id")), String.valueOf(name), quantity, chars));
+                into.add(new ItemRef(ref.get("id").toString(), String.valueOf(name), quantity, chars));
             }
             if (item.get("productOrderItem") instanceof List<?> children) {
                 collectItems((List<Map<String, Object>>) children, into);
@@ -1161,7 +1157,8 @@ public class ProductOrderService {
     private List<String> paymentRefIds(ProductOrder entity) {
         List<Map<String, Object>> refs = mapper.toDto(entity).getPayment();
         return refs == null ? List.of()
-                : refs.stream().map(r -> String.valueOf(r.get("id"))).toList();
+                : refs.stream().map(r -> r.get("id")).filter(java.util.Objects::nonNull)
+                        .map(Object::toString).toList();
     }
 
     /**
@@ -1181,7 +1178,7 @@ public class ProductOrderService {
             // a PENDING link must fail LOUDLY: silently claiming the order
             // to the caller bought a parent two plans for themselves once
             java.util.Map<String, Object> link = partyClient.householdLinkOf(customer).orElse(null);
-            if (link != null && callerId.equals(String.valueOf(link.get("id")))
+            if (link != null && callerId.equals(idOf(link))
                     && "pending".equals(link.get("status"))) {
                 throw new OrderValidationException(
                         "they have not accepted your household request yet — "
@@ -1193,7 +1190,7 @@ public class ProductOrderService {
             boolean callerIsPayer = callerId.equals(payer);
             boolean callerIsAdmin = payer != null && !callerIsPayer
                     && partyClient.householdLinkOf(callerId)
-                            .filter(l -> payer.equals(String.valueOf(l.get("id"))))
+                            .filter(l -> payer.equals(idOf(l)))
                             .filter(l -> "active".equals(l.get("status")))
                             .filter(l -> "admin".equals(l.get("role")))
                             .isPresent();
@@ -1236,7 +1233,10 @@ public class ProductOrderService {
         if (price == null) {
             return; // not a top-up order
         }
-        String payerId = String.valueOf(link.get("id"));
+        String payerId = idOf(link);
+        if (payerId == null) {
+            return;   // a link that names no payer cannot carry the top-up allowance
+        }
         dto.setCategory(TOPUP_CATEGORY);
         java.math.BigDecimal allowance = link.get("topupAllowance") instanceof Number n
                 ? new java.math.BigDecimal(n.toString()) : null;
@@ -1267,7 +1267,7 @@ public class ProductOrderService {
                 return null;
             }
             Map<String, Object> offering =
-                    catalogClient.findOfferingDetail(String.valueOf(ref.get("id"))).orElse(null);
+                    catalogClient.findOfferingDetail(ref.get("id").toString()).orElse(null);
             if (offering == null || !hasCategory(offering, TOPUP_CATEGORY)) {
                 return null;
             }
@@ -1293,7 +1293,7 @@ public class ProductOrderService {
         for (Object r : refs) {
             if (r instanceof Map<?, ?> ref && ref.get("id") != null) {
                 Map<String, Object> price =
-                        catalogClient.findPrice(String.valueOf(ref.get("id"))).orElse(null);
+                        catalogClient.findPrice(ref.get("id").toString()).orElse(null);
                 if (price != null && "oneTime".equals(price.get("priceType"))
                         && price.get("price") instanceof Map<?, ?> money
                         && money.get("value") instanceof Number value) {
@@ -1325,7 +1325,7 @@ public class ProductOrderService {
             for (Map<String, Object> item : flattenItemMaps(past.getProductOrderItem())) {
                 if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
                     java.math.BigDecimal one = priceCache.computeIfAbsent(
-                            String.valueOf(ref.get("id")),
+                            ref.get("id").toString(),
                             oid -> catalogClient.findOfferingDetail(oid)
                                     .map(this::oneTimePriceOf).orElse(java.math.BigDecimal.ZERO));
                     int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
@@ -1353,13 +1353,15 @@ public class ProductOrderService {
         String caller = partyScope.scopedPartyId()
                 .orElseThrow(() -> new OrderValidationException("approvals are a customer decision"));
         ProductOrderDto held = mapper.toDto(entity);
+        // a payer party that carries no id is NOT a payer: the `payerId != null`
+        // below was dead while String.valueOf turned an absent id into "null"
         String payerId = held.getRelatedParty() == null ? null : held.getRelatedParty().stream()
                 .filter(p -> "payer".equals(p.get("role")))
-                .map(p -> String.valueOf(p.get("id")))
+                .map(p -> p.get("id")).filter(java.util.Objects::nonNull).map(Object::toString)
                 .findFirst().orElse(null);
         boolean isPayer = caller.equals(payerId);
         boolean isAdmin = payerId != null && !isPayer && partyClient.householdLinkOf(caller)
-                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> payerId.equals(idOf(l)))
                 .filter(l -> "active".equals(l.get("status")))
                 .filter(l -> "admin".equals(l.get("role")))
                 .isPresent();
@@ -1393,13 +1395,20 @@ public class ProductOrderService {
                     || !"admin".equals(link.get("role"))) {
                 return List.of();
             }
-            payerId = String.valueOf(link.get("id"));
+            payerId = idOf(link);
+            if (payerId == null) {
+                return List.of();   // a link naming no payer has no household to list
+            }
             members = partyClient.dependentsOf(payerId);
         }
         List<ProductOrderDto> held = new ArrayList<>();
         for (Map<String, Object> member : members) {
+            String memberId = idOf(member);
+            if (memberId == null) {
+                continue;
+            }
             for (ProductOrder order : repository.findByTenantIdAndOwnerPartyIdAndState(
-                    tenantScope.currentTenantId(), String.valueOf(member.get("id")), STATE_HELD)) {
+                    tenantScope.currentTenantId(), memberId, STATE_HELD)) {
                 ProductOrderDto dto = mapper.toDto(order);
                 dto.setDescription((dto.getDescription() == null ? "" : dto.getDescription() + " ")
                         + "requested by " + member.get("givenName") + " " + member.get("familyName"));
@@ -1423,16 +1432,29 @@ public class ProductOrderService {
         dto.setRelatedParty(parties);
     }
 
-    /** Owner of a staff-placed order: the related party in the customer role, if any. */
+    /**
+     * Owner of a staff-placed order: the related party in the customer role, if
+     * any. Returns null when that party carries no id — the stream this replaces
+     * mapped the id through String.valueOf before orElse(null), so a customer
+     * party WITHOUT an id came back as the text "null" and passed every
+     * `!= null` check after it.
+     */
     private String customerPartyIn(List<Map<String, Object>> relatedParty) {
         if (relatedParty == null) {
             return null;
         }
-        return relatedParty.stream()
-                .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                .map(p -> String.valueOf(p.get("id")))
-                .findFirst()
-                .orElse(null);
+        for (Map<String, Object> p : relatedParty) {
+            if ("customer".equalsIgnoreCase(String.valueOf(p.get("role")))) {
+                return idOf(p);
+            }
+        }
+        return null;
+    }
+
+    /** The "id" of a wire map (or of anything that is not a map) as text, or null. */
+    private static String idOf(Object mapOrNull) {
+        Object id = mapOrNull instanceof Map<?, ?> m ? m.get("id") : null;
+        return id == null ? null : id.toString();
     }
 
     /**
@@ -1453,7 +1475,7 @@ public class ProductOrderService {
         for (Object child : detail.get("bundledProductOffering") instanceof List<?> l
                 ? l : java.util.List.of()) {
             if (child instanceof Map<?, ?> cm && cm.get("id") != null) {
-                catalogClient.findOfferingDetail(String.valueOf(cm.get("id")))
+                catalogClient.findOfferingDetail(cm.get("id").toString())
                         .ifPresent(this::requireSellableDetail);
             }
         }
@@ -1494,7 +1516,7 @@ public class ProductOrderService {
         for (Map<String, Object> item : dto.getProductOrderItem() == null
                 ? java.util.List.<Map<String, Object>>of() : dto.getProductOrderItem()) {
             if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
-                requireSellable(String.valueOf(ref.get("id")));
+                requireSellable(ref.get("id").toString());
             }
         }
         if (dto.getBillingAccountId() != null
@@ -1575,14 +1597,15 @@ public class ProductOrderService {
             // the product must carry the offering's REAL name (services do,
             // and downstream correlates the two records by it) — an item
             // naming only the id gets the name from the catalog
+            String offeringId = idOf(offering);   // validated sellable at create, so present
             String name = offering.get("name") != null ? String.valueOf(offering.get("name"))
-                    : nameFromCatalog(String.valueOf(offering.get("id")));
+                    : nameFromCatalog(offeringId);
             // TMF637 lineage: the order item that made the product, and the service the SOM said realises it
-            List<Map<String, Object>> orderItemRef = List.of(lineageRef(order.getId(), String.valueOf(item.get("id"))));
+            List<Map<String, Object>> orderItemRef = List.of(lineageRef(order.getId(), idOf(item)));
             List<Map<String, Object>> realizing = item.get("product") instanceof Map<?, ?> ip
                     && ip.get("realizingService") instanceof List<?> rs
                     ? (List<Map<String, Object>>) rs : null;
-            if (quantity > 1 && isFungible(String.valueOf(offering.get("id")))) {
+            if (quantity > 1 && isFungible(offeringId)) {
                 // seats and licences are interchangeable: ONE product carrying the quantity as a
                 // characteristic (TMF637 has no quantity of its own); billing multiplies per-unit prices
                 List<Map<String, Object>> withQuantity = new ArrayList<>(characteristics == null ? List.of() : characteristics);
@@ -1623,7 +1646,7 @@ public class ProductOrderService {
             if (detail == null || !(detail.get("productSpecification") instanceof Map<?, ?> specRef) || specRef.get("id") == null) {
                 return false;
             }
-            Map<String, Object> spec = catalogClient.findSpecification(String.valueOf(specRef.get("id"))).orElse(null);
+            Map<String, Object> spec = catalogClient.findSpecification(specRef.get("id").toString()).orElse(null);
             if (spec == null || !(spec.get("productSpecCharacteristic") instanceof List<?> chars)) {
                 return false;
             }
@@ -1645,7 +1668,7 @@ public class ProductOrderService {
         Map<String, Object> ref = new java.util.LinkedHashMap<>();
         ref.put("productOrderId", productOrderId);
         ref.put("productOrderHref", "/tmf-api/productOrderingManagement/v4/productOrder/" + productOrderId);
-        if (orderItemId != null && !"null".equals(orderItemId)) {
+        if (orderItemId != null) {
             ref.put("orderItemId", orderItemId);
         }
         ref.put("role", "productOrderItem");
@@ -1688,7 +1711,7 @@ public class ProductOrderService {
             Object name = offering.get("name") == null ? offering.get("id") : offering.get("name");
             qualificationItems.add(Map.of(
                     "productOffering", Map.of(
-                            "id", String.valueOf(offering.get("id")),
+                            "id", offering.get("id").toString(),
                             "name", String.valueOf(name)),
                     "place", place));
         }

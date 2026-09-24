@@ -50,7 +50,8 @@ public class CreditDecisionController {
         requireBackOffice();
         MockBureauDriver driver = mockDriver.orElseThrow(
                 () -> new OrderValidationException("no mock bureau driver in this deployment"));
-        String ref = body == null || body.get("ref") == null ? null : String.valueOf(body.get("ref"));
+        Object rawRef = body == null ? null : body.get("ref");
+        String ref = rawRef == null ? null : rawRef.toString();
         if (ref == null || ref.isBlank()) {
             throw new OrderValidationException("ref is required");
         }

@@ -40,9 +40,10 @@ public class RestPartyClient implements PartyClient {
                     .uri("/tmf-api/party/v4/individual/{id}", partyId)
                     .retrieve()
                     .body(java.util.Map.class);
-            if (person != null && person.get("organization") instanceof java.util.Map<?, ?> org
-                    && org.get("id") != null) {
-                return java.util.Optional.of(String.valueOf(org.get("id")));
+            Object orgId = person != null && person.get("organization") instanceof java.util.Map<?, ?> org
+                    ? org.get("id") : null;
+            if (orgId != null) {
+                return java.util.Optional.of(orgId.toString());
             }
             return java.util.Optional.empty();
         } catch (HttpClientErrorException.NotFound e) {
@@ -100,8 +101,11 @@ public class RestPartyClient implements PartyClient {
                     .retrieve()
                     .body(java.util.Map.class);
             if (person != null && person.get("householdPayer") instanceof java.util.Map<?, ?> payer
-                    && payer.get("id") != null && "active".equals(payer.get("status"))) {
-                return java.util.Optional.of(String.valueOf(payer.get("id")));
+                    && "active".equals(payer.get("status"))) {
+                Object payerId = payer.get("id");
+                if (payerId != null) {
+                    return java.util.Optional.of(payerId.toString());
+                }
             }
             return java.util.Optional.empty();
         } catch (HttpClientErrorException.NotFound e) {

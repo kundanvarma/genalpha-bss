@@ -65,7 +65,7 @@ public class RiskClient {
             return new Assessment(
                     Integer.parseInt(String.valueOf(result.get("overallScore"))),
                     String.valueOf(result.get("riskLevel")),
-                    String.valueOf(body.get("id")));
+                    body.get("id") == null ? null : body.get("id").toString());
         } catch (RestClientException | NumberFormatException e) {
             log.warn("risk engine unreachable, order proceeds unscored (fail-open): {}",
                     e.getMessage());
