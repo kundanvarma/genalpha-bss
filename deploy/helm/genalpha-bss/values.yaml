@@ -73,6 +73,16 @@ services:
   gateway:
     db: ""
     extraEnv:
+      # WHO MAY REWRITE A CUSTOMER'S URLs. X-Forwarded-* is honoured only from
+      # these sources, and services rebuild client-visible links (TMF Location
+      # headers among them) from those headers. The application default is
+      # every RFC1918 range — correct for a laptop on a Docker bridge, wrong
+      # here: in a flat cluster it trusts every workload, not just the ingress.
+      #
+      # 10.0.0.0/8 covers the pod network of a default EKS/AKS/k3s install,
+      # which is where the ingress controller actually sits. AN OPERATOR ON A
+      # DIFFERENT POD CIDR MUST CHANGE THIS — see docs/hardening.md.
+      GATEWAY_TRUSTED_PROXIES: "10\\..*"
       CATALOG_URL: http://product-catalog:8080
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080

@@ -70,6 +70,25 @@ between services — zero code change, the services already speak plain
 HTTP behind the gateway. The alternative (Spring-native TLS per service)
 works but costs a cert-distribution story the mesh gives you free.
 
+### Who may rewrite a customer's URLs (trusted proxies)
+
+The gateway honours `X-Forwarded-*` only from sources it trusts, and services
+rebuild client-visible links — TMF `Location` headers among them — from those
+headers. So the trusted-proxy list decides who can tell a customer's browser
+where to go next.
+
+The application default is every RFC1918 range
+(`10.*`, `172.*`, `192.168.*`, `127.*`). That is right for a laptop fleet on a
+Docker bridge and **wrong for a cluster**: inside a flat network it trusts
+every workload, not only the ingress.
+
+Set `GATEWAY_TRUSTED_PROXIES` to the range your ingress controller, load
+balancer or service mesh actually occupies. The Helm chart ships `10\..*`,
+which covers the pod network of a default EKS/AKS/k3s install — **an operator
+on a different pod CIDR must change it**, and one terminating TLS at an
+external LB should narrow it to that LB's addresses. Strip inbound forwarded
+headers at the outer edge so only the edge can set them.
+
 ### HA databases and brokers
 - **Postgres**: one managed HA instance (RDS/Aurora Multi-AZ, Azure
   Flexible Server zone-redundant) — image parity matters only for

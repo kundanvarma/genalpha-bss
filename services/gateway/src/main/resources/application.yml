@@ -11,10 +11,16 @@ spring:
   cloud:
     gateway:
       # X-Forwarded-* headers are only added for requests arriving from a
-      # trusted proxy (SCG 4.2+ security default). Trust the private ranges
-      # the fleet actually runs on — services rebuild client-visible URLs
-      # (e.g. TMF Location headers) from these.
-      trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+      # trusted proxy (SCG 4.2+ security default). Services rebuild
+      # client-visible URLs (e.g. TMF Location headers) from these, so whoever
+      # is trusted here can decide what a customer's browser is told to visit.
+      #
+      # The DEFAULT is every RFC1918 range, which is right for a laptop fleet
+      # on a Docker bridge and WRONG for a production cluster: inside a flat
+      # network it trusts every workload, not just the ingress. Production sets
+      # GATEWAY_TRUSTED_PROXIES to its actual ingress/LB/service-mesh range —
+      # see docs/hardening.md.
+      trusted-proxies: "${GATEWAY_TRUSTED_PROXIES:10\\..*|172\\..*|192\\.168\\..*|127\\..*}"
       # Browse-path edge cache: LocalResponseCache absorbs the campaign-day
       # catalog surge before it reaches the catalog JVM + Postgres. Route-level
       # ONLY (applied via the LocalResponseCache filter on the product-catalog
@@ -37,7 +43,7 @@ spring:
       # silently stays on.
       server:
         webflux:
-          trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+          trusted-proxies: "${GATEWAY_TRUSTED_PROXIES:10\\..*|172\\..*|192\\.168\\..*|127\\..*}"
           filter:
             local-response-cache:
               enabled: true       # registers the per-route LocalResponseCache filter
