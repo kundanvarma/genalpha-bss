@@ -39,7 +39,13 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **service-orchestration (activation face)** | **TMF640** R18.5 kit | **1187/1187, 0 failures** |
 | **intelligence (AI management)** | **TMF915** | **794/794, 0 failures** |
 
-**Twenty-eight kits, zero failures.** An earlier version of this page called
+**Twenty-eight kits certified at zero failures — each on the dataset of the day it
+was run.** That is a certification snapshot, not a claim about this laptop's
+database today: several kits assert over the whole history, and the *current,
+accumulated-data* status is the drift note further down (one kit, TMF653, fails
+54 assertions on the grown dataset as of 23 September and reproduces clean on
+fresh demo data). A release's CTK statement cites a receipt from a clean
+fixture at that release's SHA (`ops/ctk`), never this headline. An earlier version of this page called
 the list closed at twenty-five; that was wrong. Checked against the
 `tmforum-rand` org on 2026-09-18, kits existed for three faces this fleet
 serves and had never been run — TMF633 (the catalog served only

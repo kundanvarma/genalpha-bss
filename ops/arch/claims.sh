@@ -93,6 +93,31 @@ CI_JAVA=$(grep -m1 -A3 'setup-java' .github/workflows/ci.yml | grep -oE "java-ve
 grep -qE "Java $CI_JAVA source" README.md \
   || fail "README does not state Java $CI_JAVA source (what CI actually compiles with)"
 
+# The RUNTIME JDK: the images run whatever the Dockerfiles say, CI compiles with
+# something else, and the README states both — so both are read from source.
+# The runtime image is exercised by the PR smoke (ops/ci-fleet.sh builds and
+# boots the real images), which is what makes "Java N runtime" a tested claim.
+RT_JAVA=$(grep -hoE '^FROM eclipse-temurin:[0-9]+' services/*/Dockerfile 2>/dev/null | grep -oE '[0-9]+$' | sort -u)
+[ "$(echo "$RT_JAVA" | wc -l | tr -d ' ')" = 1 ] \
+  || fail "service Dockerfiles run more than one runtime JDK: $(echo $RT_JAVA)" "one runtime for the fleet, or say which service runs which"
+grep -qE "Java $RT_JAVA runtime image" README.md \
+  || fail "README does not state Java $RT_JAVA runtime image (what services/*/Dockerfile actually run)"
+
+# ------------------------------------------------------------------ CTK ----
+# "N official TM Forum CTKs" in the README is the number of rows in the
+# scorecard's Certified table — a certification is a row with a date and a
+# receipt there, not a sentence here. The scorecard also carries the current,
+# grown-dataset status; the README must not read as if that were zero too.
+# a kit is one TMF API: TMF640 has two collections (v4 and R18.5) and counts once
+CTK_ROWS=$(awk '/^## Certified/{f=1;next} /^## /{f=0} f && /^\| \*?\*?[a-z]/' docs/ctk-conformance.md | grep -oE 'TMF[0-9]+' | sort -u | wc -l | tr -d ' ')
+CTK_CLAIMED=$(grep -oE '\b[0-9]+ official TM Forum CTKs' README.md | grep -oE '^[0-9]+' | sort -u)
+for n in $CTK_CLAIMED; do
+  [ "$n" = "$CTK_ROWS" ] || fail "README says $n official TM Forum CTKs; docs/ctk-conformance.md certifies $CTK_ROWS" \
+    "fix: the Certified table is the source; change the README number"
+done
+grep -qiE "CTKs certified" README.md \
+  || fail "README must say the CTKs are CERTIFIED (each on the dataset of its day), not that they pass now — see docs/ctk-conformance.md's drift note"
+
 # ------------------------------------------------------------ gates bite ----
 # A gate that cannot fail is worse than no gate: it is believed. Every script
 # we call a gate must have a path that exits non-zero — in shell, or in an
@@ -151,5 +176,5 @@ if [ "$FAILED" -gt 0 ]; then
   echo "claims: $FAILED claim(s) drifted from the code. Change the code or change the claim." >&2
   exit 1
 fi
-echo "claims: clean — $SUITES suites, Spring Boot $BOOT, Java $CI_JAVA, secure defaults off, every gate can fail"
+echo "claims: clean — $SUITES suites, $CTK_ROWS CTKs certified, Spring Boot $BOOT, Java $CI_JAVA source / $RT_JAVA runtime, secure defaults off, every gate can fail"
 exit 0
