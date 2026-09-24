@@ -14,14 +14,14 @@ variable "availability_zones" {
 }
 
 variable "kubernetes_version" {
-  type    = string
+  type = string
   # keep this inside EKS STANDARD support — versions that age into
   # extended support cost 6x for the control plane ($0.60/hr vs $0.10)
   default = "1.33"
 }
 
 variable "node_instance_type" {
-  type    = string
+  type = string
   # MATCH THE NODE ARCH TO YOUR IMAGE BUILDS: images built on Apple
   # Silicon are arm64 — Graviton (t4g) runs them natively and costs
   # ~30% less than t3; set t3.large for x86-built images. (The first
