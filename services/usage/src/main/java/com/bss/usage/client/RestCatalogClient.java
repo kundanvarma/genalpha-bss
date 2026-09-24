@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import static com.bss.usage.api.Wire.idOf;
 
 @Component
 public class RestCatalogClient implements CatalogClient {
@@ -77,13 +78,12 @@ public class RestCatalogClient implements CatalogClient {
             Map<String, Object> offering = restClient.get()
                     .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                     .retrieve().body(Map.class);
-            Object specRef = offering == null ? null : offering.get("productSpecification");
-            if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+            String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+            if (specId == null) {
                 return Map.of();
             }
             Map<String, Object> spec = restClient.get()
-                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}",
-                            String.valueOf(ref.get("id")))
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
                     .retrieve().body(Map.class);
             Map<String, String> out = new LinkedHashMap<>();
             if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {

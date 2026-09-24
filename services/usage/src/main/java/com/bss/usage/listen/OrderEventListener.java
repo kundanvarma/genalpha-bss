@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import static com.bss.usage.api.Wire.textOf;
 
 /**
  * Data top-ups land here: a completed order carrying a boost-flagged offering
@@ -44,16 +45,20 @@ public class OrderEventListener {
             if ("LoyaltyDataRewardEvent".equals(eventType)) {
                 // points became gigabytes on the loyalty ledger; the meter
                 // delivers them — idempotent per redemption
-                String tenant = envelope.get("tenantId") == null ? "genalpha"
-                        : String.valueOf(envelope.get("tenantId"));
+                String tenant = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
                 Map<String, Object> ev = envelope.get("event") instanceof Map<?, ?> em
                         ? (Map<String, Object>) em : Map.of();
                 if (ev.get("loyaltyReward") instanceof Map<?, ?> rw) {
+                    String party = textOf(rw, "partyId");
+                    String redemptionId = textOf(rw, "redemptionId");
+                    if (party == null || redemptionId == null) {
+                        // gigabytes for nobody, or without the redemption that makes them once-only
+                        log.warn("loyalty reward without a party or redemption id — not delivered: {}", rw.keySet());
+                        return;
+                    }
                     try (TenantContext ignored = TenantContext.actAs(tenant)) {
-                        usage.recordLoyaltyBoost(tenant,
-                                String.valueOf(rw.get("partyId")),
-                                new java.math.BigDecimal(String.valueOf(rw.get("gb"))),
-                                String.valueOf(rw.get("redemptionId")));
+                        usage.recordLoyaltyBoost(tenant, party,
+                                new java.math.BigDecimal(String.valueOf(rw.get("gb"))), redemptionId);
                     }
                 }
                 return;
@@ -61,13 +66,16 @@ public class OrderEventListener {
             if ("ReferralDataRewardEvent".equals(eventType)) {
                 // G1: a referral became a customer — both sides get GBs on the
                 // meter, same idempotent rail as a loyalty redemption
-                String tenant = envelope.get("tenantId") == null ? "genalpha"
-                        : String.valueOf(envelope.get("tenantId"));
+                String tenant = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
                 Map<String, Object> ev = envelope.get("event") instanceof Map<?, ?> em
                         ? (Map<String, Object>) em : Map.of();
                 if (ev.get("referralReward") instanceof Map<?, ?> rw) {
+                    String party = textOf(rw, "partyId");
+                    if (party == null) {
+                        log.warn("referral reward without a party — not delivered: {}", rw.keySet());
+                        return;
+                    }
                     try (TenantContext ignored = TenantContext.actAs(tenant)) {
-                        String party = String.valueOf(rw.get("partyId"));
                         java.math.BigDecimal gb = new java.math.BigDecimal(String.valueOf(rw.get("gb")));
                         String rewardId = "referral-" + rw.get("rewardId");
                         if (!usage.recordLoyaltyBoost(tenant, party, gb, rewardId)) {
@@ -80,8 +88,7 @@ public class OrderEventListener {
             if (!"ProductOrderStateChangeEvent".equals(eventType)) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? "genalpha"
-                    : String.valueOf(envelope.get("tenantId"));
+            String tenantId = java.util.Objects.requireNonNullElse(textOf(envelope, "tenantId"), "genalpha");
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
             if (event.get("productOrder") instanceof Map<?, ?> po) {

@@ -7,6 +7,7 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.Map;
 import java.util.Optional;
+import static com.bss.usage.api.Wire.textOf;
 
 @Component
 public class RestNumberClient implements NumberClient {
@@ -27,8 +28,7 @@ public class RestNumberClient implements NumberClient {
                     .uri(uri -> uri.path("/tmf-api/serviceInventory/v4/numberOwner")
                             .queryParam("number", number).build())
                     .retrieve().body(Map.class);
-            return owner == null || owner.get("partyId") == null
-                    ? Optional.empty() : Optional.of(String.valueOf(owner.get("partyId")));
+            return Optional.ofNullable(textOf(owner, "partyId"));
         } catch (RestClientException e) {
             return Optional.empty();
         }
