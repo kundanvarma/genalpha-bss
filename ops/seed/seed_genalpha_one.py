@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Seed the GenAlpha One triple-play product family through the gateway TMF620 API."""
 import json
+import urllib.error
 import urllib.request
 import urllib.parse
 
@@ -22,7 +23,29 @@ def token():
 TOKEN = token()
 
 
+def find_by_name(path, name):
+    """The row this seed already made, if any — matched on the exact name."""
+    q = urllib.parse.urlencode({"name": name, "limit": 100})
+    req = urllib.request.Request(f"{API}/{path}?{q}",
+                                 headers={"Authorization": f"Bearer {TOKEN}"})
+    try:
+        with urllib.request.urlopen(req) as r:
+            rows = json.load(r)
+    except urllib.error.HTTPError:
+        return None
+    return next((x for x in rows if x.get("name") == name), None)
+
+
 def post(path, body):
+    # IDEMPOTENT, as the README promises and CI relies on. This used to POST
+    # blindly, so a second run minted a twin of every offering, spec and price:
+    # a second "GenAlpha Mobile Unlimited 5G" with no category, which the shop
+    # never listed but a customer's product could still point at — and then
+    # the shop refused to offer that customer a plan change.
+    existing = find_by_name(path, body.get("name")) if body.get("name") else None
+    if existing is not None:
+        print(f"reused {path}: {existing['name']} ({existing['id']})")
+        return existing
     req = urllib.request.Request(
         f"{API}/{path}",
         data=json.dumps(body).encode(),
