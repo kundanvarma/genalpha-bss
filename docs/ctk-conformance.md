@@ -108,6 +108,51 @@ carried `description` but not the trio. The fix derives them for every row from
 facts the service already stores (source system, agent, description), so the
 whole history is conformant — not just kit-created records.
 
+## Semantic maturity beside conformance
+
+A green kit proves the wire shape and CRUD semantics of one API face. It does
+not prove that the face *does the work* an operator buys it for — and in BSS/OSS
+procurement that distinction matters more than endpoint count. So every face
+above also carries one of four labels, and the label is the stronger claim of
+the two:
+
+- **TMF-shaped** — the endpoint exists and answers in the standard shape; no kit
+  run, no workflow proof. *None of the faces above are only this.*
+- **CTK-conformant** — the kit is green; the face stores and serves. Nothing here
+  claims the face triggers the rest of the platform.
+- **business-rule-hardened divergence** — the face is stricter than the spec on
+  purpose and fails the kit where the spec is permissive; the divergence is
+  documented below, with the rule it protects.
+- **semantically complete** — the face is CTK-conformant *and* a numbered
+  browser suite drives the business workflow through it, end to end, on a real
+  fleet.
+
+| Face | Label | The workflow proof (suite) or the honest limit |
+|---|---|---|
+| TMF620 product catalog | semantically complete | `configurator_test`, `bundle_test`, `launch_governance_test` — configure, price, govern |
+| TMF622 product ordering | semantically complete | `order_journey_test`, `bundle_decomposition_test` — order to service to bill |
+| TMF632 / TMF666 / TMF669 party, account, role | semantically complete | `family_test`, `household_test`, `b2b_test` |
+| TMF637 product inventory | semantically complete | `family_phase2_test`, `plan_change_test` |
+| TMF663 shopping cart | semantically complete | `storefront_test`, `agentic_commerce_test` |
+| TMF678 customer bill | semantically complete | `bill_distribution_test`, `collections_test` |
+| TMF635 / TMF677 / TMF654 usage, consumption, prepay | semantically complete | `usage_policy_test`, `referral_test`, `ocs_test` |
+| TMF683 party interaction | semantically complete | `interaction_timeline_test`, `omnichannel_test` |
+| TMF673 / TMF674 address, site | semantically complete | `registry_address_test`, `geosite_test` |
+| TMF641 / TMF638 / TMF639 / TMF685 service order, inventory, resource, number | semantically complete | `order_journey_test`, `sim_test`, `number_choice_test`, `porting_test` |
+| TMF645 / TMF679 qualification | semantically complete | `servicequal_test`, `qualification_gate_test`, `wholesale_open_access_test` |
+| TMF651 / TMF668 agreement, partnership | semantically complete | `wholesale_open_access_test`, `dealer_channel_test` |
+| TMF642 / TMF656 alarm, service problem | semantically complete | `ai_slice_test`, `sla_test` — alarm to problem to self-heal to ticket |
+| TMF621 trouble ticket | semantically complete | `process_memory_test`, `agentic_workforce_test` |
+| TMF653 service test | CTK-conformant | certified on a clean fixture; the grown dataset fails 54 assertions (drift note above); no workflow suite drives the test face on its own |
+| TMF633 service catalog | CTK-conformant | `serviceCandidate` is real; `importJob`/`exportJob` are **recorded only** — no runner fetches or writes the url |
+| TMF640 service activation | CTK-conformant | the declared-activation face writes the inventory row TMF638 reads and never triggers fulfilment — the orchestrator is TMF641 |
+| TMF915 AI management | semantically complete | `ai_control_plane_test`, `tmf915_test` — budgets, alarms, the ledger projection |
+| TMF676 payment | business-rule-hardened divergence | a payment IS a PSP authorization (positive amount, idempotency correlator); `psp_card_orchestration_test`, `psp_klarna_test` |
+| TMF681 communication | business-rule-hardened divergence | a message needs a recipient and rides consent and frequency caps; `engagement_test`, `frequency_dnc_test` |
+
+Every suite named here is a file in `ops/e2e` — the claims gate checks that,
+so a renamed suite cannot leave a stale name in this table.
+
 ## Intentional gaps — hardened beyond the spec (by design)
 
 These components **fail the CTK on purpose**: they enforce business rules
