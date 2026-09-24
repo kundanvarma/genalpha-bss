@@ -87,6 +87,15 @@ jobs:
             echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
           done
 
+      # TAR-15: the RLS invariant checker against a LIVE catalogue. Migration
+      # tests prove the migrations; this proves the database that actually
+      # booted — a table added by a later migration that nobody thought about
+      # is exactly what it is here to catch, and it found eight the first time
+      # it ran. It needs a fleet up, which is why it lives here rather than in
+      # the Security workflow: the smoke fleet is the only one CI has.
+      - name: Row-level security holds on the live database
+        run: python3 ops/security/rls_check.py
+
       - name: Install Playwright
         working-directory: ops/e2e
         run: |

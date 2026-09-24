@@ -132,7 +132,8 @@ PY
 # If a document says a check is enforced in CI, a workflow must invoke it.
 while IFS='|' read -r phrase invocation; do
   [ -z "$phrase" ] && continue
-  if grep -rqi "$phrase" README.md docs/*.md 2>/dev/null; then
+  # CLAUDE.md counts too: it is the densest collection of claims in the repo
+  if grep -rqi "$phrase" README.md CLAUDE.md docs/*.md 2>/dev/null; then
     # a workflow may run the thing directly, or run a list that names it
     grep -rqi "$invocation" .github/workflows/ ops/e2e/smoke-suites.txt 2>/dev/null \
       || fail "docs claim \"$phrase\" but no workflow (or smoke list) runs '$invocation'"
@@ -141,6 +142,7 @@ done <<'CLAIMS'
 accessibility enforced in ci|a11y_test
 the architecture ratchet is green in ci|ratchet.sh
 the chart is template-verified|kubeconform
+runs on every pull request against the smoke fleet|rls_check.py
 CLAIMS
 
 # --------------------------------------------------------------- verdict ----
