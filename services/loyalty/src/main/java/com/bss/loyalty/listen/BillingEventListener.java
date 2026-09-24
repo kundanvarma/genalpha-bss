@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import static com.bss.loyalty.api.Wire.idOf;
 
 /**
  * The earner: loyalty follows the BILLING relationship. A settled bill
@@ -45,10 +46,16 @@ public class BillingEventListener {
             if (bill == null || !"settled".equals(bill.get("state"))) {
                 return;
             }
-            String billId = String.valueOf(bill.get("id"));
+            // points are earned once per BILL, for the customer WITH an id: a bill
+            // without an id used to earn once for all such bills, to party "null"
+            String billId = idOf(bill);
+            if (billId == null) {
+                return;
+            }
             String party = ((List<Map<String, Object>>) bill.getOrDefault("relatedParty", List.of()))
                     .stream().filter(p -> "customer".equals(p.get("role")))
-                    .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(null);
+                    .map(com.bss.loyalty.api.Wire::idOf).filter(java.util.Objects::nonNull)
+                    .findFirst().orElse(null);
             Map<String, Object> amountDue = (Map<String, Object>) bill.get("amountDue");
             BigDecimal amount = amountDue == null || amountDue.get("value") == null ? null
                     : new BigDecimal(String.valueOf(amountDue.get("value")));

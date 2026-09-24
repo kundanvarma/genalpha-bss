@@ -26,9 +26,12 @@ const run = Date.now();
 
   /* wound 2: an order must reach completed (machine channels re-minting) */
   const cust = await tok(email, login.temporaryPassword, 'bss-biz');
+  // ask by NAME: the catalog holds more than one page of offerings, so a
+  // first-100 scan misses the plan on any install with a grown catalog
   const offerings = await (await ctx.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H(staff) })).json();
-  const plan = offerings.find((o) => o.name === 'GenAlpha Mobile Unlimited 5G');
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent('GenAlpha Mobile Unlimited 5G')}`,
+    { headers: H(staff) })).json();
+  const plan = offerings.find((o) => o.name === 'GenAlpha Mobile Unlimited 5G' && o.lifecycleStatus === 'Active');
   if (!plan) fail('no mobile plan to order');
   const order = await (await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`,
     { headers: H(cust), data: { productOrderItem: [{ action: 'add',
