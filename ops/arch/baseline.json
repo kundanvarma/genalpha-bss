@@ -21,9 +21,7 @@
   "apps/storefront/src/pages/UsageControls.jsx": 310
  },
  "htmlInterpolations": {},
- "mapReturns": {
-  "qualification": 2
- },
+ "mapReturns": {},
  "nullIdGuards": {},
  "rawMapWrites": {}
 }

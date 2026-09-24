@@ -33,16 +33,21 @@ public abstract class OpenTaskDocument {
         }
     }
 
+    /** Jackson's any-getter: the extensions ride back out beside the declared fields. */
     @JsonAnyGetter
-    public Map<String, Object> extensions() {
+    protected Map<String, Object> extensions() {
         return extensions;
     }
 
     /** The declared fields of the concrete document, in wire order, nulls left out. */
     protected abstract void declared(Map<String, Object> into);
 
-    /** The document as it is stored and echoed: declared fields first, then the extensions. */
-    public Map<String, Object> toDocument() {
+    /**
+     * The document as it is stored and echoed: declared fields first, then the
+     * extensions. Typed as an open document on purpose — this IS the TM Forum
+     * wire shape behind a typed envelope, the one place the conventions allow it.
+     */
+    public Map<String, ?> toDocument() {
         Map<String, Object> doc = new LinkedHashMap<>();
         declared(doc);
         doc.putAll(extensions);

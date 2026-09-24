@@ -56,7 +56,7 @@ public class LegacyPoqController {
     public ResponseEntity<Map<String, Object>> create(@RequestBody PoqDocument body) {
         // the envelope is typed and refuses what the server owns (id, state, tenant);
         // the TMF body under it stays open, as the R18 kit requires
-        Map<String, Object> dto = body.toDocument();
+        Map<String, Object> dto = new LinkedHashMap<>(body.toDocument());
         List<Map<String, Object>> items = body.productOfferingQualificationItem();
         if (items == null || items.isEmpty()) {
             throw new BadRequestException("productOfferingQualificationItem is required — "
