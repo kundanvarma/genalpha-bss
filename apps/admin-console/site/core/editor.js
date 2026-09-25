@@ -74,6 +74,7 @@ function renderEditor() {
     caption.textContent = f.label + (f.required ? ' *' : '');
     const parts =
       f.kind === 'checkbox' ? checkboxControl(f) :
+      f.kind === 'date' ? dateControl(f) :
       f.kind === 'money' ? moneyControl(f) :
       f.kind === 'quantity' ? quantityControl(f) :
       f.kind === 'ref' ? refControl(f, false) :
