@@ -12,6 +12,11 @@ import java.security.SecureRandom;
 @ConditionalOnProperty(name = "bss.partner.platform", havingValue = "mock", matchIfMissing = true)
 public class MockPartnerEntitlementClient implements PartnerEntitlementClient {
 
+    @Override
+    public String vendor() {
+        return "mock-partner-platform";
+    }
+
     private static final Logger log = LoggerFactory.getLogger(MockPartnerEntitlementClient.class);
     private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 

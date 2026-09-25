@@ -57,6 +57,28 @@ public interface CatalogClient {
     }
 
     /**
+     * The resource-facing services a CFS declares it needs (TMF633
+     * {@code serviceSpecRelationship} of type {@code reliesOn} to specs with
+     * {@code serviceType: RFS}), each with the seam it realises and, when the
+     * RFS names one, the TMF634 resource specification. Empty when the CFS
+     * declares none or the catalog is unreadable: step 2 only RECORDS what the
+     * orchestrator realised against this list; it never changes fulfilment.
+     */
+    java.util.List<Rfs> rfsOf(String cfsId);
+
+    /**
+     * @param id               the RFS's TMF633 id
+     * @param name             its display name ("Number", "Online-charging subscriber", ...)
+     * @param seam             the seam it realises (number | sim | ocs | slice | wholesale-access | partner-entitlement | cpe); null when undeclared
+     * @param consumes         the product-spec characteristics the RFS consumes, as declared on the CFS->RFS edge
+     * @param resourceSpecId   the TMF634 resource specification it names; null when none
+     * @param resourceSpecName its name; null when none
+     */
+    record Rfs(String id, String name, String seam, java.util.List<String> consumes,
+            String resourceSpecId, String resourceSpecName) {
+    }
+
+    /**
      * @param profile          the core's slice profile name
      * @param boostHours       present = a time-boxed pass
      * @param chargingSpecId   the OCS rate plan the line moves to while on the slice (slice-aware charging); null = charging unchanged

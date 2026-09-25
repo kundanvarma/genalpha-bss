@@ -59,22 +59,31 @@ public final class StandardFaceViews {
     /** An issued number (assigned) or a quarantined one — the ledger, honestly labeled. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"id", "href", "name", "value", "resourceStatus", "poolId", "relatedService", "relatedParty",
-            "@type"})
+            "resourceSpecification", "@type"})
     public record ResourceView(String id, String href, String name, String value, String resourceStatus,
             String poolId, ServiceRef relatedService, List<PartyRef> relatedParty,
-            @JsonProperty("@type") String type) {
+            SpecRef resourceSpecification, @JsonProperty("@type") String type) {
 
         public static ResourceView assigned(String id, String value, String poolId, String serviceId,
                 String ownerPartyId) {
             return new ResourceView(id, "/tmf-api/resourceInventoryManagement/v4/resource/" + id, value, value,
                     "assigned", poolId, serviceId == null ? null : ServiceRef.of(serviceId),
-                    PartyRef.customerListOrNull(ownerPartyId), "Resource");
+                    PartyRef.customerListOrNull(ownerPartyId), null, "Resource");
+        }
+
+        /** The same issued resource, now saying WHAT KIND of thing it is: the TMF634 spec its RFS names. */
+        public ResourceView realising(String resourceSpecId, String resourceSpecName) {
+            if (resourceSpecId == null) {
+                return this;
+            }
+            return new ResourceView(id, href, name, value, resourceStatus, poolId, relatedService, relatedParty,
+                    SpecRef.resourceSpec(resourceSpecId, resourceSpecName), type);
         }
 
         public static ResourceView quarantined(String number) {
             return new ResourceView("quarantine-" + number,
                     "/tmf-api/resourceInventoryManagement/v4/resource/quarantine-" + number, number, number,
-                    "quarantined", null, null, null, "Resource");
+                    "quarantined", null, null, null, null, "Resource");
         }
     }
 

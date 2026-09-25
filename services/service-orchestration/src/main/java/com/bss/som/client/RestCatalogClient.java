@@ -23,6 +23,8 @@ public class RestCatalogClient implements CatalogClient {
     private final Map<String, Optional<String>> nameCache = new ConcurrentHashMap<>();
     /** A spec's CFS is design-time data; cache per offering like the category. */
     private final Map<String, Optional<Cfs>> cfsCache = new ConcurrentHashMap<>();
+    /** The RFS list under a CFS is design-time data too; cache per CFS. */
+    private final Map<String, List<Rfs>> rfsCache = new ConcurrentHashMap<>();
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {
@@ -169,6 +171,119 @@ public class RestCatalogClient implements CatalogClient {
                 return Optional.empty();
             }
         });
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Rfs> rfsOf(String cfsId) {
+        if (cfsId == null) {
+            return List.of();
+        }
+        return rfsCache.computeIfAbsent(cfsId, id -> {
+            try {
+                Map<String, Object> cfs = restClient.get()
+                        .uri("/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}", id)
+                        .retrieve().body(Map.class);
+                if (cfs == null || !(cfs.get("serviceSpecRelationship") instanceof List<?> rels)) {
+                    return List.of();
+                }
+                List<Rfs> out = new java.util.ArrayList<>();
+                for (Object r : rels) {
+                    if (!(r instanceof Map<?, ?> rel)
+                            || !"reliesOn".equalsIgnoreCase(String.valueOf(rel.get("relationshipType")))) {
+                        continue;
+                    }
+                    String rfsId = idOf(rel);
+                    if (rfsId == null) {
+                        continue;
+                    }
+                    // what the CFS->RFS edge says the RFS consumes: a characteristic
+                    // "consumes" on the relationship, a list or comma-separated
+                    List<String> consumes = new java.util.ArrayList<>();
+                    if (rel.get("characteristic") instanceof List<?> chars) {
+                        for (Object c : chars) {
+                            if (c instanceof Map<?, ?> ch && "consumes".equals(String.valueOf(ch.get("name")))) {
+                                Object v = ch.get("value");
+                                if (v instanceof List<?> vs) {
+                                    vs.forEach(x -> consumes.add(String.valueOf(x).trim()));
+                                } else if (v != null) {
+                                    for (String x : String.valueOf(v).split(",")) {
+                                        if (!x.isBlank()) {
+                                            consumes.add(x.trim());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Map<String, Object> rfs = restClient.get()
+                            .uri("/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}", rfsId)
+                            .retrieve().body(Map.class);
+                    if (rfs == null || !"RFS".equalsIgnoreCase(String.valueOf(rfs.get("serviceType")))) {
+                        log.warn("catalog: CFS {} reliesOn {} which is not an RFS - ignoring it", id, rfsId);
+                        continue;
+                    }
+                    String seam = characteristic(rfs.get("serviceSpecCharacteristic"), "seam");
+                    // the TMF634 resource spec the RFS names: the standard reference list
+                    // when the catalog carries it, else the house bridge characteristic
+                    String resourceSpecId = null;
+                    String resourceSpecName = null;
+                    if (rfs.get("resourceSpecification") instanceof List<?> refs && !refs.isEmpty()) {
+                        resourceSpecId = idOf(refs.get(0));
+                        resourceSpecName = refs.get(0) instanceof Map<?, ?> m && m.get("name") != null
+                                ? String.valueOf(m.get("name")) : null;
+                    }
+                    if (resourceSpecId == null) {
+                        resourceSpecId = characteristic(rfs.get("serviceSpecCharacteristic"), "resourceSpecificationId");
+                    }
+                    if (resourceSpecId != null) {
+                        try {
+                            Map<String, Object> spec = restClient.get()
+                                    .uri("/tmf-api/resourceCatalogManagement/v4/resourceSpecification/{id}", resourceSpecId)
+                                    .retrieve().body(Map.class);
+                            if (spec != null) {
+                                if (spec.get("name") != null) {
+                                    resourceSpecName = String.valueOf(spec.get("name"));
+                                }
+                                if (seam == null) {
+                                    seam = characteristic(spec.get("resourceSpecCharacteristic"), "seam");
+                                }
+                            }
+                        } catch (RuntimeException e) {
+                            log.warn("catalog: resource spec {} unreadable for RFS {}: {}", resourceSpecId, rfsId, e.getMessage());
+                        }
+                    }
+                    String name = rfs.get("name") == null ? null : String.valueOf(rfs.get("name"));
+                    out.add(new Rfs(rfsId, name, seam == null ? null : seam.toLowerCase(java.util.Locale.ROOT),
+                            List.copyOf(consumes), resourceSpecId, resourceSpecName));
+                }
+                return List.copyOf(out);
+            } catch (RuntimeException e) {
+                log.warn("catalog: RFS list unreadable for CFS {}: {}", id, e.getMessage());
+                return List.of();
+            }
+        });
+    }
+
+    /** The first value of a TMF spec characteristic by name (serviceSpecCharacteristicValue / resourceSpecCharacteristicValue / value). */
+    private static String characteristic(Object chars, String name) {
+        if (!(chars instanceof List<?> list)) {
+            return null;
+        }
+        for (Object c : list) {
+            if (c instanceof Map<?, ?> ch && name.equals(String.valueOf(ch.get("name")))) {
+                for (String key : List.of("serviceSpecCharacteristicValue", "resourceSpecCharacteristicValue")) {
+                    if (ch.get(key) instanceof List<?> vals && !vals.isEmpty()
+                            && vals.get(0) instanceof Map<?, ?> v0 && v0.get("value") != null) {
+                        return String.valueOf(v0.get("value")).trim();
+                    }
+                }
+                if (ch.get("value") != null) {
+                    return String.valueOf(ch.get("value")).trim();
+                }
+            }
+        }
+        return null;
     }
 
     @Override

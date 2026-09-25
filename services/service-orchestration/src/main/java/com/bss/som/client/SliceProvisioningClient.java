@@ -19,6 +19,11 @@ import java.util.Optional;
  */
 public interface SliceProvisioningClient {
 
+    /** Who provides this seam: the core adapter in use, named honestly. */
+    default String vendor() {
+        return getClass().getSimpleName();
+    }
+
     /** What the core currently applies to a line — profile name and expiry, if any. */
     record SliceState(String profile, OffsetDateTime until, boolean active) { }
 
