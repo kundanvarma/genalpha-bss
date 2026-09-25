@@ -189,6 +189,8 @@ the architecture ratchet is green in ci|ratchet.sh
 the chart is template-verified|kubeconform
 runs on every pull request against the smoke fleet|rls_check.py
 every sellable spec names a cfs|cfs_check.py
+signed keyless with cosign|cosign sign
+attested with build provenance|attest-build-provenance
 CLAIMS
 
 # --------------------------------------------------------------- verdict ----
