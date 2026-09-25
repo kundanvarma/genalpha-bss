@@ -145,15 +145,58 @@ integrates "product X means do Y" into the order handler.
   (family) → each RFS and what it reads → resource spec (seam) → who provides
   the seam for this tenant (its configured vendor, or the fleet's built-in
   adapter) — in operator language, honest when a link is missing.
-- **The family's *behaviour* is still code (step 3).** The SOM knows exactly
-  six families and six seams; it records realisations against the RFS list
-  but does not yet *obey* it, so authoring a new RFS does not make the
-  orchestrator call a new adapter, and `componentType(category)` still exists
-  as the fallback for a spec that names no CFS.
+- **Step 3 is built (25 September 2026): the orchestrator obeys the list.**
+  One **executor** in the SOM walks a fixed seam order — wholesale access,
+  partner entitlement, number (or `edge-gpu` for a compute product), SIM,
+  charging, slice, customer premises equipment — and runs exactly the
+  resource-facing services the CFS declares, dropping an optional one when
+  the product carries none of the characteristics its edge says it consumes,
+  and skipping a seam whose adapter says the environment does not call for it
+  (no fibre owner at that address). The **set** of seams is catalog data; the
+  **order** stays code, because a catalog that could reorder seams could
+  provision a SIM before a number exists. Each seam is a **seam adapter**
+  behind a registry keyed by seam name, so a seam nobody serves in this fleet
+  is recorded and logged rather than thrown, and adding one — a content
+  platform for TV, a market hub for electricity — is one adapter class plus
+  catalog data, with no change to the executor.
+- **The executor is the only reader of the product specification.** It builds
+  the map of consumed values from the spec and the order item and hands it to
+  the adapter; an adapter no longer reaches into the catalog for its own
+  characteristics. The mapping on the CFS→RFS edge is therefore what actually
+  flows, not documentation.
+- **Families are labels now.** `mobile`, `internet`, `tv`, `device`,
+  `partner`, `security`, `compute`, `billing-only` mean something to people
+  and screens; the code keys on the declared seams. Two decisions that used to
+  read an offering's *name* are gone: the stadium slice is an RFS on the slice
+  seam consuming `deliveryPath`, and Edge AI is the `compute` family on the
+  `edge-gpu` seam with its own CFS and RFS. Insurance and top-ups name a
+  **billing-only** CFS with zero RFS: nothing to provision is a catalog fact,
+  and a top-up that carries a slice profile declares the slice RFS as optional,
+  so the boost pass still rides the customer's line.
+- **The category table is a counted debt.** A product spec that names no CFS
+  is still fulfilled by `componentType(category)`, and the service says so
+  with a realisation on seam `category-fallback`. `cfs_check.py` prints the
+  count, `ops/arch/ratchet.sh --live` pins it and refuses an increase, and a
+  ceased service leaves the count. Zero on both tenants today; deleting the
+  table is the last commit of that debt, not part of this step.
+- **The product manager picks a pattern by name.** The Product Specification
+  form carries a *Fulfilment* field listing the tenant's customer-facing
+  services in words ("Mobile line — a network line", "Billing-only product —
+  nothing to provision") with the consequences beneath; no seam, RFS or vendor
+  is a control. The product copilot proposes the pattern from the description
+  and characteristics and names what is missing ("no charging plan: charging
+  will not be provisioned"); Create is a click, and the assignment runs
+  through the governed action `assignFulfilmentPattern` with a receipt, so an
+  agent uses the same door.
+- **A dry run says what will happen before anyone orders.** The SOM walks the
+  same plan without calling a single adapter and returns the steps, the values
+  each consumes, the vendor per seam, and a verdict; the offering page shows it
+  in words, and launch governance carries it as a readiness item that goes red
+  when a required seam has no adapter in this fleet.
 
-The catalog now *is* the mapping down to the resource specification, and the
-orchestrator's record is checked against it; letting the orchestrator obey
-the RFS list and retiring the category table is step 3.
+The catalog is now the decomposition and the orchestrator obeys it, checked
+both ways: the gate compares what is declared with what was realised, and the
+ratchet counts every order still fulfilled by the old table.
 
 ## What closes it
 
@@ -172,23 +215,38 @@ Three bounded steps, each provable by a suite and checkable by the claims gate:
    declares what each RFS consumes and whether it is required; the
    orchestrator records what it realised and the gate checks the two agree;
    the offering page shows the chain.
-3. **The decomposition table becomes data.** The SOM *obeys* the RFS list —
-   an RFS the CFS declares is what gets called, through the seam its resource
-   spec names — and `componentType()` retires. Step 2's realisation records
-   and gate are the safety net this step runs under: the moment the catalog
-   and the code disagree, the check is red before an order goes wrong.
+3. **The decomposition table becomes data — built, see above.** The SOM obeys
+   the RFS list through a registry of seam adapters, families are labels, the
+   name-based decisions and the billing-only category test are catalog data,
+   and `componentType()` survives only as a counted fallback the ratchet lets
+   fall. Step 2's realisation records and gate are the safety net it runs
+   under. What is left of it is one line of debt: deleting the table when the
+   count reaches zero for good, which means the eleven ordering suites and any
+   legacy offering naming a pattern first.
 
 Estimate: steps 1 and 2 took two days between them (25 September 2026), most
 of it proof; step 3 is a week, with the existing adapters unchanged.
 
 ## Honest limits
 
-- Steps 1 and 2 are built; step 3 is not. The truthful demo answer today is:
-  the product spec names its customer-facing service and the orchestrator
-  obeys it; the CFS names the resource-facing services and resource
-  specifications it needs, and the orchestrator *records* what it realised
-  against them, checked on every pull request — but what the orchestrator
-  *does* at each seam is still decided by code, not by the RFS list.
+- All three steps are built. The truthful demo answer today is: the product
+  spec names its customer-facing service, the CFS names the resource-facing
+  services it needs and what each consumes, and the orchestrator runs exactly
+  those — checked both ways on every pull request. What is *not* true: the
+  category table is gone (it is counted debt at zero, not deleted), and a new
+  seam still needs an adapter written before any catalog entry can use it.
+- The seam **order** is code and stays code. A catalog that could reorder
+  seams could provision a SIM before a number exists.
+- A CFS declaring a seam no adapter serves in this fleet is recorded, logged
+  and shown as a red dry run; it is not a runtime error and not a silent
+  skip. Adding a product line — a content platform, an electricity supply —
+  is catalog data *plus* its adapters.
+- The eleven ordering suites and any offering whose spec names no pattern
+  still ride the counted fallback. The ratchet stops that number rising; it
+  does not make migrating them free.
+- The dry run's readiness item refuses a launch only where launch governance
+  is switched on for the tenant. GenAlpha runs with it off, so the refusal
+  was proven on Taranga.
 - The disagreement gate can only judge a CFS that has realised services; a
   CFS nobody has ordered since step 2 has no evidence yet, and the 5,000-odd
   services that predate step 2 carry no realisation rows and are counted,

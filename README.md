@@ -205,7 +205,15 @@ every CFS**: a TMF634 resource catalog served beside TMF633, seven resource-faci
 the resource spec (and seam, never vendor) it realises, every CFS declaring what it relies on and what
 each RFS consumes, the orchestrator recording what it realised on every service and resource (TMF638 /
 TMF639) with behaviour unchanged, the same live gate checking that catalog and orchestrator agree, and
-the offering page showing the whole chain (`cfs_realisation_test.js`),
+the offering page showing the whole chain (`cfs_realisation_test.js`), and finally **the
+orchestrator obeying the catalog**: one executor walks a fixed seam order and runs exactly the
+resource-facing services a CFS declares, optional ones only when the product carries what they
+consume, each through a seam adapter in a registry — so adding a product line (a content platform,
+an electricity supply) is catalog data plus one adapter, with no change to the orchestrator; the
+category table survives only as a debt a ratchet counts and lets fall; a product manager picks the
+pattern by name with the copilot proposing it through a governed action; and a dry run says what an
+order will do, in words, before anyone can launch it (`cfs_obeys_test.js`,
+`fulfilment_dry_run_test.js`, `fulfilment_picker_test.js`),
 then a whole new product line, **wholesale / open-access fibre** (the Nordic market opening now:
 sell retail broadband on top of a third party's fibre, split by access layer — L2 VULA / L3
 activated bitstream — ordered and settled operator-to-operator over **MEF LSO Sonata**;
