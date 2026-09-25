@@ -265,7 +265,9 @@ const run = Date.now();
   for (const t of expectPat) {
     if (!patTabs.includes(t)) fail(`product persona missing tab "${t}" — got ${patTabs.join(', ')}`);
   }
-  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'Staff']) {
+  // 'Bills' since the finance page was renamed (#112) — the old name would make
+  // this check vacuous: no tab is called that any more, so it could never fail
+  for (const t of ['Bills', 'Appointments', 'Campaigns', 'Porting', 'Staff']) {
     if (patTabs.includes(t)) fail(`product persona must NOT see "${t}" — got ${patTabs.join(', ')}`);
   }
   console.log('OK role-scoped console: product-pat sees only', patTabs.join(' | '));

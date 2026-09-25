@@ -9,7 +9,7 @@
  *  - ONE MEANING: an overdue bill reads overdue on the desk's situation list
  *    and on the same bill read through the TMF678 door the CSR desk uses.
  *  - THREE CHANNELS: the same bill's block drives the word on the back
- *    office's Customer Bills page, the CSR 360 and the customer's shop.
+ *    office's Bills page, the CSR 360 and the customer's shop.
  *  - THE FLIP: a fact changes (a dispute is opened on the customer's bill) and
  *    all three channels change together, in the same breath; resolving it puts
  *    them back. This is the arrangement case's mechanism, proven with the fact
@@ -139,15 +139,19 @@ const situation = (bill) => (bill.billSituation || {}).value;
     await page.click('input[type="submit"], button[type="submit"]');
   }
   await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
-  await page.locator('.tab', { hasText: 'Customer Bills' }).first().click();
-  await page.waitForSelector('#listing-body tr', { timeout: 20000 });
+  // the page is "Bills" now and it is a React island (ADR-0022, suite #235):
+  // the rows live in the island's own body, not the shell's generic listing.
+  // hasText is a case-insensitive SUBSTRING match, so an exact pattern is what
+  // keeps this off any other page whose name contains the word.
+  await page.locator('.tab', { hasText: /^bills$/i }).first().click();
+  await page.waitForSelector('[data-testid="bills-body"] tr', { timeout: 20000 });
   await page.waitForTimeout(1500);
   const chips = await page.locator('.chips, [data-testid="kpi-chips"], .kpis').first().innerText().catch(() => '');
   const overdueChip = /overdue/i.test(chips) ? chips.match(/(\d+)\s*overdue/i) : null;
   await page.screenshot({ path: `/tmp/situation-console-${Date.now()}.png` });
   await page.close();
   await browser.close();
-  if (!overdueChip) fail(`the Customer Bills page shows no overdue chip: "${chips.replace(/\s+/g, ' ').slice(0, 120)}"`);
+  if (!overdueChip) fail(`the Bills page shows no overdue chip: "${chips.replace(/\s+/g, ' ').slice(0, 120)}"`);
   if (Number(overdueChip[1]) === 0) {
     fail('the overdue chip counts zero while the book holds overdue bills — it is reading a field no bill carries');
   }

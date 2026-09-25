@@ -63,8 +63,8 @@ async function api(path, tok) {
   /* ---------- the desk ---------- */
   // the console lands on Home; Bills is a tab of the Billing & Revenue department
   // exactly the Bills tab: hasText is a case-insensitive SUBSTRING match, and
-  // the console still carries a "Customer Bills" page, so a plain string would
-  // happily open the wrong one and prove nothing
+  // other pages on this desk carry the word ("Bill formats"), so a plain string
+  // could happily open the wrong one and prove nothing
   await page.locator('#tabs .tab', { hasText: /^bills$/i }).first().click();
   await page.waitForSelector('[data-testid="bills-desk"]', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('[data-testid="bills-body"] tr').length > 1, null, { timeout: 20000 });
