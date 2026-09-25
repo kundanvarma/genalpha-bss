@@ -45,3 +45,24 @@ else has to stop.
   three catalogs in one box; this record is why.
 - Extraction later is mechanical, not a redesign, as long as no code outside
   `product-catalog` reaches the resource tables except over TMF634.
+
+## Enforced by
+
+- The gateway's route table (`services/gateway/src/main/resources/application.yml`):
+  `/tmf-api/resourceCatalogManagement/**` points at the catalog URL, beside
+  the service-catalog route; the fresh-install check in `ops/arch/claims.sh`
+  boots that configuration on every pull request.
+- product-catalog's `PostgresMigrationTest` (the resource tables and their
+  row-level-security policy migrate on real Postgres) and
+  `ops/security/rls_check.py` against the live fleet on every pull request.
+- ADR 0002 (one component, one database) is what keeps other components off
+  the resource tables: they reach them over TMF634 or not at all. Held by
+  review; the day a second component needs the tables directly is the day
+  the extraction happens.
+
+## Related
+
+- `docs/catalog-to-provisioning.md` — the arc, its steps and honest limits.
+- ADR 0001 (TM Forum Open APIs are the contract), ADR 0006 (seams for
+  vendor systems: the resource specification names a seam, `tenants.yml`
+  names the vendor).
