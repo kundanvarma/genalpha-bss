@@ -171,14 +171,14 @@ const HOME_READERS = [
     if (!homeCanSee('customerBill')) return null;
     const bills = await homeGet(`${BILLING_BASE}/customerBill?limit=100`);
     if (!Array.isArray(bills)) return null;
-    const now = Date.now();
-    const unpaid = bills.filter((b) => !/settled|paid|closed/i.test(b.state || ''));
-    const overdue = unpaid.filter((b) => b.paymentDueDate && new Date(b.paymentDueDate).getTime() < now);
+    // the bill says what is true about itself; this card used to test `paymentDueDate`, which no bill carries
+    const overdue = bills.filter((b) => (b.billSituation || {}).value === 'overdue');
     const out = { attention: [], work: [], health: [] };
     if (overdue.length) out.attention.push(homeCard('overdue', 'bad', overdue.length,
       `${homePlural(overdue.length, 'bill is', 'bills are')} overdue`,
-      'Past the due date and still unpaid — the collections ladder starts here.', 'customerBill'));
-    out.health.push({ label: 'bills open', value: unpaid.length, tone: unpaid.length ? 'warn' : 'ok' });
+      'Past the due date with no arrangement — the collections ladder starts here.', 'customerBill'));
+    const open = bills.filter((b) => !['paid', 'writtenOff', 'issued'].includes((b.billSituation || {}).value)).length;
+    out.health.push({ label: 'bills open', value: open, tone: open ? 'warn' : 'ok' });
     return out;
   },
   // Orders: in flight and stalled (gate: the Orders tab)

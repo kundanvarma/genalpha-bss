@@ -10,31 +10,10 @@ const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
 const None = () => <span className="secnone"> — none</span>;
 const dt = (v) => v ? new Date(v).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
-export const OPEN_BILL_STATES = ['new', 'validated', 'sent', 'partiallyPaid'];
-export const due = (b) => Number(b.amountDue?.value ?? b.amountDue ?? 0);
+export { OPEN_BILL_STATES, due, situationOf, SITUATION_WORDS, STILL_OWING, stillOwing } from './situation.jsx';
+import { due, situationOf, SITUATION_WORDS, stillOwing } from './situation.jsx';
 
-/** One line per topic for the Overview's Account card: normal is quiet, exceptions say what to do. */
-export function accountState({ bills, spendPolicies, usage, creditDecisions, methods }) {
-  const open = bills.filter((b) => OPEN_BILL_STATES.includes(b.state) && due(b) > 0);
-  const disputed = bills.filter((b) => b.dispute && b.dispute.status === 'open');
-  const lines = [];
-  lines.push(open.length
-    ? { level: 'warn', text: `${open.length} open bill${open.length === 1 ? '' : 's'} — ${open.reduce((s, b) => s + due(b), 0).toFixed(2)} ${open[0].amountDue?.unit || ''} due`, area: 'billing' }
-    : { level: 'ok', text: 'Billing: current', area: 'billing' });
-  if (disputed.length) lines.push({ level: 'warn', text: `${disputed.length} bill${disputed.length === 1 ? '' : 's'} under dispute — collection paused`, area: 'billing' });
-  for (const m of spendPolicies) {
-    const label = { spend: 'Spend cap', content: 'Content services', roaming: 'Roaming' }[m.meterType] || m.meterType;
-    if (m.blocked || m.barred) lines.push({ level: 'warn', text: `${label}: ${m.barred ? 'barred' : 'blocked'} — review`, area: 'billing' });
-    else if (m.limit && m.accrued && Number(m.accrued.value) >= Number(m.limit.value) * 0.8) lines.push({ level: 'warn', text: `${label}: ${m.accrued.value} of ${m.limit.value} ${m.limit.unit} — near the limit`, area: 'billing' });
-    else if (m.enabled && m.limit) lines.push({ level: 'ok', text: `${label}: ${m.accrued ? m.accrued.value : 0} of ${m.limit.value} ${m.limit.unit}`, area: 'billing' });
-  }
-  const over = usage.filter((u) => u.allowedValue != null && Number(u.usedValue) > Number(u.allowedValue));
-  if (over.length) lines.push({ level: 'warn', text: `Over allowance: ${over.map((u) => u.name).join(', ')}`, area: 'billing' });
-  const declined = creditDecisions.find((c) => c.decision === 'decline');
-  if (declined) lines.push({ level: 'warn', text: 'A credit decision on file was a decline', area: 'billing' });
-  if (methods.length) lines.push({ level: 'ok', text: `${methods.length} saved card${methods.length === 1 ? '' : 's'}`, area: 'billing' });
-  return lines;
-}
+export { accountState } from './accountState.jsx';
 
 export function Bills({ bills, id, act }) {
   return (
@@ -67,7 +46,11 @@ export function Bills({ bills, id, act }) {
               {b.installmentPlan && b.installmentPlan.status !== 'cancelled' && (
                 <span className="dim small">{b.installmentPlan.paidCount}/{b.installmentPlan.installments} paid</span>
               )}
-              <span className={`state ${b.state}`}>{b.state}</span>
+              <span className={`state ${situationOf(b) || b.state}`}
+                    data-testid="csr-bill-situation"
+                    title={(b.billSituation || {}).reason || ''}>
+                {SITUATION_WORDS[situationOf(b)] || b.state}
+              </span>
               <button className="ghost" data-testid="csr-bill-pdf" title="Open the bill exactly as the customer sees it" onClick={() => act(() => openBillPdf(b.id), 'billing')}>PDF</button>
               <details className="more">
                 <summary className="ghost">More…</summary>

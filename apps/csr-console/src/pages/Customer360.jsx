@@ -12,7 +12,7 @@ import { rememberRecent } from './Customers.jsx';
 import NewMenu from './customer/NewMenu.jsx';
 import Activity, { timelineOf, dt, chan } from './customer/Activity.jsx';
 import { ServiceFacts, ServiceActions, DangerZone, Diagnosis, numberOf, serviceKind } from './customer/ServiceRows.jsx';
-import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, OPEN_BILL_STATES, due } from './customer/Money.jsx';
+import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, stillOwing } from './customer/Money.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue, authFetch } from '../auth.js';
 
@@ -217,7 +217,7 @@ export default function Customer360() {
     const livePorts = portingOrders.filter((po) => !['completed', 'cancelled', 'rejected', 'failed'].includes(po.status));
     const upcoming = appointments.filter((ap) => !['completed', 'cancelled'].includes(ap.status));
     const cartLines = carts.filter((c) => c.status === 'active').flatMap((c) => (c.cartItem || []).map((line) => ({ cart: c, line })));
-    const openBills = bills.filter((b) => OPEN_BILL_STATES.includes(b.state) && due(b) > 0);
+    const openBills = bills.filter(stillOwing);
     const rows = mergeProductsAndServices(products, activeServices);
     return { openTickets, liveOrders, livePorts, upcoming, cartLines, openBills, rows };
   }, [tickets, orders, portingOrders, appointments, carts, bills, products, activeServices]);
