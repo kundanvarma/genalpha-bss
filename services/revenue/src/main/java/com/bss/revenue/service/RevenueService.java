@@ -1,12 +1,16 @@
 package com.bss.revenue.service;
 
+import com.bss.revenue.api.OffsetPageRequest;
+import com.bss.revenue.api.PagedResult;
 import com.bss.revenue.client.BillingClient;
 import com.bss.revenue.dto.AccountNet;
 import com.bss.revenue.dto.AccountTotal;
 import com.bss.revenue.dto.BackfillReceipt;
 import com.bss.revenue.dto.ChartRow;
 import com.bss.revenue.dto.DrillRow;
+import com.bss.revenue.dto.ChangeFinding;
 import com.bss.revenue.dto.JournalEntryView;
+import com.bss.revenue.dto.JournalFilter;
 import com.bss.revenue.dto.JournalLineView;
 import com.bss.revenue.dto.LoyaltyAccrual;
 import com.bss.revenue.dto.LoyaltyControl;
@@ -119,6 +123,9 @@ public class RevenueService {
      * here it is a small, explicit list — the honest boundary.) */
     private static final Set<String> BNPL_PROVIDERS = Set.of("klarna");
 
+    /** The most rows one export will carry. A reconciliation file, not a database dump. */
+    private static final int EXPORT_CAP = 10000;
+
     private static final TypeReference<Map<String, Object>> OPEN_MAP = new TypeReference<>() { };
 
     private final ObjectMapper json = new ObjectMapper();
@@ -129,16 +136,28 @@ public class RevenueService {
     private final BillingClient billingClient;
     private final TenantScope tenantScope;
     private final com.bss.revenue.repository.PeriodCloseRepository periods;
+    private final ChartGuard guard;
 
     public RevenueService(JournalEntryRepository entries, JournalLineRepository lines,
             AccountMappingRepository mappings, BillingClient billingClient, TenantScope tenantScope,
-            com.bss.revenue.repository.PeriodCloseRepository periods) {
+            com.bss.revenue.repository.PeriodCloseRepository periods, ChartGuard guard) {
         this.entries = entries;
         this.lines = lines;
         this.mappings = mappings;
         this.billingClient = billingClient;
         this.tenantScope = tenantScope;
         this.periods = periods;
+        this.guard = guard;
+    }
+
+    /** Is this a posting key the subledger books against? */
+    public static boolean knownPostingKey(String key) {
+        return DEFAULT_CHART.containsKey(key);
+    }
+
+    /** Every posting key, in the order the chart lists them. */
+    public static Set<String> postingKeys() {
+        return DEFAULT_CHART.keySet();
     }
 
     /* ---------- posting builders ---------- */
@@ -924,6 +943,39 @@ public class RevenueService {
         return out;
     }
 
+    /**
+     * The journal a controller reconciles with: a date range, one kind of
+     * business event, one account, a page at a time, and the TOTAL beside it.
+     *
+     * <p>The total is the service's, not a count of whatever fitted on the page.
+     * A book of forty thousand postings served a hundred at a time would
+     * otherwise have every screen quoting "100" as if it were the answer.
+     */
+    @Transactional(readOnly = true)
+    public PagedResult<JournalEntryView> journalPage(JournalFilter filter) {
+        String tenant = tenantScope.currentTenantId();
+        String type = blank(filter.sourceType());
+        String account = blank(filter.account());
+        long total = entries.countFiltered(tenant, filter.fromBound(), filter.toBound(), type, account);
+        List<JournalEntry> found = entries.filtered(tenant, filter.fromBound(), filter.toBound(), type,
+                account, new OffsetPageRequest(filter.offset(), filter.limit()));
+        List<JournalEntryView> out = new ArrayList<>();
+        for (JournalEntry e : found) {
+            out.add(entryView(e, lines.findAllByTenantIdAndEntryIdOrderBySeqAsc(tenant, e.getId())));
+        }
+        return new PagedResult<>(out, total);
+    }
+
+    /** The kinds of business event this tenant's book actually holds. */
+    @Transactional(readOnly = true)
+    public List<String> journalSourceTypes() {
+        return entries.sourceTypes(tenantScope.currentTenantId());
+    }
+
+    private static String blank(String s) {
+        return s == null || s.isBlank() ? null : s;
+    }
+
     @Transactional(readOnly = true)
     public JournalEntryView entryById(String id) {
         String tenant = tenantScope.currentTenantId();
@@ -936,10 +988,13 @@ public class RevenueService {
      * format=sap|netsuite emits ERP-flavored column layouts (SHAPED to their
      * import conventions, not certified against a live instance — honest). */
     @Transactional(readOnly = true)
-    public String exportCsv(LocalDate date, String format) {
+    public String exportCsv(JournalFilter filter, String format) {
+        // the export answers the SAME question the screen asked, so a
+        // reconciliation never downloads something other than what it looked at
+        List<JournalEntryView> rows = journalPage(filter.withPage(EXPORT_CAP, 0)).items();
         if ("sap".equalsIgnoreCase(format)) {
             StringBuilder sap = new StringBuilder("BLDAT,BUDAT,XBLNR,BKTXT,HKONT,SHKZG,WRBTR,WAERS\n");
-            for (JournalEntryView entry : journal(date)) {
+            for (JournalEntryView entry : rows) {
                 for (JournalLineView l : entry.lines()) {
                     boolean debit = l.debit().signum() > 0;
                     sap.append(String.join(",", String.valueOf(entry.entryDate()),
@@ -953,7 +1008,7 @@ public class RevenueService {
         }
         if ("netsuite".equalsIgnoreCase(format)) {
             StringBuilder ns = new StringBuilder("Date,Journal,Account,Debit,Credit,Memo,Currency\n");
-            for (JournalEntryView entry : journal(date)) {
+            for (JournalEntryView entry : rows) {
                 for (JournalLineView l : entry.lines()) {
                     ns.append(String.join(",", String.valueOf(entry.entryDate()),
                             String.valueOf(entry.id()),
@@ -966,7 +1021,7 @@ public class RevenueService {
         }
         StringBuilder csv = new StringBuilder(
                 "entryDate,entryId,sourceType,accountCode,accountName,debit,credit,currency,ref,description\n");
-        for (JournalEntryView entry : journal(date)) {
+        for (JournalEntryView entry : rows) {
             for (JournalLineView l : entry.lines()) {
                 csv.append(String.join(",",
                         String.valueOf(entry.entryDate()), String.valueOf(entry.id()),
@@ -1096,10 +1151,19 @@ public class RevenueService {
     public List<ChartRow> chart() {
         String tenant = tenantScope.currentTenantId();
         seedDefaults(tenant);
+        // how many postings each account already carries, asked ONCE: a screen
+        // that asked per row would fire thirty requests and read a trimmed
+        // burst as thirty unused accounts
+        Map<String, Long> used = new LinkedHashMap<>();
+        for (Object[] row : lines.countByAccount(tenant)) {
+            used.put(String.valueOf(row[0]), ((Number) row[1]).longValue());
+        }
         List<ChartRow> out = new ArrayList<>();
         for (AccountMapping m : mappings.findAllByTenantIdOrderByMappingKeyAsc(tenant)) {
             out.add(new ChartRow(m.getMappingKey(), m.getAccountCode(), m.getAccountName(),
-                    m.getConfigValue()));
+                    m.getConfigValue(), ChartWords.books(m.getMappingKey()),
+                    ChartWords.setting(m.getMappingKey()),
+                    used.getOrDefault(m.getAccountCode(), 0L)));
         }
         return out;
     }
@@ -1116,13 +1180,25 @@ public class RevenueService {
         }
         seedDefaults(tenant);
         AccountMapping m = mappings.findByTenantIdAndMappingKey(tenant, key).orElseThrow();
+        // absent leaves the setting alone; an explicit JSON null clears it
+        BigDecimal value = m.getConfigValue();
+        if (dto.configValue() != null) {
+            value = dto.configValue().isNull() ? null : new BigDecimal(dto.configValue().asText());
+        }
+        // The SAME checks the Configuration ladder runs. This door is the one a
+        // seed and a machine caller use, and a rule only the screen enforced
+        // would not be a rule: an account carrying postings cannot be left
+        // without a code a ledger can read, and a rate cannot go negative.
+        List<ChangeFinding> refused = guard
+                .check(key, m, dto.accountCode(), dto.accountName(), value,
+                        guard.postingsUsing(tenant, m.getAccountCode()))
+                .stream().filter(ChangeFinding::blocking).toList();
+        if (!refused.isEmpty()) {
+            throw new BadRequestException(refused.get(0).message());
+        }
         m.setAccountCode(dto.accountCode());
         m.setAccountName(dto.accountName());
-        // absent leaves the setting alone; an explicit JSON null clears it
-        if (dto.configValue() != null) {
-            m.setConfigValue(dto.configValue().isNull() ? null
-                    : new BigDecimal(dto.configValue().asText()));
-        }
+        m.setConfigValue(value);
         mappings.save(m);
         return RemapReceipt.of(key, m.getAccountCode(), m.getAccountName(), m.getConfigValue());
     }

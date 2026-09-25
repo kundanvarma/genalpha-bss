@@ -14,6 +14,20 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, String
 
     List<JournalLine> findAllByTenantIdAndEntryIdInOrderBySeqAsc(String tenantId, List<String> entryIds);
 
+    /** How many booked lines carry this account code — what makes an account "in use". */
+    long countByTenantIdAndAccountCode(String tenantId, String accountCode);
+
+    /**
+     * How many booked lines carry EACH account code, in one question. The chart
+     * of accounts needs this for every row at once, and thirty separate counts
+     * from a browser is a burst the gateway would trim — which on screen looks
+     * exactly like thirty unused accounts.
+     * Returns rows of [accountCode, count].
+     */
+    @Query("SELECT l.accountCode, COUNT(l) FROM JournalLine l WHERE l.tenantId = :tenant "
+            + "GROUP BY l.accountCode")
+    List<Object[]> countByAccount(@Param("tenant") String tenant);
+
     /**
      * Per-account debit/credit totals over a date range — the governed input to
      * the reporting summary. Joined to the entry for the date; RLS still applies.
