@@ -70,4 +70,46 @@ class FulfilmentPatternsTest {
         Map<String, Object> spec = new LinkedHashMap<>(Map.of("ref", "s1", "name", "Mystery", "productSpecCharacteristic", List.of()));
         assertThat(FulfilmentPatterns.propose(spec, List.of(), catalog)).isEmpty();
     }
+
+    @Test
+    void aFamilyWithTwoPatternsProposesItsPrimary() {
+        // step 3 gave `mobile` a second pattern (a venue slice). Taking the first
+        // match offered a 50 GB plan a slice; the primary flag settles it.
+        List<Map<String, Object>> catalog = List.of(
+                pattern("cfs-slice", "Priority slice", "mobile", "false"),
+                pattern("cfs-line", "Mobile line", "mobile", "true"));
+        Map<String, Object> spec = new java.util.HashMap<>(Map.of("name", "50 GB plan"));
+        var p = FulfilmentPatterns.propose(spec, List.of(), catalog);
+        assertThat(p).isPresent();
+        assertThat(p.get().cfsName()).isEqualTo("Mobile line");
+    }
+
+    @Test
+    void withNoPrimaryMarkedTheFullerPatternWins() {
+        List<Map<String, Object>> catalog = List.of(
+                pattern("cfs-slice", "Priority slice", "mobile", null),
+                withRelies(pattern("cfs-line", "Mobile line", "mobile", null), 4));
+        Map<String, Object> spec = new java.util.HashMap<>(Map.of("name", "50 GB plan"));
+        assertThat(FulfilmentPatterns.propose(spec, List.of(), catalog).get().cfsName()).isEqualTo("Mobile line");
+    }
+
+    private static Map<String, Object> pattern(String id, String name, String family, String primary) {
+        List<Map<String, Object>> chars = new java.util.ArrayList<>();
+        chars.add(Map.of("name", "fulfilmentFamily", "serviceSpecCharacteristicValue", List.of(Map.of("value", family))));
+        if (primary != null) {
+            chars.add(Map.of("name", "primaryForFamily", "serviceSpecCharacteristicValue", List.of(Map.of("value", primary))));
+        }
+        Map<String, Object> m = new java.util.HashMap<>();
+        m.put("id", id); m.put("name", name); m.put("serviceType", "CFS"); m.put("serviceSpecCharacteristic", chars);
+        return m;
+    }
+
+    private static Map<String, Object> withRelies(Map<String, Object> spec, int n) {
+        List<Map<String, Object>> edges = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            edges.add(Map.of("relationshipType", "reliesOn", "id", "rfs-" + i, "name", "RFS " + i));
+        }
+        spec.put("serviceSpecRelationship", edges);
+        return spec;
+    }
 }

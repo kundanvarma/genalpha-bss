@@ -31,30 +31,34 @@ GATEWAY = os.environ.get("BSS_GATEWAY", "http://localhost:8080")
 CATALOG = f"{GATEWAY}/tmf-api/productCatalogManagement/v4"
 SERVICE_CATALOG = f"{GATEWAY}/tmf-api/serviceCatalogManagement/v4"
 
-# One customer-facing service per fulfilment family. The SOM knows exactly
-# these six families (CatalogClient.Cfs.FAMILIES); a seventh needs code first.
+# The customer-facing services, with the family each fulfils and whether it is
+# that family's PRIMARY pattern — the everyday one a product manager (or the
+# copilot proposing on their behalf) should be offered. A family may hold more
+# than one: a mobile line and a venue slice are both `mobile`; a plain top-up
+# and one that boosts a line are both `billing-only`. The SOM knows exactly the
+# families in CatalogClient.Cfs.FAMILIES; a new one needs code first.
 CFS = [
     ("Mobile line", "mobile",
-     "A network line: a number, a SIM or eSIM profile, an online-charging subscriber."),
+     "A network line: a number, a SIM or eSIM profile, an online-charging subscriber.", True),
     ("Broadband access", "internet",
-     "A fixed access installed at a place; it never draws a number."),
+     "A fixed access installed at a place; it never draws a number.", True),
     ("TV entitlement", "tv",
-     "A digital entitlement; when bundled it rides the broadband and waits for it."),
+     "A digital entitlement; when bundled it rides the broadband and waits for it.", True),
     ("Device shipment", "device",
-     "A handset shipped to the customer; a parcel, not a line."),
+     "A handset shipped to the customer; a parcel, not a line.", True),
     ("Partner activation", "partner",
-     "Activated on the partner's platform; this BSS holds the activation code."),
+     "Activated on the partner's platform; this BSS holds the activation code.", True),
     ("Security feature", "security",
-     "A feature toggled on the customer's line or access."),
+     "A feature toggled on the customer's line or access.", True),
     # step 3: what used to be decided by a name or a category is a CFS now
     ("Priority slice", "mobile",
-     "A network slice sold as a product: a priority profile on the 5G core, riding a delivery path."),
+     "A network slice sold as a product: a priority profile on the 5G core, riding a delivery path.", False),
     ("Edge inference", "compute",
-     "Compute at the network edge: a GPU drawn from the edge pool instead of a number."),
+     "Compute at the network edge: a GPU drawn from the edge pool instead of a number.", True),
     ("Billing-only product", "billing-only",
-     "Nothing to provision: the product bills, and that is the whole story."),
+     "Nothing to provision: the product bills, and that is the whole story.", True),
     ("Top-up with boost", "billing-only",
-     "A top-up that bills and, when it carries a slice profile, boosts the customer's existing line for the pass's hours."),
+     "A top-up that bills and, when it carries a slice profile, boosts the customer's existing line for the pass's hours.", False),
 ]
 # The retail categories and the family each sells. Anything else is either
 # billing-only, a container, or another seed's business (wholesale has its own CFS).
@@ -104,6 +108,16 @@ def page(url):
         offset += 100
 
 
+def char_value(entity, list_key, name):
+    """One characteristic's first value, or None — the seed reads what it wrote."""
+    for c in entity.get(list_key) or []:
+        if c.get("name") == name:
+            vals = c.get(list_key.replace("Characteristic", "CharacteristicValue")) or []
+            if vals and vals[0].get("value") is not None:
+                return str(vals[0]["value"])
+    return None
+
+
 def family_of(cfs):
     for c in cfs.get("serviceSpecCharacteristic") or []:
         if c.get("name") == "fulfilmentFamily":
@@ -122,7 +136,7 @@ def cfs_ref(cfs):
 existing = {s["name"]: s for s in page(f"{SERVICE_CATALOG}/serviceSpecification")}
 cfs_by_family = {}
 cfs_by_name = {}
-for name, family, description in CFS:
+for name, family, description, primary in CFS:
     body = {
         "name": name, "description": description, "version": "1.0",
         "lifecycleStatus": "Active", "serviceType": "CFS", "isBundle": False,
@@ -130,11 +144,15 @@ for name, family, description in CFS:
             "name": "fulfilmentFamily", "valueType": "string", "configurable": False,
             "description": "the fulfilment family the SOM runs for this service",
             "serviceSpecCharacteristicValue": [{"value": family, "isDefault": True}],
+        }, {
+            "name": "primaryForFamily", "valueType": "boolean", "configurable": False,
+            "description": "the everyday pattern of this family — what a product manager is offered first",
+            "serviceSpecCharacteristicValue": [{"value": "true" if primary else "false", "isDefault": True}],
         }],
     }
     if name in existing:
         cfs = existing[name]
-        if family_of(cfs) != family:
+        if family_of(cfs) != family or char_value(cfs, "serviceSpecCharacteristic", "primaryForFamily") != ("true" if primary else "false"):
             cfs = req("PATCH", f"{SERVICE_CATALOG}/serviceSpecification/{cfs['id']}",
                       {"serviceSpecCharacteristic": body["serviceSpecCharacteristic"]})
             print(f"cfs: {name} — family set to {family}")
