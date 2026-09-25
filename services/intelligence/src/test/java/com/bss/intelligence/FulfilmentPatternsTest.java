@@ -53,14 +53,14 @@ class FulfilmentPatternsTest {
     @Test
     void wordsDecideWhenThereIsNoCategory_andACarriedValueIsNotMissing() {
         Map<String, Object> spec = new LinkedHashMap<>(Map.of("ref", "s1", "name", "Travel insurance", "productSpecCharacteristic", List.of()));
-        var p = FulfilmentPatterns.propose(spec, List.of(), catalog, Map.of());
+        var p = FulfilmentPatterns.propose(spec, List.of(), catalog);
         assertThat(p).isPresent();
         assertThat(p.get().cfsName()).isEqualTo("Billing-only product");
         assertThat(p.get().missingConsumed()).isEmpty();
 
         Map<String, Object> mobile = new LinkedHashMap<>(Map.of("ref", "s2", "name", "Prepaid 10 GB",
                 "productSpecCharacteristic", List.of(Map.of("name", "chargingSpecId"), Map.of("name", "zeroRatedApps"))));
-        var q = FulfilmentPatterns.propose(mobile, List.of(), catalog, Map.of());
+        var q = FulfilmentPatterns.propose(mobile, List.of(), catalog);
         assertThat(q.get().family()).isEqualTo("mobile");
         assertThat(q.get().missingConsumed()).isEmpty();
     }
@@ -68,6 +68,6 @@ class FulfilmentPatternsTest {
     @Test
     void noRecognisableFamilyMeansNoPattern_neverAGuess() {
         Map<String, Object> spec = new LinkedHashMap<>(Map.of("ref", "s1", "name", "Mystery", "productSpecCharacteristic", List.of()));
-        assertThat(FulfilmentPatterns.propose(spec, List.of(), catalog, Map.of())).isEmpty();
+        assertThat(FulfilmentPatterns.propose(spec, List.of(), catalog)).isEmpty();
     }
 }
