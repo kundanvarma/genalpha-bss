@@ -11,7 +11,7 @@ const None = () => <span className="secnone"> — none</span>;
 const dt = (v) => v ? new Date(v).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export { OPEN_BILL_STATES, due, situationOf, SITUATION_WORDS, STILL_OWING, stillOwing } from './situation.jsx';
-import { due, situationOf, SITUATION_WORDS, stillOwing } from './situation.jsx';
+import { situationOf, SITUATION_WORDS } from './situation.jsx';
 
 export { accountState } from './accountState.jsx';
 
