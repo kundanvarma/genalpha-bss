@@ -46,3 +46,7 @@ __pycache__/
 docs/*.pdf
 ops/cloud/aws-demo/box.env
 .ci-fleet.override.yml
+
+# the back office's React island bundle: built in the image from apps/admin-console/island
+apps/admin-console/site/island/
+apps/admin-console/island/node_modules/

@@ -197,7 +197,7 @@ const WORKSPACES = [
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.
   { label: 'Privacy & governance', tabs: ['profile', 'aiflows'] },
-  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
+  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations', 'islandHealth'] },
   // the ontology is every staff member's reading room, so it is its own desk: a persona
   // that may read it must not thereby see the admin's Platform desk (suite console_workspaces)
   { label: 'What the BSS can do', tabs: ['ontology'] },

@@ -1,7 +1,36 @@
 /* The custom panes: a resource flagged as a desk renders its own panel instead of the table. Called first by loadList; true = handled. */
 'use strict';
 
+/* A desk may be a React island: the shell keeps sign-in, navigation, the
+ * palette and the frame, and React renders inside the panel. `island: '<name>'`
+ * on the resource is the whole coupling; the bundle (site/island/islands.js,
+ * built in the image) hangs window.mountIsland on the page. */
+function renderIsland(name) {
+  el('editor').hidden = true;
+  el('total').textContent = '';
+  el('listing-head').replaceChildren();
+  el('listing-body').replaceChildren();
+  document.querySelector('.pager')?.setAttribute('hidden', '');
+  document.querySelector('.table-wrap')?.setAttribute('hidden', '');
+  let panel = document.getElementById('island-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'island-panel';
+    document.querySelector('.table-wrap').after(panel);
+  }
+  panel.hidden = false;
+  if (typeof window.mountIsland !== 'function') {
+    panel.textContent = "This screen needs the console's React bundle, which did not load.";
+    return;
+  }
+  window.mountIsland(name, panel, { authFetch, user: (tokenClaims() || {}).preferred_username, config: window.BSS_CONSOLE_CONFIG || {} });
+}
+
 function renderCustomPane() {
+  if (active.island) {
+    renderIsland(active.island);
+    return true;
+  }
   if (active.home) {
     el('editor').hidden = true;
     el('total').textContent = '';
