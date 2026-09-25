@@ -232,24 +232,10 @@ public class OrchestrationService {
             // insurance is billing-only (no service at all), partner services
             // activate with the partner, security toggles a feature. Anything
             // else — or an unreachable catalog — is a network line, as always.
+            // The category is read for the FALLBACK only (a spec that names no CFS):
+            // since step 3 the catalog path never consults it — "creates no
+            // service" is a CFS with family billing-only and zero seams (#91).
             String category = catalog.categoryOf(offeringId).orElse("");
-            if ("Insurance".equals(category) || "Top-ups".equals(category)) {
-                // insurance covers, top-ups boost an allowance — neither is a
-                // service; they bill, and that's the whole story. Nothing to
-                // fulfil, so the item is done. EXCEPT a top-up that carries slice
-                // intent — a BOOST PASS: the customer's mobile line rides a
-                // priority slice for the pass's hours. The core enforces the
-                // window; the line's record carries it so everyone can see it.
-                final String passName = name;
-                final String passOwner = owner;
-                catalog.sliceIntentOf(offeringId).ifPresent(intent ->
-                        applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
-                log.info("'{}' is billing-only ({}) — no service to provision", name, category);
-                if (itemId != null) {
-                    ordering.updateItemState(productOrderId, itemId, "completed");
-                }
-                continue;
-            }
             // The decomposed component's family decides its fulfilment: a mobile
             // plan is a network line (number + SIM); broadband installs and never
             // draws a number; TV is a digital entitlement; a handset ships and is
@@ -287,9 +273,9 @@ public class OrchestrationService {
             // counted fallback (ticket #89 counts it; #90/#91 retire what is in it).
             ItemOutcome outcome = cfs.isPresent()
                     ? fulfilByCatalog(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
-                            cfs.get(), componentType, deferred)
+                            cfs.get(), componentType, category, deferred)
                     : fulfilByCategory(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
-                            cfs, componentType, deferred);
+                            cfs, componentType, category, deferred);
             if (outcome.billingOnly()) {
                 if (itemId != null) {
                     ordering.updateItemState(productOrderId, itemId, "completed");
@@ -368,7 +354,7 @@ public class OrchestrationService {
      */
     private ItemOutcome fulfilByCatalog(String tenant, String owner, Map<String, Object> productOrder,
             String productOrderId, Map<String, Object> item, String name, String offeringId, String wish,
-            CatalogClient.Cfs cfs, String family, boolean deferred) {
+            CatalogClient.Cfs cfs, String family, String category, boolean deferred) {
         Optional<java.util.List<CatalogClient.Rfs>> readable = catalog.rfsOfIfReadable(cfs.id());
         if (readable.isEmpty()) {
             // the catalog is unreadable right now: the historical fail-open (treat it
@@ -376,18 +362,26 @@ public class OrchestrationService {
             log.warn("service for '{}': the RFS list of CFS '{}' could not be read — falling back to the category path",
                     name, cfs.name());
             return fulfilByCategory(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
-                    Optional.of(cfs), family, deferred);
+                    Optional.of(cfs), family, category, deferred);
         }
         java.util.List<CatalogClient.Rfs> declared = readable.get();
-        if (declared.isEmpty() && "billing-only".equals(family)) {
-            // nothing to provision: the product bills, and that is the whole story —
-            // except a top-up that carries slice intent (a BOOST PASS), which rides
-            // the customer's existing mobile line for the pass's hours, as before
-            final String passName = name;
-            final String passOwner = owner;
-            catalog.sliceIntentOf(offeringId).ifPresent(intent ->
-                    applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
-            log.info("'{}' is billing-only (CFS {}) — no service to provision", name, cfs.name());
+        if ("billing-only".equals(family)) {
+            // NOTHING TO PROVISION: the product bills, and that is the whole story.
+            // The one thing a billing-only product may still do is a BOOST PASS: a
+            // top-up whose CFS declares the slice RFS (optional — it runs when the
+            // product carries a slice profile) rides the customer's EXISTING mobile
+            // line for the pass's hours; no service record of its own is created.
+            // The slice RFS on the edge is what says so; a billing-only CFS without
+            // it boosts nothing, whatever the spec happens to carry (#91).
+            Map<String, String> values = executor.consumedValues(declared, offeringId, item);
+            boolean boostDeclared = declared.stream().anyMatch(r -> "slice".equalsIgnoreCase(r.seam()));
+            if (boostDeclared) {
+                com.bss.som.seam.adapters.SliceSeam.intentOf(values).ifPresent(intent ->
+                        applyBoostPass(tenant, owner, productOrderId, name, intent).ifPresent(line ->
+                                realise(tenant, line.getId(), offeringId, "slice", slices.vendor(), intent.profile())));
+            }
+            log.info("'{}' is billing-only (CFS {}) — no service to provision{}", name, cfs.name(),
+                    boostDeclared ? ", boost pass considered" : "");
             return ItemOutcome.nothingToProvision();
         }
         ServiceOrder so = new ServiceOrder();
@@ -455,7 +449,20 @@ public class OrchestrationService {
     @SuppressWarnings("unchecked")
     private ItemOutcome fulfilByCategory(String tenant, String owner, Map<String, Object> productOrder,
             String productOrderId, Map<String, Object> item, String name, String offeringId, String wish,
-            Optional<CatalogClient.Cfs> cfs, String componentType, boolean deferred) {
+            Optional<CatalogClient.Cfs> cfs, String componentType, String category, boolean deferred) {
+        if ("Insurance".equals(category) || "Top-ups".equals(category)) {
+            // the category table's billing-only rows: insurance covers, top-ups
+            // boost an allowance — neither is a service. A top-up that carries
+            // slice intent is a BOOST PASS on the customer's existing line. Kept
+            // here, byte for byte, for a spec that names no CFS; the catalog path
+            // says the same thing with a CFS of family billing-only (#91).
+            final String passName = name;
+            final String passOwner = owner;
+            catalog.sliceIntentOf(offeringId).ifPresent(intent ->
+                    applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
+            log.info("'{}' is billing-only ({}) by category — no service to provision", name, category);
+            return ItemOutcome.nothingToProvision();
+        }
         boolean partnerService = "partner".equals(componentType);
         boolean securityFeature = "security".equals(componentType);
         boolean internet = "internet".equals(componentType);
@@ -496,15 +503,17 @@ public class OrchestrationService {
             instance.setCfsFamily(componentType);
         });
 
-        // Slice services ride a delivery path (assurance re-homes them on
-        // failure); AI services draw a GPU from the edge pool; everything
-        // else draws an MSISDN as before.
-        boolean isSlice = name != null && name.contains("Slice");
-        boolean isEdgeAi = name != null && name.contains("Edge AI");
-        if (isSlice) {
-            instance.setDeliveryPath("fibre-route-stadium-north");
-        }
         services.save(instance);
+        // THE COUNTED FALLBACK (#89): this service was fulfilled by the category
+        // table because its product spec names no CFS. The realisation on seam
+        // category-fallback is the evidence — cfs_check.py counts it and the
+        // ratchet lets the count only fall. (The "Slice" / "Edge AI" name tests
+        // that used to live here are catalog data since #90: a slice product
+        // names a CFS with the slice RFS and carries deliveryPath; an Edge AI
+        // product names the compute CFS on the edge-gpu seam. Without a CFS,
+        // both are plain lines here — which is what the count is for.)
+        realise(tenant, serviceId, offeringId, "category-fallback", "componentType",
+                category == null || category.isBlank() ? "none" : category);
 
         // OPEN ACCESS: a broadband component may be delivered over a THIRD-PARTY
         // owner's fibre. If owners serve this address, place the access-seeker
@@ -517,9 +526,8 @@ public class OrchestrationService {
 
         // Only a mobile line (or an unknown/other offering, historically) draws
         // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
-        boolean nonLine = partnerService || securityFeature || isSlice
-                || internet || tv || device;
-        String poolType = nonLine ? null : isEdgeAi ? "edge-gpu" : ResourcePool.MSISDN;
+        boolean nonLine = partnerService || securityFeature || internet || tv || device;
+        String poolType = nonLine ? null : ResourcePool.MSISDN;
         if (partnerService) {
             // the partner's platform owns the account; we hold the code
             ResourceAssignment entitlement = new ResourceAssignment();
@@ -1054,11 +1062,11 @@ public class OrchestrationService {
      * event never doubles the window); a pass on a line already boosted extends
      * from the later of now and the current expiry. Fail-open on the core.
      */
-    void applyBoostPass(String tenant, String owner, String productOrderId, String passName,
+    Optional<ServiceInstance> applyBoostPass(String tenant, String owner, String productOrderId, String passName,
             com.bss.som.client.CatalogClient.SliceIntent intent) {
         if (owner == null) {
             log.warn("boost pass '{}' on order {} has no owner — nothing to boost", passName, productOrderId);
-            return;
+            return Optional.empty();
         }
         ServiceInstance line = services.findByTenantIdAndOwnerPartyId(tenant, owner).stream()
                 .filter(sv -> ServiceInstance.ACTIVE.equals(sv.getState()))
@@ -1066,10 +1074,10 @@ public class OrchestrationService {
                 .findFirst().orElse(null);
         if (line == null) {
             log.warn("boost pass '{}' on order {}: customer {} has no active mobile line", passName, productOrderId, owner);
-            return;
+            return Optional.empty();
         }
         if (productOrderId != null && productOrderId.equals(line.getSliceOrderId())) {
-            return; // the same order already applied — idempotent
+            return Optional.of(line); // the same order already applied — idempotent
         }
         // DEVICE ELIGIBILITY: a slice needs a 5G standalone handset. The network told
         // us the model (DeviceDetectedEvent); a phone that cannot ride a slice must not
@@ -1084,7 +1092,7 @@ public class OrchestrationService {
             ev.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
             events.publish("ServiceSliceRefusedEvent", "service", ev);
             log.warn("boost pass '{}' refused for line {}: device '{}' is not slice-capable", passName, line.getId(), line.getDeviceModel());
-            return;
+            return Optional.empty();
         }
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime from = line.getSliceUntil() != null && line.getSliceUntil().isAfter(now)
@@ -1118,6 +1126,7 @@ public class OrchestrationService {
         events.publish("ServiceSliceChangeEvent", "service", ev);
         log.info("boost pass '{}': line {} rides '{}'{}", passName, line.getId(), intent.profile(),
                 until == null ? "" : " until " + until);
+        return Optional.of(line);
     }
 
     /** Move the line's OCS subscriber to the slice rate plan, remembering the base plan for the way back. */
