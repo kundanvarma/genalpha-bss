@@ -326,6 +326,31 @@ capabilities:
     route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}/governance" }
     roles: [catalog:read]
 
+  - id: productCatalog.specification
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF620 Product Catalog
+    meaning: Read one product specification — the facts behind an offer, and the customer-facing service it names.
+    route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productSpecification/{id}" }
+
+  - id: serviceCatalog.specification
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF633 Service Catalog
+    meaning: Read one service specification — a customer-facing service (a fulfilment pattern) or a resource-facing one.
+    route: { method: GET, path: "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}" }
+
+  - id: catalog.assignFulfilmentPattern
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF620 Product Catalog
+    meaning: Point a product specification at the customer-facing service that fulfils it — the one edit that decides what the orchestrator will do for every product built on the spec.
+    route: { method: PATCH, path: "/tmf-api/productCatalogManagement/v4/productSpecification/{id}" }
+    roles: [catalog:write]
+
   - id: catalog.requestLaunch
     version: 1
     component: product-catalog

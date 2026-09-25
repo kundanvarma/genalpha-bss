@@ -439,6 +439,26 @@ public class BssApiClient {
 
     /** One page of the shelf — for callers that need a taste, not the
      * whole catalog (the full crawl below is paged and slow). */
+    /** The tenant's TMF633 service specifications — the customer-facing services a product can name, and the RFS under them. */
+    public List<Map<String, Object>> serviceSpecifications() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        try {
+            for (int offset = 0; offset < 2000; offset += 100) {
+                String body = catalogClient.get()
+                        .uri("/tmf-api/serviceCatalogManagement/v4/serviceSpecification?limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                List<Map<String, Object>> page = parse(body);
+                all.addAll(page);
+                if (page.size() < 100) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            return all;
+        }
+        return all;
+    }
+
     public List<Map<String, Object>> offeringsFirstPage() {
         try {
             String body = catalogClient.get()

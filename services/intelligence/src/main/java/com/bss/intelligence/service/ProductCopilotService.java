@@ -189,6 +189,15 @@ public class ProductCopilotService {
             throw new BadRequestException("the model did not follow the copilot JSON contract");
         }
         normalize(parsed);
+        // the fulfilment pattern beside the commercial proposal: which customer-facing
+        // service each spec should name, and what the product lacks for it — read off
+        // the tenant's own TMF633 catalog, deterministic, never blocking the proposal
+        try {
+            FulfilmentPatterns.attach(parsed, bssApi.serviceSpecifications());
+        } catch (RuntimeException e) {
+            org.slf4j.LoggerFactory.getLogger(ProductCopilotService.class)
+                    .warn("product copilot: fulfilment pattern not attached: {}", e.getMessage());
+        }
         attachForecast(parsed);
         return JourneyCopilotService.reply(parsed, llm.provider(), llm.model(),
                 parsed.remove("forecast"), objectMapper);

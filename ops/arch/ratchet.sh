@@ -256,7 +256,11 @@ for app in sorted(os.listdir('apps')):
                     p = os.path.join(dp, f)
                     with open(p, errors='ignore') as fh: src = fh.read()
                     n = src.count('\n') + (0 if src.endswith('\n') or not src else 1)
-                    if n > mx: out["frontendFiles"][p] = n
+                    # a GENERATED file (the ontology SDK twin, one function per registered action) grows with
+                    # the registry, not with a hand; "split before adding" is meaningless for it — the suite
+                    # that regenerates it and diffs the committed copy (#125) is its check
+                    generated = src.startswith('// GENERATED') or src.startswith('/* GENERATED')
+                    if n > mx and not generated: out["frontendFiles"][p] = n
                     if 'innerHTML' in src:
                         h = html_holes(src)
                         if h: out["htmlInterpolations"][p] = h

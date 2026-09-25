@@ -15,9 +15,13 @@ async function copilotExecute(proposal, context = { offerings: [] }) {
   try {
     const specs = {};    // ref -> {id, name}
     for (const spec of proposal.specs || []) {
+      // the proposed fulfilment pattern rides the spec into the catalog (Create is the click — ADR 0012)
+      const fp = spec.fulfilmentPattern;
       const made = await jsonOf(await post('productSpecification', {
         name: spec.name, brand: spec.brand, lifecycleStatus: 'Active',
         productSpecCharacteristic: spec.productSpecCharacteristic || [],
+        ...(fp && fp.cfsId ? { serviceSpecification: [{ id: fp.cfsId, name: fp.cfsName,
+          href: `${SERVICE_CATALOG_BASE}/serviceSpecification/${fp.cfsId}`, '@referredType': 'ServiceSpecification' }] } : {}),
       }), `spec "${spec.name}"`);
       specs[spec.ref] = made;
       created.push({ kind: 'productSpecification', id: made.id });

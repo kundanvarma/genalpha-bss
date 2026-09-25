@@ -1,0 +1,20 @@
+concept: ProductSpecification
+version: 1
+introduced: 2026-09-25
+meaning: What an offering technically is — its characteristics (the levers a product manager edits) and the customer-facing service that fulfils it.
+lineage:
+  sid: ProductSpecification (Product Specification ABE)
+  tmf: [TMF620 productSpecification]
+  oda: TMFC001 Product Catalog Management
+backedBy: { capability: productCatalog.specification, resource: productSpecification }
+states:
+  field: lifecycleStatus
+  values: [In study, In design, In test, Active, Launched, Retired, Obsolete]
+  live: [Active, Launched]
+properties:
+  - { name: name, path: name, type: string }
+  - { name: fulfilmentPattern, path: "serviceSpecification[0].name", type: string, meaning: the customer-facing service this spec names — how the orchestrator fulfils products built on it }
+links:
+  - { name: fulfilledBy, to: CustomerFacingService, via: "serviceSpecification[0].id", cardinality: one, meaning: the fulfilment pattern }
+events: []
+pages: [productSpecification]
