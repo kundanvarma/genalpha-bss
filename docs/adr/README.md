@@ -41,6 +41,7 @@ more deliberate than it was; 0016 says so explicitly.
 | [0018](0018-screens-speak-operator-language.md) | Screens speak operator language | Names never keys; quiet healthy states; a goal line and a ? drawer on every page. |
 | [0019](0019-hosted-demo-one-box.md) | Hosted demo | The same Compose fleet on one box, Caddy TLS, one hostname per tenant; deploy only on request. |
 | [0020](0020-licensing-wording-no-prospect-names-no-pdfs.md) | Public repo hygiene | Source-available (BUSL-1.1) wording; no prospect names in the repo; no report PDFs in git. |
+| [0021](0021-tmf634-served-by-product-catalog.md) | TMF634 in product-catalog | The resource catalog is served by the product-catalog component on the standard path; a resource spec names a seam, never a vendor; extraction later is along the API path. |
 
 ## How to add one
 
