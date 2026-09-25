@@ -61,6 +61,8 @@ bss:
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
     # availability per configuration for the TMF760 oracle (GET is public on product-stock)
     stock-base-url: ${STOCK_BASE_URL:http://localhost:8114}
+    # the fulfilment dry run launch governance asks before a launch (under the caller's token; fails soft)
+    som-base-url: ${SOM_BASE_URL:http://localhost:8104}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

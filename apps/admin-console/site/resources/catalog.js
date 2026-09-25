@@ -229,13 +229,13 @@ function decompositionControl(field) {
     if (!spec) { line('The product specification could not be read.', 'muted'); return; }
     line(`Product specification: ${spec.name}`);
     const cfsRef = (spec.serviceSpecification || [])[0];
-    if (!cfsRef || !cfsRef.id) { line('This specification names no customer-facing service — the orchestrator falls back to the offering\'s category.', 'muted'); return; }
+    if (!cfsRef || !cfsRef.id) { line('This specification names no customer-facing service — the orchestrator falls back to the offering\'s category.', 'muted'); await dryRun(item); return; }
     const cfs = await fetchJson(`/tmf-api/serviceCatalogManagement/v4/serviceSpecification/${cfsRef.id}`);
     if (!cfs) { line(`Customer-facing service ${cfsRef.name || ''} could not be read.`, 'muted'); return; }
     line(`Customer-facing service: ${cfs.name} — fulfilled as ${charValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily') || 'the category decides'}`);
     const edges = (cfs.serviceSpecRelationship || []).filter((e) => e.relationshipType === 'reliesOn');
     const family = charValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily');
-    if (!edges.length) { line(family === 'billing-only' ? 'Nothing to provision: this product only bills.' : 'Needs no resource-facing service: realised inside this BSS.', 'muted'); return; }
+    if (!edges.length) { line(family === 'billing-only' ? 'Nothing to provision: this product only bills.' : 'Needs no resource-facing service: realised inside this BSS.', 'muted'); await dryRun(item); return; }
     const list = document.createElement('ul');
     for (const edge of edges) {
       const rfs = await fetchJson(`/tmf-api/serviceCatalogManagement/v4/serviceSpecification/${edge.id}`);
@@ -252,6 +252,22 @@ function decompositionControl(field) {
       list.appendChild(li);
     }
     box.appendChild(list);
+    await dryRun(item);
+  }
+  /* What will happen when someone orders this — the executor's plan with no adapter
+   * called, one sentence per step, and whether it can launch here. Read-only. */
+  async function dryRun(item) {
+    const r = await authFetch('/som/v1/fulfilment/dryRun', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+      body: JSON.stringify({ offeringId: item.id }) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    const head = line('What will happen when someone orders this', 'dry-run-head');
+    head.dataset.testid = 'dry-run';
+    if (!r) { line('The orchestrator could not be asked right now.', 'muted'); return; }
+    const ol = document.createElement('ul'); ol.className = 'dry-run';
+    for (const s of (r.summary || []).slice(0, -1)) { const li = document.createElement('li'); li.textContent = s; ol.appendChild(li); }
+    box.appendChild(ol);
+    const verdict = line((r.summary || []).slice(-1)[0] || r.reason || '', r.verdict === 'LAUNCHABLE' ? 'ok' : r.verdict === 'FALLBACK' ? 'muted' : 'warn');
+    verdict.dataset.verdict = r.verdict || '';
   }
   controls[field.name] = { get: () => undefined, set: (item) => { render(item); } };
   return [box];
