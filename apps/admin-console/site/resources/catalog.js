@@ -139,7 +139,8 @@ function decompositionControl(field) {
     if (!cfs) { line(`Customer-facing service ${cfsRef.name || ''} could not be read.`, 'muted'); return; }
     line(`Customer-facing service: ${cfs.name} — fulfilled as ${charValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily') || 'the category decides'}`);
     const edges = (cfs.serviceSpecRelationship || []).filter((e) => e.relationshipType === 'reliesOn');
-    if (!edges.length) { line('Needs no resource-facing service: realised inside this BSS.', 'muted'); return; }
+    const family = charValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily');
+    if (!edges.length) { line(family === 'billing-only' ? 'Nothing to provision: this product only bills.' : 'Needs no resource-facing service: realised inside this BSS.', 'muted'); return; }
     const list = document.createElement('ul');
     for (const edge of edges) {
       const rfs = await fetchJson(`/tmf-api/serviceCatalogManagement/v4/serviceSpecification/${edge.id}`);

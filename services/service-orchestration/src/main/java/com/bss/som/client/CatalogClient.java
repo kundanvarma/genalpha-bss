@@ -52,8 +52,14 @@ public interface CatalogClient {
      * @param family the fulfilment family it declares; null when the CFS declares none
      */
     record Cfs(String id, String name, String family) {
+        /**
+         * Fulfilment families are LABELS for people and screens (step 3): the
+         * executor keys on the seams a CFS declares, never on the family name.
+         * {@code compute} is Edge AI on the edge-gpu seam; {@code billing-only}
+         * is a CFS with zero seams — nothing to provision.
+         */
         public static final java.util.Set<String> FAMILIES =
-                java.util.Set.of("mobile", "internet", "tv", "device", "partner", "security");
+                java.util.Set.of("mobile", "internet", "tv", "device", "partner", "security", "compute", "billing-only");
     }
 
     /**
