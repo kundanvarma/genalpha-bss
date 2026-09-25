@@ -107,7 +107,7 @@ jobs:
       - name: Run the smoke suites
         working-directory: ops/e2e
         env:
-          A11Y_TARGETS: storefront
+          A11Y_TARGETS: storefront,console,csr,partner,app
         run: |
           set -uo pipefail
           failed=""

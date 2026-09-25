@@ -3,7 +3,9 @@
 # A pull request cannot afford 227 suites or 95 services, so it buys the
 # cheapest evidence that the storefront slice still works end to end through
 # the gateway with a real token — plus axe on the storefront, because
-# accessibility is the thing most likely to rot silently.
+# accessibility is the thing most likely to rot silently. Since 25 Sep the tier
+# covers the CSR console and the mobile app as well: a half-merged React bump
+# had blanked both (error #527) and the storefront-only smoke never saw it.
 #
 # The rule for this list: every suite here must run against the slice in
 # ops/ci-fleet.sh (SMOKE_SERVICES). Adding a suite that needs another service
@@ -15,4 +17,6 @@
 # which means seeding and running two more operators on every PR).
 
 shop_staff_guard_test # the shop in a browser, real Keycloak SSO, genalpha only
-a11y_test             # axe-core, storefront only (A11Y_TARGETS=storefront)
+a11y_test             # axe-core on EVERY channel: storefront, catalog console, CSR desk, partner portal, mobile app (A11Y_TARGETS)
+app_test              # the mobile app's web export: register, sign in, My page (16s)
+csr_workspace_test    # the CSR desk: search, customer 360, the incident bar (13s) — assurance/SOM/tickets ride the slice already

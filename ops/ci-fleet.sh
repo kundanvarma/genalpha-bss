@@ -35,7 +35,10 @@ READY_TIMEOUT="${CI_FLEET_TIMEOUT:-600}"
 SMOKE_SERVICES="postgres kafka redis keycloak gateway
   product-catalog product-ordering product-inventory party-account
   shopping-cart payment payment-method promotion qualification policy
-  document user-roles storefront"
+  document user-roles storefront csr-console mobile-app console partner-console"
+# csr-console, mobile-app and console were already in the closure through the
+# gateway; naming them keeps the list honest about what the tier proves. The
+# partner portal is the one channel that was not (an nginx container, no JVM).
 
 case "$TIER" in
   smoke|build-list) SERVICES="$SMOKE_SERVICES" ;;

@@ -28,6 +28,17 @@ const TARGETS = [
     open: async (p) => { await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo'); await p.waitForSelector('#main:not([hidden])', { timeout: 20000 }); } },
   { label: 'csr: agent desk (agent-anna)',
     open: async (p) => { await p.goto(`${BASE}/csr/`); await kcLogin(p, 'agent-anna', 'agent'); await p.waitForSelector('.searchbar', { timeout: 20000 }); } },
+  { label: 'app: My page (paula)',
+    // the mobile app's web export: a customer signs in and lands on My page
+    open: async (p) => {
+      await p.goto(`${BASE}/app/`);
+      await p.locator('[data-testid=signin]').click();
+      await p.waitForSelector('input[name="username"]', { timeout: 20000 });
+      await p.fill('input[name="username"]', 'paula@family.example');
+      await p.fill('input[name="password"]', 'paula');
+      await p.click('input[type="submit"], button[type="submit"]');
+      await p.waitForSelector('[data-testid=lob-card], [data-testid=avatar]', { timeout: 30000 });
+    } },
   { label: 'partner: wholesale portal (demo)',
     open: async (p) => { await p.goto(`${BASE}/partner/`); await p.waitForSelector('#signin', { state: 'visible', timeout: 20000 }); await p.click('#signin'); await kcLogin(p, 'demo', 'demo'); await p.waitForSelector('#app', { state: 'visible', timeout: 20000 }); } },
 ];
