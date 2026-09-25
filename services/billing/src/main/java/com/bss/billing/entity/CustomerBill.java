@@ -65,6 +65,15 @@ public class CustomerBill {
     @Column(name = "bill_date")
     private OffsetDateTime billDate;
 
+    /** When this bill is due — a fact stamped at bill run, never recomputed. */
+    @Column(name = "due_date")
+    private OffsetDateTime dueDate;
+
+    /** The payment term (in days) that produced the due date, kept so a later
+     * policy change cannot silently rewrite what this bill promised. */
+    @Column(name = "payment_term_days")
+    private Integer paymentTermDays;
+
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
@@ -176,6 +185,22 @@ public class CustomerBill {
 
     public void setBillDate(OffsetDateTime billDate) {
         this.billDate = billDate;
+    }
+
+    public OffsetDateTime getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(OffsetDateTime dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public Integer getPaymentTermDays() {
+        return paymentTermDays;
+    }
+
+    public void setPaymentTermDays(Integer paymentTermDays) {
+        this.paymentTermDays = paymentTermDays;
     }
 
     public OffsetDateTime getLastUpdate() {
