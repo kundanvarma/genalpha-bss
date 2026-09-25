@@ -29,6 +29,9 @@ const RESOURCES = [
       // row 6 — composition and art
       { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering', wide: true },
       { name: 'attachment', label: 'Artwork', kind: 'artwork', wide: true, hint: 'Gallery shots and colour variants' },
+      // row 7 — how the orchestrator will fulfil it, read off the catalog (product spec → CFS → RFS → resource spec)
+      { name: 'decomposition', label: 'Decomposition', kind: 'decomposition', wide: true,
+        hint: 'What this offering needs from the network and partners, as the catalog declares it. Read-only.' },
     ],
     assemble: (body) => {
       const out = { ...body };
@@ -103,3 +106,57 @@ const RESOURCES = [
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
 ];
+
+/* The Decomposition panel (CFS step 2): product spec → customer-facing service (its
+ * fulfilment family) → resource-facing services (what each consumes) → resource
+ * specification (its seam) → this tenant's vendor for that seam. Read-only, built
+ * with createElement, and honest when a link is missing: a spec that names no CFS
+ * says the orchestrator falls back to the category; a seam nobody configures says
+ * the fleet's own adapter serves it. Nothing here is ever submitted. */
+function decompositionControl(field) {
+  const box = document.createElement('div');
+  box.className = 'decomposition';
+  box.dataset.testid = 'decomposition';
+  const line = (text, cls) => { const p = document.createElement('p'); if (cls) p.className = cls; p.textContent = text; box.appendChild(p); return p; };
+  const fetchJson = (path) => authFetch(`${API_BASE.replace(/\/tmf-api\/.*$/, '')}${path}`, { headers: { 'Cache-Control': 'no-cache' } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const charValue = (entity, list, name) => {
+    const c = (entity[list] || []).find((x) => x.name === name);
+    const vals = c ? (c[list.replace('Characteristic', 'CharacteristicValue')] || []) : [];
+    return vals.length ? vals[0].value : undefined;
+  };
+  const vendors = (window.BSS_CONSOLE_CONFIG || {}).seamVendors || {};
+  async function render(item) {
+    box.replaceChildren();
+    const specRef = item && item.productSpecification;
+    if (!specRef || !specRef.id) { line('This offering names no product specification yet.', 'muted'); return; }
+    const spec = await fetchJson(`/tmf-api/productCatalogManagement/v4/productSpecification/${specRef.id}`);
+    if (!spec) { line('The product specification could not be read.', 'muted'); return; }
+    line(`Product specification: ${spec.name}`);
+    const cfsRef = (spec.serviceSpecification || [])[0];
+    if (!cfsRef || !cfsRef.id) { line('This specification names no customer-facing service — the orchestrator falls back to the offering\'s category.', 'muted'); return; }
+    const cfs = await fetchJson(`/tmf-api/serviceCatalogManagement/v4/serviceSpecification/${cfsRef.id}`);
+    if (!cfs) { line(`Customer-facing service ${cfsRef.name || ''} could not be read.`, 'muted'); return; }
+    line(`Customer-facing service: ${cfs.name} — fulfilled as ${charValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily') || 'the category decides'}`);
+    const edges = (cfs.serviceSpecRelationship || []).filter((e) => e.relationshipType === 'reliesOn');
+    if (!edges.length) { line('Needs no resource-facing service: realised inside this BSS.', 'muted'); return; }
+    const list = document.createElement('ul');
+    for (const edge of edges) {
+      const rfs = await fetchJson(`/tmf-api/serviceCatalogManagement/v4/serviceSpecification/${edge.id}`);
+      const consumes = ((edge.serviceSpecRelationshipCharacteristic || []).find((c) => c.name === 'consumes') || {});
+      const consumed = ((consumes.serviceSpecCharacteristicValue || [])[0] || {}).value;
+      const rsRef = rfs ? (rfs.resourceSpecification || [])[0] : null;
+      const rs = rsRef && rsRef.id ? await fetchJson(`/tmf-api/resourceCatalogManagement/v4/resourceSpecification/${rsRef.id}`) : null;
+      const seam = rs ? charValue(rs, 'resourceSpecCharacteristic', 'seam') : undefined;
+      const vendor = seam ? (vendors[seam] ? `${vendors[seam]}, this tenant's choice` : 'the fleet\'s built-in adapter') : undefined;
+      const li = document.createElement('li');
+      li.textContent = `${rfs ? rfs.name : edge.name || 'resource-facing service'}`
+        + (consumed ? ` — reads ${consumed.split(',').join(', ')}` : '')
+        + (rs ? ` → ${rs.name} (${seam || 'seam not declared'}; provided by ${vendor})` : ' → names no resource specification');
+      list.appendChild(li);
+    }
+    box.appendChild(list);
+  }
+  controls[field.name] = { get: () => undefined, set: (item) => { render(item); } };
+  return [box];
+}

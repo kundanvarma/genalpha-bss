@@ -52,6 +52,8 @@ public class TenantHosts {
         private String issuer;
         private String brandName;
         private String brandColor;
+        /** tenants.yml {@code ocs-provider}: the vendor behind the online-charging seam (mock when unset). */
+        private String ocsProvider;
         /** The storefront hero line — the operator's voice, console-editable. */
         private String tagline;
         /** uniform (default) | per-channel — attested to humans AND agents. */
@@ -161,6 +163,14 @@ public class TenantHosts {
 
         public void setBrandColor(String brandColor) {
             this.brandColor = brandColor;
+        }
+
+        public String getOcsProvider() {
+            return ocsProvider;
+        }
+
+        public void setOcsProvider(String ocsProvider) {
+            this.ocsProvider = ocsProvider;
         }
 
         public String getLocale() {

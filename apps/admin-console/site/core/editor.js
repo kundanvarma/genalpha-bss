@@ -81,6 +81,7 @@ function renderEditor() {
       f.kind === 'commitment' ? commitmentControl(f) :
       f.kind === 'artwork' ? artworkControl(f) :
       f.kind === 'bundlecomposer' ? bundleComposerControl(f) :
+      f.kind === 'decomposition' ? decompositionControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'stepbuilder' ? stepBuilderControl(f) :
       f.kind === 'select' ? selectControl(f) :
