@@ -6,7 +6,7 @@
  *  - 'On this page' lists the buttons visible on the page in front of you
  *  - Esc closes; the header hint button opens it with the mouse
  *  - the palette only offers what the token can see: pat (product) gets no
- *    Customer Bills row — visibility follows `visible[]`, the API 403 underneath
+ *    Bills row — visibility follows `visible[]`, the API 403 underneath
  */
 const { chromium } = require('playwright');
 
@@ -102,13 +102,15 @@ const rows = (page) => page.locator('[data-testid="palette-row"]').allTextConten
   await openPalette(pat.page);
   await pat.page.keyboard.type('bill');
   const patRows = await rows(pat.page);
-  if (patRows.some((r) => r.toLowerCase().includes('customer bills'))) fail('pat sees a Customer Bills row: ' + patRows);
+  // the finance page is called "Bills" now (#112); matching the old name would
+  // pass for the wrong reason, since nothing is called that any more
+  if (patRows.some((r) => /^\s*bills\b/i.test(r))) fail('pat sees a Bills row: ' + patRows);
   await pat.page.keyboard.press('Escape');
   await openPalette(pat.page);
   await pat.page.keyboard.type('offer');
   if (!(await rows(pat.page)).some((r) => r.includes('Product Offerings'))) fail('pat lost Product Offerings in the palette');
   await pat.page.keyboard.press('Escape');
-  console.log('OK PAT: no Customer Bills row, Product Offerings still there — the palette follows the token.');
+  console.log('OK PAT: no Bills row, Product Offerings still there — the palette follows the token.');
   await pat.ctx.close();
 
   await browser.close();

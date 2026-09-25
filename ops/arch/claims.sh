@@ -42,6 +42,9 @@ fail() {
 SUITES=$(find ops/e2e -maxdepth 1 -name '*_test.js' | wc -l | tr -d ' ')
 CLAIMED=$(grep -oE '\b[0-9]+ (end-to-end browser|Playwright) suites' README.md | grep -oE '^[0-9]+' | sort -u)
 for n in $CLAIMED; do
+  # the suggested fix must actually work on the machine that reads it: BSD sed
+  # (this laptop) has no \b, so a word-boundary pattern silently matches
+  # nothing and the gate stays red while the fix "succeeds"
   [ "$n" = "$SUITES" ] || fail "README says $n suites; ops/e2e holds $SUITES" \
     "fix: python3 - <<'PY'
 import re; p='README.md'; s=open(p).read()
