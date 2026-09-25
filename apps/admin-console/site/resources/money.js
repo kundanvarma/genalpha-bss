@@ -16,6 +16,29 @@ RESOURCES.push(
     columns: [],
   },
   {
+    // Bills are money owed; payments are money received. Related jobs, not the
+    // same job — so unapplied cash is stated here as the exception it is,
+    // beside the action that resolves it.
+    path: 'payments',
+    title: 'Payments',
+    island: 'payments',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    // A collections case is one customer's whole story: the debt, the
+    // commitments, the stage, what was said, what is restricted, the risk.
+    path: 'collections',
+    title: 'Collections',
+    island: 'collections',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'customerBill',
     base: BILLING_BASE,
     // "Bills": on this desk the customer context is implicit. The page is a

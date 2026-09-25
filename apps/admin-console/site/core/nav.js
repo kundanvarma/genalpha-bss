@@ -17,8 +17,10 @@ const TAB_ROLE = {
   productOfferingPrice: 'catalog:write',
   productStock: 'stock:read',
   customerBill: 'billing:admin',
-  // the desk's own screens carry the desk's gate
+  // the three Billing & Revenue screens are the same desk, so the same gate
   billingOverview: 'billing:admin',
+  payments: 'billing:admin',
+  collections: 'billing:admin',
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
@@ -174,7 +176,7 @@ const WORKSPACES = [
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   // Overview first, then the book, then the two workflows. The remaining peer
   // tabs keep their places until #117 re-homes them under the six areas.
-  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill',
+  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'payments', 'collections',
     'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
     'shadowDrift'] },
