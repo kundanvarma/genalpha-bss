@@ -37,5 +37,6 @@ process_memory_test         process trouble-ticket
 referral_test               campaign revenue usage
 registry_address_test       geographic-address mock-freg insight
 signal_intelligence_test    intelligence mock-servicedesk campaign
+spec_characteristics_test   product-catalog
 telesales_test              mock-dnc party-interaction insight service-orchestration
 wholesale_open_access_test  agreement qualification service-orchestration

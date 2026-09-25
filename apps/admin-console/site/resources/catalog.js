@@ -69,9 +69,8 @@ const RESOURCES = [
       // A specification has no selling window: TMF620 puts `validFor` on the
       // OFFERING, and this form's two date fields were silently dropped by the
       // API for as long as they existed. Removed rather than faked.
-      { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'jsontext', wide: true,
-        hint: 'JSON array. Facts the shop shows and the systems read: Data, Validity, chargingSpecId, sliceProfile, zeroRatedApps. "configurable": true makes a picker.',
-        placeholder: '[{"name": "Data", "configurable": false, "productSpecCharacteristicValue": [{"value": "20 GB"}]}]' },
+      { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'characteristics', wide: true,
+        hint: 'The facts the shop shows and the systems read. Tick "the customer chooses" and add values to make it a picker in the shop.' },
       // how products built on this spec are fulfilled: a pattern by name, consequences in words (CFS step 3, ticket 8a)
       { name: 'serviceSpecification', label: 'Fulfilment', kind: 'fulfilment', wide: true,
         hint: 'Pick how the orchestrator fulfils products built on this specification. What each pattern needs is spelled out underneath.' },
@@ -143,9 +142,8 @@ const RESOURCES = [
 const fulfilmentState = { original: null, receipt: null };
 const FAMILY_WORDS = { mobile: 'a network line', internet: 'an install', tv: 'a digital entitlement', device: 'a parcel',
   partner: 'activated with the partner', security: 'a feature toggle', compute: 'compute on the edge', 'billing-only': 'nothing to provision' };
-const CONSUMED_WORDS = { chargingSpecId: 'a charging plan', zeroRatedApps: 'zero-rated apps', overageTier: 'overage tiers', sliceProfile: 'a slice profile',
-  boostHours: 'boost hours', sliceChargingSpecId: 'a slice charging plan', guaranteedDlMbps: 'a guaranteed speed', deliveryPath: 'a delivery path',
-  accessLayer: 'an access layer', speed: 'a speed', msisdn: 'a chosen number', simType: 'a SIM type', eid: 'an eSIM identifier' };
+// CONSUMED_WORDS moved to core/config.js: the characteristics editor offers the
+// same names this picker explains, and one vocabulary cannot drift from itself.
 function fulfilmentControl(field) {
   const select = document.createElement('select');
   select.name = field.name;
@@ -167,7 +165,17 @@ function fulfilmentControl(field) {
     if (pending) { select.value = pending; pending = null; }
     describe();
   });
+  /* The pattern says what it reads off the specification; the characteristics
+   * editor listens, so a missing charging plan is said beside the row that
+   * would supply it rather than only in this sentence. */
+  const wants = [];
   async function describe() {
+    wants.length = 0;
+    await describePattern();
+    window.fulfilmentWants = wants.slice();
+    document.dispatchEvent(new CustomEvent('fulfilment-changed'));
+  }
+  async function describePattern() {
     const cfs = byId[select.value];
     if (!cfs) { consequences.textContent = select.value ? 'Reading the pattern…' : 'No pattern: the orchestrator decides from the offering\'s category, as it always did.'; return; }
     const edges = (cfs.serviceSpecRelationship || []).filter((e) => e.relationshipType === 'reliesOn');
@@ -184,6 +192,9 @@ function fulfilmentControl(field) {
       const consumes = (((chars.find((c) => c.name === 'consumes') || {}).serviceSpecCharacteristicValue || [{}])[0].value || '').split(',').map((x) => x.trim()).filter(Boolean);
       const when = String(required) === 'false' ? ` (only when the product carries ${consumes.map((c) => CONSUMED_WORDS[c] || c).join(' or ') || 'what it needs'})` : ' (always)';
       parts.push(`${rfs}${when}`);
+      // what this pattern reads off the specification, so the characteristics
+      // editor can say what is missing beside the rows that would fix it
+      for (const c of consumes) wants.push({ name: c, effect: `no ${CONSUMED_WORDS[c] || c}: ${rfs.toLowerCase()} will not run` });
     }
     consequences.textContent = `Needs: ${parts.join('; ')}.`;
   }

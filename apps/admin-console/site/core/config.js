@@ -158,3 +158,20 @@ async function partyName(id) {
   _partyNames.set(id, name);
   return name;
 }
+
+/* The technical levers a seam reads off a product specification, in words.
+ * Two controls speak this vocabulary — the fulfilment picker ("only when the
+ * product carries a charging plan") and the characteristics editor, which
+ * offers these names rather than asking anyone to spell `chargingSpecId` —
+ * so it lives here and is said once. A name missing from this map is still
+ * allowed: a specification may carry anything. */
+const CONSUMED_WORDS = { chargingSpecId: 'a charging plan', zeroRatedApps: 'zero-rated apps', overageTier: 'overage tiers', sliceProfile: 'a slice profile',
+  boostHours: 'boost hours', sliceChargingSpecId: 'a slice charging plan', guaranteedDlMbps: 'a guaranteed speed', deliveryPath: 'a delivery path',
+  accessLayer: 'an access layer', speed: 'a speed', msisdn: 'a chosen number', simType: 'a SIM type', eid: 'an eSIM identifier' };
+/* The same word as a label for a picker: "a charging plan" → "Charging plan". */
+function consumedLabel(name) {
+  const words = CONSUMED_WORDS[name];
+  if (!words) return name;
+  const bare = words.replace(/^(a|an|the) /, '');
+  return bare.charAt(0).toUpperCase() + bare.slice(1);
+}
