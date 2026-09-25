@@ -166,7 +166,7 @@ const HOME_READERS = [
       `${homePlural(held.length, 'launch is', 'launches are')} on hold`, 'Waiting on something you asked for.', 'approvals'));
     return out;
   },
-  // Money: unpaid and overdue bills (gate: the Customer Bills tab)
+  // Billing & Revenue: unpaid and overdue bills (gate: the Bills tab)
   async function money() {
     if (!homeCanSee('customerBill')) return null;
     const bills = await homeGet(`${BILLING_BASE}/customerBill?limit=100`);

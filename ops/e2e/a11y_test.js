@@ -26,6 +26,27 @@ const TARGETS = [
     open: async (p) => { await p.goto(`${BASE}/shop/cart`); await p.waitForSelector('.nav', { timeout: 20000 }); } },
   { label: 'console: catalog (demo)',
     open: async (p) => { await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo'); await p.waitForSelector('#main:not([hidden])', { timeout: 20000 }); } },
+  // the Bills desk and the bill workspace are React islands inside the
+  // console's own panel (ADR-0022) — scanned in their own right, because a
+  // scan of the landing page proves nothing about a screen mounted later
+  { label: 'console: bills desk (demo)',
+    open: async (p) => {
+      await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
+      await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+      await p.locator('#tabs .tab', { hasText: /^bills$/i }).first().click();
+      await p.waitForSelector('[data-testid="bills-desk"]', { timeout: 20000 });
+      await p.waitForFunction(() => document.querySelectorAll('[data-testid="bills-body"] tr').length > 1, null, { timeout: 20000 });
+    } },
+  { label: 'console: one bill (demo)',
+    open: async (p) => {
+      await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
+      await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+      await p.locator('#tabs .tab', { hasText: /^bills$/i }).first().click();
+      await p.waitForSelector('[data-testid="bills-desk"]', { timeout: 20000 });
+      await p.locator('[data-testid="bill-link"]').first().click();
+      await p.waitForSelector('[data-testid="bill-workspace"]', { timeout: 20000 });
+      await p.waitForFunction(() => !/Opening/.test(document.querySelector('[data-testid="bill-workspace"]').textContent), null, { timeout: 20000 });
+    } },
   { label: 'csr: agent desk (agent-anna)',
     open: async (p) => { await p.goto(`${BASE}/csr/`); await kcLogin(p, 'agent-anna', 'agent'); await p.waitForSelector('.searchbar', { timeout: 20000 }); } },
   { label: 'app: My page (paula)',

@@ -1,4 +1,4 @@
-/* Bills as the operational centre, and one bill whole. Suite #233.
+/* Bills as the operational centre, and one bill whole. Suite #235.
  *
  * The Billing & Revenue paper asked for two things on this desk: a list that
  * states each bill's situation and due date and opens from the bill number
@@ -62,7 +62,10 @@ async function api(path, tok) {
 
   /* ---------- the desk ---------- */
   // the console lands on Home; Bills is a tab of the Billing & Revenue department
-  await page.locator('#tabs .tab', { hasText: 'Bills' }).first().click();
+  // exactly the Bills tab: hasText is a case-insensitive SUBSTRING match, and
+  // the console still carries a "Customer Bills" page, so a plain string would
+  // happily open the wrong one and prove nothing
+  await page.locator('#tabs .tab', { hasText: /^bills$/i }).first().click();
   await page.waitForSelector('[data-testid="bills-desk"]', { timeout: 20000 });
   await page.waitForFunction(() => document.querySelectorAll('[data-testid="bills-body"] tr').length > 1, null, { timeout: 20000 });
 
