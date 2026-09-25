@@ -99,6 +99,9 @@ const TAB_ROLE = {
   // the AI audit trail rides along with AI power, by design (auditability)
   audit: ['catalog:write', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
   policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
+  // the island proof page is the platform's own, like the rest of that department:
+  // without a gate every persona saw a Platform department they have no business in
+  islandHealth: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
   'desk-suggestions': ['catalog:write', 'ai:admin'], // AI & Automation is the product owner's and the admin's room (suite #87)
   // the decision log and the contracts are the product owner's and the admin's room, like the suggestions (gro, marketing, sees no AI desk)

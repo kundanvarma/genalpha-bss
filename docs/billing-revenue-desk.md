@@ -164,6 +164,11 @@ placeholder, a zero count reading as clean, a chip filtering to exactly its own
 count, all six workspace sections answering, no identifier and no ISO date
 above the technical fold, and the back link returning to the desk it left.
 
+The accessibility scan covers both screens (`A11Y_TARGETS=console,bills`). They
+sit in the nightly tier rather than the pull-request tier, because the PR slice
+seeds the catalog and no billing, and a scan reaching for a bill that cannot
+exist is a failure that says nothing.
+
 `ops/e2e/accounting_configuration_test.js` (suite #238) drives the same console
 for Accounting and Configuration: the journal's count equals the subledger's
 own total, no identifier is visible above the technical fold, a filter narrows
