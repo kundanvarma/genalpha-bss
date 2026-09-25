@@ -18,5 +18,8 @@
 
 shop_staff_guard_test # the shop in a browser, real Keycloak SSO, genalpha only
 a11y_test             # axe-core on EVERY channel: storefront, catalog console, CSR desk, partner portal, mobile app (A11Y_TARGETS)
-app_test              # the mobile app's web export: register, sign in, My page (16s)
-csr_workspace_test    # the CSR desk: search, customer 360, the incident bar (13s) — assurance/SOM/tickets ride the slice already
+# Tried and rejected on 25 Sep: app_test (needs a GenAlpha number pool to draw
+# from) and csr_workspace_test (needs the seeded "GenAlpha Mobile 10 GB" plan) —
+# both want the full demo seed, which the PR slice does not run. They stay in
+# the nightly. The six-channel axe scan above is what a PR can afford, and it
+# already reaches the mobile app's My page and the CSR desk after a real sign-in.
