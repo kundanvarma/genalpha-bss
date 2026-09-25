@@ -164,8 +164,17 @@ async function openTab(page, title) {
   for (const a of ['Journal', 'Chart of accounts']) {
     if (!accAreas.includes(a)) await fail(`Accounting dropped its second row but has no "${a}" area: ${accAreas}`);
   }
+  // Payments is `whole` for the same reason: the screen states unapplied cash
+  // itself, with the match form on the row, so the old peer tab would be the
+  // same worklist named twice in the row above it
+  await openTab(demo.page, 'Payments');
+  await demo.page.waitForSelector('[data-testid="payments-desk"]', { timeout: 30000 });
+  const payText = await demo.page.textContent('[data-testid="payments-desk"]');
+  if (!/Unapplied cash/i.test(payText)) {
+    await fail('Payments dropped Unapplied cash from its row but does not state it on the page');
+  }
   console.log(`OK no choice is printed twice: Configuration's areas are ${cfgAreas.join(' · ')};`
-    + ` Accounting's are ${accAreas.join(' · ')}`);
+    + ` Accounting's are ${accAreas.join(' · ')}; Payments states unapplied cash itself`);
 
   /* ---- 3. every one of the fourteen still opens, under its new primary ---- */
   for (const [tab, home] of Object.entries(HOMES)) {

@@ -22,9 +22,14 @@ async function token(request, user, pass) {
 
 async function loginConsole(browser, user, pass) {
   const ctx = await browser.newContext();
+  // seven personas is seven full OIDC redirect chains, which makes this the
+  // heaviest console suite there is. On a laptop sharing its Docker VM with
+  // another suite the 30s default navigation timeout expires on the sign-in
+  // page and reports a failure that says nothing about who sees which desk.
+  ctx.setDefaultNavigationTimeout(90000);
   const page = await ctx.newPage();
   await page.goto(`${API}/console/`);
-  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.waitForSelector('input[name="username"]', { timeout: 60000 });
   await page.fill('input[name="username"]', user);
   await page.fill('input[name="password"]', pass);
   await page.click('input[type="submit"], button[type="submit"]');
