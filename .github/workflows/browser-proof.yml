@@ -83,7 +83,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet requests
-          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions; do
+          # seed_service_specifications runs LAST: it stamps the CFS on whatever
+          # specs the other seeds left sellable (the bundle seed re-points specs)
+          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions seed_service_specifications; do
             echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
           done
 
@@ -95,6 +97,14 @@ jobs:
       # the Security workflow: the smoke fleet is the only one CI has.
       - name: Row-level security holds on the live database
         run: python3 ops/security/rls_check.py
+
+      # Catalog-to-provisioning step 1: the catalog IS the decomposition. Every
+      # product spec an Active offering sells names a TMF633 CFS that declares
+      # its fulfilment family; a spec without one is a product the orchestrator
+      # can only decompose by guessing from a category string. Live-only, like
+      # the RLS check: the seeds compose the catalog, so it is judged here.
+      - name: Every sellable spec names a CFS
+        run: python3 ops/arch/cfs_check.py
 
       - name: Install Playwright
         working-directory: ops/e2e
@@ -177,7 +187,8 @@ jobs:
                    seed_agreement_terms seed_promotions seed_resource_pools \
                    seed_ai_slice seed_verified_identity seed_nova \
                    seed_catalog_taxonomy seed_family_max seed_vas seed_content \
-                   seed_device_content seed_color_pricing seed_ocs_charging; do
+                   seed_device_content seed_color_pricing seed_ocs_charging \
+                   seed_service_specifications; do
             echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
           done
       # run-all-suites.sh is the gate: it exits 1 on any failed suite and 2

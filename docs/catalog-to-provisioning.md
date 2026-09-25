@@ -74,37 +74,57 @@ integrates "product X means do Y" into the order handler.
 
 ## Where this BSS is, honestly
 
-- **The seam exists, the data does not.** `ProductSpecificationDto` already
-  carries TMF620's `serviceSpecification[]` reference list, and the SOM's
-  TMF638 service view already faces a `serviceSpecification` reference — but
-  no retail seed fills the field, so retail offerings name no CFS. The
-  wholesale plan calls this out in its own words: *"no ServiceSpecification /
-  ResourceSpecification entities — fibre is a flat retail SKU"*.
+- **Step 1 is built (25 September 2026): every sellable spec names a CFS.**
+  Six customer-facing services live in the service catalog the product-catalog
+  component serves over TMF633 — *Mobile line*, *Broadband access*, *TV
+  entitlement*, *Device shipment*, *Partner activation*, *Security feature* —
+  each declaring its family as the characteristic `fulfilmentFamily`
+  (`serviceType` already means CFS | RFS). Every retail product spec an Active
+  offering sells carries the reference in TMF620's `serviceSpecification[0]`
+  (`ops/seed/seed_service_specifications.py`, idempotent, runs last). At order
+  time the SOM resolves offering → spec → CFS and runs the family the CFS
+  declares; `componentType(category)` is now only the fallback for a spec that
+  names none, so an unfilled catalog changes nothing. The inventory row records
+  the CFS it realised, and the TMF638 `serviceSpecification` points at the real
+  spec instead of a derived `svcspec-<category>` stand-in. Proven by
+  `cfs_decomposition_test.js` (suite #228) with the category deliberately
+  lying: a "Mobile plans" offering whose spec names the TV CFS is fulfilled as
+  TV and draws no number; the same category with a CFS-less spec still draws
+  one.
+- **The gate: every sellable spec names a CFS** — `ops/arch/cfs_check.py`
+  judges the *live* catalog (an Active offering with a spec and a retail
+  category; billing-only Insurance and Top-ups, the Bundles container and the
+  wholesale line, which has its own CFS, are out of scope) and exits 2 on the
+  first spec without a resolvable CFS that declares a family. It runs on every
+  pull request against the smoke fleet, beside the row-level-security check,
+  and in the proof run. Zero is the only passing count. It found two things on
+  its first day: the Sports Pass sharing the iPhone's product spec (one spec,
+  two fulfilment families — fixed in the bundle seed), and duplicate spec
+  names that let a re-run of one seed re-point an offering at an unstamped
+  twin (why the CFS seed runs last).
 - **There is no TMF634 resource catalog.** Numbers, SIM profiles, OCS rate
   plans and slice profiles are real resources with real adapters, but they are
   not described as resource specifications anywhere a buyer can browse.
-- **Decomposition is code, not data.** `componentType(category)` and the named
-  characteristics above are a decomposition table — a good one, proven by
-  suites — but it lives in `OrchestrationService`, so adding a new family
-  (say, a fixed-wireless access product) is a code change, and a buyer's
-  architect cannot read the table off the catalog.
+- **The family is data; the family's *behaviour* is still code.** The SOM
+  knows exactly six families; authoring a seventh CFS (say, fixed-wireless
+  access) is refused with a log line until the orchestrator learns what it
+  means, and the characteristics above (`chargingSpecId`, `sliceProfile` …)
+  still ride the product spec rather than the CFS→RFS edge.
 
-None of this is a defect in what works. It is the difference between "the
-catalog carries the intent" (true) and "the catalog *is* the mapping" (not
-yet).
+The catalog now *is* the mapping for the first hop, product spec → CFS; the
+hops below it (CFS → RFS → resource spec) are steps 2 and 3.
 
 ## What closes it
 
 Three bounded steps, each provable by a suite and checkable by the claims gate:
 
-1. **CFS on every sellable spec (TMF633).** Author one `ServiceSpecification`
-   per fulfilment family — *Mobile line*, *Broadband access*, *TV entitlement*,
-   *Device shipment*, *Partner activation*, *Security feature* — in the service
-   catalog the product-catalog component already serves, and put its reference
-   on each retail product spec. The SOM reads `serviceSpecification[0]` and
-   falls back to `componentType(category)` only while a spec names none; the
-   claims gate then counts "sellable specs without a CFS" and the count may
-   only fall.
+1. **CFS on every sellable spec (TMF633) — built, see above.** One
+   `ServiceSpecification` per fulfilment family in the service catalog the
+   product-catalog component already serves, its reference on each retail
+   product spec; the SOM reads `serviceSpecification[0]` and falls back to
+   `componentType(category)` only while a spec names none; `cfs_check.py`
+   counts sellable specs without a CFS on the live catalog, and zero is the
+   only passing count.
 2. **RFS and resource specs (TMF634).** Under each CFS, the resource-facing
    services it needs — *MSISDN*, *SIM/eSIM profile*, *OCS subscriber*, *slice
    binding*, *Sonata access* — each pointing at a `ResourceSpecification` that
@@ -123,8 +143,21 @@ a week, with the existing adapters unchanged.
 
 ## Honest limits
 
-- This document describes the mapping; it does not build it. Until step 1
-  lands, the truthful demo answer is the *short answer* above, not the table.
+- Step 1 is built; steps 2 and 3 are not. The truthful demo answer today is:
+  the product spec names its customer-facing service and the orchestrator
+  obeys it; below the CFS, the resource-facing layer is still the adapters and
+  characteristics described in the *short answer*, not catalog data.
+- The gate judges only what an Active offering sells under a retail category.
+  Offerings with no category or no spec (mostly suite fixtures) are printed
+  and not judged; the debris sweep owns them.
+- A CFS whose family disagrees with its offering's category is a *warning*,
+  not a failure: overriding the category is the point of authoring a CFS, but
+  it is also where a data mistake would silently change fulfilment — read the
+  warnings.
+- The seed maps categories to families with a fixed table; a tenant with its
+  own category names (Taranga, ENet) gets its CFS by running the seed against
+  its realm (`BSS_REALM=taranga`) only if its categories use the same names —
+  otherwise the mapping is authored by hand in the console.
 - Vendor rows summarise public product documentation and TM Forum
   specifications; they are not an evaluation of any vendor's release, and
   names in the table are the vendors' own.

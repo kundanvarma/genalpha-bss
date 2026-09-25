@@ -17,7 +17,7 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 40 ODA components speaking TMF Open APIs natively
-- 227 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
+- 228 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
 - Accessibility enforced in CI: axe-core runs the full WCAG 2.2 AA ruleset across every channel at zero violations — the storefront scan is a pull-request gate (`.github/workflows/browser-proof.yml`), all five channels run in the proof run, and each tenant's brand colour is auto-shaded to stay legible — accessibility that can't silently rot between releases
 - Best-of-breed growth & journey orchestration: onboarding-triggered journeys with named stages, reusable localized message templates, multi-channel delivery (in-app/email/SMS/push), saved rule-tree audiences, a full node graph (message · wait · wait-for-event · decision · exit), a visual canvas with live per-node counts, AI-drafted journeys (governed + audited), and real-time next-best-action arbitration with an explainable decision log — governed by default (consent, frequency caps, quiet hours, holdout-measured lift). **[Step-by-step operator guide →](docs/growth-guide.md)**
 - A **BSS-native CDP** — no reverse-ETL, no second database: audiences are built from the operational event bus you already run (a completed order, a new bill, a loyalty-tier change *is* the trait), across four populations (customers · consent-gated prospects · B2B organizations · anonymous visitors for retargeting). One connector activates the same audience to **Meta *and* Google** (SHA-256 hashed, DNC-filtered, async), inbound **social care** turns negative/support DMs into TMF621 trouble tickets over the bus, and a **portfolio attribution** report shows holdout-measured lift and **incremental** revenue across every campaign and journey — with a hard honesty rule: no control group, no lift claimed. **[Step-by-step martech guide →](docs/martech-guide.md)**
@@ -38,9 +38,9 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 
 
 <details>
-<summary><b>Every feature is verified end-to-end in a real browser</b> — 227 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — 228 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
 
-**Every feature is verified end-to-end in a real browser** — 227 Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — 228 Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -196,6 +196,11 @@ device — each on its own fulfilment clock, wired with a TMF622 `reliesOn` so T
 broadband it rides and a physical-SIM line stays reserved until the SIM lands; fixed components
 bill *through* the bundle byte-identically; the order rolls up `partiallyCompleted`; a speed
 tier is an in-place `modify` on the same line — no SKU per tier; `bundle_decomposition_test.js`),
+and then **the catalog became the decomposition**: every sellable product spec names a TMF633
+customer-facing service that declares its fulfilment family, the orchestrator obeys the CFS over
+the category string (which stays only as the fallback for a spec that names none), the TMF638
+inventory row points at the real CFS, and a live gate counts every sellable spec without one on
+every pull request (`cfs_decomposition_test.js`, `ops/arch/cfs_check.py`),
 then a whole new product line, **wholesale / open-access fibre** (the Nordic market opening now:
 sell retail broadband on top of a third party's fibre, split by access layer — L2 VULA / L3
 activated bitstream — ordered and settled operator-to-operator over **MEF LSO Sonata**;

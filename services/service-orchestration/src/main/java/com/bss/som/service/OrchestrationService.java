@@ -1,6 +1,7 @@
 package com.bss.som.service;
 
 import com.bss.som.api.ApiConstants;
+import com.bss.som.client.CatalogClient;
 import com.bss.som.client.OrderingClient;
 import com.bss.som.dto.LineReceipts.NumberOffer;
 import com.bss.som.dto.LineReceipts.ServiceStateReceipt;
@@ -25,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import static com.bss.som.mapper.Wire.idOf;
 
@@ -237,13 +239,18 @@ public class OrchestrationService {
                 }
                 continue;
             }
-            boolean partnerService = "Partner services".equals(category);
-            boolean securityFeature = "Security".equals(category);
             // The decomposed component's family decides its fulfilment: a mobile
             // plan is a network line (number + SIM); broadband installs and never
             // draws a number; TV is a digital entitlement; a handset ships and is
             // not a line at all. Unknown/other keeps the historical line behaviour.
-            String componentType = componentType(category);
+            // WHO SAYS which family: the CFS the product spec names (TMF620
+            // serviceSpecification[0] → TMF633, characteristic fulfilmentFamily)
+            // — the catalog's own decomposition. Only while a spec names no CFS
+            // does the category string decide, as it did before there were CFS.
+            Optional<CatalogClient.Cfs> cfs = catalog.cfsOf(offeringId);
+            String componentType = fulfilmentFamily(cfs, category);
+            boolean partnerService = "partner".equals(componentType);
+            boolean securityFeature = "security".equals(componentType);
             boolean internet = "internet".equals(componentType);
             boolean tv = "tv".equals(componentType);
             boolean device = "device".equals(componentType);
@@ -295,6 +302,13 @@ public class OrchestrationService {
             instance.setOwnerPartyId(owner);
             instance.setCreatedAt(OffsetDateTime.now());
             instance.setLastUpdate(OffsetDateTime.now());
+            // the inventory row names the CFS it realises, so TMF638's
+            // serviceSpecification is the catalog's spec, not a derived stand-in
+            cfs.ifPresent(c -> {
+                instance.setCfsId(c.id());
+                instance.setCfsName(c.name());
+                instance.setCfsFamily(componentType);
+            });
 
             // Slice services ride a delivery path (assurance re-homes them on
             // failure); AI services draw a GPU from the edge pool; everything
@@ -956,6 +970,25 @@ public class OrchestrationService {
         return n.contains("mobile") || n.contains("orange") || n.contains("prepaid") || n.contains("sim")
                 || n.contains("5g") || n.contains("4g") || n.contains("phone plan")
                 || (n.contains("day") && (n.contains("gb") || n.contains("data") || n.contains("voice")));
+    }
+
+    /**
+     * The fulfilment family of an order item: the CFS's declared family when
+     * the product spec names a CFS that declares one; otherwise the category
+     * table below (partner and security by their category names, the rest by
+     * {@link #componentType}). Pure, so the precedence is unit-tested.
+     */
+    public static String fulfilmentFamily(Optional<CatalogClient.Cfs> cfs, String category) {
+        if (cfs.isPresent() && cfs.get().family() != null) {
+            return cfs.get().family();
+        }
+        if ("Partner services".equals(category)) {
+            return "partner";
+        }
+        if ("Security".equals(category)) {
+            return "security";
+        }
+        return componentType(category);
     }
 
     static String componentType(String category) {

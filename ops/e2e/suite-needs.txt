@@ -12,6 +12,7 @@ audience_sql_test           bss-bridge insight
 b2b_test                    communication quote
 bss_traits_test             bss-bridge insight
 campaign_lifecycle_test     campaign
+cfs_decomposition_test      product-ordering service-orchestration party-account
 copilot_experience_test     intelligence mock-llm
 copilot_test                intelligence mock-llm
 decision_log_test           campaign insight
