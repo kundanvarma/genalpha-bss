@@ -56,8 +56,8 @@ PATH_DECL = re.compile(r"path:\s*'([^']+)'")
 LABEL = re.compile(r"label:\s*'((?:[^'\\]|\\.)*)'")
 TABS = re.compile(r"tabs:\s*\[(.*?)\]", re.S)
 
-def commercial_tabs():
-    """The page paths the commercial departments open, off nav.js's WORKSPACES.
+def console_tabs():
+    """(pages the commercial desks open, pages ANY desk opens) off WORKSPACES.
 
     Never returns a quiet empty set: a console that cannot be read would make
     this metric count zero for ever, which reads exactly like a pass. If the
@@ -75,22 +75,24 @@ def commercial_tabs():
     if end < 0:
         sys.exit(f"ratchet: {NAV}'s WORKSPACES list is not closed — cannot read the commercial desks")
     body = src[i:end]
-    tabs = set(); seen = set()
+    tabs = set(); every = set(); seen = set()
     for m in LABEL.finditer(body):
         seen.add(m.group(1))
-        if m.group(1) not in COMMERCIAL_DEPTS: continue
         # a department's own `tabs:` is the flat union and comes before its `groups:`
         t = TABS.search(body, m.end())
-        if t: tabs |= set(re.findall(r"'([^']+)'", t.group(1)))
+        if not t: continue
+        pages = set(re.findall(r"'([^']+)'", t.group(1)))
+        every |= pages
+        if m.group(1) in COMMERCIAL_DEPTS: tabs |= pages
     missing = sorted(COMMERCIAL_DEPTS - seen)
     if missing:
         sys.exit("ratchet: nav.js names no department " + ", ".join(missing)
                  + " — a desk was renamed; update COMMERCIAL_DEPTS in ops/arch/ratchet.sh")
-    return tabs
+    return tabs, every
 
 def json_boxes():
     if not os.path.isfile(NAV): return {}          # no admin console in this tree
-    tabs = commercial_tabs(); boxes = {}
+    tabs, every = console_tabs(); boxes = {}
     for dp, dn, fs in os.walk(CONSOLE):
         dn[:] = [d for d in dn if d not in ('node_modules', 'dist', 'build')]
         for f in sorted(fs):
@@ -101,12 +103,17 @@ def json_boxes():
             for m in JSONBOX.finditer(src):
                 owner = None                       # the page is the nearest path: above the field
                 for d in PATH_DECL.finditer(src[:m.start()]): owner = d.group(1)
-                if owner is None:                  # a field on no declared page: counted, never assumed safe
-                    key = p + ' (no page declared)'
-                elif owner in tabs and owner not in DESIGNER_ONLY:
-                    key = owner
-                else:
+                if owner in DESIGNER_ONLY:         # the declared exception
                     continue
+                if owner in tabs:
+                    key = owner
+                elif owner in every:               # a page on a non-commercial desk: not this rule's business
+                    continue
+                else:
+                    # no page above it, or a page no desk opens: counted, never assumed
+                    # safe. An unclassified page is how a box would otherwise slip past
+                    # the whole metric in silence.
+                    key = f"{p} ({owner or 'no page declared'})"
                 boxes[key] = boxes.get(key, 0) + 1
     return boxes
 
@@ -425,7 +432,10 @@ for page, n in now.get("commercialJsonBoxes", {}).items():
     # console is rechecked whenever a console file is the one being edited
     if quick and f and 'apps/admin-console/' not in f: continue
     b = base.get("commercialJsonBoxes", {}).get(page, 0)
-    if n > b: bad.append(f"admin console '{page}': {n} raw JSON text box(es) on a page a commercial department opens, baseline {b} — a product manager cannot write JSON; give the field a control (apps/admin-console/site/core/controls.js), see docs/engineering-conventions.md §4")
+    if n <= b: continue
+    where = (f"on the '{page}' page, which a commercial department opens" if '(' not in page
+             else f"in {page} — on no page any desk opens, so nothing classifies it; declare the page in nav.js or give the field a control")
+    bad.append(f"admin console: {n} raw JSON text box(es) {where}, baseline {b} — a product manager cannot write JSON; give the field a control (apps/admin-console/site/core/controls.js), see docs/engineering-conventions.md §4")
 if bad:
     print("ARCHITECTURE RATCHET — regression:"); [print("  - " + m) for m in bad]; sys.exit(2)
 tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
