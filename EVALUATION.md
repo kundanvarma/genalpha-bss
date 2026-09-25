@@ -31,7 +31,7 @@ GCP `e2-standard-8`, or Azure `D8s_v5`, running Ubuntu 22.04+ with
 Docker Engine + compose v2. Laptops work if Docker's memory limit is
 actually raised (Docker Desktop defaults are far too low).
 
-Also needed on the host: **JDK 17, Maven, Python 3** (images copy
+Also needed on the host: **JDK 21 or newer, Maven, Python 3** (images copy
 host-built jars — the build takes seconds, not the 30-minute in-container
 alternative).
 

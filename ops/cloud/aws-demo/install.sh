@@ -5,7 +5,7 @@
 #
 # Reads /etc/taranga-demo.env (created on first run from the DEMO_* variables
 # below, then edited by hand). Stages, each skipped when already done:
-#   1. packages: docker + compose plugin, JDK 17 + maven, caddy, swap
+#   1. packages: docker + compose plugin, JDK 21 + maven, caddy, swap
 #   2. repo: deploy key → clone/pull (pauses once for you to add the key on GitHub)
 #   3. secrets: .env with generated Postgres/Keycloak passwords
 #   4. build: mvn package (host-built jars, ~15 min on 8 vCPU) + docker compose build
@@ -60,7 +60,7 @@ if ! command -v caddy >/dev/null; then
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
   apt-get update -qq && apt-get install -y -qq caddy
 fi
-command -v mvn >/dev/null || { log "jdk + maven"; apt-get install -y -qq openjdk-17-jdk-headless maven git python3 python3-yaml apache2-utils; }
+command -v mvn >/dev/null || { log "jdk + maven"; apt-get install -y -qq openjdk-21-jdk-headless maven git python3 python3-yaml apache2-utils; }
 if [ ! -f /swapfile ]; then
   log "8 GB swap (headroom for the Maven build)"
   fallocate -l 8G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab

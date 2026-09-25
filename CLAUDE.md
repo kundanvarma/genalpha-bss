@@ -8,7 +8,7 @@ matter are enforced by tools (see *Checks*), not by this prose.
 
 ## Where things live
 
-- `services/<component>/` — one Spring Boot service per ODA component (Java 17 source on a Java 25 runtime image, Maven, Flyway). `src/main/resources/db/migration` and `db/migration-postgresql` **share one version space**.
+- `services/<component>/` — one Spring Boot service per ODA component (Java 21 source on a Java 25 runtime image, Maven, Flyway). `src/main/resources/db/migration` and `db/migration-postgresql` **share one version space**.
 - `apps/` — channels: `storefront`, `mobile`, `csr-console` (React); `admin-console`, `business-console`, `dealer-console`, `partner-console` (vanilla JS, being migrated — see conventions).
 - `ontology/` — the registry YAML: concepts, capabilities, governed actions, agents. `services/ontology` serves it; `ops/ontology/gen-sdk.mjs` regenerates the SDK.
 - `ops/e2e/` — the browser suites (Playwright, `node <name>_test.js`), `ops/ctk/` — TM Forum conformance kits, `ops/seed/` — demo data, `ops/cloud/aws-demo/` — the hosted demo box.
@@ -18,7 +18,7 @@ matter are enforced by tools (see *Checks*), not by this prose.
 ## Build, run, prove
 
 ```bash
-cd services/<x> && mvn -q clean package -DskipTests      # no mvnw in this repo
+cd services/<x> && mvn -q clean package -DskipTests      # no mvnw; needs a JDK 21+ (java.version 21 — a JDK 17 fails with "release version 21 not supported"; on this laptop: export JAVA_HOME=$(/usr/libexec/java_home -v 21+) or brew's openjdk@26)
 docker compose build <x> && docker compose up -d --no-deps --force-recreate <x>
 cd ops/e2e && node <suite>_test.js                        # one suite at a time on the laptop
 bash ops/run-all-suites.sh                                # ~40 min, writes ops/e2e/.proof-run/
