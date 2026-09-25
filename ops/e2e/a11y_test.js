@@ -26,10 +26,17 @@ const TARGETS = [
     open: async (p) => { await p.goto(`${BASE}/shop/cart`); await p.waitForSelector('.nav', { timeout: 20000 }); } },
   { label: 'console: catalog (demo)',
     open: async (p) => { await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo'); await p.waitForSelector('#main:not([hidden])', { timeout: 20000 }); } },
-  // the Bills desk and the bill workspace are React islands inside the
-  // console's own panel (ADR-0022) — scanned in their own right, because a
-  // scan of the landing page proves nothing about a screen mounted later
-  { label: 'console: bills desk (demo)',
+  // The Bills desk and the bill workspace are React islands inside the console's
+  // own panel (ADR-0022), scanned in their own right because a scan of the
+  // landing page proves nothing about a screen mounted later.
+  //
+  // They are labelled "bills:", NOT "console:", on purpose. The PR smoke tier
+  // runs A11Y_TARGETS=storefront,console,csr,partner,app against a slice that
+  // seeds the catalog and no billing at all, so a "console:" label would drag
+  // these onto every pull request and they would fail for want of data. The
+  // nightly full proof runs every target and is where they belong. Locally:
+  // A11Y_TARGETS=console,bills.
+  { label: 'bills: desk (demo)',
     open: async (p) => {
       await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
       await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
@@ -37,7 +44,7 @@ const TARGETS = [
       await p.waitForSelector('[data-testid="bills-desk"]', { timeout: 20000 });
       await p.waitForFunction(() => document.querySelectorAll('[data-testid="bills-body"] tr').length > 1, null, { timeout: 20000 });
     } },
-  { label: 'console: one bill (demo)',
+  { label: 'bills: one bill (demo)',
     open: async (p) => {
       await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
       await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });

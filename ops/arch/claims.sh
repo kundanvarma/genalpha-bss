@@ -46,7 +46,10 @@ for n in $CLAIMED; do
   # (this laptop) has no \b, so a word-boundary pattern silently matches
   # nothing and the gate stays red while the fix "succeeds"
   [ "$n" = "$SUITES" ] || fail "README says $n suites; ops/e2e holds $SUITES" \
-    "fix: sed -i '' 's/$n end-to-end browser suites/$SUITES end-to-end browser suites/g; s/$n Playwright suites/$SUITES Playwright suites/g' README.md"
+    "fix: python3 - <<'PY'
+import re; p='README.md'; s=open(p).read()
+open(p,'w').write(re.sub(r'\\b$n (end-to-end browser|Playwright) suites', r'$SUITES \\1 suites', s))
+PY"
 done
 RUN_ALL=$(grep -oE 'all \*\*[0-9]+ suites\*\*' README.md | grep -oE '[0-9]+' || true)
 for n in $RUN_ALL; do
