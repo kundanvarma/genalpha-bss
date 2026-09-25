@@ -42,3 +42,33 @@ _Avoid_: provider, supplier, partner (a partner is a commercial party whose enti
 **Realisation**:
 The record, on a service in inventory, that one resource-facing service was carried out for it: which RFS, through which seam, by which vendor, with what external reference. Descriptive in step 2; what the orchestrator obeys in step 3.
 _Avoid_: fulfilment record, provisioning log, activation (an activation is one seam's act, not the record of it)
+
+## Fulfilment (step 3)
+
+**Seam adapter**:
+The one piece of code behind a seam: it says which seam it serves, when it applies (its precondition), which characteristics it can consume, and it runs the vendor's call. One per vendor, registered by seam name; adding a seam is adding one adapter.
+_Avoid_: connector, plugin, integration
+
+**Seam registry**:
+The orchestrator's map from seam name to seam adapter. The executor asks it, never the family, which code to run.
+_Avoid_: dispatcher, router, factory
+
+**Executor**:
+The one place the orchestrator decides fulfilment: it walks the declared resource-facing services in a fixed seam order, skips optional ones the product does not call for, and hands each seam adapter the consumed values. It is the only reader of the product specification.
+_Avoid_: orchestration plan, workflow, decomposition engine
+
+**Dry run**:
+The executor's plan for an offering without any adapter being called: which seams in which order, with which values and which vendor, and which seams no adapter serves here. Shown before launch; a launch-readiness item.
+_Avoid_: simulation, preview, test order
+
+**Category fallback**:
+What the orchestrator does for a product specification that names no customer-facing service: the old category table decides, and the service records a realisation on seam `category-fallback` so the gate and the ratchet can count it. A debt that may only shrink.
+_Avoid_: legacy path, default behaviour
+
+**Billing-only** (family):
+A customer-facing service with zero resource-facing services: the product bills and nothing is provisioned. Insurance and top-ups.
+_Avoid_: no-service, virtual product
+
+**Compute** (family):
+A customer-facing service realised on the `edge-gpu` seam: an inference or compute product that draws a GPU from the edge pool instead of a number from the number pool.
+_Avoid_: AI product, GPU plan
