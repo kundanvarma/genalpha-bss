@@ -38,6 +38,7 @@ knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
 loyalty_test                loyalty
 omnichannel_test            campaign party-interaction communication
+party_debris_test           party-account product-inventory product-ordering billing revenue party-interaction communication campaign shopping-cart trouble-ticket appointment insight user-roles
 price_builder_test          product-stock insight
 process_memory_test         process trouble-ticket
 referral_test               campaign revenue usage

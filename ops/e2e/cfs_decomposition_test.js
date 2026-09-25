@@ -59,6 +59,13 @@ async function created(method, p, tok, body) {
   if (r.status !== 201 && r.status !== 200) fail(`${method} ${p}: ${r.status} ${r.text.slice(0, 200)}`);
   return r.body;
 }
+/* The PERSON this run mints. A suite that creates a customer owes the demo
+ * tenant the same courtesy it pays the catalog: take them away at the end —
+ * by the rule in party_debris.js, which refuses to shred accounting history.
+ * Recorded on this object rather than returned, so the call sites below stay
+ * exactly as they were. */
+const parties = require('./party_debris');
+const fixture = {};
 /* A brand-new customer with an empty inventory, so "the service this order
  * created" is unambiguous and no shared persona inherits our fixtures. */
 async function freshCustomer() {
@@ -75,7 +82,10 @@ async function freshCustomer() {
   const cust = roles.find((r) => r.name === 'customer');
   if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
   const tok = (await form(KC, { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
-  await call('POST', '/tmf-api/party/v4/individual', tok, { givenName: 'Cfs', familyName: 'Tester' });
+  const person = await call('POST', '/tmf-api/party/v4/individual', tok,
+    { givenName: 'Cfs', familyName: 'Tester' });
+  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId: users[0].id,
+    partyId: (person.body || {}).id });
   return tok;
 }
 /* the live gate, as CI runs it */
@@ -186,6 +196,16 @@ const characteristic = (s, name) => ((s.serviceCharacteristic || []).find((c) =>
   const green = gate();
   if (green.code !== 0) fail(`cfs_check.py is still red after the fixtures are gone:\n${green.out}`);
   ok(`GATE CLEAN: ${green.out.trim().split('\n').pop()}`);
+
+  /* ---------- and take the fixture PERSON away too ---------- */
+  const swept = await parties.removeFixtureParty(parties.ctxFor(staff), fixture);
+  if (swept.action === 'left') {
+    fail(`the fixture customer was left behind: ${swept.detail}`);
+  }
+  // 'blocked' = a component was unreadable, so the cleanup refused to guess;
+  // the fixture stays and the party sweep will report it. Say so, do not fail.
+  console.log(`${swept.action === 'blocked' ? 'WARN' : 'OK'} FIXTURE PERSON `
+    + `${swept.action}: ${swept.detail}`);
 
   console.log('\nALL CFS-DECOMPOSITION CHECKS PASSED — the product spec names its customer-facing service,'
     + ' the CFS names the fulfilment family, the SOM obeys it over the category, the old table still'

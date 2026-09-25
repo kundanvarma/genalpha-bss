@@ -60,6 +60,13 @@ async function created(method, p, tok, body) {
   if (r.status !== 201 && r.status !== 200) fail(`${method} ${p}: ${r.status} ${r.text.slice(0, 200)}`);
   return r.body;
 }
+/* The PERSON this run mints. A suite that creates a customer owes the demo
+ * tenant the same courtesy it pays the catalog: take them away at the end —
+ * by the rule in party_debris.js, which refuses to shred accounting history.
+ * Recorded on this object rather than returned, so the call sites below stay
+ * exactly as they were. */
+const parties = require('./party_debris');
+const fixture = {};
 async function freshCustomer() {
   const admin = (await form(`${KCB}/realms/master/protocol/openid-connect/token`, { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' })).access_token;
   const uname = `e2e-obeys-${run}@example.com`;
@@ -70,7 +77,10 @@ async function freshCustomer() {
   const cust = roles.find((r) => r.name === 'customer');
   if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
   const tok = (await form(KC, { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
-  await call('POST', '/tmf-api/party/v4/individual', tok, { givenName: 'Obeys', familyName: 'Tester' });
+  const person = await call('POST', '/tmf-api/party/v4/individual', tok,
+    { givenName: 'Obeys', familyName: 'Tester' });
+  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId: users[0].id,
+    partyId: (person.body || {}).id });
   return tok;
 }
 function script(file, args = []) {
@@ -197,6 +207,16 @@ const charOf = (name, value) => ({ name, configurable: false, productSpecCharact
   const after = script('cfs_check.py');
   if (findings(after.out).some((l) => l.includes(tag))) fail(`the gate still mentions this run's fixtures after cleanup:\n${after.out}`);
   ok(`GATE CLEAN OF THIS RUN: ${after.out.trim().split('\n').pop().slice(0, 160)}`);
+
+  /* ---------- and take the fixture PERSON away too ---------- */
+  const swept = await parties.removeFixtureParty(parties.ctxFor(staff), fixture);
+  if (swept.action === 'left') {
+    fail(`the fixture customer was left behind: ${swept.detail}`);
+  }
+  // 'blocked' = a component was unreadable, so the cleanup refused to guess;
+  // the fixture stays and the party sweep will report it. Say so, do not fail.
+  console.log(`${swept.action === 'blocked' ? 'WARN' : 'OK'} FIXTURE PERSON `
+    + `${swept.action}: ${swept.detail}`);
 
   console.log('\nALL CFS-OBEYS CHECKS PASSED — an optional RFS runs only when the product calls for it, a spec without a pattern is'
     + ' fulfilled by the counted fallback and the ratchet says so until the service is gone, and a billing-only pattern provisions nothing.');
