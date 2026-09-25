@@ -20,6 +20,11 @@ import java.util.Optional;
 @Component
 public class RestSliceProvisioningClient implements SliceProvisioningClient {
 
+    @Override
+    public String vendor() {
+        return enabled ? "5gc-slice-manager" : "none";
+    }
+
     private static final Logger log = LoggerFactory.getLogger(RestSliceProvisioningClient.class);
 
     private final RestClient restClient;

@@ -7,7 +7,9 @@ import com.bss.som.dto.ServiceView;
 import com.bss.som.dto.SpecRef;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ServiceInstance;
+import com.bss.som.entity.ServiceRealisation;
 import com.bss.som.repository.ResourceAssignmentRepository;
+import com.bss.som.repository.ServiceRealisationRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -27,10 +29,13 @@ import java.util.Locale;
 public class ServiceViews {
 
     private final ResourceAssignmentRepository assignments;
+    private final ServiceRealisationRepository realisations;
     private final ObjectMapper objectMapper;
 
-    public ServiceViews(ResourceAssignmentRepository assignments, ObjectMapper objectMapper) {
+    public ServiceViews(ResourceAssignmentRepository assignments, ServiceRealisationRepository realisations,
+            ObjectMapper objectMapper) {
         this.assignments = assignments;
+        this.realisations = realisations;
         this.objectMapper = objectMapper;
     }
 
@@ -106,8 +111,7 @@ public class ServiceViews {
                 s.getResumeAt() == null ? null : s.getResumeAt().toString(),
                 restriction,
                 List.of(ServiceView.ServiceRelationship.standalone(s.getId(), s.getHref())),
-                List.of(new ServiceRef(s.getId(), s.getHref(), s.getName(),
-                        "standalone — supports itself; not an invented dependency")),
+                supportingServices(s),
                 // the CFS the order actually realised when the spec named one;
                 // the derived per-category stand-in only for rows that predate CFS
                 s.getCfsId() != null ? SpecRef.cfs(s.getCfsId(), s.getCfsName()) : SpecRef.serviceSpec(category),
@@ -117,6 +121,26 @@ public class ServiceViews {
                 supporting,
                 characteristics,
                 "Service");
+    }
+
+    /**
+     * TMF638 supportingService: the resource-facing services the orchestrator
+     * REALISED for this service (declared ones point at their RFS spec; an
+     * undeclared one carries only its seam). A row that predates step 2, or a
+     * service that exercised no seam, keeps the honest standalone entry the
+     * conformance kit demands non-empty.
+     */
+    private List<ServiceRef> supportingServices(ServiceInstance s) {
+        List<ServiceRealisation> rows = realisations.findByTenantIdAndServiceIdOrderByRealisedAtAsc(s.getTenantId(), s.getId());
+        if (rows.isEmpty()) {
+            return List.of(new ServiceRef(s.getId(), s.getHref(), s.getName(),
+                    "standalone — supports itself; not an invented dependency"));
+        }
+        List<ServiceRef> out = new ArrayList<>();
+        for (ServiceRealisation r : rows) {
+            out.add(ServiceRef.realised(r.getRfsId(), r.getRfsName(), r.getSeam(), r.getVendor(), r.getExternalRef()));
+        }
+        return out;
     }
 
     /** The service's kind, derived from what it IS named — never invented. */

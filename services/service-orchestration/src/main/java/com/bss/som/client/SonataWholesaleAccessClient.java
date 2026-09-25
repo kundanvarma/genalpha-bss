@@ -27,6 +27,11 @@ import static com.bss.som.mapper.Wire.idOf;
 @ConditionalOnProperty(name = "bss.wholesale.oss", havingValue = "sonata")
 public class SonataWholesaleAccessClient implements WholesaleAccessClient {
 
+    @Override
+    public String vendor() {
+        return "mef-sonata";
+    }
+
     private static final Logger log = LoggerFactory.getLogger(SonataWholesaleAccessClient.class);
     private static final String ORDER = "/mefApi/serviceOrdering/v1/serviceOrder";
 
