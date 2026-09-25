@@ -116,7 +116,19 @@ async function call(method, p, tok, body) {
   }
 
   /* ---------- PROPOSED, by the copilot ---------- */
-  const reply = await call('POST', '/ai/v1/productCopilot', staff, { messages: [{ role: 'user', content: 'create a 50 GB plan with a Samsung discount' }] });
+  // The copilot may ask before it proposes — a price it was not given, a name
+  // it wants confirmed. That is its designed manner (a card, then Create), not
+  // a failure, so the suite answers once and asks again rather than demanding
+  // that a model never clarify.
+  const ask = (content, history = []) => call('POST', '/ai/v1/productCopilot', staff, { messages: [...history, { role: 'user', content }] });
+  // Complete on purpose: this suite proves which FULFILMENT PATTERN the copilot
+  // proposes, so the ask carries everything a model would otherwise clarify.
+  const asked = 'create a 50 GB mobile plan called Fifty Plus at 399 NOK per month, available now';
+  let reply = await ask(asked);
+  if (reply.status === 200 && reply.body?.kind === 'question') {
+    reply = await ask('yes, exactly that — go ahead',
+      [{ role: 'user', content: asked }, { role: 'assistant', content: reply.body.message || '' }]);
+  }
   if (reply.status !== 200 || reply.body?.kind !== 'proposal') fail(`copilot: ${reply.status} ${reply.text.slice(0, 200)}`);
   const specs = reply.body.proposal?.specs || [];
   const fp = specs[0]?.fulfilmentPattern;

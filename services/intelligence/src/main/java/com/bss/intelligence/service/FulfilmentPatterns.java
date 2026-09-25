@@ -30,6 +30,17 @@ public final class FulfilmentPatterns {
     public record Pattern(String cfsId, String cfsName, String family, String reason, List<Missing> missingConsumed) {
     }
 
+    /** How many resource-facing services a pattern relies on — the tie-break when no primary is marked. */
+    static int reliesOn(Map<String, Object> cfs) {
+        int n = 0;
+        for (Map<String, Object> e : list(cfs.get("serviceSpecRelationship"))) {
+            if ("reliesOn".equals(e.get("relationshipType"))) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     /** The family words the console shows beside a pattern's name. */
     public static final Map<String, String> FAMILY_WORDS = Map.of(
             "mobile", "a network line", "internet", "an install", "tv", "a digital entitlement",
@@ -108,11 +119,24 @@ public final class FulfilmentPatterns {
         if (family == null) {
             return Optional.empty();
         }
+        // A family may hold more than one pattern: "Mobile line" is the everyday
+        // one, "Priority slice" a venue product; "Billing-only product" the
+        // everyday one, "Top-up with boost" the exception. Taking the first
+        // match proposed whichever the catalog happened to list first, so a
+        // 50 GB plan was offered a venue slice. Prefer the pattern the catalog
+        // marks as its family's primary (`primaryForFamily`); failing that, the
+        // one that declares the most it relies on — a full line beats a single
+        // seam — and only then the first, so an unmarked catalog still answers.
         Map<String, Object> cfs = null;
+        int best = Integer.MIN_VALUE;
         for (Map<String, Object> s : serviceSpecs) {
-            if ("CFS".equals(s.get("serviceType")) && family.equals(characteristic(s, "fulfilmentFamily"))) {
+            if (!"CFS".equals(s.get("serviceType")) || !family.equals(characteristic(s, "fulfilmentFamily"))) {
+                continue;
+            }
+            int score = ("true".equalsIgnoreCase(characteristic(s, "primaryForFamily")) ? 1000 : 0) + reliesOn(s);
+            if (score > best) {
+                best = score;
                 cfs = s;
-                break;
             }
         }
         if (cfs == null || idOf(cfs) == null) {
