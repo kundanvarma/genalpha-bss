@@ -23,3 +23,9 @@ a11y_test             # axe-core on EVERY channel: storefront, catalog console, 
 # both want the full demo seed, which the PR slice does not run. They stay in
 # the nightly. The six-channel axe scan above is what a PR can afford, and it
 # already reaches the mobile app's My page and the CSR desk after a real sign-in.
+#
+# Same rule, same day: the axe targets for the Bills desk and the bill workspace
+# are labelled "bills:" rather than "console:", so the A11Y_TARGETS list above
+# does NOT pick them up. They need seeded bills and this slice seeds none — on a
+# PR they failed reaching for a row that cannot exist. The nightly runs every
+# target and scans them there.

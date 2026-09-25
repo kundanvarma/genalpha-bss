@@ -3,9 +3,50 @@
 
 RESOURCES.push(
   {
+    // The desk's first screen: what needs attention, what is queued, where the
+    // book stands. A React island (ADR-0022) because the paper's priority rule
+    // — exceptions loud, queues visible, normal states calm — is a layout, not
+    // a table. Every figure is a fact a service already decided.
+    path: 'billingOverview',
+    title: 'Overview',
+    island: 'billingOverview',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    // Bills are money owed; payments are money received. Related jobs, not the
+    // same job — so unapplied cash is stated here as the exception it is,
+    // beside the action that resolves it.
+    path: 'payments',
+    title: 'Payments',
+    island: 'payments',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    // A collections case is one customer's whole story: the debt, the
+    // commitments, the stage, what was said, what is restricted, the risk.
+    path: 'collections',
+    title: 'Collections',
+    island: 'collections',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'customerBill',
     base: BILLING_BASE,
-    title: 'Customer Bills',
+    // "Bills": on this desk the customer context is implicit. The page is a
+    // React island (ADR-0022) because a bill's situation, its chips and its
+    // workspace are more than the generic table can say; the path and the role
+    // gate are untouched, so #/customerBill and the suites still land here.
+    title: 'Bills',
+    island: 'bills',
     readOnly: true,
     fields: [],
     columns: ['billNo', 'relatedParty', 'billingPeriod', 'amountDue', 'state', 'lastUpdate'],

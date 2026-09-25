@@ -19,6 +19,10 @@ function renderIsland(name) {
     document.querySelector('.table-wrap').after(panel);
   }
   panel.hidden = false;
+  // an island states its own goal and its own counts; the shell's generic intro
+  // and KPI chips would otherwise say the same thing twice, in older words
+  document.getElementById('tab-intro')?.setAttribute('hidden', '');
+  document.getElementById('kpis')?.setAttribute('hidden', '');
   if (typeof window.mountIsland !== 'function') {
     panel.textContent = "This screen needs the console's React bundle, which did not load.";
     return;

@@ -17,6 +17,10 @@ const TAB_ROLE = {
   productOfferingPrice: 'catalog:write',
   productStock: 'stock:read',
   customerBill: 'billing:admin',
+  // the three Billing & Revenue screens are the same desk, so the same gate
+  billingOverview: 'billing:admin',
+  payments: 'billing:admin',
+  collections: 'billing:admin',
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
@@ -91,6 +95,9 @@ const TAB_ROLE = {
   // the AI audit trail rides along with AI power, by design (auditability)
   audit: ['catalog:write', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
   policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
+  // the island proof page is the platform's own, like the rest of that department:
+  // without a gate every persona saw a Platform department they have no business in
+  islandHealth: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
   'desk-suggestions': ['catalog:write', 'ai:admin'], // AI & Automation is the product owner's and the admin's room (suite #87)
   // the decision log and the contracts are the product owner's and the admin's room, like the suggestions (gro, marketing, sees no AI desk)
@@ -99,6 +106,9 @@ const TAB_ROLE = {
   'device-entitlements': ['entitlement:read'],
   // the ontology is every staff member's to read; an action's own permissions decide who may run it
   ontology: ['catalog:read', 'ordering:write', 'ai:use', 'insight:read'],
+  // the island seam's proof page is a developer's page, not a desk: ungated it
+  // put a Platform department on every persona's rail holding one dev page
+  islandHealth: 'roles:admin',
 };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
@@ -167,7 +177,10 @@ const WORKSPACES = [
     quiet: ['copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
-  { label: 'Billing & Revenue', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
+  // Overview first, then the book, then the two workflows. The remaining peer
+  // tabs keep their places until #117 re-homes them under the six areas.
+  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'payments', 'collections',
+    'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
     'shadowDrift'] },
   { label: 'Reporting', tabs: ['reporting'] },
@@ -202,6 +215,24 @@ const WORKSPACES = [
   // that may read it must not thereby see the admin's Platform desk (suite console_workspaces)
   { label: 'What the BSS can do', tabs: ['ontology'] },
 ];
+
+/* The one way into a page from outside the rail. A React island (ADR-0022)
+ * that says "37 outstanding" must be able to take the operator to the bills
+ * behind the 37; without this it would reach into the shell's DOM and click a
+ * tab by its label. An unknown path is ignored rather than blanking the page. */
+window.consoleGoTo = function consoleGoTo(path) {
+  const target = RESOURCES.find((r) => r.path === path);
+  if (!target) return false;
+  active = target;
+  offset = 0;
+  listFilter = '';
+  listSortCol = null;
+  stopEditing();
+  sessionStorage.setItem('bss.console.tab', target.path);
+  renderTabs();
+  loadList();
+  return true;
+};
 
 function renderTabs() {
   const tabButton = (r) => {
