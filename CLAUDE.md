@@ -18,7 +18,7 @@ matter are enforced by tools (see *Checks*), not by this prose.
 ## Build, run, prove
 
 ```bash
-cd services/<x> && mvn -q clean package -DskipTests      # no mvnw; needs a JDK 21+ (java.version 21 — a JDK 17 fails with "release version 21 not supported"; on this laptop: export JAVA_HOME=$(/usr/libexec/java_home -v 21+) or brew's openjdk@26)
+cd services/<x> && mvn -q clean package -DskipTests      # no mvnw; needs a JDK 21+ (java.version 21 — a JDK 17 fails with "release version 21 not supported"). On this laptop /usr/libexec/java_home knows no JDK; use brew's: export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
 docker compose build <x> && docker compose up -d --no-deps --force-recreate <x>
 cd ops/e2e && node <suite>_test.js                        # one suite at a time on the laptop
 bash ops/run-all-suites.sh                                # ~40 min, writes ops/e2e/.proof-run/

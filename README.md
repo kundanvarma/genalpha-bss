@@ -414,7 +414,7 @@ deployment:
 
 ## Quickstart
 
-Prereqs: JDK 21 or newer (the runtime image is Java 25; any JDK from 21 up compiles the tree), Maven, Docker (with compose), Python 3. The full fleet — every service, console and demo mock — is ~90 containers: 16GB free memory is the floor, 24-32GB is comfortable. Evaluating seriously? See [EVALUATION.md](EVALUATION.md).
+Prereqs: JDK 21 or newer (the runtime image is Java 25; any JDK from 21 up compiles the tree — with Homebrew, `export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home`), Maven, Docker (with compose), Python 3. The full fleet — every service, console and demo mock — is ~90 containers: 16GB free memory is the floor, 24-32GB is comfortable. Evaluating seriously? See [EVALUATION.md](EVALUATION.md).
 
 ```bash
 mvn -q package -DskipTests            # images use the host-built jars
