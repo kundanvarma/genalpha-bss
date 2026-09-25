@@ -99,6 +99,9 @@ const TAB_ROLE = {
   'device-entitlements': ['entitlement:read'],
   // the ontology is every staff member's to read; an action's own permissions decide who may run it
   ontology: ['catalog:read', 'ordering:write', 'ai:use', 'insight:read'],
+  // the island seam's proof page is a developer's page, not a desk: ungated it
+  // put a Platform department on every persona's rail holding one dev page
+  islandHealth: 'roles:admin',
 };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered

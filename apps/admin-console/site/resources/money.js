@@ -5,7 +5,12 @@ RESOURCES.push(
   {
     path: 'customerBill',
     base: BILLING_BASE,
-    title: 'Customer Bills',
+    // "Bills": on this desk the customer context is implicit. The page is a
+    // React island (ADR-0022) because a bill's situation, its chips and its
+    // workspace are more than the generic table can say; the path and the role
+    // gate are untouched, so #/customerBill and the suites still land here.
+    title: 'Bills',
+    island: 'bills',
     readOnly: true,
     fields: [],
     columns: ['billNo', 'relatedParty', 'billingPeriod', 'amountDue', 'state', 'lastUpdate'],
