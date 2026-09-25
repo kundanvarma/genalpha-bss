@@ -76,6 +76,9 @@ evidence is not "probably fine" — it is open, and the launch waits.
   half green on every change.
 - One REPO row is still open at the time of writing: distributed tracing.
 - Publishing runs only on a push to `main`; a pull request builds and scans
-  but cannot sign (no OIDC token), so the first proof of the publish steps is
-  the first `main` run after they land — verify it with the two commands
-  above before quoting this row.
+  but cannot sign (no OIDC token). **First receipt, 25 September 2026, main
+  `fe72c826`:** 42 images published; `product-catalog@sha256:642e8d70…` passed
+  `cosign verify` (identity `…/.github/workflows/ci.yml@refs/heads/main`),
+  `cosign verify-attestation --type cyclonedx`, and `gh attestation verify`
+  (exit 0). Repeat the three commands for the release SHA before quoting the
+  row for a later release; a receipt is for one SHA, never for the pipeline.
