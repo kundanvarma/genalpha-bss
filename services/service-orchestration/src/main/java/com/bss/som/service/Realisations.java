@@ -16,8 +16,12 @@ import java.util.stream.Collectors;
 public final class Realisations {
 
     /** The seams the orchestrator can exercise today; a CFS declaring another one is planned as "no adapter". */
+    /** Not a seam an adapter serves: the mark on a service the category table fulfilled (a spec with no CFS). */
+    public static final String CATEGORY_FALLBACK = "category-fallback";
+
     public static final Set<String> SEAMS = Set.of(
-            "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu");
+            "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu",
+            CATEGORY_FALLBACK);
 
     private Realisations() {
     }

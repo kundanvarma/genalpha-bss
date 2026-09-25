@@ -10,6 +10,12 @@
 # Usage: ops/arch/ratchet.sh            compare against ops/arch/baseline.json, exit 2 on regression
 #        ops/arch/ratchet.sh --baseline  rewrite the baseline from the current tree (deliberate, reviewed)
 #        ops/arch/ratchet.sh --quick <f> check only the service/app that owns file <f> (edit hook)
+#        ops/arch/ratchet.sh --live      also read the LIVE metric categoryFallbacks from ops/arch/cfs_check.py
+#                                        (services the category table fulfilled because their spec named no
+#                                        CFS — step 3's counted debt; may only fall). Needs a fleet; without
+#                                        --live, or when the gate is unreachable, the metric is skipped, never
+#                                        red — the pre-commit hook runs without a fleet. Pin it with
+#                                        --baseline --live.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$REPO"
 BASE=ops/arch/baseline.json
@@ -271,14 +277,35 @@ print(json.dumps(out, indent=1, sort_keys=True))
 PY
 }
 
-if [ "${1:-}" = "--baseline" ]; then current > "$BASE"; echo "ratchet: baseline written to $BASE"; exit 0; fi
+# the live metric: the gate prints "metric categoryFallbacks=N"; empty when no fleet or not asked
+live_fallbacks() {
+  case " $* " in *" --live "*) ;; *) return 0 ;; esac
+  python3 ops/arch/cfs_check.py 2>/dev/null | grep -oE '^metric categoryFallbacks=[0-9]+' | grep -oE '[0-9]+$' || true
+}
+LIVE=$(live_fallbacks "$@")
+
+if [ "${1:-}" = "--baseline" ]; then
+  current > "$BASE"
+  if [ -n "$LIVE" ]; then
+    python3 - "$BASE" "$LIVE" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1])); b["categoryFallbacks"] = int(sys.argv[2])
+json.dump(b, open(sys.argv[1], "w"), indent=1, sort_keys=True); open(sys.argv[1], "a").write("\n")
+PY
+  fi
+  echo "ratchet: baseline written to $BASE${LIVE:+ (categoryFallbacks pinned at $LIVE)}"; exit 0
+fi
 [ -f "$BASE" ] || { echo "ratchet: no baseline — run ops/arch/ratchet.sh --baseline"; exit 1; }
 
 NOW=$(current)
-python3 - "$BASE" "$NOW" "${1:-}" "${2:-}" <<'PY'
+python3 - "$BASE" "$NOW" "${1:-}" "${2:-}" "$LIVE" <<'PY'
 import json, sys
 base = json.load(open(sys.argv[1])); now = json.loads(sys.argv[2]); quick = sys.argv[3] == '--quick'; f = sys.argv[4]
+live = sys.argv[5]
 bad = []
+if live != "" and "categoryFallbacks" in base:
+    n, b = int(live), int(base["categoryFallbacks"])
+    if n > b: bad.append(f"live: {n} service(s) fulfilled by the category fallback, baseline {b} — a product spec names no CFS; stamp it (seed_service_specifications.py or the Fulfilment picker) rather than let the category table decide")
 for svc, n in now["mapReturns"].items():
     if quick and f and f'services/{svc}/' not in f: continue
     b = base["mapReturns"].get(svc, 0)
@@ -309,5 +336,6 @@ tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
 tw = sum(now.get("rawMapWrites", {}).values()); twb = sum(base.get("rawMapWrites", {}).values())
 tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards", {}).values())
 th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])})")
+fb = f"; category fallbacks {live} (baseline {base.get('categoryFallbacks', '?')})" if live != "" else ""
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
 PY

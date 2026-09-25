@@ -47,7 +47,10 @@ class RealisationsTest {
 
     @Test
     void theSeamsAreExactlyWhatTheOrchestratorDrivesToday() {
+        // plus the one mark that is not a seam: the category table fulfilled the service (#89)
         assertThat(Realisations.SEAMS).containsExactlyInAnyOrder(
-                "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu");
+                "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu",
+                Realisations.CATEGORY_FALLBACK);
+        assertThat(Realisations.CATEGORY_FALLBACK).isEqualTo("category-fallback");
     }
 }

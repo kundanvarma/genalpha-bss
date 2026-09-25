@@ -36,6 +36,11 @@ The inventory face needs a staff token: demo/demo in realm BSS_REALM (bss).
 
 usage: cfs_check.py [--gateway http://localhost:8080] [--host shop.example]
        BSS_REALM=taranga cfs_check.py --host shop.taranga.no
+Step 3 counts the FALLBACK: a service whose realisations carry seam
+`category-fallback` was fulfilled by the category table because its product
+spec named no CFS. That is a debt, not a disagreement: the count is printed as
+`metric categoryFallbacks=N` and ops/arch/ratchet.sh --live lets it only fall.
+
 exit 0 clean · 2 a sellable spec without a resolvable CFS, or a catalog/orchestrator disagreement
 """
 import argparse
@@ -46,13 +51,17 @@ import urllib.parse
 import urllib.error
 import urllib.request
 
-BILLING_ONLY = {"Insurance", "Top-ups"}
+# step 3: billing-only is a CFS (family billing-only, zero seams), so Insurance
+# and Top-ups are judged like every other sellable category
+BILLING_ONLY = set()
 CONTAINERS = {"Bundles"}
 OWN_SEED = {"Wholesale access", "Wholesale mobile"}
 FAMILY_OF_CATEGORY = {
     "Mobile plans": "mobile", "Broadband": "internet", "TV & Add-ons": "tv",
     "Devices": "device", "Partner services": "partner", "Security": "security",
+    "Insurance": "billing-only", "Top-ups": "billing-only",
 }
+CATEGORY_FALLBACK = "category-fallback"  # the seam the orchestrator records when the category table fulfilled a service
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--gateway", default="http://localhost:8080")
@@ -193,7 +202,7 @@ for sp in all_specs.values():
     declared[sp["id"]] = seams
 
 disagreements, optional_unused = [], []
-orphaned = predating = judged_services = 0
+orphaned = predating = judged_services = fallbacks = 0
 services = None
 for attempt in (1, 2, 3):
     try:
@@ -213,6 +222,13 @@ for svc in services:
     rows = [x for x in (svc.get("supportingService") or []) if isinstance(x, dict) and x.get("seam")]
     if not rows:
         predating += 1
+        continue
+    if any(x["seam"] == CATEGORY_FALLBACK for x in rows):
+        # the category table fulfilled this service (its spec named no CFS): a
+        # counted debt (ratchet metric categoryFallbacks), never a disagreement.
+        # A terminated service is no longer debt — nobody is served by it.
+        if svc.get("state") != "terminated":
+            fallbacks += 1
         continue
     if cfs_id not in declared:
         orphaned += 1
@@ -246,13 +262,17 @@ if missing or disagreements:
         for name, cat, spec, why in missing:
             print(f"  - {name} [{cat}] spec '{spec}': {why}")
         print("\nfix: python3 ops/seed/seed_service_specifications.py (or author the CFS in the console), then rerun")
+    print(f"metric categoryFallbacks={fallbacks}")
     if disagreements:
         print(f"\nCFS CHECK — {len(disagreements)} disagreement(s) between what the catalog declares and what the orchestrator realised:")
         for d in disagreements:
             print(f"  - {d}")
         print("\nfix: python3 ops/seed/seed_resource_facing_services.py declares the seams the orchestrator drives; a seam the code exercises that no RFS names is the catalog lagging the code")
     sys.exit(2)
+# machine-readable for ops/arch/ratchet.sh --live (the count may only fall)
+print(f"metric categoryFallbacks={fallbacks}")
 print(f"cfs_check: clean — {len(judged)} sellable specs, every one names a CFS with a fulfilment family"
       f"{f'; {len(warnings)} family warning(s)' if warnings else ''}; {len(skipped)} uncategorised/spec-less offerings not judged; "
       f"catalog and orchestrator agree on {len(realised)} CFS across {judged_services} realised services "
-      f"({orphaned} whose CFS is gone and {predating} predating step 2 skipped)")
+      f"({orphaned} whose CFS is gone and {predating} predating step 2 skipped); "
+      f"{fallbacks} service(s) fulfilled by the category fallback")
