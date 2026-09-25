@@ -96,20 +96,19 @@ RESOURCES.push(
     path: 'billDistribution',
     base: BILLING_BASE,
     title: 'Deliveries',
+    // Setup, not daily work: one area of the Configuration island (ADR-0022),
+    // where a failed delivery is the only loud thing on the page.
+    island: 'financialConfiguration',
+    islandView: 'deliveries',
     // THE DELIVERY LEDGER: every bill's trip to the distribution partner
     // — sent after how many tries, what the buyer answered (Peppol
     // Invoice Response), and what FAILED and deserves a retry.
     noEdit: true,
     noDelete: true,
     readOnly: true,
+    noCreate: true,
     fields: [],
-    columns: ['billNo', 'format', 'channel', 'status', 'attempts', 'buyerStatus', 'lastError', 'sentAt'],
-    rowAction: {
-      label: (item) => (item.status === 'failed' ? 'Retry' : '—'),
-      apply: (item) => (item.status === 'failed'
-        ? authFetch(`${BILLING_BASE}/billDistribution/${item.id}/retry`, { method: 'POST' })
-        : Promise.resolve()),
-    },
+    columns: [],
   },
   {
     path: 'remittance/unapplied',

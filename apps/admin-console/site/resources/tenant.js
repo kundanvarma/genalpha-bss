@@ -26,11 +26,16 @@ RESOURCES.push(
     title: 'Shadow billing',
     // P3 — the parallel bill run, standing: what will bill DIFFERENTLY next
     // cycle vs the last real invoice, caught by the sweep before it lands.
+    // Setup, not daily work: it is one area of the Configuration island now,
+    // and this tab keeps its path and title so a deep link still lands on it.
+    island: 'financialConfiguration',
+    islandView: 'shadow',
     noEdit: true,
     noDelete: true,
     readOnly: true,
+    noCreate: true,
     fields: [],
-    columns: ['offeringName', 'ownerPartyId', 'billedMonthly', 'currentMonthly', 'delta', 'unit', 'detectedAt'],
+    columns: [],
   },
   {
     path: 'dunning',
@@ -46,24 +51,20 @@ RESOURCES.push(
     path: 'billFormatProfile',
     base: BILLING_BASE,
     title: 'Bill formats',
+    // Setup, not daily work: one area of the Configuration island (ADR-0022).
+    // The tab keeps its path, title and role gate; the form is React now.
+    island: 'financialConfiguration',
+    islandView: 'formats',
+    readOnly: true,
+    noCreate: true,
     // FORMAT PROFILES AS CONFIG ROWS: what a country's e-invoice profile
     // IS — the syntax, the CustomizationID/ProfileID it declares, whether
     // a payment reference is required. Adding a country here is an
     // insert, not a deploy; the tenant's distribution format picks a row
     // by code and the renderer follows the row.
     noDelete: true,
-    fields: [
-      { name: 'code', label: 'Code (the key the distribution format points at)', required: true },
-      { name: 'name', label: 'Name', required: true },
-      { name: 'syntax', label: 'Syntax (EN 16931 carries both)', kind: 'select', options: [
-        { value: 'ubl', label: 'UBL 2.1 (Peppol BIS, EHF, A-NZ…)' },
-        { value: 'cii', label: 'UN/CEFACT CII (DACH / France)' },
-      ] },
-      { name: 'customizationId', label: 'CustomizationID the document declares' },
-      { name: 'profileId', label: 'ProfileID' },
-      { name: 'paymentReference', label: 'Payment reference required (Norway NO-R / KID)', kind: 'checkbox' },
-    ],
-    columns: ['code', 'name', 'syntax', 'paymentReference', 'lastUpdate'],
+    fields: [],
+    columns: [],
   },
   {
     path: 'findings',

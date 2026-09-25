@@ -21,7 +21,11 @@ function mountIsland(name, element, context = {}) {
     root = createRoot(element);
     roots.set(element, root);
   }
-  root.render(<Island {...context} />);
+  // The key carries the VIEW as well as the island's name. Several tabs may
+  // share one island — Journal and Chart of accounts are one Accounting page —
+  // and clicking a tab is a navigation, so the screen starts again on the part
+  // that tab named instead of keeping the state of the one before it.
+  root.render(<Island key={`${name}:${context.view || ''}`} {...context} />);
   return root;
 }
 
