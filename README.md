@@ -200,7 +200,12 @@ and then **the catalog became the decomposition**: every sellable product spec n
 customer-facing service that declares its fulfilment family, the orchestrator obeys the CFS over
 the category string (which stays only as the fallback for a spec that names none), the TMF638
 inventory row points at the real CFS, and a live gate counts every sellable spec without one on
-every pull request (`cfs_decomposition_test.js`, `ops/arch/cfs_check.py`),
+every pull request (`cfs_decomposition_test.js`, `ops/arch/cfs_check.py`), and then **the chain under
+every CFS**: a TMF634 resource catalog served beside TMF633, seven resource-facing services each naming
+the resource spec (and seam, never vendor) it realises, every CFS declaring what it relies on and what
+each RFS consumes, the orchestrator recording what it realised on every service and resource (TMF638 /
+TMF639) with behaviour unchanged, the same live gate checking that catalog and orchestrator agree, and
+the offering page showing the whole chain (`cfs_realisation_test.js`),
 then a whole new product line, **wholesale / open-access fibre** (the Nordic market opening now:
 sell retail broadband on top of a third party's fibre, split by access layer — L2 VULA / L3
 activated bitstream — ordered and settled operator-to-operator over **MEF LSO Sonata**;
