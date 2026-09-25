@@ -10,6 +10,7 @@ audience_scheduler_test     bss-bridge insight
 audience_snapshot_test      bss-bridge insight
 audience_sql_test           bss-bridge insight
 b2b_test                    communication quote
+bill_distribution_test      mock-distribution
 bss_traits_test             bss-bridge insight
 campaign_lifecycle_test     campaign
 cfs_decomposition_test      product-ordering service-orchestration party-account

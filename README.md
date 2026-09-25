@@ -414,7 +414,7 @@ deployment:
 
 ## Quickstart
 
-Prereqs: JDK 17, Maven, Docker (with compose), Python 3. The full fleet — every service, console and demo mock — is ~90 containers: 16GB free memory is the floor, 24-32GB is comfortable. Evaluating seriously? See [EVALUATION.md](EVALUATION.md).
+Prereqs: JDK 21 or newer (the runtime image is Java 25; any JDK from 21 up compiles the tree), Maven, Docker (with compose), Python 3. The full fleet — every service, console and demo mock — is ~90 containers: 16GB free memory is the floor, 24-32GB is comfortable. Evaluating seriously? See [EVALUATION.md](EVALUATION.md).
 
 ```bash
 mvn -q package -DskipTests            # images use the host-built jars
@@ -525,7 +525,7 @@ difference table — are in [architecture.md §5](docs/architecture.md) and
 
 ## Stack
 
-Java 17 source, Java 25 runtime image (the PR smoke boots the real images, so the runtime JDK is what the browser proof runs against) · Spring Boot 3.5.7 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
+Java 21 source, Java 25 runtime image (the PR smoke boots the real images, so the runtime JDK is what the browser proof runs against) · Spring Boot 3.5.7 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
 (+ RLS) · Flyway · Kafka (transactional outbox) · Keycloak 26 (dev IdP) · React + Vite ·
 Playwright · Helm · Terraform · GitHub Actions.
 

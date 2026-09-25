@@ -7,16 +7,16 @@ import com.bss.billing.repository.AppliedBillingRateRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
-import com.lowagie.text.Document;
-import com.lowagie.text.Element;
-import com.lowagie.text.Font;
-import com.lowagie.text.FontFactory;
-import com.lowagie.text.PageSize;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.pdf.PdfPCell;
-import com.lowagie.text.pdf.PdfPTable;
-import com.lowagie.text.pdf.PdfWriter;
+import org.openpdf.text.Document;
+import org.openpdf.text.Element;
+import org.openpdf.text.Font;
+import org.openpdf.text.FontFactory;
+import org.openpdf.text.PageSize;
+import org.openpdf.text.Paragraph;
+import org.openpdf.text.Phrase;
+import org.openpdf.text.pdf.PdfPCell;
+import org.openpdf.text.pdf.PdfPTable;
+import org.openpdf.text.pdf.PdfWriter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -118,7 +118,7 @@ public class BillDocumentService {
                 // uncompressed embed: the structured invoice stays readable
                 // to any byte-level inspector, not only full PDF parsers
                 writer.addFileAttachment("Factur-X invoice data (EN 16931 CII)",
-                        com.lowagie.text.pdf.PdfFileSpecification.fileEmbedded(
+                        org.openpdf.text.pdf.PdfFileSpecification.fileEmbedded(
                                 writer, null, "factur-x.xml", facturXml, false));
             }
 
