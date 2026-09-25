@@ -59,6 +59,10 @@ public class ServiceSpecification {
     @Column(name = "service_spec_relationship", length = 4000)
     private String serviceSpecRelationshipJson;
 
+    /** JSON array of TMF633 resourceSpecification refs (an RFS names the TMF634 resource spec it realises), verbatim. */
+    @Column(name = "resource_specification", length = 4000)
+    private String resourceSpecificationJson;
+
     public ServiceSpecification() {
     }
 
@@ -156,5 +160,13 @@ public class ServiceSpecification {
 
     public void setServiceSpecRelationshipJson(String serviceSpecRelationshipJson) {
         this.serviceSpecRelationshipJson = serviceSpecRelationshipJson;
+    }
+
+    public String getResourceSpecificationJson() {
+        return resourceSpecificationJson;
+    }
+
+    public void setResourceSpecificationJson(String resourceSpecificationJson) {
+        this.resourceSpecificationJson = resourceSpecificationJson;
     }
 }

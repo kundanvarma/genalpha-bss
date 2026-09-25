@@ -207,6 +207,37 @@ class ServiceCatalogApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** CFS step 2: an RFS names the TMF634 resource specification it realises; the list round-trips and PATCH clears it. */
+    @Test
+    void resourceFacingService_namesItsResourceSpecification_andPatchClearsIt() throws Exception {
+        String created = mockMvc.perform(post(V4 + "/serviceSpecification").with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Number assignment", "serviceType": "RFS", "lifecycleStatus": "Active",
+                                 "resourceSpecification": [{"id": "rs-number", "href": "/tmf-api/resourceCatalogManagement/v4/resourceSpecification/rs-number",
+                                                            "name": "Mobile number", "@referredType": "ResourceSpecification"}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resourceSpecification[0].id").value("rs-number"))
+                .andExpect(jsonPath("$.resourceSpecification[0].@referredType").value("ResourceSpecification"))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(created).get("id").asText();
+
+        mockMvc.perform(get(V4 + "/serviceSpecification/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resourceSpecification[0].name").value("Mobile number"));
+
+        // an explicit empty list clears the reference; an absent field leaves it alone
+        mockMvc.perform(patch(V4 + "/serviceSpecification/" + id).with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"description\": \"touched\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resourceSpecification[0].id").value("rs-number"));
+        mockMvc.perform(patch(V4 + "/serviceSpecification/" + id).with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"resourceSpecification\": []}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resourceSpecification").isEmpty());
+    }
+
     private static RequestPostProcessor writeToken() {
         return jwt().authorities(new SimpleGrantedAuthority("catalog:write"));
     }

@@ -46,6 +46,10 @@ public class ServiceSpecificationDto {
     @JsonProperty("serviceSpecRelationship")
     private List<Map<String, Object>> serviceSpecRelationship;
 
+    /** TMF633: the resource specifications (TMF634) an RFS realises — refs {id, href, name, @referredType}. */
+    @JsonProperty("resourceSpecification")
+    private List<Map<String, Object>> resourceSpecification;
+
     /**
      * TMF633 polymorphism: CustomerFacingServiceSpecification (CFS) or
      * ResourceFacingServiceSpecification (RFS); plain ServiceSpecification when
@@ -165,6 +169,14 @@ public class ServiceSpecificationDto {
 
     public void setServiceSpecRelationship(List<Map<String, Object>> serviceSpecRelationship) {
         this.serviceSpecRelationship = serviceSpecRelationship;
+    }
+
+    public List<Map<String, Object>> getResourceSpecification() {
+        return resourceSpecification;
+    }
+
+    public void setResourceSpecification(List<Map<String, Object>> resourceSpecification) {
+        this.resourceSpecification = resourceSpecification;
     }
 
     public String getType() {

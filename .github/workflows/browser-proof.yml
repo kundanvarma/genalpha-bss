@@ -85,7 +85,7 @@ jobs:
           python3 -m pip install --quiet requests
           # seed_service_specifications runs LAST: it stamps the CFS on whatever
           # specs the other seeds left sellable (the bundle seed re-points specs)
-          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions seed_service_specifications; do
+          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions seed_service_specifications seed_resource_facing_services; do
             echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
           done
 
@@ -188,7 +188,7 @@ jobs:
                    seed_ai_slice seed_verified_identity seed_nova \
                    seed_catalog_taxonomy seed_family_max seed_vas seed_content \
                    seed_device_content seed_color_pricing seed_ocs_charging \
-                   seed_service_specifications; do
+                   seed_service_specifications seed_resource_facing_services; do
             echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
           done
       # run-all-suites.sh is the gate: it exits 1 on any failed suite and 2
