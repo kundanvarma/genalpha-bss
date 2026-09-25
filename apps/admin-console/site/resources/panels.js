@@ -1,6 +1,10 @@
 /* Resources 9/9 — the custom panes (copilots, approvals, decisions, ontology, staff, workforce, reporting, integrations …): each a stub whose flag loadList dispatches on. */
 'use strict';
 
+// The React island seam's own proof page (Platform): renders live data through
+// the shell's authenticated fetch. Replaced by real islands as desks convert.
+RESOURCES.push({ path: 'islandHealth', title: 'React island', island: 'health', readOnly: true, noCreate: true, fields: [], columns: [] });
+
 RESOURCES.push(
   {
     path: 'copilot',

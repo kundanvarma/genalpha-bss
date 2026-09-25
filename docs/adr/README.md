@@ -42,6 +42,7 @@ more deliberate than it was; 0016 says so explicitly.
 | [0019](0019-hosted-demo-one-box.md) | Hosted demo | The same Compose fleet on one box, Caddy TLS, one hostname per tenant; deploy only on request. |
 | [0020](0020-licensing-wording-no-prospect-names-no-pdfs.md) | Public repo hygiene | Source-available (BUSL-1.1) wording; no prospect names in the repo; no report PDFs in git. |
 | [0021](0021-tmf634-served-by-product-catalog.md) | TMF634 in product-catalog | The resource catalog is served by the product-catalog component on the standard path; a resource spec names a seam, never a vendor; extraction later is along the API path. |
+| [0022](0022-react-islands-in-the-back-office.md) | React islands in the back office | A desk may render React inside its own panel; one bundle built in the image, `island: '<name>'` is the whole coupling; the shell keeps sign-in, nav and the palette. |
 
 ## How to add one
 
