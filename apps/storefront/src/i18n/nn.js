@@ -40,7 +40,6 @@ export const NN = {
   'One service is paused': 'Éi teneste er sett på pause',
   'services are paused': 'tenester er sette på pause',
   'Nothing is charged and nothing connects while a service is paused. Resume the ones you want back.': 'Ingenting belastes og ingenting kobler til mens en tjeneste er på pause. Gjenoppta dem du vil ha tilbake.',
-  'Resume now': 'Ta opp att no',
   'Resume all': 'Ta opp att alle',
   'We know about problems on your lines': 'Vi vet om problemer på linjene dine',
   'Today. Your number, SIM and discounts carry over; the next bill is split at the change date, so you pay each plan only for its days.': 'I dag. Nummer, SIM og rabatter følger med; neste faktura deles på byttedatoen, så du betaler hver plan bare for dens dager.',

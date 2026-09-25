@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { fmtPrice } from '../../money.js';
 import { giftData, myReferral, quickOrder, redeemReferral } from '../../api.js';
 import { t } from '../../i18n.js';

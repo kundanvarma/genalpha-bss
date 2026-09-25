@@ -1,5 +1,5 @@
 // assist: part of the CSR console's TMF client (split from api.js; the barrel re-exports).
-import { KNOWLEDGE, authFetch, json } from './_http.js';
+import { KNOWLEDGE, authFetch } from './_http.js';
 
 // Intelligence copilot — fail-soft like every optional component: if the
 // module is not deployed, the copilot card simply does not render results.

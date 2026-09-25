@@ -1,5 +1,5 @@
 // bills: part of the storefront's TMF client (split from api.js; the barrel re-exports).
-import { BILLING, ORDERING, PARTY, PAY, authFetch, json, tokenClaims } from './_http.js';
+import { BILLING, ORDERING, PARTY, authFetch, json, tokenClaims } from './_http.js';
 
 /** The FAQ library — the customer shelf of the knowledge base. The audience
  *  filter is what keeps the CSR/sales/product-owner cheat-sheets off the

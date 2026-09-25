@@ -1,5 +1,5 @@
 // growth: part of the storefront's TMF client (split from api.js; the barrel re-exports).
-import { CONSENT_KEY, INSIGHT, VISITOR_KEY, authFetch, json, publicFetch } from './_http.js';
+import { CONSENT_KEY, INSIGHT, VISITOR_KEY, authFetch, publicFetch } from './_http.js';
 
 /**
  * Dynamic pricing preview: ask the policy component what the enabled pricing

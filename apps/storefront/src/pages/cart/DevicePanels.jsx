@@ -6,7 +6,6 @@
  */
 import React, { useState, useEffect } from 'react';
 import { financingQuote, quoteTradeIn } from '../../api.js';
-import { t } from '../../i18n.js';
 
 /** The device plan a fresh trade-in or financing pick starts from. */
 export function freshDevicePlan(deviceLine, devicePrice) {

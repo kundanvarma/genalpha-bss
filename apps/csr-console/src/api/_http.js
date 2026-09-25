@@ -3,7 +3,6 @@
  * helpers and the error shape. Every domain module imports from here; the
  * barrel (../api.js) re-exports the domains so callers never changed.
  */
-import { authFetch } from '../auth.js';
 export { authFetch, publicFetch, tokenClaims } from '../auth.js';
 export const CATALOG = '/tmf-api/productCatalogManagement/v4';
 export const ORDERING = '/tmf-api/productOrderingManagement/v4';
