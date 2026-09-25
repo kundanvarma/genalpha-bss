@@ -67,6 +67,7 @@ public class BillingRunService {
 
     private final int runConcurrency;
     private final TenantClock clock;
+    private final PaymentTerms paymentTerms;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
@@ -84,8 +85,9 @@ public class BillingRunService {
                     "${bss.billing.run-account-delay-ms:0}") long accountDelayMs,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.billing.run-concurrency:8}") int runConcurrency,
-            TenantClock clock) {
+            TenantClock clock, PaymentTerms paymentTerms) {
         this.clock = clock;
+        this.paymentTerms = paymentTerms;
         this.bills = bills;
         this.loyaltyTierClient = loyaltyTierClient;
         this.rates = rates;
@@ -720,7 +722,13 @@ public class BillingRunService {
             bill.setPeriodStart(periodStart);
             bill.setPeriodEnd(periodEnd);
             bill.setOwnerPartyId(owner.getKey());
-            bill.setBillDate(OffsetDateTime.now());
+            OffsetDateTime billedAt = OffsetDateTime.now();
+            bill.setBillDate(billedAt);
+            // when it falls due is a fact on the bill, not something each
+            // reader re-derives: the tenant's payment term, stamped once
+            PaymentTerms.Term term = paymentTerms.at(tenantId, billedAt);
+            bill.setDueDate(term.dueDate());
+            bill.setPaymentTermDays(term.days());
             bill.setLastUpdate(OffsetDateTime.now());
             bills.save(bill);
             billRates.forEach(r -> r.setBillId(id));

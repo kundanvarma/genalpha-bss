@@ -103,6 +103,24 @@ public class CustomerBillController {
                 .body(body);
     }
 
+    /**
+     * The finance desk's list, by what is TRUE about a bill rather than by
+     * its stored state: {@code ?situation=overdue} and the rest of the
+     * vocabulary. A house resource beside the standard one — the TMF list
+     * stays exactly as conformance expects it.
+     */
+    @GetMapping("/billSituation")
+    public ResponseEntity<List<CustomerBillDto>> bySituation(
+            @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
+            @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(name = "situation", required = false) String situation) {
+        PagedResult<CustomerBillDto> result = service.findBySituation(offset, limit, situation);
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(result.totalCount()))
+                .header("X-Result-Count", String.valueOf(result.items().size()))
+                .body(result.items());
+    }
+
     // ---- TMF678 CustomerBillOnDemand ----
 
     /** The caller's document, kept verbatim: an open tree in, the same tree with server fields out. */

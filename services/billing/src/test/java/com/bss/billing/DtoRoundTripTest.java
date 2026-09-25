@@ -99,6 +99,33 @@ class DtoRoundTripTest {
                 + "\"@type\":\"CustomerBill\"}", json.writeValueAsString(dto));
     }
 
+    /** The due date and the house situation block ride BESIDE the standard
+     * fields — the TMF678 shape above is unchanged, these are additions. */
+    @Test
+    void customerBill_carriesTheDueDateAndTheSituationBeside() throws Exception {
+        CustomerBillDto dto = new CustomerBillDto();
+        dto.setId("b2");
+        dto.setState("new");
+        dto.setAmountDue(new MoneyDto("NOK", new BigDecimal("340.43")));
+        dto.setBillDate(AT);
+        dto.setDueDate(AT.plusDays(14));
+        dto.setBillSituation(new com.bss.billing.dto.BillSituation("arrangement",
+                "Payment arrangement in place until 2026-10-02",
+                LocalDate.parse("2026-08-17"), LocalDate.parse("2026-10-02"), LocalDate.parse("2026-10-02"),
+                new Money("NOK", new BigDecimal("340.43"))));
+        assertEquals("{\"id\":\"b2\",\"state\":\"new\","
+                + "\"billSituation\":{\"value\":\"arrangement\","
+                + "\"reason\":\"Payment arrangement in place until 2026-10-02\","
+                + "\"originalDueDate\":\"2026-08-17\",\"currentDueDate\":\"2026-10-02\","
+                + "\"arrangementUntil\":\"2026-10-02\",\"outstanding\":{\"unit\":\"NOK\",\"value\":340.43},"
+                + "\"@type\":\"BillSituation\"},"
+                + "\"billDocument\":[],"
+                + "\"amountDue\":{\"unit\":\"NOK\",\"value\":340.43},"
+                + "\"billDate\":\"2026-08-03T09:08:12.169178Z\","
+                + "\"dueDate\":\"2026-08-17T09:08:12.169178Z\","
+                + "\"@type\":\"CustomerBill\"}", json.writeValueAsString(dto));
+    }
+
     @Test
     void customerBill_patchParsesThePaymentReference() throws Exception {
         CustomerBillDto patch = json.readValue(

@@ -6,6 +6,7 @@ import com.bss.billing.api.PagedResult;
 import com.bss.billing.client.DownstreamClients;
 import com.bss.billing.dto.AppliedBillingRateView;
 import com.bss.billing.dto.AttachmentRef;
+import com.bss.billing.dto.BillSituation;
 import com.bss.billing.dto.CustomerBillDto;
 import com.bss.billing.dto.DisputeChip;
 import com.bss.billing.dto.EntityRef;
@@ -62,6 +63,10 @@ public class CustomerBillService {
     private final com.bss.billing.repository.BillDisputeRepository disputeChips;
     // lazy: collections listens to settlements, settlements never call back
     private final org.springframework.beans.factory.ObjectProvider<CollectionService> collections;
+    // the facts a bill's situation is decided from: the account's standing
+    // promise to pay, and the tenant's today
+    private final com.bss.billing.repository.CollectionCaseRepository collectionCases;
+    private final TenantClock clock;
 
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
             com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository,
@@ -69,7 +74,10 @@ public class CustomerBillService {
             TenantScope tenantScope, ObjectMapper objectMapper,
             com.bss.billing.repository.InstallmentPlanRepository plans,
             com.bss.billing.repository.BillDisputeRepository disputeChips,
-            org.springframework.beans.factory.ObjectProvider<CollectionService> collections) {
+            org.springframework.beans.factory.ObjectProvider<CollectionService> collections,
+            com.bss.billing.repository.CollectionCaseRepository collectionCases, TenantClock clock) {
+        this.collectionCases = collectionCases;
+        this.clock = clock;
         this.repository = repository;
         this.rateRepository = rateRepository;
         this.onDemandRepository = onDemandRepository;
@@ -155,6 +163,29 @@ public class CustomerBillService {
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<CustomerBill> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(this::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * The finance desk's list: bills by what is TRUE about them, not by the
+     * stored state. It is a house resource rather than a filter on the TMF
+     * list because the situation is derived — filtering it inside TMF paging
+     * would hand back pages of unpredictable size and a total count that lied.
+     * Here the tenant's bills are judged first and paged after, so the count
+     * is the count.
+     */
+    @Transactional(readOnly = true)
+    public PagedResult<CustomerBillDto> findBySituation(int offset, int limit, String situation) {
+        String tenantId = tenantScope.currentTenantId();
+        CustomerBill probe = new CustomerBill();
+        probe.setTenantId(tenantId);
+        partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
+        List<CustomerBillDto> judged = repository.findAll(Example.of(probe)).stream()
+                .map(this::toDto)
+                .filter(b -> situation == null || situation.isBlank()
+                        || b.getBillSituation() != null && situation.equals(b.getBillSituation().value()))
+                .toList();
+        List<CustomerBillDto> page = judged.stream().skip(Math.max(0, offset)).limit(Math.max(1, limit)).toList();
+        return new PagedResult<>(page, judged.size());
     }
 
     private CustomerBill probeFor(Map<String, String> filters) {
@@ -383,6 +414,7 @@ public class CustomerBillService {
         disputeChips.findFirstByTenantIdAndBillIdOrderByCreatedAtDesc(
                 entity.getTenantId(), entity.getId()).ifPresent(d ->
                 dto.setDispute(new DisputeChip(d.getId(), d.getStatus(), d.getReason())));
+        dto.setBillSituation(situationOf(entity));
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setBillNo(entity.getBillNo());
@@ -398,9 +430,39 @@ public class CustomerBillService {
         dto.setBillDocument(List.of(AttachmentRef.pdfOf(entity.getId(), entity.getBillNo(), entity.getHref())));
         dto.setDistributionChannel(entity.getDistributionChannel());
         dto.setBillDate(entity.getBillDate());
+        dto.setDueDate(entity.getDueDate());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setType("CustomerBill");
         return dto;
+    }
+
+    /**
+     * What is true about this bill right now. Gathered here — the facts live
+     * in four places — and decided in {@link BillSituations}, which is pure so
+     * the precedence can be tested exhaustively without a fleet. Every channel
+     * reads this block; none of them works lateness out for itself.
+     */
+    BillSituation situationOf(CustomerBill entity) {
+        java.math.BigDecimal allocated = java.math.BigDecimal.ZERO;
+        com.bss.billing.entity.InstallmentPlan plan = plans
+                .findByTenantIdAndBillId(entity.getTenantId(), entity.getId()).orElse(null);
+        if (plan != null && entity.getAmountDueValue() != null) {
+            allocated = entity.getAmountDueValue().subtract(plan.remainingOf(entity.getAmountDueValue()));
+        }
+        // the promise to pay stands on the ACCOUNT's collection case: a customer
+        // under an arrangement is under it for every bill the case covers
+        java.time.LocalDate promise = collectionCases
+                .findByTenantIdAndAccountId(entity.getTenantId(), entity.getOwnerPartyId())
+                .map(com.bss.billing.entity.CollectionCase::getPromiseDueAt)
+                .map(OffsetDateTime::toLocalDate)
+                .orElse(null);
+        return BillSituations.of(new BillSituations.Facts(
+                entity.getState(), entity.getAmountDueValue(), allocated, entity.getAmountDueUnit(),
+                entity.getDueDate() == null ? null : entity.getDueDate().toLocalDate(),
+                clock.today(),
+                disputeChips.existsByTenantIdAndBillIdAndStatus(entity.getTenantId(), entity.getId(),
+                        com.bss.billing.entity.BillDispute.OPEN),
+                promise));
     }
 
     private AppliedBillingRateView rateView(AppliedBillingRate rate) {
