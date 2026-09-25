@@ -20,6 +20,7 @@ cfs_realisation_test        product-ordering service-orchestration party-account
 console_test                porting insight campaign product-stock
 copilot_experience_test     intelligence mock-llm
 copilot_test                intelligence mock-llm
+csr_test                    assurance trouble-ticket recommendation intelligence knowledge
 decision_log_test           campaign insight
 device_commerce_test        revenue device-commerce
 device_entitlement_test     device-entitlement mock-ts43-device mock-smdp mock-hss
