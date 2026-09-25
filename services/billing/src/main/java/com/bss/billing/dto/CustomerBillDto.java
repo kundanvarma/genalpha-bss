@@ -15,8 +15,9 @@ import java.util.List;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)
-@JsonPropertyOrder({"id", "href", "billNo", "state", "billingAccount", "billDocument", "amountDue", "installmentPlan",
-        "dispute", "billingPeriod", "relatedParty", "payment", "distributionChannel", "billDate", "lastUpdate", "@type"})
+@JsonPropertyOrder({"id", "href", "billNo", "state", "billSituation", "billingAccount", "billDocument", "amountDue",
+        "installmentPlan", "dispute", "billingPeriod", "relatedParty", "payment", "distributionChannel", "billDate",
+        "dueDate", "lastUpdate", "@type"})
 public class CustomerBillDto {
 
     @JsonProperty("id")
@@ -60,6 +61,18 @@ public class CustomerBillDto {
 
     @JsonProperty("billDate")
     private OffsetDateTime billDate;
+
+    /** When this bill is due. A fact stamped at bill run; nobody recomputes it. */
+    @JsonProperty("dueDate")
+    private OffsetDateTime dueDate;
+
+    /**
+     * What is true about this bill right now — a HOUSE block beside the
+     * standard fields, never instead of them. Every channel reads this one
+     * answer rather than deciding lateness for itself.
+     */
+    @JsonProperty("billSituation")
+    private BillSituation billSituation;
 
     @JsonProperty("lastUpdate")
     private OffsetDateTime lastUpdate;
@@ -153,6 +166,22 @@ public class CustomerBillDto {
 
     public void setBillDate(OffsetDateTime billDate) {
         this.billDate = billDate;
+    }
+
+    public OffsetDateTime getDueDate() {
+        return dueDate;
+    }
+
+    public void setDueDate(OffsetDateTime dueDate) {
+        this.dueDate = dueDate;
+    }
+
+    public BillSituation getBillSituation() {
+        return billSituation;
+    }
+
+    public void setBillSituation(BillSituation billSituation) {
+        this.billSituation = billSituation;
     }
 
     public OffsetDateTime getLastUpdate() {
