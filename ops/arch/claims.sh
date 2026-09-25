@@ -43,7 +43,10 @@ SUITES=$(find ops/e2e -maxdepth 1 -name '*_test.js' | wc -l | tr -d ' ')
 CLAIMED=$(grep -oE '\b[0-9]+ (end-to-end browser|Playwright) suites' README.md | grep -oE '^[0-9]+' | sort -u)
 for n in $CLAIMED; do
   [ "$n" = "$SUITES" ] || fail "README says $n suites; ops/e2e holds $SUITES" \
-    "fix: sed -i '' 's/\\b$n \\(end-to-end browser\\|Playwright\\) suites/$SUITES \\1 suites/g' README.md"
+    "fix: python3 - <<'PY'
+import re; p='README.md'; s=open(p).read()
+open(p,'w').write(re.sub(r'\\b$n (end-to-end browser|Playwright) suites', r'$SUITES \\1 suites', s))
+PY"
 done
 RUN_ALL=$(grep -oE 'all \*\*[0-9]+ suites\*\*' README.md | grep -oE '[0-9]+' || true)
 for n in $RUN_ALL; do
