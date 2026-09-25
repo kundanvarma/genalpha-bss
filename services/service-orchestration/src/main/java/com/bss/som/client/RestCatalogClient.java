@@ -22,9 +22,32 @@ public class RestCatalogClient implements CatalogClient {
     private final Map<String, String> chargingCache = new ConcurrentHashMap<>();
     private final Map<String, Optional<String>> nameCache = new ConcurrentHashMap<>();
     /** A spec's CFS is design-time data; cache per offering like the category. */
-    private final Map<String, Optional<Cfs>> cfsCache = new ConcurrentHashMap<>();
+    /**
+     * Step 3 makes the catalog the thing the orchestrator OBEYS, so a product
+     * manager's edit must reach an order within a short while: the chain caches
+     * (CFS, RFS list, spec characteristics) hold an entry for {@link #CATALOG_TTL_MS}
+     * and then re-read. Design-time data changes rarely; when it does, the next
+     * order after the window sees it — and the suite proves it.
+     */
+    public static final long CATALOG_TTL_MS = 10_000L;
+
+    /** A cached read and when it was taken. */
+    private record Stamped<T>(T value, long at) {
+        boolean fresh() {
+            return System.currentTimeMillis() - at < CATALOG_TTL_MS;
+        }
+    }
+
+    private static <T> T freshOrNull(Map<String, Stamped<T>> cache, String key) {
+        Stamped<T> s = cache.get(key);
+        return s != null && s.fresh() ? s.value() : null;
+    }
+
+    private final Map<String, Stamped<Optional<Cfs>>> cfsCache = new ConcurrentHashMap<>();
     /** The RFS list under a CFS is design-time data too; cache per CFS. */
-    private final Map<String, List<Rfs>> rfsCache = new ConcurrentHashMap<>();
+    private final Map<String, Stamped<List<Rfs>>> rfsCache = new ConcurrentHashMap<>();
+    /** A product spec's characteristics are design-time data; cache per offering like the rest. */
+    private final Map<String, Stamped<Map<String, String>>> specCharsCache = new ConcurrentHashMap<>();
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {
@@ -124,7 +147,19 @@ public class RestCatalogClient implements CatalogClient {
         if (offeringId == null) {
             return Optional.empty();
         }
-        return cfsCache.computeIfAbsent(offeringId, id -> {
+        Optional<Cfs> cached = freshOrNull(cfsCache, offeringId);
+        if (cached != null) {
+            return cached;
+        }
+        Optional<Cfs> read = readCfs(offeringId);
+        if (read != null) {
+            cfsCache.put(offeringId, new Stamped<>(read, System.currentTimeMillis())); // only a successful read is worth keeping
+        }
+        return read == null ? Optional.empty() : read;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<Cfs> readCfs(String id) {
             try {
                 Map<String, Object> offering = restClient.get()
                         .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
@@ -168,18 +203,35 @@ public class RestCatalogClient implements CatalogClient {
                 return Optional.of(new Cfs(cfsId, name, family));
             } catch (RuntimeException e) {
                 log.warn("catalog: CFS unreadable for offering {}: {}", id, e.getMessage());
-                return Optional.empty();
+                return null;
             }
-        });
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public List<Rfs> rfsOf(String cfsId) {
+        return rfsOfIfReadable(cfsId).orElse(List.of());
+    }
+
+    @Override
+    public Optional<List<Rfs>> rfsOfIfReadable(String cfsId) {
         if (cfsId == null) {
-            return List.of();
+            return Optional.of(List.of());
         }
-        return rfsCache.computeIfAbsent(cfsId, id -> {
+        List<Rfs> cached = freshOrNull(rfsCache, cfsId);
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+        List<Rfs> read = readRfs(cfsId);
+        if (read == null) {
+            return Optional.empty(); // unreadable: NOT cached — a starved catalog must not become "declares none" forever
+        }
+        rfsCache.put(cfsId, new Stamped<>(read, System.currentTimeMillis()));
+        return Optional.of(read);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Rfs> readRfs(String id) {
             try {
                 Map<String, Object> cfs = restClient.get()
                         .uri("/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}", id)
@@ -197,13 +249,28 @@ public class RestCatalogClient implements CatalogClient {
                     if (rfsId == null) {
                         continue;
                     }
-                    // what the CFS->RFS edge says the RFS consumes: a characteristic
-                    // "consumes" on the relationship, a list or comma-separated
+                    // what the CFS->RFS edge says the RFS consumes and whether it is
+                    // required: characteristics on the relationship — the TMF633 shape
+                    // (serviceSpecRelationshipCharacteristic, values in
+                    // serviceSpecCharacteristicValue[].value, comma-separated or a list)
+                    // or the plain {name, value} shape — both are read
                     List<String> consumes = new java.util.ArrayList<>();
-                    if (rel.get("characteristic") instanceof List<?> chars) {
+                    boolean required = false;
+                    for (String key : List.of("serviceSpecRelationshipCharacteristic", "characteristic")) {
+                        if (!(rel.get(key) instanceof List<?> chars)) {
+                            continue;
+                        }
                         for (Object c : chars) {
-                            if (c instanceof Map<?, ?> ch && "consumes".equals(String.valueOf(ch.get("name")))) {
-                                Object v = ch.get("value");
+                            if (!(c instanceof Map<?, ?> ch)) {
+                                continue;
+                            }
+                            String chName = String.valueOf(ch.get("name"));
+                            Object v = ch.get("value");
+                            if (v == null && ch.get("serviceSpecCharacteristicValue") instanceof List<?> vals
+                                    && !vals.isEmpty() && vals.get(0) instanceof Map<?, ?> v0) {
+                                v = v0.get("value");
+                            }
+                            if ("consumes".equals(chName)) {
                                 if (v instanceof List<?> vs) {
                                     vs.forEach(x -> consumes.add(String.valueOf(x).trim()));
                                 } else if (v != null) {
@@ -213,6 +280,8 @@ public class RestCatalogClient implements CatalogClient {
                                         }
                                     }
                                 }
+                            } else if ("required".equals(chName) && v != null) {
+                                required = "true".equalsIgnoreCase(String.valueOf(v).trim());
                             }
                         }
                     }
@@ -255,14 +324,13 @@ public class RestCatalogClient implements CatalogClient {
                     }
                     String name = rfs.get("name") == null ? null : String.valueOf(rfs.get("name"));
                     out.add(new Rfs(rfsId, name, seam == null ? null : seam.toLowerCase(java.util.Locale.ROOT),
-                            List.copyOf(consumes), resourceSpecId, resourceSpecName));
+                            List.copyOf(consumes), resourceSpecId, resourceSpecName, required));
                 }
                 return List.copyOf(out);
             } catch (RuntimeException e) {
                 log.warn("catalog: RFS list unreadable for CFS {}: {}", id, e.getMessage());
-                return List.of();
+                return null;
             }
-        });
     }
 
     /** The first value of a TMF spec characteristic by name (serviceSpecCharacteristicValue / resourceSpecCharacteristicValue / value). */
@@ -284,6 +352,53 @@ public class RestCatalogClient implements CatalogClient {
             }
         }
         return null;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, String> specCharacteristicsOf(String offeringId) {
+        if (offeringId == null) {
+            return Map.of();
+        }
+        Map<String, String> cached = freshOrNull(specCharsCache, offeringId);
+        if (cached != null) {
+            return cached;
+        }
+        Map<String, String> read = readSpecCharacteristics(offeringId);
+        if (read != null) {
+            specCharsCache.put(offeringId, new Stamped<>(read, System.currentTimeMillis()));
+        }
+        return read == null ? Map.of() : read;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, String> readSpecCharacteristics(String id) {
+            try {
+                Map<String, Object> offering = restClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .retrieve().body(Map.class);
+                String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+                if (specId == null) {
+                    return Map.of();
+                }
+                Map<String, Object> spec = restClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
+                        .retrieve().body(Map.class);
+                Map<String, String> out = new java.util.LinkedHashMap<>();
+                if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
+                    for (Object c : chars) {
+                        if (c instanceof Map<?, ?> ch && ch.get("name") != null
+                                && ch.get("productSpecCharacteristicValue") instanceof List<?> vals && !vals.isEmpty()
+                                && vals.get(0) instanceof Map<?, ?> v0 && v0.get("value") != null) {
+                            out.putIfAbsent(String.valueOf(ch.get("name")), String.valueOf(v0.get("value")));
+                        }
+                    }
+                }
+                return Map.copyOf(out);
+            } catch (RuntimeException e) {
+                log.warn("catalog: product spec characteristics unreadable for offering {}: {}", id, e.getMessage());
+                return null;
+            }
     }
 
     @Override

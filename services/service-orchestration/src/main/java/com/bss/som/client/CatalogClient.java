@@ -73,16 +73,37 @@ public interface CatalogClient {
     java.util.List<Rfs> rfsOf(String cfsId);
 
     /**
+     * The same list, distinguishing "the CFS declares no RFS" (a present, empty
+     * list) from "the catalog could not be read" (empty). The executor falls
+     * back to the category path on the latter — the historical fail-open —
+     * instead of standing up a service with nothing provisioned.
+     */
+    default Optional<java.util.List<Rfs>> rfsOfIfReadable(String cfsId) {
+        return Optional.of(rfsOf(cfsId));
+    }
+
+    /**
      * @param id               the RFS's TMF633 id
      * @param name             its display name ("Number", "Online-charging subscriber", ...)
-     * @param seam             the seam it realises (number | sim | ocs | slice | wholesale-access | partner-entitlement | cpe); null when undeclared
+     * @param seam             the seam it realises (number | sim | ocs | slice | wholesale-access | partner-entitlement | cpe | edge-gpu); null when undeclared
      * @param consumes         the product-spec characteristics the RFS consumes, as declared on the CFS->RFS edge
      * @param resourceSpecId   the TMF634 resource specification it names; null when none
      * @param resourceSpecName its name; null when none
+     * @param required         the edge's {@code required} flag: true = runs for every order of the CFS; false (the
+     *                         default when the edge says nothing, matching the gate) = runs only when the product
+     *                         carries a value the RFS consumes
      */
     record Rfs(String id, String name, String seam, java.util.List<String> consumes,
-            String resourceSpecId, String resourceSpecName) {
+            String resourceSpecId, String resourceSpecName, boolean required) {
     }
+
+    /**
+     * The product specification's characteristics behind an offering, first
+     * value per name — what the executor reads and hands to a seam adapter as
+     * the values its RFS consumes. Empty when the offering, its spec or the
+     * catalog is unreadable (the seam then sees no value, never an error).
+     */
+    java.util.Map<String, String> specCharacteristicsOf(String offeringId);
 
     /**
      * @param profile          the core's slice profile name

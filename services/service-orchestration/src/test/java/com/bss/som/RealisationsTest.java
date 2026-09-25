@@ -17,10 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RealisationsTest {
 
-    private static final Rfs NUMBER = new Rfs("rfs-number", "Number", "number", List.of(), "rs-number", "Number pool");
+    private static final Rfs NUMBER = new Rfs("rfs-number", "Number", "number", List.of(), "rs-number", "Number pool", true);
     private static final Rfs OCS = new Rfs("rfs-ocs", "Online-charging subscriber", "ocs",
-            List.of("chargingSpecId", "zeroRatedApps"), null, null);
-    private static final Rfs NAMELESS = new Rfs("rfs-x", "Something", null, List.of(), null, null);
+            List.of("chargingSpecId", "zeroRatedApps"), null, null, false);
+    private static final Rfs NAMELESS = new Rfs("rfs-x", "Something", null, List.of(), null, null, false);
 
     @Test
     void aDeclaredSeamMatchesItsRfsCaseInsensitively() {
@@ -48,6 +48,6 @@ class RealisationsTest {
     @Test
     void theSeamsAreExactlyWhatTheOrchestratorDrivesToday() {
         assertThat(Realisations.SEAMS).containsExactlyInAnyOrder(
-                "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe");
+                "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu");
     }
 }

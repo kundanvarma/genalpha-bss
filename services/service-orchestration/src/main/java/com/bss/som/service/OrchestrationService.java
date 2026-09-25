@@ -74,6 +74,10 @@ public class OrchestrationService {
     private final com.bss.som.client.WholesaleRateCardClient wholesaleRateCard;
     /** Step 2 of catalog-to-provisioning: what this orchestrator realised, per service. */
     private final com.bss.som.repository.ServiceRealisationRepository realisations;
+    /** The line-level steps the seam adapters and the category fallback share. */
+    private final LineProvisioning lines;
+    /** The one place fulfilment is decided from the catalog (CONTEXT.md: executor). */
+    private final FulfilmentExecutor executor;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -98,8 +102,11 @@ public class OrchestrationService {
             com.bss.som.client.WholesaleQualificationClient wholesaleQualification,
             com.bss.som.client.WholesaleAccessClient wholesaleAccess,
             com.bss.som.client.WholesaleRateCardClient wholesaleRateCard,
-            com.bss.som.repository.ServiceRealisationRepository realisations) {
+            com.bss.som.repository.ServiceRealisationRepository realisations,
+            LineProvisioning lines, FulfilmentExecutor executor) {
         this.realisations = realisations;
+        this.lines = lines;
+        this.executor = executor;
         this.wholesaleOrders = wholesaleOrders;
         this.wholesaleQualification = wholesaleQualification;
         this.wholesaleAccess = wholesaleAccess;
@@ -253,11 +260,6 @@ public class OrchestrationService {
             // does the category string decide, as it did before there were CFS.
             Optional<CatalogClient.Cfs> cfs = catalog.cfsOf(offeringId);
             String componentType = fulfilmentFamily(cfs, category);
-            boolean partnerService = "partner".equals(componentType);
-            boolean securityFeature = "security".equals(componentType);
-            boolean internet = "internet".equals(componentType);
-            boolean tv = "tv".equals(componentType);
-            boolean device = "device".equals(componentType);
             // Fulfilment dependency (TMF622 "reliesOn"): a component that rides
             // another — TV on the broadband connection — must NOT activate while
             // its base is still being set up. Hold it inProgress ONLY while that
@@ -279,176 +281,25 @@ public class OrchestrationService {
             if (reliesOnPending) {
                 deferred = true;
             }
-            ServiceOrder so = new ServiceOrder();
-            String id = UUID.randomUUID().toString();
-            so.setId(id);
-            so.setTenantId(tenant);
-            so.setHref(ApiConstants.ORDER_BASE + "/serviceOrder/" + id);
-            so.setState(ServiceOrder.IN_PROGRESS);
-            so.setProductOrderId(productOrderId);
-            so.setOwnerPartyId(owner);
-            so.setItemName(name);
-            so.setOfferingId(offeringId);
-            so.setCreatedAt(OffsetDateTime.now());
-            so.setLastUpdate(OffsetDateTime.now());
-            serviceOrders.save(so);
-
-            // TMF640 stands in: instant mock activation. A real adapter would
-            // call the network and complete asynchronously.
-            ServiceInstance instance = new ServiceInstance();
-            String serviceId = UUID.randomUUID().toString();
-            instance.setId(serviceId);
-            instance.setTenantId(tenant);
-            instance.setHref(ApiConstants.INVENTORY_BASE + "/service/" + serviceId);
-            instance.setName(name);
-            instance.setState(ServiceInstance.ACTIVE);
-            instance.setServiceOrderId(id);
-            instance.setOwnerPartyId(owner);
-            instance.setCreatedAt(OffsetDateTime.now());
-            instance.setLastUpdate(OffsetDateTime.now());
-            // the inventory row names the CFS it realises, so TMF638's
-            // serviceSpecification is the catalog's spec, not a derived stand-in
-            cfs.ifPresent(c -> {
-                instance.setCfsId(c.id());
-                instance.setCfsName(c.name());
-                instance.setCfsFamily(componentType);
-            });
-
-            // Slice services ride a delivery path (assurance re-homes them on
-            // failure); AI services draw a GPU from the edge pool; everything
-            // else draws an MSISDN as before.
-            boolean isSlice = name != null && name.contains("Slice");
-            boolean isEdgeAi = name != null && name.contains("Edge AI");
-            if (isSlice) {
-                instance.setDeliveryPath("fibre-route-stadium-north");
-            }
-            services.save(instance);
-
-            // OPEN ACCESS: a broadband component may be delivered over a THIRD-PARTY
-            // owner's fibre. If owners serve this address, place the access-seeker
-            // order UPSTREAM and realize the retail line over it — instead of our own
-            // install. The owner OSS activates it (mock: instantly), so the retail
-            // line comes up here rather than waiting on a workOrder of ours.
-            if (internet && provisionWholesaleAccess(tenant, item, serviceId, owner, productOrderId)) {
-                deferred = false;
-            }
-
-            // Only a mobile line (or an unknown/other offering, historically) draws
-            // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
-            boolean nonLine = partnerService || securityFeature || isSlice
-                    || internet || tv || device;
-            String poolType = nonLine ? null : isEdgeAi ? "edge-gpu" : ResourcePool.MSISDN;
-            if (partnerService) {
-                // the partner's platform owns the account; we hold the code
-                ResourceAssignment entitlement = new ResourceAssignment();
-                entitlement.setId(UUID.randomUUID().toString());
-                entitlement.setTenantId(tenant);
-                entitlement.setPoolId("partner");
-                entitlement.setValue(partners.activate(name, owner));
-                entitlement.setServiceId(serviceId);
-                entitlement.setOwnerPartyId(owner);
-                entitlement.setAssignedAt(OffsetDateTime.now());
-                assignments.save(entitlement);
-                realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(), entitlement.getValue());
-            }
-            // Keep-your-number: if the customer ported a number in, activate on
-            // it and skip the pool draw entirely.
-            String portedNumber = poolType != null && ResourcePool.MSISDN.equals(poolType)
-                    ? porting.portedNumberFor(owner) : null;
-            boolean numbered = false;
-            if (portedNumber != null) {
-                ResourceAssignment assignment = new ResourceAssignment();
-                assignment.setId(UUID.randomUUID().toString());
-                assignment.setTenantId(tenant);
-                assignment.setPoolId("ported");
-                assignment.setValue(portedNumber);
-                assignment.setServiceId(serviceId);
-                assignment.setOwnerPartyId(owner);
-                assignment.setAssignedAt(OffsetDateTime.now());
-                assignments.save(assignment);
-                realise(tenant, serviceId, offeringId, "number", "ported-in", portedNumber);
-                numbered = true;
-                poolType = null; // do not also draw from the pool
-            }
-            if (poolType != null && ResourcePool.MSISDN.equals(poolType)) {
-                numbered = true;
-            }
-            if (poolType != null)
-            pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
-                // Choose-your-number: the wish wins while it is still FREE; a
-                // lost race (two shoppers, one number) falls back to next-free
-                // — the first pick stands, honestly.
-                String value = null;
-                if (wish != null && ResourcePool.MSISDN.equals(pool.getResourceType())
-                        && assignments.findFirstByTenantIdAndValue(tenant, wish).isEmpty()) {
-                    value = wish;
+            // WHICH PATH: a spec that names a CFS is fulfilled FROM THE CATALOG —
+            // the executor runs exactly the seams the CFS declares (step 3). A
+            // spec that names none keeps the category table, unchanged, as the
+            // counted fallback (ticket #89 counts it; #90/#91 retire what is in it).
+            ItemOutcome outcome = cfs.isPresent()
+                    ? fulfilByCatalog(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
+                            cfs.get(), componentType, deferred)
+                    : fulfilByCategory(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
+                            cfs, componentType, deferred);
+            if (outcome.billingOnly()) {
+                if (itemId != null) {
+                    ordering.updateItemState(productOrderId, itemId, "completed");
                 }
-                if (value == null) {
-                    // next FREE — skips any value a wish already consumed from
-                    // the window ahead, so the counter can never mint a dupe
-                    long next = pool.getNextValue();
-                    String candidate = pool.getPrefix() + String.format("%06d", next);
-                    while (assignments.findFirstByTenantIdAndValue(tenant, candidate).isPresent()) {
-                        next++;
-                        candidate = pool.getPrefix() + String.format("%06d", next);
-                    }
-                    value = candidate;
-                    pool.setNextValue(next + 1);
-                    pool.setLastUpdate(OffsetDateTime.now());
-                    pools.save(pool);
-                }
-                ResourceAssignment assignment = new ResourceAssignment();
-                assignment.setId(UUID.randomUUID().toString());
-                assignment.setTenantId(tenant);
-                assignment.setPoolId(pool.getId());
-                assignment.setValue(value);
-                assignment.setServiceId(serviceId);
-                assignment.setOwnerPartyId(instance.getOwnerPartyId());
-                assignment.setAssignedAt(OffsetDateTime.now());
-                assignments.save(assignment);
-                realise(tenant, serviceId, offeringId, ResourcePool.MSISDN.equals(pool.getResourceType()) ? "number" : pool.getResourceType(),
-                        "own-pool", value);
-            });
-            // Every numbered line rides a SIM: minted operator-side with its
-            // PUK. The PIN lives on the card — set via the SIM-platform seam.
-            if (numbered) {
-                attachKitSimOrMint(tenant, serviceId, productOrderId);
-                // the SIM is issued operator-side (minted, or a starter kit stamped at the counter)
-                realise(tenant, serviceId, offeringId, "sim", "house-sim-issuer",
-                        sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
-                                .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
-                accrueCommission(tenant, productOrder, productOrderId, serviceId, name);
-                // charging lifecycle: the catalog references the OCS rate
-                // plan (chargingSpecId); the subscriber and its counters are
-                // provisioned THERE — the OCS stays the charging master
-                String chargingSpec = catalog.chargingSpecOf(so.getOfferingId()).orElse(null);
-                if (chargingSpec != null) {
-                    // zero-rated apps ride along: the OCS, not the BSS, makes them free
-                    ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
-                    // the BSS-defined overage steps ride to the charging system, so real-time and bill-time agree
-                    ocs.pushOverageTiers(tenant, serviceId, chargingSpec, usageAllowances.tiersOf(so.getOfferingId()));
-                    realise(tenant, serviceId, offeringId, "ocs", ocs.vendor(tenant), chargingSpec);
-                }
-                // the entitlement server learns which SIM (and number) now belongs to
-                // this party and plan — the phone's next TS.43 check-in tells the truth
-                entitlement.bind(tenant, owner, serviceId, so.getOfferingId(), msisdnOf(tenant, serviceId),
-                        sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
-                                .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
-                // a PRIORITY TIER: the plan itself names a slice profile, so the
-                // line rides it for as long as the plan does (no expiry)
-                catalog.sliceIntentOf(so.getOfferingId()).ifPresent(intent -> {
-                    services.findById(serviceId).ifPresent(line -> {
-                        line.setSliceProfile(intent.profile());
-                        line.setSliceUntil(null);
-                        line.setSliceOrderId(productOrderId);
-                        line.setSliceGuaranteedDlMbps(intent.guaranteedDlMbps());
-                        services.save(line);
-                        moveToSliceChargingPlan(tenant, line, intent.chargingSpecId());
-                    });
-                    slices.apply(tenant, serviceId, intent.profile(), null);
-                    realise(tenant, serviceId, offeringId, "slice", slices.vendor(), intent.profile());
-                });
+                continue;
             }
+            ServiceOrder so = outcome.so();
+            String id = so.getId();
+            String serviceId = outcome.serviceId();
+            deferred = outcome.deferred();
 
             // C4 — a physical item's service order is HELD inProgress until its
             // parcel/install actually lands; only a digital service completes NOW.
@@ -493,6 +344,297 @@ public class OrchestrationService {
     }
 
     /**
+     * What one order item's fulfilment left behind for the shared tail of the
+     * loop: the service order, the inventory row, whether the item is still
+     * waiting on a parcel or an install — or that there was nothing to
+     * provision at all (billing-only: the item completes, no service exists).
+     */
+    record ItemOutcome(ServiceOrder so, String serviceId, boolean deferred, boolean billingOnly) {
+        static ItemOutcome nothingToProvision() {
+            return new ItemOutcome(null, null, false, true);
+        }
+    }
+
+    /**
+     * FULFIL FROM THE CATALOG (step 3): the CFS the product spec names declares
+     * the resource-facing services; the executor runs exactly those, in the
+     * fixed seam order, with the values each edge says its RFS consumes.
+     *
+     * <p>The one rule about service records, stated once: any declared seam
+     * means a service record; a CFS declaring NO seam still gets a record unless
+     * its family is {@code billing-only} — TV, device and security are realised
+     * in-house and have always had a row, while insurance and top-ups never
+     * had one. Whether a pool is drawn is the number / edge-gpu seam's own doing.
+     */
+    private ItemOutcome fulfilByCatalog(String tenant, String owner, Map<String, Object> productOrder,
+            String productOrderId, Map<String, Object> item, String name, String offeringId, String wish,
+            CatalogClient.Cfs cfs, String family, boolean deferred) {
+        Optional<java.util.List<CatalogClient.Rfs>> readable = catalog.rfsOfIfReadable(cfs.id());
+        if (readable.isEmpty()) {
+            // the catalog is unreadable right now: the historical fail-open (treat it
+            // by category) is safer than a service record with nothing provisioned
+            log.warn("service for '{}': the RFS list of CFS '{}' could not be read — falling back to the category path",
+                    name, cfs.name());
+            return fulfilByCategory(tenant, owner, productOrder, productOrderId, item, name, offeringId, wish,
+                    Optional.of(cfs), family, deferred);
+        }
+        java.util.List<CatalogClient.Rfs> declared = readable.get();
+        if (declared.isEmpty() && "billing-only".equals(family)) {
+            // nothing to provision: the product bills, and that is the whole story —
+            // except a top-up that carries slice intent (a BOOST PASS), which rides
+            // the customer's existing mobile line for the pass's hours, as before
+            final String passName = name;
+            final String passOwner = owner;
+            catalog.sliceIntentOf(offeringId).ifPresent(intent ->
+                    applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
+            log.info("'{}' is billing-only (CFS {}) — no service to provision", name, cfs.name());
+            return ItemOutcome.nothingToProvision();
+        }
+        ServiceOrder so = new ServiceOrder();
+        String id = UUID.randomUUID().toString();
+        so.setId(id);
+        so.setTenantId(tenant);
+        so.setHref(ApiConstants.ORDER_BASE + "/serviceOrder/" + id);
+        so.setState(ServiceOrder.IN_PROGRESS);
+        so.setProductOrderId(productOrderId);
+        so.setOwnerPartyId(owner);
+        so.setItemName(name);
+        so.setOfferingId(offeringId);
+        so.setCreatedAt(OffsetDateTime.now());
+        so.setLastUpdate(OffsetDateTime.now());
+        serviceOrders.save(so);
+
+        ServiceInstance instance = new ServiceInstance();
+        String serviceId = UUID.randomUUID().toString();
+        instance.setId(serviceId);
+        instance.setTenantId(tenant);
+        instance.setHref(ApiConstants.INVENTORY_BASE + "/service/" + serviceId);
+        instance.setName(name);
+        instance.setState(ServiceInstance.ACTIVE);
+        instance.setServiceOrderId(id);
+        instance.setOwnerPartyId(owner);
+        instance.setCreatedAt(OffsetDateTime.now());
+        instance.setLastUpdate(OffsetDateTime.now());
+        instance.setCfsId(cfs.id());
+        instance.setCfsName(cfs.name());
+        instance.setCfsFamily(family);
+        Map<String, String> values = executor.consumedValues(declared, offeringId, item);
+        String deliveryPath = values.get("deliveryPath");
+        if (deliveryPath != null && !deliveryPath.isBlank()) {
+            instance.setDeliveryPath(deliveryPath.trim());
+        }
+        services.save(instance);
+
+        if (declared.isEmpty()) {
+            // realised inside this BSS (TV entitlement, device shipment, security feature): the row IS the service
+            return new ItemOutcome(so, serviceId, deferred, false);
+        }
+        com.bss.som.seam.SeamContext ctx = new com.bss.som.seam.SeamContext(tenant, owner, serviceId, id,
+                offeringId, name, productOrderId, item, values, wish, deferred);
+        FulfilmentExecutor.Outcome run = executor.execute(declared, ctx);
+        log.info("service {} fulfilled from CFS '{}': ran {} of plan {}", serviceId, cfs.name(), run.ran(),
+                run.plan().running());
+        if (run.lineNumbered()) {
+            // a numbered line: the dealer's commission accrues and the entitlement
+            // server learns which SIM and number belong to this party and plan
+            // (bookkeeping, not seams — neither provisions anything)
+            accrueCommission(tenant, productOrder, productOrderId, serviceId, name);
+            entitlement.bind(tenant, owner, serviceId, offeringId, msisdnOf(tenant, serviceId),
+                    lines.iccidOf(tenant, serviceId).orElse(null));
+        }
+        return new ItemOutcome(so, serviceId, run.clearsDeferral() ? false : deferred, false);
+    }
+
+    /**
+     * FULFIL BY CATEGORY — the counted fallback for a product spec that names no
+     * CFS: today's category table and the name tests, byte for byte, until the
+     * catalog carries a CFS for every sellable spec. Ticket #89 records every use
+     * as a realisation on seam {@code category-fallback}; #90 and #91 retire the
+     * name tests and the billing-only category test that still live here.
+     */
+    @SuppressWarnings("unchecked")
+    private ItemOutcome fulfilByCategory(String tenant, String owner, Map<String, Object> productOrder,
+            String productOrderId, Map<String, Object> item, String name, String offeringId, String wish,
+            Optional<CatalogClient.Cfs> cfs, String componentType, boolean deferred) {
+        boolean partnerService = "partner".equals(componentType);
+        boolean securityFeature = "security".equals(componentType);
+        boolean internet = "internet".equals(componentType);
+        boolean tv = "tv".equals(componentType);
+        boolean device = "device".equals(componentType);
+        ServiceOrder so = new ServiceOrder();
+        String id = UUID.randomUUID().toString();
+        so.setId(id);
+        so.setTenantId(tenant);
+        so.setHref(ApiConstants.ORDER_BASE + "/serviceOrder/" + id);
+        so.setState(ServiceOrder.IN_PROGRESS);
+        so.setProductOrderId(productOrderId);
+        so.setOwnerPartyId(owner);
+        so.setItemName(name);
+        so.setOfferingId(offeringId);
+        so.setCreatedAt(OffsetDateTime.now());
+        so.setLastUpdate(OffsetDateTime.now());
+        serviceOrders.save(so);
+
+        // TMF640 stands in: instant mock activation. A real adapter would
+        // call the network and complete asynchronously.
+        ServiceInstance instance = new ServiceInstance();
+        String serviceId = UUID.randomUUID().toString();
+        instance.setId(serviceId);
+        instance.setTenantId(tenant);
+        instance.setHref(ApiConstants.INVENTORY_BASE + "/service/" + serviceId);
+        instance.setName(name);
+        instance.setState(ServiceInstance.ACTIVE);
+        instance.setServiceOrderId(id);
+        instance.setOwnerPartyId(owner);
+        instance.setCreatedAt(OffsetDateTime.now());
+        instance.setLastUpdate(OffsetDateTime.now());
+        // the inventory row names the CFS it realises, so TMF638's
+        // serviceSpecification is the catalog's spec, not a derived stand-in
+        cfs.ifPresent(c -> {
+            instance.setCfsId(c.id());
+            instance.setCfsName(c.name());
+            instance.setCfsFamily(componentType);
+        });
+
+        // Slice services ride a delivery path (assurance re-homes them on
+        // failure); AI services draw a GPU from the edge pool; everything
+        // else draws an MSISDN as before.
+        boolean isSlice = name != null && name.contains("Slice");
+        boolean isEdgeAi = name != null && name.contains("Edge AI");
+        if (isSlice) {
+            instance.setDeliveryPath("fibre-route-stadium-north");
+        }
+        services.save(instance);
+
+        // OPEN ACCESS: a broadband component may be delivered over a THIRD-PARTY
+        // owner's fibre. If owners serve this address, place the access-seeker
+        // order UPSTREAM and realize the retail line over it — instead of our own
+        // install. The owner OSS activates it (mock: instantly), so the retail
+        // line comes up here rather than waiting on a workOrder of ours.
+        if (internet && provisionWholesaleAccess(tenant, item, serviceId, owner, productOrderId)) {
+            deferred = false;
+        }
+
+        // Only a mobile line (or an unknown/other offering, historically) draws
+        // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
+        boolean nonLine = partnerService || securityFeature || isSlice
+                || internet || tv || device;
+        String poolType = nonLine ? null : isEdgeAi ? "edge-gpu" : ResourcePool.MSISDN;
+        if (partnerService) {
+            // the partner's platform owns the account; we hold the code
+            ResourceAssignment entitlement = new ResourceAssignment();
+            entitlement.setId(UUID.randomUUID().toString());
+            entitlement.setTenantId(tenant);
+            entitlement.setPoolId("partner");
+            entitlement.setValue(partners.activate(name, owner));
+            entitlement.setServiceId(serviceId);
+            entitlement.setOwnerPartyId(owner);
+            entitlement.setAssignedAt(OffsetDateTime.now());
+            assignments.save(entitlement);
+            realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(), entitlement.getValue());
+        }
+        // Keep-your-number: if the customer ported a number in, activate on
+        // it and skip the pool draw entirely.
+        String portedNumber = poolType != null && ResourcePool.MSISDN.equals(poolType)
+                ? porting.portedNumberFor(owner) : null;
+        boolean numbered = false;
+        if (portedNumber != null) {
+            ResourceAssignment assignment = new ResourceAssignment();
+            assignment.setId(UUID.randomUUID().toString());
+            assignment.setTenantId(tenant);
+            assignment.setPoolId("ported");
+            assignment.setValue(portedNumber);
+            assignment.setServiceId(serviceId);
+            assignment.setOwnerPartyId(owner);
+            assignment.setAssignedAt(OffsetDateTime.now());
+            assignments.save(assignment);
+            realise(tenant, serviceId, offeringId, "number", "ported-in", portedNumber);
+            numbered = true;
+            poolType = null; // do not also draw from the pool
+        }
+        if (poolType != null && ResourcePool.MSISDN.equals(poolType)) {
+            numbered = true;
+        }
+        if (poolType != null)
+        pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
+            // Choose-your-number: the wish wins while it is still FREE; a
+            // lost race (two shoppers, one number) falls back to next-free
+            // — the first pick stands, honestly.
+            String value = null;
+            if (wish != null && ResourcePool.MSISDN.equals(pool.getResourceType())
+                    && assignments.findFirstByTenantIdAndValue(tenant, wish).isEmpty()) {
+                value = wish;
+            }
+            if (value == null) {
+                // next FREE — skips any value a wish already consumed from
+                // the window ahead, so the counter can never mint a dupe
+                long next = pool.getNextValue();
+                String candidate = pool.getPrefix() + String.format("%06d", next);
+                while (assignments.findFirstByTenantIdAndValue(tenant, candidate).isPresent()) {
+                    next++;
+                    candidate = pool.getPrefix() + String.format("%06d", next);
+                }
+                value = candidate;
+                pool.setNextValue(next + 1);
+                pool.setLastUpdate(OffsetDateTime.now());
+                pools.save(pool);
+            }
+            ResourceAssignment assignment = new ResourceAssignment();
+            assignment.setId(UUID.randomUUID().toString());
+            assignment.setTenantId(tenant);
+            assignment.setPoolId(pool.getId());
+            assignment.setValue(value);
+            assignment.setServiceId(serviceId);
+            assignment.setOwnerPartyId(instance.getOwnerPartyId());
+            assignment.setAssignedAt(OffsetDateTime.now());
+            assignments.save(assignment);
+            realise(tenant, serviceId, offeringId, ResourcePool.MSISDN.equals(pool.getResourceType()) ? "number" : pool.getResourceType(),
+                    "own-pool", value);
+        });
+        // Every numbered line rides a SIM: minted operator-side with its
+        // PUK. The PIN lives on the card — set via the SIM-platform seam.
+        if (numbered) {
+            attachKitSimOrMint(tenant, serviceId, productOrderId);
+            // the SIM is issued operator-side (minted, or a starter kit stamped at the counter)
+            realise(tenant, serviceId, offeringId, "sim", "house-sim-issuer",
+                    sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+                            .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
+            accrueCommission(tenant, productOrder, productOrderId, serviceId, name);
+            // charging lifecycle: the catalog references the OCS rate
+            // plan (chargingSpecId); the subscriber and its counters are
+            // provisioned THERE — the OCS stays the charging master
+            String chargingSpec = catalog.chargingSpecOf(so.getOfferingId()).orElse(null);
+            if (chargingSpec != null) {
+                // zero-rated apps ride along: the OCS, not the BSS, makes them free
+                ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
+                // the BSS-defined overage steps ride to the charging system, so real-time and bill-time agree
+                ocs.pushOverageTiers(tenant, serviceId, chargingSpec, usageAllowances.tiersOf(so.getOfferingId()));
+                realise(tenant, serviceId, offeringId, "ocs", ocs.vendor(tenant), chargingSpec);
+            }
+            // the entitlement server learns which SIM (and number) now belongs to
+            // this party and plan — the phone's next TS.43 check-in tells the truth
+            entitlement.bind(tenant, owner, serviceId, so.getOfferingId(), msisdnOf(tenant, serviceId),
+                    sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+                            .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
+            // a PRIORITY TIER: the plan itself names a slice profile, so the
+            // line rides it for as long as the plan does (no expiry)
+            catalog.sliceIntentOf(so.getOfferingId()).ifPresent(intent -> {
+                services.findById(serviceId).ifPresent(line -> {
+                    line.setSliceProfile(intent.profile());
+                    line.setSliceUntil(null);
+                    line.setSliceOrderId(productOrderId);
+                    line.setSliceGuaranteedDlMbps(intent.guaranteedDlMbps());
+                    services.save(line);
+                    moveToSliceChargingPlan(tenant, line, intent.chargingSpecId());
+                });
+                slices.apply(tenant, serviceId, intent.profile(), null);
+                realise(tenant, serviceId, offeringId, "slice", slices.vendor(), intent.profile());
+            });
+        }
+        return new ItemOutcome(so, serviceId, deferred, false);
+    }
+
+    /**
      * C4 — when fulfilment completes the order, finish the physical items' service
      * orders that were held IN_PROGRESS at order time, emitting the provisioning
      * event now. This makes the process layer's provisioned/fulfilled milestones
@@ -521,51 +663,17 @@ public class OrchestrationService {
     /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
     /** The line's number as digits (its MSISDN assignment), or null when it has none yet. */
     public String msisdnOf(String tenant, String serviceId) {
-        for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(tenant, serviceId)) {
-            String digits = a.getValue() == null ? "" : a.getValue().replaceAll("[^0-9]", "");
-            if (digits.length() >= 8) {
-                return digits;
-            }
-        }
-        return null;
+        return lines.msisdnOf(tenant, serviceId);
     }
 
     public com.bss.som.entity.SimCard mintSim(String tenant, String serviceId) {
-        java.security.SecureRandom random = new java.security.SecureRandom();
-        StringBuilder iccid = new StringBuilder("8946");
-        for (int i = 0; i < 15; i++) {
-            iccid.append(random.nextInt(10));
-        }
-        com.bss.som.entity.SimCard sim = new com.bss.som.entity.SimCard();
-        sim.setIccid(iccid.toString());
-        sim.setTenantId(tenant);
-        sim.setServiceId(serviceId);
-        sim.setPuk(pukVault.encrypt(
-                String.format("%08d", random.nextInt(100_000_000)), sim.getIccid()));
-        sim.setCreatedAt(OffsetDateTime.now());
-        sim.setLastUpdate(OffsetDateTime.now());
-        return sims.save(sim);
+        return lines.mintSim(tenant, serviceId);
     }
 
     /** A KIT order rides the SIM from the box; anything else mints fresh.
      * The kit was stamped with the product order at activation time. */
     private void attachKitSimOrMint(String tenant, String serviceId, String productOrderId) {
-        com.bss.som.entity.StarterKit kit = starterKits
-                .findFirstByTenantIdAndProductOrderId(tenant, productOrderId).orElse(null);
-        if (kit == null) {
-            mintSim(tenant, serviceId);
-            return;
-        }
-        com.bss.som.entity.SimCard sim = new com.bss.som.entity.SimCard();
-        sim.setIccid(kit.getIccid());
-        sim.setTenantId(tenant);
-        sim.setServiceId(serviceId);
-        sim.setPuk(kit.getPukCiphertext());
-        sim.setCreatedAt(OffsetDateTime.now());
-        sim.setLastUpdate(OffsetDateTime.now());
-        sims.save(sim);
-        log.info("starter kit SIM {} attached to service {} (kit {})",
-                kit.getIccid(), serviceId, kit.getActivationCode());
+        lines.attachKitSimOrMint(tenant, serviceId, productOrderId);
     }
 
     /**
@@ -758,67 +866,11 @@ public class OrchestrationService {
     @SuppressWarnings("unchecked")
     private boolean provisionWholesaleAccess(String tenant, Map<String, Object> item,
             String serviceId, String owner, String productOrderId) {
-        String postCode = postCodeOf(item);
-        if (postCode == null || postCode.isBlank()) {
-            return false;
-        }
-        List<Map<String, Object>> options = wholesaleQualification.accessOptions(postCode, "fiber");
-        if (options.isEmpty()) {
-            return false; // our own network here — nothing to buy
-        }
-        int requested = requestedBandwidth(item);
-        Map<String, Object> pick = pickAccessOption(options, item, requested);
-        if (pick == null) {
-            return false;
-        }
-        String accessOwner = String.valueOf(pick.get("accessOwner"));
-        String accessLayer = pick.get("accessLayer") == null ? null : String.valueOf(pick.get("accessLayer"));
-        Integer bandwidth = pick.get("maxDownMbps") instanceof Number nb ? nb.intValue() : requested;
-        String woId = UUID.randomUUID().toString();
-        // the async owner callback (Sonata) references OUR order id, so mint it
-        // first and hand it over as the buyer reference
-        com.bss.som.client.WholesaleAccessClient.AccessOrderResult res =
-                wholesaleAccess.order(accessOwner, accessLayer, bandwidth, postCode, serviceId, woId);
-
-        com.bss.som.entity.WholesaleAccessOrder wo = new com.bss.som.entity.WholesaleAccessOrder();
-        wo.setId(woId);
-        wo.setTenantId(tenant);
-        wo.setProductOrderId(productOrderId);
-        wo.setServiceId(serviceId);
-        wo.setOrderItemId(idOf(item));
-        wo.setOwnerPartyId(owner);
-        wo.setAccessOwner(accessOwner);
-        wo.setAccessLayer(accessLayer);
-        wo.setBandwidthMbps(bandwidth);
-        wo.setPostCode(postCode);
-        wo.setExternalId(res.externalId());
-        wo.setState(res.state());
-        realise(tenant, serviceId, idOf(item.get("productOffering")), "wholesale-access", wholesaleAccess.vendor(), res.externalId());
-        wo.setCreatedAt(OffsetDateTime.now());
-        if (com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(res.state())) {
-            wo.setActivatedAt(OffsetDateTime.now());
-        }
-        wo.setLastUpdate(OffsetDateTime.now());
-        wholesaleOrders.save(wo);
-        // the per-line wholesale rate (fail-soft) rides the event so revenue can
-        // book the COGS without its own rate lookup
-        com.bss.som.client.WholesaleRateCardClient.Rate rate = wholesaleRateCard.rateCard().get(accessOwner);
-        Map<String, Object> event = new java.util.LinkedHashMap<>();
-        event.put("id", wo.getId());
-        event.put("accessOwner", accessOwner);
-        event.put("accessLayer", accessLayer == null ? "" : accessLayer);
-        event.put("state", wo.getState());
-        event.put("productOrderId", productOrderId);
-        event.put("serviceId", serviceId);
-        event.put("externalId", res.externalId());
-        if (rate != null) {
-            event.put("ratePerLine", rate.perLine());
-            event.put("currency", "EUR");
-        }
-        events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", event);
-        log.info("wholesale access {}: {} {} {} Mbit/s for retail line {} (owner ref {})",
-                wo.getState(), accessOwner, accessLayer, bandwidth, serviceId, res.externalId());
-        return com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState());
+        Optional<LineProvisioning.AccessPlacement> placed =
+                lines.placeWholesaleAccess(tenant, item, serviceId, owner, productOrderId);
+        placed.ifPresent(p -> realise(tenant, serviceId, idOf(item.get("productOffering")), "wholesale-access",
+                wholesaleAccess.vendor(), p.externalId()));
+        return placed.map(LineProvisioning.AccessPlacement::active).orElse(false);
     }
 
     /**
@@ -890,91 +942,8 @@ public class OrchestrationService {
         return true;
     }
 
-    /** The install/service postcode carried on the component's place. */
-    @SuppressWarnings("unchecked")
-    private static String postCodeOf(Map<String, Object> item) {
-        if (!(item.get("product") instanceof Map<?, ?> product) || product.get("place") == null) {
-            return null;
-        }
-        Object place = product.get("place");
-        if (place instanceof List<?> list && !list.isEmpty()) {
-            place = list.get(0);
-        }
-        return place instanceof Map<?, ?> m && m.get("postCode") != null
-                ? String.valueOf(m.get("postCode")).replaceAll("\\s", "") : null;
-    }
 
-    /** The retail speed the line is sold at — the downloadSpeed characteristic,
-     *  else the biggest number in the offering name, else 1000. */
-    @SuppressWarnings("unchecked")
-    private static int requestedBandwidth(Map<String, Object> item) {
-        if (item.get("product") instanceof Map<?, ?> product
-                && product.get("productCharacteristic") instanceof List<?> chars) {
-            for (Object c : chars) {
-                if (c instanceof Map<?, ?> ch && "downloadSpeed".equals(String.valueOf(ch.get("name")))
-                        && ch.get("value") != null) {
-                    try {
-                        return (int) Double.parseDouble(String.valueOf(ch.get("value")));
-                    } catch (NumberFormatException ignored) {
-                        // fall through
-                    }
-                }
-            }
-        }
-        if (item.get("productOffering") instanceof Map<?, ?> off && off.get("name") != null) {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{2,4})")
-                    .matcher(String.valueOf(off.get("name")));
-            int best = 0;
-            while (m.find()) {
-                best = Math.max(best, Integer.parseInt(m.group(1)));
-            }
-            if (best > 0) {
-                return best;
-            }
-        }
-        return 1000;
-    }
 
-    /**
-     * Choose the access owner. If the order names a preferred owner (a productChar
-     * accessOwner — the retailer's pick), honour it; otherwise the efficient
-     * allocation: the SMALLEST bandwidth tier that still meets the retail speed
-     * (headroom without waste), falling back to the biggest available if none reach it.
-     */
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> pickAccessOption(List<Map<String, Object>> options,
-            Map<String, Object> item, int requested) {
-        String preferred = null;
-        if (item.get("product") instanceof Map<?, ?> product
-                && product.get("productCharacteristic") instanceof List<?> chars) {
-            for (Object c : chars) {
-                if (c instanceof Map<?, ?> ch && "accessOwner".equals(String.valueOf(ch.get("name")))
-                        && ch.get("value") != null) {
-                    preferred = String.valueOf(ch.get("value"));
-                }
-            }
-        }
-        if (preferred != null) {
-            for (Map<String, Object> o : options) {
-                if (preferred.equalsIgnoreCase(String.valueOf(o.get("accessOwner")))) {
-                    return o;
-                }
-            }
-        }
-        Map<String, Object> meets = null;
-        Map<String, Object> biggest = null;
-        for (Map<String, Object> o : options) {
-            int bw = o.get("maxDownMbps") instanceof Number n ? n.intValue() : 0;
-            if (biggest == null || bw > (Integer) biggest.getOrDefault("maxDownMbps", 0)) {
-                biggest = o;
-            }
-            if (bw >= requested && (meets == null
-                    || bw < (Integer) meets.getOrDefault("maxDownMbps", Integer.MAX_VALUE))) {
-                meets = o;
-            }
-        }
-        return meets != null ? meets : biggest;
-    }
 
     /** Coarse product family from a catalog category — mirrors the ordering
      *  service's decomposition axis, so SOM fulfils each component by its class
@@ -995,32 +964,7 @@ public class OrchestrationService {
      * never changes what was done, and a failure to record never fails the order.
      */
     private void realise(String tenant, String serviceId, String offeringId, String seam, String vendor, String externalRef) {
-        try {
-            java.util.List<CatalogClient.Rfs> declared = catalog.cfsOf(offeringId)
-                    .map(c -> catalog.rfsOf(c.id())).orElse(java.util.List.of());
-            Optional<CatalogClient.Rfs> match = Realisations.declaredFor(declared, seam);
-            com.bss.som.entity.ServiceRealisation r = new com.bss.som.entity.ServiceRealisation();
-            r.setId(UUID.randomUUID().toString());
-            r.setTenantId(tenant);
-            r.setServiceId(serviceId);
-            r.setSeam(seam);
-            r.setVendor(vendor);
-            r.setExternalRef(externalRef == null ? null : externalRef.length() > 160 ? externalRef.substring(0, 160) : externalRef);
-            match.ifPresent(m -> {
-                r.setRfsId(m.id());
-                r.setRfsName(m.name());
-                r.setResourceSpecId(m.resourceSpecId());
-                r.setResourceSpecName(m.resourceSpecName());
-            });
-            r.setRealisedAt(OffsetDateTime.now());
-            realisations.save(r);
-            if (match.isEmpty() && !declared.isEmpty()) {
-                log.info("realisation: service {} exercised seam '{}' which its CFS never declared ({} RFS declared)",
-                        serviceId, seam, declared.size());
-            }
-        } catch (RuntimeException e) {
-            log.warn("realisation not recorded for service {} seam {}: {}", serviceId, seam, e.getMessage());
-        }
+        lines.realise(tenant, serviceId, offeringId, seam, vendor, externalRef);
     }
 
     /**
@@ -1178,23 +1122,7 @@ public class OrchestrationService {
 
     /** Move the line's OCS subscriber to the slice rate plan, remembering the base plan for the way back. */
     private void moveToSliceChargingPlan(String tenant, ServiceInstance line, String sliceChargingSpec) {
-        if (sliceChargingSpec == null || sliceChargingSpec.isBlank()) {
-            return; // the offer sells priority without a rating change
-        }
-        if (line.getSliceBaseChargingSpec() == null) {
-            // the base plan comes from the line's own offering (spec chargingSpecId)
-            String base = serviceOrders.findById(line.getServiceOrderId())
-                    .flatMap(so -> catalog.chargingSpecOf(so.getOfferingId())).orElse(null);
-            line.setSliceBaseChargingSpec(base == null ? "" : base);
-            services.save(line);
-        }
-        // a line whose plan has no charging footprint has no OCS subscriber yet — the
-        // slice plan IS its first charging footprint, so provision rather than move
-        if (line.getSliceBaseChargingSpec().isBlank()) {
-            ocs.provision(tenant, line.getOwnerPartyId(), line.getId(), sliceChargingSpec);
-            return;
-        }
-        ocs.changeRatePlan(tenant, line.getId(), sliceChargingSpec);
+        lines.moveToSliceChargingPlan(tenant, line, sliceChargingSpec);
     }
 
     private void restoreBaseChargingPlan(String tenant, ServiceInstance line) {
