@@ -86,6 +86,7 @@ function renderEditor() {
       f.kind === 'fulfilment' ? fulfilmentControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'stepbuilder' ? stepBuilderControl(f) :
+      f.kind === 'characteristics' ? characteristicsControl(f) :
       f.kind === 'select' ? selectControl(f) :
       f.kind === 'multiselect' ? multiselectControl(f) :
       f.kind === 'recipe' ? recipeControl(f) :
