@@ -65,6 +65,9 @@ public class SecurityConfig {
                                 "/mefApi/serviceOrdering/v1/serviceOrder").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
                         .requestMatchers("/som/v1/importService").hasAuthority("service:write")
+                        // the dry run is a staff question about a product: the catalog's people
+                        // (catalog:write) and the orchestrator's (service:read/write) may ask it
+                        .requestMatchers("/som/v1/fulfilment/**").hasAnyAuthority(READ, WRITE, "catalog:write")
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",
                                 "/tmf-api/serviceOrdering/v3/serviceOrder").hasAuthority(WRITE)

@@ -1,6 +1,7 @@
 package com.bss.catalog.service;
 
 import com.bss.catalog.client.PolicyClient;
+import com.bss.catalog.client.SomDryRunClient;
 import com.bss.catalog.dto.EntityRef;
 import com.bss.catalog.dto.EnvelopeRef;
 import com.bss.catalog.dto.GovernanceRequest;
@@ -87,13 +88,14 @@ public class LaunchGovernanceService {
     private final TenantRegistry tenants;
     private final TenantScope scope;
     private final PolicyClient policy;
+    private final SomDryRunClient dryRun;
     private final DomainEventPublisher events;
     private final ObjectMapper json;
     private final ProductOfferingMapper mapper;
 
     public LaunchGovernanceService(ProductOfferingRepository offerings, ProductSpecificationRepository specs,
             ProductOfferingPriceRepository prices, GovernanceLedgerRepository ledger, TenantRegistry tenants,
-            TenantScope scope, PolicyClient policy, DomainEventPublisher events, ObjectMapper json,
+            TenantScope scope, PolicyClient policy, SomDryRunClient dryRun, DomainEventPublisher events, ObjectMapper json,
             ProductOfferingMapper mapper) {
         this.offerings = offerings;
         this.specs = specs;
@@ -102,6 +104,7 @@ public class LaunchGovernanceService {
         this.tenants = tenants;
         this.scope = scope;
         this.policy = policy;
+        this.dryRun = dryRun;
         this.events = events;
         this.json = json;
         this.mapper = mapper;
@@ -127,6 +130,31 @@ public class LaunchGovernanceService {
     private int expiryDays() {
         TenantRegistry.TenantEntry e = tenants.byId(scope.currentTenantId());
         return e == null || e.getApprovalExpiryDays() <= 0 ? 60 : e.getApprovalExpiryDays();
+    }
+
+    /**
+     * The one readiness item nobody ticks: the orchestrator's dry run for this
+     * offering (CONTEXT.md: dry run). Done when the product can be fulfilled
+     * here or falls back to the category (with a note saying so); open when a
+     * required seam has no adapter in this fleet; done-with-a-note when the
+     * orchestrator could not be asked, so an outage never blocks a launch by
+     * accident. Computed on every view, never stored.
+     */
+    private ReadinessItem fulfilmentPlanItem(ProductOffering e) {
+        SomDryRunClient.Plan plan = dryRun.plan(e.getId());
+        String at = now();
+        if (plan == null) {
+            return new ReadinessItem(SomDryRunClient.OWNER, SomDryRunClient.LABEL, true, "dry run", at,
+                    "could not be verified — the orchestrator could not be asked; not blocking");
+        }
+        boolean done = !"NOT_LAUNCHABLE_HERE".equals(plan.verdict());
+        return new ReadinessItem(SomDryRunClient.OWNER, SomDryRunClient.LABEL, done, "dry run", at, plan.reason());
+    }
+
+    private List<ReadinessItem> withFulfilmentPlan(ProductOffering e, List<ReadinessItem> stored) {
+        List<ReadinessItem> out = new ArrayList<>(stored);
+        out.add(fulfilmentPlanItem(e));
+        return out;
     }
 
     /** The readiness template: one tick per configured owner, "authority|label". */
@@ -674,7 +702,11 @@ public class LaunchGovernanceService {
                 throw new BadRequestException("the approval of '" + e.getName() + "' expired on "
                         + e.getApprovalExpiresAt() + " — request it again");
             }
-            List<String> open = g.readinessOrEmpty().stream().filter(r -> !r.done()).map(ReadinessItem::label).toList();
+            List<String> open = new ArrayList<>(g.readinessOrEmpty().stream().filter(r -> !r.done()).map(ReadinessItem::label).toList());
+            ReadinessItem plan = fulfilmentPlanItem(e);
+            if (!plan.done()) {
+                open.add(plan.label() + " (" + plan.note() + ")");
+            }
             if (!open.isEmpty() && !force) {
                 throw new BadRequestException("'" + e.getName() + "' is approved but not ready: " + String.join(", ", open)
                         + (approver() ? " — an approver may launch anyway with force" : ""));
@@ -805,7 +837,7 @@ public class LaunchGovernanceService {
                 e.getApprovalExpiresAt() == null ? null : e.getApprovalExpiresAt().toString(),
                 readRefs(e.getChannelJson()),
                 e.getLastUpdate() == null ? "" : e.getLastUpdate().toString(),
-                unwrapped, st.readinessOrEmpty(), trail, approver());
+                unwrapped, withFulfilmentPlan(e, st.readinessOrEmpty()), trail, approver());
     }
 
     /** The substance an approval covers: what a customer pays, gets and where. Dates and copy are free to edit. */
