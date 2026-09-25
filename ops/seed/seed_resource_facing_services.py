@@ -38,15 +38,18 @@ RESOURCE_SPECS = {
     "partner-entitlement": ("Partner entitlement", "An activation on a partner's platform; this BSS holds the code."),
     "cpe": ("Customer premises equipment", "The router or set-top box managed over the ACS."),
 }
-# seam -> (RFS name, the product-spec characteristics it consumes)
+# seam -> (RFS name, the product-spec characteristics it consumes, required?)
+# required = the orchestrator realises it for EVERY order of the CFS; an optional RFS is
+# realised only when the product spec carries what it consumes (charging, slice) or when
+# the address calls for it (wholesale access) — the disagreement gate reads this flag.
 RFS = {
-    "number": ("Number assignment", ["msisdn"]),
-    "sim": ("SIM provisioning", ["simType", "eid"]),
-    "ocs": ("Charging subscriber", ["chargingSpecId", "zeroRatedApps", "overageTier"]),
-    "slice": ("Slice binding", ["sliceProfile", "boostHours", "sliceChargingSpecId", "guaranteedDlMbps"]),
-    "wholesale-access": ("Wholesale access order", ["accessLayer", "speed"]),
-    "partner-entitlement": ("Partner entitlement activation", []),  # NOT "Partner activation": that is the CFS
-    "cpe": ("Equipment management", []),
+    "number": ("Number assignment", ["msisdn"], True),
+    "sim": ("SIM provisioning", ["simType", "eid"], True),
+    "ocs": ("Charging subscriber", ["chargingSpecId", "zeroRatedApps", "overageTier"], False),
+    "slice": ("Slice binding", ["sliceProfile", "boostHours", "sliceChargingSpecId", "guaranteedDlMbps"], False),
+    "wholesale-access": ("Wholesale access order", ["accessLayer", "speed"], False),
+    "partner-entitlement": ("Partner entitlement activation", [], True),  # NOT "Partner activation": that is the CFS
+    "cpe": ("Equipment management", [], False),
 }
 # CFS name -> the seams it needs today; an empty list is an honest "in-house"
 CHAIN = {
@@ -136,7 +139,7 @@ for seam, (name, description) in RESOURCE_SPECS.items():
 # --- 2. resource-facing services, one per seam, each naming its resource spec
 specs = {s["name"]: s for s in page(f"{SERVICE_CATALOG}/serviceSpecification")}
 rfs = {}
-for seam, (name, consumes) in RFS.items():
+for seam, (name, consumes, _required) in RFS.items():
     rs = resource_spec[seam]
     body = {"name": name, "description": f"Resource-facing service on the {seam} seam.", "version": "1.0",
             "lifecycleStatus": "Active", "serviceType": "RFS", "isBundle": False,
@@ -174,10 +177,17 @@ for cfs_name, seams in CHAIN.items():
         edge = {**ref(r, "ServiceSpecification"), "relationshipType": "reliesOn",
                 "serviceSpecRelationshipCharacteristic": [
                     {"name": "consumes", "valueType": "array",
-                     "serviceSpecCharacteristicValue": [{"value": ",".join(RFS[seam][1])}]}]}
+                     "serviceSpecCharacteristicValue": [{"value": ",".join(RFS[seam][1])}]},
+                    {"name": "required", "valueType": "boolean",
+                     "serviceSpecCharacteristicValue": [{"value": "true" if RFS[seam][2] else "false"}]}]}
         want.append(edge)
     have = cfs.get("serviceSpecRelationship") or []
-    same = [ (e.get("id"), e.get("relationshipType")) for e in have ] == [ (e["id"], "reliesOn") for e in want ]
+    def shape(edges):
+        return [(e.get("id"), e.get("relationshipType"),
+                 tuple(sorted((c.get("name"), (c.get("serviceSpecCharacteristicValue") or [{}])[0].get("value"))
+                              for c in e.get("serviceSpecRelationshipCharacteristic") or [])))
+                for e in edges]
+    same = shape(have) == shape(want)
     if same:
         print(f"exists: {cfs_name} -> {[RFS[s][0] for s in seams] or 'no RFS (realised in-house)'}")
         continue
