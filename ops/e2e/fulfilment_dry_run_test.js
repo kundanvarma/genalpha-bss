@@ -109,9 +109,16 @@ const readiness = (decision) => (decision.readiness || []).find((r) => r.label =
   let decision = (await call('GET', `${CAT}/productOffering/${energy.id}/governance`, staff)).body;
   let item = readiness(decision);
   if (!item || item.done !== false || !/market-hub/.test(item.note || '')) fail(`readiness item should be open naming market-hub: ${JSON.stringify(item)}`);
-  const launch = await call('POST', `${CAT}/productOffering/${energy.id}/governance/launch`, staff, {});
-  if (launch.status < 400 || !/Fulfilment plan/.test(launch.text)) fail(`a launch should be refused by the fulfilment plan: ${launch.status} ${launch.text.slice(0, 200)}`);
-  ok(`READINESS: "Fulfilment plan" is open (${item.note}); launch refused with it named`);
+  // the launch door only exists where launch governance is on (Taranga: envelope; GenAlpha: none —
+  // a write is a launch there, and the readiness item is advice on the page, not a gate)
+  const mode = ((await call('GET', `${CAT}/governance/settings`, staff)).body || {}).mode;
+  if (mode && mode !== 'none') {
+    const launch = await call('POST', `${CAT}/productOffering/${energy.id}/governance/launch`, staff, {});
+    if (launch.status < 400 || !/Fulfilment plan/.test(launch.text)) fail(`a launch should be refused by the fulfilment plan: ${launch.status} ${launch.text.slice(0, 200)}`);
+    ok(`READINESS: "Fulfilment plan" is open (${item.note}); launch refused with it named`);
+  } else {
+    ok(`READINESS: "Fulfilment plan" is open (${item.note}); launch governance is '${mode}' on this tenant, so the refusal is proven by launch_governance_test's tenant, not here`);
+  }
 
   /* ---------- LAUNCHABLE: the number only ---------- */
   await created('PATCH', `${SCAT}/serviceSpecification/${cfs.id}`, staff, { serviceSpecRelationship: [edge(rfsNumber, true)] });
