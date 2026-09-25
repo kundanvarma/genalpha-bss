@@ -20,6 +20,8 @@
  *  - PICKED: an offering that excludes another, and a stock row counting one
  *    variant, both authored without an identifier being typed.
  *  - READ BACK: reopening every one of them shows what was saved.
+ *  - EMPTY STAYS EMPTY: a price with none of these four keeps none of them
+ *    after an edit. A blank box must omit its field, never send {} or [].
  */
 const { chromium } = require('playwright');
 
@@ -277,9 +279,36 @@ async function saveAndWait(page) {
   }
   ok(`READ BACK: reopening the price shows exactly what is stored — per ${unit.amount} ${unit.units}, 1–31 October, per unit above a threshold on ${algoOnWire.characteristic}`);
 
+  /* ---------- EMPTY STAYS EMPTY ----------
+   * A price with none of these four is the ordinary case, and a control that
+   * writes {} or [] for a box the operator never filled would put an empty
+   * object on every price in the catalog. The blank form must OMIT the field,
+   * not send an empty one. Proven on a price that has none of them and an
+   * edit that touches none of them. */
+  const bare = (await call('POST', `${CAT}/productOfferingPrice`, staff, {
+    name: `${tag} plain price`, priceType: 'oneTime', lifecycleStatus: 'Active',
+    price: { taxIncludedAmount: { unit: 'EUR', value: 9.99 } },
+  })).body;
+  if (!bare?.id) fail('could not create the fixture plain price');
+
+  await page.reload();
+  await page.waitForSelector('#username', { timeout: 20000 });
+  await open(page, 'Prices', `${tag} plain price`);
+  await page.fill('input[name="version"]', '1.1');   // an edit that touches none of the four
+  await saveAndWait(page);
+
+  const stillBare = (await call('GET', `${CAT}/productOfferingPrice/${bare.id}`, staff)).body || {};
+  if (stillBare.version !== '1.1') fail(`the edit did not reach the wire: version ${stillBare.version}`);
+  for (const key of ['unitOfMeasure', 'validFor', 'pricingLogicAlgorithm', 'prodSpecCharValueUse']) {
+    const v = stillBare[key];
+    if (v !== undefined && v !== null) fail(`a blank control wrote ${key} = ${JSON.stringify(v)} — it must omit the field`);
+  }
+  ok('EMPTY STAYS EMPTY: editing a price that has none of the four left all four absent, not empty objects');
+
   await browser.close();
 
   /* ---------- leave the shelf as we found it ---------- */
+  await call('DELETE', `${CAT}/productOfferingPrice/${bare.id}`, staff);
   await call('DELETE', `${STOCK}/productStock/${stock.id}`, staff);
   await call('DELETE', `${CAT}/productOffering/${offering.id}`, staff);
   await call('DELETE', `${CAT}/productOffering/${other.id}`, staff);
