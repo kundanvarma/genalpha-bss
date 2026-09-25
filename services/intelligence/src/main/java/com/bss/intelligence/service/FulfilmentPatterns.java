@@ -61,13 +61,6 @@ public final class FulfilmentPatterns {
         Map<String, Object> proposal = (Map<String, Object>) pm;
         List<Map<String, Object>> specs = list(proposal.get("specs"));
         List<Map<String, Object>> offerings = list(proposal.get("offerings"));
-        Map<String, Map<String, Object>> byId = new LinkedHashMap<>();
-        for (Map<String, Object> s : serviceSpecs) {
-            String id = idOf(s);
-            if (id != null) {
-                byId.put(id, s);
-            }
-        }
         for (Map<String, Object> spec : specs) {
             List<Map<String, Object>> sold = new ArrayList<>();
             for (Map<String, Object> o : offerings) {
@@ -75,13 +68,13 @@ public final class FulfilmentPatterns {
                     sold.add(o);
                 }
             }
-            propose(spec, sold, serviceSpecs, byId).ifPresent(p -> spec.put("fulfilmentPattern", toMap(p)));
+            propose(spec, sold, serviceSpecs).ifPresent(p -> spec.put("fulfilmentPattern", toMap(p)));
         }
     }
 
     /** The pattern for one spec: the offering's category decides, then the words. */
     public static Optional<Pattern> propose(Map<String, Object> spec, List<Map<String, Object>> offerings,
-            List<Map<String, Object>> serviceSpecs, Map<String, Map<String, Object>> byId) {
+            List<Map<String, Object>> serviceSpecs) {
         String family = null;
         String reason = null;
         for (Map<String, Object> o : offerings) {
@@ -127,11 +120,11 @@ public final class FulfilmentPatterns {
         }
         return Optional.of(new Pattern(idOf(cfs), String.valueOf(cfs.get("name")), family,
                 reason + " — " + cfs.get("name") + ", " + FAMILY_WORDS.getOrDefault(family, family),
-                missing(spec, cfs, byId)));
+                missing(spec, cfs)));
     }
 
     /** The consumed characteristics the spec lacks, per RFS edge, with the effect in words. */
-    static List<Missing> missing(Map<String, Object> spec, Map<String, Object> cfs, Map<String, Map<String, Object>> byId) {
+    static List<Missing> missing(Map<String, Object> spec, Map<String, Object> cfs) {
         List<String> have = new ArrayList<>();
         for (Map<String, Object> c : list(spec.get("productSpecCharacteristic"))) {
             have.add(String.valueOf(c.get("name")));
