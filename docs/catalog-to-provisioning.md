@@ -102,17 +102,58 @@ integrates "product X means do Y" into the order handler.
   two fulfilment families — fixed in the bundle seed), and duplicate spec
   names that let a re-run of one seed re-point an offering at an unstamped
   twin (why the CFS seed runs last).
-- **There is no TMF634 resource catalog.** Numbers, SIM profiles, OCS rate
-  plans and slice profiles are real resources with real adapters, but they are
-  not described as resource specifications anywhere a buyer can browse.
-- **The family is data; the family's *behaviour* is still code.** The SOM
-  knows exactly six families; authoring a seventh CFS (say, fixed-wireless
-  access) is refused with a log line until the orchestrator learns what it
-  means, and the characteristics above (`chargingSpecId`, `sliceProfile` …)
-  still ride the product spec rather than the CFS→RFS edge.
+- **Step 2 is built (25 September 2026): the chain under every CFS.** The
+  product-catalog component serves **TMF634** beside TMF633 (ADR-0021: one
+  deployable, the standard path, extraction later along the API). Seven
+  **resource specifications**, one per seam the orchestrator drives — number,
+  SIM profile, online-charging subscriber, network-slice binding, wholesale
+  access, partner entitlement, customer premises equipment — each naming its
+  **seam** and never a vendor; `tenants.yml` keeps choosing the vendor. Seven
+  **resource-facing services** (TMF633 `serviceType: RFS`) each name the
+  resource spec they realise in the standard `resourceSpecification[]`, and
+  every CFS lists the RFS it needs as `reliesOn` relationships whose edge
+  declares what the RFS **consumes** (the product-spec characteristics it
+  reads — values stay where the product manager edits them) and whether it is
+  **required** for every order or only when the product or the address calls
+  for it. TV entitlement, device shipment and security feature honestly need
+  no RFS: nothing outside this BSS realises them today. Seeded for GenAlpha and
+  Taranga by `ops/seed/seed_resource_facing_services.py`, which runs last and
+  refuses to rewrite a CFS (a first run clobbered one through a name clash).
+- **The orchestrator records what it realised — behaviour unchanged.** At
+  order time the SOM walks offering → product spec → CFS → RFS → resource spec
+  and, at each seam it actually exercises (number, SIM, charging, slice,
+  wholesale access, partner entitlement), writes a **realisation** on the
+  service: which RFS (when the CFS declared one), the seam, the vendor that
+  served it, the external reference. TMF638's service view lists them as
+  `supportingService[]` with a `declared` flag; TMF639's issued resource
+  references its resource specification. The same adapters run, the same
+  numbers are drawn; a wrong catalog entry is a red check, never a wrong
+  activation.
+- **The gate: catalog and orchestrator agree** — `ops/arch/cfs_check.py` now
+  also compares, for every CFS the orchestrator has realised services for,
+  what the catalog declares with what was realised: red when a service
+  realised a seam its CFS does not declare, or a *required* RFS was never
+  realised by any service of that CFS; an optional RFS nobody needed is a
+  note. It judges against the catalog as it is now, so declaring the missing
+  RFS is the fix and turns it green; services whose CFS is gone or that
+  predate step 2 carry no evidence and are counted, not judged; an
+  inventory it cannot reach is red. Same step as the CFS gate, on every pull
+  request and in the nightly. Proven by `cfs_realisation_test.js` (suite
+  #229): the seam the catalog forgot goes red, declaring it goes green.
+- **The offering page shows the chain.** The admin console's Product Offering
+  editor carries a read-only *Decomposition* panel: product spec → CFS
+  (family) → each RFS and what it reads → resource spec (seam) → who provides
+  the seam for this tenant (its configured vendor, or the fleet's built-in
+  adapter) — in operator language, honest when a link is missing.
+- **The family's *behaviour* is still code (step 3).** The SOM knows exactly
+  six families and six seams; it records realisations against the RFS list
+  but does not yet *obey* it, so authoring a new RFS does not make the
+  orchestrator call a new adapter, and `componentType(category)` still exists
+  as the fallback for a spec that names no CFS.
 
-The catalog now *is* the mapping for the first hop, product spec → CFS; the
-hops below it (CFS → RFS → resource spec) are steps 2 and 3.
+The catalog now *is* the mapping down to the resource specification, and the
+orchestrator's record is checked against it; letting the orchestrator obey
+the RFS list and retiring the category table is step 3.
 
 ## What closes it
 
@@ -125,28 +166,43 @@ Three bounded steps, each provable by a suite and checkable by the claims gate:
    `componentType(category)` only while a spec names none; `cfs_check.py`
    counts sellable specs without a CFS on the live catalog, and zero is the
    only passing count.
-2. **RFS and resource specs (TMF634).** Under each CFS, the resource-facing
-   services it needs — *MSISDN*, *SIM/eSIM profile*, *OCS subscriber*, *slice
-   binding*, *Sonata access* — each pointing at a `ResourceSpecification` that
-   names the adapter seam (`tenants.yml` picks the vendor). The characteristics
-   above (`chargingSpecId`, `sliceProfile`, `zone` …) become **characteristic
-   mappings on the CFS→RFS edge**, which is exactly where Vlocity and OSM keep
-   them.
-3. **The decomposition table becomes data.** `componentType()` retires; the
-   SOM walks product spec → CFS → RFS → resource spec, and the console's
-   Offering workspace shows the chain on the offering page — the thing the
-   demo question was really asking to see.
+2. **RFS and resource specs (TMF634) — built, see above.** Under each CFS,
+   the resource-facing services it needs, each naming a `ResourceSpecification`
+   that names the seam (`tenants.yml` picks the vendor); the CFS→RFS edge
+   declares what each RFS consumes and whether it is required; the
+   orchestrator records what it realised and the gate checks the two agree;
+   the offering page shows the chain.
+3. **The decomposition table becomes data.** The SOM *obeys* the RFS list —
+   an RFS the CFS declares is what gets called, through the seam its resource
+   spec names — and `componentType()` retires. Step 2's realisation records
+   and gate are the safety net this step runs under: the moment the catalog
+   and the code disagree, the check is red before an order goes wrong.
 
-Estimate: step 1 is a day (seeds, one DTO field already there, one SOM read,
-one gate); steps 2–3 are the wholesale plan's W2 generalised to retail — about
-a week, with the existing adapters unchanged.
+Estimate: steps 1 and 2 took two days between them (25 September 2026), most
+of it proof; step 3 is a week, with the existing adapters unchanged.
 
 ## Honest limits
 
-- Step 1 is built; steps 2 and 3 are not. The truthful demo answer today is:
+- Steps 1 and 2 are built; step 3 is not. The truthful demo answer today is:
   the product spec names its customer-facing service and the orchestrator
-  obeys it; below the CFS, the resource-facing layer is still the adapters and
-  characteristics described in the *short answer*, not catalog data.
+  obeys it; the CFS names the resource-facing services and resource
+  specifications it needs, and the orchestrator *records* what it realised
+  against them, checked on every pull request — but what the orchestrator
+  *does* at each seam is still decided by code, not by the RFS list.
+- The disagreement gate can only judge a CFS that has realised services; a
+  CFS nobody has ordered since step 2 has no evidence yet, and the 5,000-odd
+  services that predate step 2 carry no realisation rows and are counted,
+  not judged.
+- `required` on a CFS→RFS edge is authored by the seed from what the code
+  does today. A product manager who changes it is trusted; the gate tells
+  them when the orchestrator disagrees.
+- The offering page knows the vendor only for seams the tenant configures
+  (today the online-charging provider); every other seam is served by the
+  fleet's built-in adapter and the panel says so. The vendor that actually
+  served an order lives on the service's realisation, not on the page.
+- Vendor names on realisations are the adapters' own (`own-pool`,
+  `house-sim-issuer`, the tenant's OCS provider); they describe this fleet,
+  not a product decision.
 - The gate judges only what an Active offering sells under a retail category.
   Offerings with no category or no spec (mostly suite fixtures) are printed
   and not judged; the debris sweep owns them.
