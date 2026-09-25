@@ -81,6 +81,81 @@ The Bills desk is the first real desk to convert. The islands live in
 with the words and the tone of the desk in one place (`words.js`) so a change
 of language is a change in one file.
 
+## Accounting: the journal and the chart, one destination
+
+Journal and Chart of accounts were two peer tabs among ten, which meant a
+controller reconciling a month had to know the data model before they could
+find either. They are one job — what the books say, and what the books are told
+to say — so they are one page with two views.
+
+**The journal reads as business events.** A posting is a bill issued, cash
+received, a credit note raised, a handset handed over; it is a row of debits
+and credits only once you ask. So the row leads with the event, and the double
+entry lives one click down. Clicking the event discloses the balanced posting;
+the entry identifier, the source reference and the party ride one fold further,
+under **Technical details**, where a support call can still reach them.
+
+The filter bar narrows by date range, by kind of business event and by account
+code, and **the count above the table is the service's judged total for that
+filter** — not the length of the page. That distinction is the whole reason the
+journal needed a service change: this tenant's book holds four thousand
+postings and a page serves fifty, so a page-counted figure reads as a plausible
+lie. `X-Total-Count` on `/revenue/v1/journalEntry` is the answer, and the
+export honours the same filter, built from one query string in one file. A
+reconciliation that downloads something other than what it looked at is worse
+than no export at all. Three layouts: the subledger's own, SAP-shaped and
+NetSuite-shaped.
+
+**The chart of accounts leads with what an account books.** "What customers owe
+— every invoice issued lands here and every payment clears it" is the headline;
+`ar` is a posting key, and a posting key is an identifier, so it sits under
+technical details with the code. Each row says how many booked lines already
+carry its account, because that number is what makes a change consequential.
+The service counts them once, with the chart, rather than the page asking
+thirty times and reading a trimmed burst as thirty unused accounts.
+
+Nothing on this page edits anything. `+ New account` and `Propose a change`
+both write a proposal and hand it to Configuration.
+
+## Configuration: a ladder, because these settings move real money
+
+Which account a kind of money books into is not a form field. A change to it is
+written down, checked against the live books, signed for by name and only then
+applied:
+
+| Rung | What happens |
+|---|---|
+| Drafted | the proposal, with what the account says today beside it |
+| Validated | the service says what it would do, and refuses what it must not |
+| Approved | somebody puts their name to the consequences |
+| Activated | the books change, and future postings follow |
+
+The service refuses every step taken out of order, so the screen shows a ladder
+rather than enforcing one: approve before validate is a 409, activate before
+approve is a 409, and **activation revalidates against the live row** — an
+approval granted yesterday cannot activate a change that became dangerous
+overnight, and a stale draft that would overwrite a colleague's edit is sent
+back to draft instead.
+
+What validation refuses: an account left without a code a general ledger can
+read, an account left without a name, a negative setting, a VAT rate above one
+hundred percent. What it allows but says out loud: moving an account that
+already carries postings — "5 booked lines keep account 2150, because a posting
+keeps the code it was born with" — because booked lines keep their snapshot and
+the ledger will hold both codes until the general ledger is told. That sentence
+is what the approver signs for.
+
+The same checks answer the direct `POST /revenue/v1/accountMapping` that seeds
+and machine callers use, because a rule only the screen enforced would not be a
+rule.
+
+Configuration also holds the three setup pages that used to sit in the daily
+path — **Bill formats** (what a country's electronic invoice is), **Deliveries**
+(every bill's trip to the distribution partner, where a failure is the only
+loud thing on the page) and **Shadow billing** (what would bill differently next
+cycle). Each keeps its own tab, its own path and its own role gate, and lands
+on its own area of the page, so every deep link and every suite still works.
+
 ## Proof
 
 `ops/e2e/bills_desk_test.js` (suite #235) drives the real console with a real
@@ -88,6 +163,21 @@ token: the table's columns and the absence of a View button, the search
 placeholder, a zero count reading as clean, a chip filtering to exactly its own
 count, all six workspace sections answering, no identifier and no ISO date
 above the technical fold, and the back link returning to the desk it left.
+
+`ops/e2e/accounting_configuration_test.js` (suite #238) drives the same console
+for Accounting and Configuration: the journal's count equals the subledger's
+own total, no identifier is visible above the technical fold, a filter narrows
+the screen and the downloaded file to the same number, an account leads with
+what it books, a proposal changes nothing until it is activated, approve before
+validate and activate before approve are both refused by the service, a broken
+account code is refused at the ladder AND at the direct remap, a product
+manager gets 403 both ways, and the activated change carries four names.
+`ChartGuardTest` covers every input combination of the validator without a
+fleet. The accessibility scan covers all three screens
+(`A11Y_TARGETS=console,accounting`); like the bills targets they sit in the
+nightly tier, because the pull-request slice seeds the catalog and no billing,
+and a scan reaching for a posting that cannot exist is a failure that says
+nothing.
 
 ## Honest limits
 
@@ -111,3 +201,29 @@ above the technical fold, and the back link returning to the desk it left.
   slow tenant shows a placeholder in the customer column for a moment.
 - **Nothing on this desk writes.** Every section reads. Raising a credit,
   settling a dispute or taking a payment still happens on its own page.
+
+### Accounting and Configuration
+
+- **There is no four-eyes rule.** The ladder refuses a skipped rung, but the
+  same person may draft, validate, approve and activate. Requiring a second
+  name is a tenant setting this arc did not build, and the audit trail records
+  who did each step, so the gap is visible rather than hidden.
+- **The ladder governs the chart of accounts only.** Bill formats, delivery
+  configuration and shadow billing are edited directly on the same page. They
+  do not decide where money is booked, but "live financial configuration" is a
+  larger set than one table and the rest of it is a follow-up.
+- **The direct remap endpoint is still open.** It enforces the same blocking
+  rules as the ladder, so nothing dangerous passes through it, but a seed or a
+  machine caller can still change an account without the ceremony. Closing it
+  means moving the seeds and `revenue_test` onto the ladder first.
+- **An export carries at most ten thousand lines.** It is a reconciliation
+  file, not a database dump; a larger period has to be taken in slices.
+- **The journal's filters do not include the customer.** Date, kind of business
+  event and account code are served; searching a party means going through the
+  bill.
+- **Journal and Chart of accounts still have their own tabs.** They open the
+  same page on their own view, so the grouping is real, but folding them into
+  one primary named Accounting belongs to the information-architecture arc.
+- **An account's name is the tenant's, its posting key is not.** The thirty
+  posting keys the subledger books against are fixed in the service; a tenant
+  can rename and re-code them but cannot invent a thirty-first.

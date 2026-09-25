@@ -47,6 +47,39 @@ const TARGETS = [
       await p.waitForSelector('[data-testid="bill-workspace"]', { timeout: 20000 });
       await p.waitForFunction(() => !/Opening/.test(document.querySelector('[data-testid="bill-workspace"]').textContent), null, { timeout: 20000 });
     } },
+  // Accounting and Configuration are React islands too (ADR-0022), and they are
+  // labelled "accounting:", NOT "console:", on purpose. The PR smoke tier runs
+  // A11Y_TARGETS=storefront,console,csr,partner,app against a slice that seeds
+  // the catalog and no billing at all, so a "console:" label would drag these
+  // onto every pull request and they would time out reaching for a posting that
+  // cannot exist there. The nightly full proof runs every target and is where
+  // they belong. Locally: A11Y_TARGETS=console,accounting.
+  { label: 'accounting: journal (demo)',
+    open: async (p) => {
+      await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
+      await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+      await p.locator('#tabs .tab', { hasText: /^journal$/i }).first().click();
+      await p.waitForSelector('[data-testid="journal"]', { timeout: 20000 });
+      await p.waitForFunction(() => document.querySelectorAll('[data-testid="journal-body"] tr').length > 1, null, { timeout: 20000 });
+      // the disclosure is the screen: scan it open, not only closed
+      await p.locator('[data-testid="journal-row"]').first().click();
+      await p.waitForSelector('[data-testid="journal-detail"]', { timeout: 20000 });
+    } },
+  { label: 'accounting: chart of accounts (demo)',
+    open: async (p) => {
+      await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
+      await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+      await p.locator('#tabs .tab', { hasText: /^chart of accounts$/i }).first().click();
+      await p.waitForSelector('[data-testid="chart"]', { timeout: 20000 });
+      await p.waitForFunction(() => document.querySelectorAll('[data-testid="chart-body"] tr').length > 1, null, { timeout: 20000 });
+    } },
+  { label: 'accounting: configuration (demo)',
+    open: async (p) => {
+      await p.goto(`${BASE}/console/`); await kcLogin(p, 'demo', 'demo');
+      await p.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+      await p.locator('#tabs .tab', { hasText: /^configuration$/i }).first().click();
+      await p.waitForSelector('[data-testid="ladder"]', { timeout: 20000 });
+    } },
   { label: 'csr: agent desk (agent-anna)',
     open: async (p) => { await p.goto(`${BASE}/csr/`); await kcLogin(p, 'agent-anna', 'agent'); await p.waitForSelector('.searchbar', { timeout: 20000 }); } },
   { label: 'app: My page (paula)',
