@@ -83,3 +83,19 @@ DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLE
 ## When starting work
 
 Read `docs/engineering-conventions.md`, then the arc's doc if one exists, then the relevant ADRs in `docs/adr/`. Prefer a small verified step over a large one; run the suite that covers what you touched before moving on.
+
+## Agent skills
+
+The `mattpocock-skills` plugin is installed (decided 25 Sep 2026). Every new arc starts with `grill-me` (the design interview), then `to-spec` (the arc's spec as a GitHub issue), then `to-tickets` (tracer-bullet tickets); an arc too big for one session gets a `wayfinder` map. Building still answers to the ratchet, the claims gate and the numbered suites — those have teeth; the skills shape the planning half.
+
+### Issue tracker
+
+GitHub Issues on this repo, via `gh`. See `docs/agents/issue-tracker.md` — and remember the repo is public, so discretion rules apply to issues too.
+
+### Triage labels
+
+The five canonical labels, unchanged: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: the glossary is `CONTEXT.md` at the repo root (created lazily by `domain-modeling`), decisions are `docs/adr/`. See `docs/agents/domain.md`.
