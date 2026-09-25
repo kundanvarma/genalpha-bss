@@ -23,6 +23,10 @@ const TAB_ROLE = {
   collections: 'billing:admin',
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
+  // Configuration is where the chart of accounts is actually changed —
+  // the same gate as the rest of the finance desk, and the revenue
+  // service refuses every rung without billing:admin underneath.
+  financialConfiguration: 'billing:admin',
   dispute: 'billing:admin',
   // the TMF701 API is party-scoped (customers read their own flows);
   // the TAB is the ops desk's window — keyed on ops-floor roles, since
@@ -180,7 +184,7 @@ const WORKSPACES = [
   // Overview first, then the book, then the two workflows. The remaining peer
   // tabs keep their places until #117 re-homes them under the six areas.
   { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'payments', 'collections',
-    'journalEntry', 'accountMapping', 'dispute',
+    'journalEntry', 'accountMapping', 'financialConfiguration', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
     'shadowDrift'] },
   { label: 'Reporting', tabs: ['reporting'] },

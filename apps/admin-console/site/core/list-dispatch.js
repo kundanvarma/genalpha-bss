@@ -27,7 +27,11 @@ function renderIsland(name) {
     panel.textContent = "This screen needs the console's React bundle, which did not load.";
     return;
   }
-  window.mountIsland(name, panel, { authFetch, user: (tokenClaims() || {}).preferred_username, config: window.BSS_CONSOLE_CONFIG || {} });
+  // `view` lets several tabs share one island and each land on its own part of
+  // it: Journal and Chart of accounts are one Accounting page, and the three
+  // setup pages are one Configuration page, without losing a deep link.
+  window.mountIsland(name, panel, { authFetch, user: (tokenClaims() || {}).preferred_username,
+    view: active.islandView, config: window.BSS_CONSOLE_CONFIG || {} });
 }
 
 function renderCustomPane() {

@@ -63,56 +63,46 @@ RESOURCES.push(
     },
   },
   {
+    // Journal and Chart of accounts are ONE job — what the books say, and what
+    // the books are told to say — so they are one React island (ADR-0022) with
+    // two views. Both tabs keep their path, title and role gate, and each
+    // lands on its own view, so every deep link and every suite still works.
     path: 'journalEntry',
     base: REVENUE_BASE,
     title: 'Journal',
+    island: 'accounting',
+    islandView: 'journal',
     readOnly: true,
-    // the subledger: every billing/payment event as a BALANCED double-entry
-    // posting — what the ERP's general ledger ingests (docs/revenue-export-plan.md)
+    noCreate: true,
     fields: [],
-    columns: ['entryDate', 'sourceType', 'description', 'currency'],
-    detail: async (item) => {
-      const res = await authFetch(`${REVENUE_BASE}/journalEntry/${item.id}`);
-      const entry = res.ok ? await res.json() : { lines: [] };
-      return (entry.lines || []).map((l) => ({
-        account: `${l.accountCode} ${l.accountName}`,
-        debit: Number(l.debit) ? Number(l.debit).toFixed(2) : '',
-        credit: Number(l.credit) ? Number(l.credit).toFixed(2) : '',
-        ref: l.ref,
-        line: l.description,
-      }));
-    },
+    columns: [],
   },
   {
     path: 'accountMapping',
     base: REVENUE_BASE,
     title: 'Chart of accounts',
-    noEdit: true,
-    noDelete: true,
-    // posting rules as DATA: finance's own codes and names; a remap applies
-    // to FUTURE postings only — booked journal lines keep their snapshot.
-    // configValue: VAT percent on 'tax'; currency-per-point on 'loyalty:liability'.
-    fields: [
-      { name: 'key', label: 'Posting key', kind: 'select', required: true, options: [
-        { value: 'ar', label: 'Accounts receivable (control)' },
-        { value: 'cash', label: 'Cash / PSP clearing' },
-        { value: 'rate:recurringCharge', label: 'Service revenue' },
-        { value: 'rate:usageCharge', label: 'Usage revenue' },
-        { value: 'rate:discount', label: 'Discounts (contra)' },
-        { value: 'rate:priceAdjustment', label: 'Pricing adjustments' },
-        { value: 'rate:disputeCredit', label: 'Dispute credits (billed lines)' },
-        { value: 'creditNote', label: 'Credit notes (contra-revenue)' },
-        { value: 'dispute', label: 'Dispute credits (post-journal)' },
-        { value: 'refund', label: 'Refunds (contra)' },
-        { value: 'tax', label: 'VAT payable — configValue = percent' },
-        { value: 'loyalty:expense', label: 'Loyalty program expense' },
-        { value: 'loyalty:liability', label: 'Loyalty points liability — configValue = value per point' },
-      ] },
-      { name: 'accountCode', label: 'Account code (your GL)', required: true },
-      { name: 'accountName', label: 'Account name', required: true },
-      { name: 'configValue', label: 'Config value (tax % / per-point value — see key)', kind: 'number' },
-    ],
-    columns: ['key', 'accountCode', 'accountName', 'configValue'],
+    island: 'accounting',
+    islandView: 'chart',
+    readOnly: true,
+    noCreate: true,
+    // Nothing is edited from a table any more. These settings decide which
+    // account real money lands in, so a change is PROPOSED here and climbs the
+    // ladder on Configuration: drafted, validated, approved, activated.
+    fields: [],
+    columns: [],
+  },
+  {
+    // Where live financial configuration is changed, and where the setup pages
+    // that nobody needs for today's work now live: the ladder over the chart of
+    // accounts, bill formats, deliveries and the shadow bill run.
+    path: 'financialConfiguration',
+    title: 'Configuration',
+    island: 'financialConfiguration',
+    islandView: 'changes',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
   },
   {
     path: 'dispute',

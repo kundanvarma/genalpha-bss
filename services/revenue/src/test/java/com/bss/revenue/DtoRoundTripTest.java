@@ -158,7 +158,7 @@ class DtoRoundTripTest {
                         + "keep their snapshot\"}");
         assertThat(write(RemapReceipt.of("ar", "1200", "Accounts receivable", null)))
                 .doesNotContain("configValue");
-        assertThat(write(new ChartRow("ar", "1200", "Accounts receivable", null)))
+        assertThat(write(new ChartRow("ar", "1200", "Accounts receivable", null, null, null, null)))
                 .isEqualTo("{\"key\":\"ar\",\"accountCode\":\"1200\",\"accountName\":\"Accounts receivable\"}");
         assertThat(write(new RevRecRow("a-1", "Contract", "cust-a", null, null,
                 "2026-01-01", "2027-01-01", 12, 8, 4, "RevRecInput")))

@@ -1,11 +1,13 @@
 package com.bss.revenue.controller;
 
 import com.bss.revenue.api.ApiConstants;
+import com.bss.revenue.api.PagedResult;
 import com.bss.revenue.exception.BadRequestException;
 import com.bss.revenue.dto.BackfillReceipt;
 import com.bss.revenue.dto.BackfillRequest;
 import com.bss.revenue.dto.ChartRow;
 import com.bss.revenue.dto.JournalEntryView;
+import com.bss.revenue.dto.JournalFilter;
 import com.bss.revenue.dto.LoyaltyAccrual;
 import com.bss.revenue.dto.PeriodCloseReceipt;
 import com.bss.revenue.dto.PeriodCloseRequest;
@@ -29,7 +31,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Map;
 
 /**
  * /revenue/v1 — the subledger's export face. No TMF Open API covers the
@@ -39,6 +40,10 @@ import java.util.Map;
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
 public class RevenueController {
+
+    /** What the journal serves when nobody asks for a page size, and the ceiling. */
+    private static final int DEFAULT_PAGE = 100;
+    private static final int MAX_PAGE = 500;
 
     private final RevenueService service;
 
@@ -60,11 +65,41 @@ public class RevenueController {
         return ResponseEntity.ok(service.summary(from, to));
     }
 
+    /**
+     * The journal, as a controller reconciles it: a date range, one kind of
+     * business event, one account, a page at a time. {@code X-Total-Count} is
+     * the service's judged total for the filter, not the size of the page —
+     * a screen that counted its own page would quote 100 for a book of forty
+     * thousand and look entirely plausible doing it.
+     *
+     * <p>{@code date} and {@code sourceRef} are the older single-day callers
+     * and still answer exactly as they did.
+     */
     @GetMapping("/journalEntry")
     public ResponseEntity<List<JournalEntryView>> journal(
             @RequestParam(required = false) String date,
-            @RequestParam(required = false) String sourceRef) {
-        return ResponseEntity.ok(service.journal(parseDate(date), sourceRef));
+            @RequestParam(required = false) String sourceRef,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String account,
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) Integer offset) {
+        if (sourceRef != null && !sourceRef.isBlank()) {
+            return ResponseEntity.ok(service.journal(parseDate(date), sourceRef));
+        }
+        PagedResult<JournalEntryView> page = service.journalPage(filterOf(
+                date, fromDate, toDate, sourceType, account, limit, offset));
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(page.totalCount()))
+                .header("X-Result-Count", String.valueOf(page.items().size()))
+                .body(page.items());
+    }
+
+    /** The kinds of business event this tenant's book holds — the filter's own options. */
+    @GetMapping("/journalSourceType")
+    public ResponseEntity<List<String>> journalSourceTypes() {
+        return ResponseEntity.ok(service.journalSourceTypes());
     }
 
     @GetMapping("/journalEntry/{id}")
@@ -72,13 +107,35 @@ public class RevenueController {
         return ResponseEntity.ok(service.entryById(id));
     }
 
+    /** The same question the list asked, as a file. */
     @GetMapping(value = "/journalExport", produces = "text/csv")
     public ResponseEntity<String> export(@RequestParam(required = false) String date,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String sourceType,
+            @RequestParam(required = false) String account,
             @RequestParam(required = false) String format) {
+        JournalFilter filter = filterOf(date, fromDate, toDate, sourceType, account, null, null);
+        String named = date != null ? date
+                : filter.from() != null || filter.to() != null
+                ? String.valueOf(filter.from()) + "-" + filter.to() : "all";
         return ResponseEntity.ok()
-                .header("Content-Disposition", "attachment; filename=journal-"
-                        + (date == null ? "all" : date) + ".csv")
-                .body(service.exportCsv(parseDate(date), format));
+                .header("Content-Disposition", "attachment; filename=journal-" + named + ".csv")
+                .body(service.exportCsv(filter, format));
+    }
+
+    /**
+     * One filter, read the same way by the list and the export. {@code date}
+     * is the older single-day caller: it means from and to on the same day.
+     */
+    private static JournalFilter filterOf(String date, String fromDate, String toDate,
+            String sourceType, String account, Integer limit, Integer offset) {
+        LocalDate day = parseDate(date);
+        LocalDate from = day != null ? day : parseDate(fromDate);
+        LocalDate to = day != null ? day : parseDate(toDate);
+        int size = limit == null ? DEFAULT_PAGE : Math.min(Math.max(limit, 1), MAX_PAGE);
+        return new JournalFilter(from, to, sourceType, account, size,
+                offset == null ? 0 : Math.max(offset, 0));
     }
 
     /** Obligation timelines for the ERP's rev-rec engine (ASC 606/IFRS 15). */

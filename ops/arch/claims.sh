@@ -129,6 +129,17 @@ for f in $(grep -ohE '`[a-z0-9_]+_test`' docs/ctk-conformance.md docs/capability
   [ -f "ops/e2e/$f.js" ] || fail "docs cite suite '$f' but ops/e2e/$f.js does not exist"
 done
 
+# A suite's downstreams are DATA (ops/e2e/suite-needs.txt) and the proof runner
+# starts them with ONE `docker compose up`. A single name that is not a service
+# makes that whole command fail — quietly, because the runner swallows it
+# (`|| true`) so a fleet that is already up is not an error. The suite then runs
+# against a stopped downstream and reports a bug that is not there. Found on
+# 25 Sep with four bad names across two lines: "party" for party-account,
+# "accounting" for revenue, "risk" for intelligence.
+badneeds=$(python3 ops/arch/suite_needs_check.py)
+[ -z "$badneeds" ] || fail "ops/e2e/suite-needs.txt names services docker-compose.yml does not define: $badneeds" \
+  "fix: use the compose service name — docker compose config --services"
+
 # react and react-dom are ONE version or the app is a blank page: React refuses
 # to render a mismatched pair (error #527). Dependabot bumps them as two PRs,
 # and merging one half blanked the CSR console and the mobile app on 25 Sep.
