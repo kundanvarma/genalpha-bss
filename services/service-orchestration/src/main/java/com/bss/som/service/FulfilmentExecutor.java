@@ -90,7 +90,9 @@ public class FulfilmentExecutor {
                             ctx.serviceId(), p.seam(), p.rfs().name());
                     lines.realise(ctx.tenant(), ctx.serviceId(), ctx.offeringId(), p.seam(), NO_ADAPTER, null);
                 }
-                case SKIP_OPTIONAL, SKIP_PRECONDITION ->
+                case SKIP_OPTIONAL ->
+                    log.debug("service {}: seam '{}' not run — {}", ctx.serviceId(), p.seam(), p.why());
+                case SKIP_PRECONDITION ->
                     log.debug("service {}: seam '{}' not run — {}", ctx.serviceId(), p.seam(), p.why());
                 case RUN -> {
                     SeamAdapter adapter = registry.forSeam(p.seam()).orElseThrow();

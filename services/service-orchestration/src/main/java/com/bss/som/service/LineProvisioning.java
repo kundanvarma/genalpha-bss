@@ -338,7 +338,11 @@ public class LineProvisioning {
                     .matcher(String.valueOf(off.get("name")));
             int best = 0;
             while (m.find()) {
-                best = Math.max(best, Integer.parseInt(m.group(1)));
+                try {
+                    best = Math.max(best, Integer.parseInt(m.group(1)));
+                } catch (NumberFormatException ignored) {
+                    // two to four digits cannot overflow; the guard is for the analyser's sake
+                }
             }
             if (best > 0) {
                 return best;
