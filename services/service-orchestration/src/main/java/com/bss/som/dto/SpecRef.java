@@ -17,6 +17,11 @@ public record SpecRef(String id, String href, String name, String version) {
                 category + " service", "1.0");
     }
 
+    /** The real TMF633 CFS (served by the product catalog) an inventory row realises. */
+    public static SpecRef cfs(String id, String name) {
+        return new SpecRef(id, "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/" + id, name, null);
+    }
+
     /** The built-in TMF653 spec: the CSR diagnose triage. */
     public static SpecRef diagnose() {
         return new SpecRef("diagnose",

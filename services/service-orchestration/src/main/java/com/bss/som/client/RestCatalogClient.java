@@ -21,6 +21,8 @@ public class RestCatalogClient implements CatalogClient {
     private final Map<String, Optional<String>> cache = new ConcurrentHashMap<>();
     private final Map<String, String> chargingCache = new ConcurrentHashMap<>();
     private final Map<String, Optional<String>> nameCache = new ConcurrentHashMap<>();
+    /** A spec's CFS is design-time data; cache per offering like the category. */
+    private final Map<String, Optional<Cfs>> cfsCache = new ConcurrentHashMap<>();
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {
@@ -112,6 +114,61 @@ public class RestCatalogClient implements CatalogClient {
             log.warn("catalog: zero-rated apps unreadable for offering {}: {}", offeringId, e.getMessage());
         }
         return java.util.List.of();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Optional<Cfs> cfsOf(String offeringId) {
+        if (offeringId == null) {
+            return Optional.empty();
+        }
+        return cfsCache.computeIfAbsent(offeringId, id -> {
+            try {
+                Map<String, Object> offering = restClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .retrieve().body(Map.class);
+                String specId = idOf(offering == null ? null : offering.get("productSpecification"));
+                if (specId == null) {
+                    return Optional.empty();
+                }
+                Map<String, Object> spec = restClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", specId)
+                        .retrieve().body(Map.class);
+                if (spec == null || !(spec.get("serviceSpecification") instanceof List<?> refs) || refs.isEmpty()) {
+                    return Optional.empty();
+                }
+                String cfsId = idOf(refs.get(0));
+                if (cfsId == null) {
+                    return Optional.empty();
+                }
+                Map<String, Object> cfs = restClient.get()
+                        .uri("/tmf-api/serviceCatalogManagement/v4/serviceSpecification/{id}", cfsId)
+                        .retrieve().body(Map.class);
+                if (cfs == null) {
+                    return Optional.empty();
+                }
+                String family = null;
+                if (cfs.get("serviceSpecCharacteristic") instanceof List<?> chars) {
+                    for (Object c : chars) {
+                        if (c instanceof Map<?, ?> ch && "fulfilmentFamily".equals(String.valueOf(ch.get("name")))
+                                && ch.get("serviceSpecCharacteristicValue") instanceof List<?> vals && !vals.isEmpty()
+                                && vals.get(0) instanceof Map<?, ?> v0 && v0.get("value") != null) {
+                            family = String.valueOf(v0.get("value")).trim().toLowerCase(java.util.Locale.ROOT);
+                        }
+                    }
+                }
+                if (family != null && !Cfs.FAMILIES.contains(family)) {
+                    log.warn("catalog: CFS {} declares fulfilmentFamily '{}', not one of {} — ignoring it",
+                            cfsId, family, Cfs.FAMILIES);
+                    family = null;
+                }
+                String name = cfs.get("name") == null ? null : String.valueOf(cfs.get("name"));
+                return Optional.of(new Cfs(cfsId, name, family));
+            } catch (RuntimeException e) {
+                log.warn("catalog: CFS unreadable for offering {}: {}", id, e.getMessage());
+                return Optional.empty();
+            }
+        });
     }
 
     @Override

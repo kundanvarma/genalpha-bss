@@ -86,6 +86,17 @@ public class ServiceInstance {
     @Column(name = "owner_party_id", length = 64)
     private String ownerPartyId;
 
+    /** The TMF633 CFS this service realises — the product spec's serviceSpecification[0]; null when the spec named none. */
+    @Column(name = "cfs_id", length = 64)
+    private String cfsId;
+
+    @Column(name = "cfs_name", length = 160)
+    private String cfsName;
+
+    /** The fulfilment family the CFS declared (mobile | internet | tv | device | partner | security). */
+    @Column(name = "cfs_family", length = 32)
+    private String cfsFamily;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -106,6 +117,12 @@ public class ServiceInstance {
     public void setServiceOrderId(String serviceOrderId) { this.serviceOrderId = serviceOrderId; }
     public String getOwnerPartyId() { return ownerPartyId; }
     public void setOwnerPartyId(String ownerPartyId) { this.ownerPartyId = ownerPartyId; }
+    public String getCfsId() { return cfsId; }
+    public void setCfsId(String cfsId) { this.cfsId = cfsId; }
+    public String getCfsName() { return cfsName; }
+    public void setCfsName(String cfsName) { this.cfsName = cfsName; }
+    public String getCfsFamily() { return cfsFamily; }
+    public void setCfsFamily(String cfsFamily) { this.cfsFamily = cfsFamily; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

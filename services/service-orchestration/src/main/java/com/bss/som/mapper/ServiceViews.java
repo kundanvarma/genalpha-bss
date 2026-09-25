@@ -77,6 +77,9 @@ public class ServiceViews {
             }
         }
         characteristics.add(Characteristic.string("category", category));
+        if (s.getCfsFamily() != null) {
+            characteristics.add(Characteristic.string("fulfilmentFamily", s.getCfsFamily()));
+        }
         List<ServiceView.PlaceRef> places = new ArrayList<>();
         if (s.getDeliveryPath() != null) {
             characteristics.add(Characteristic.string("deliveryPath", s.getDeliveryPath()));
@@ -105,7 +108,9 @@ public class ServiceViews {
                 List.of(ServiceView.ServiceRelationship.standalone(s.getId(), s.getHref())),
                 List.of(new ServiceRef(s.getId(), s.getHref(), s.getName(),
                         "standalone — supports itself; not an invented dependency")),
-                SpecRef.serviceSpec(category),
+                // the CFS the order actually realised when the spec named one;
+                // the derived per-category stand-in only for rows that predate CFS
+                s.getCfsId() != null ? SpecRef.cfs(s.getCfsId(), s.getCfsName()) : SpecRef.serviceSpec(category),
                 parties,
                 s.getDeliveryPath(),
                 places,

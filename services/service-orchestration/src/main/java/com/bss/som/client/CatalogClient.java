@@ -35,6 +35,28 @@ public interface CatalogClient {
     java.util.List<String> zeroRatedAppsOf(String offeringId);
 
     /**
+     * The customer-facing service (TMF633) the offering's product spec names in
+     * its {@code serviceSpecification[0]} — the catalog's OWN decomposition,
+     * authored by a product manager, not inferred from a category string. The
+     * CFS carries its fulfilment family as the characteristic
+     * {@code fulfilmentFamily} (mobile | internet | tv | device | partner |
+     * security). Empty when the spec names no CFS or the CFS is unreadable:
+     * the SOM then falls back to {@code componentType(category)}, as it always
+     * did, so an unfilled catalog changes nothing.
+     */
+    Optional<Cfs> cfsOf(String offeringId);
+
+    /**
+     * @param id     the TMF633 ServiceSpecification id
+     * @param name   its display name ("Mobile line", "Broadband access", …)
+     * @param family the fulfilment family it declares; null when the CFS declares none
+     */
+    record Cfs(String id, String name, String family) {
+        public static final java.util.Set<String> FAMILIES =
+                java.util.Set.of("mobile", "internet", "tv", "device", "partner", "security");
+    }
+
+    /**
      * @param profile          the core's slice profile name
      * @param boostHours       present = a time-boxed pass
      * @param chargingSpecId   the OCS rate plan the line moves to while on the slice (slice-aware charging); null = charging unchanged

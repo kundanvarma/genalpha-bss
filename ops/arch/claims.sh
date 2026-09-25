@@ -188,6 +188,7 @@ accessibility enforced in ci|a11y_test
 the architecture ratchet is green in ci|ratchet.sh
 the chart is template-verified|kubeconform
 runs on every pull request against the smoke fleet|rls_check.py
+every sellable spec names a cfs|cfs_check.py
 CLAIMS
 
 # --------------------------------------------------------------- verdict ----

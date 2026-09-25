@@ -41,9 +41,21 @@ def ref(entity, rt):
     return {"id": entity["id"], "href": entity.get("href"), "name": entity["name"], "@referredType": rt}
 
 
-offerings = {o["name"]: o for o in req("GET", "productOffering?limit=100")}
-prices = {p["name"]: p for p in req("GET", "productOfferingPrice?limit=100")}
-specs = {s["name"]: s for s in req("GET", "productSpecification?limit=100")}
+def page(path):
+    """The catalog caps a page at 100 and the demo tenant outgrew that: a lookup
+    off one page silently misses 'TV Max Monthly' and crashes here with a KeyError."""
+    out, offset = [], 0
+    while True:
+        chunk = req("GET", f"{path}?limit=100&offset={offset}")
+        out.extend(chunk)
+        if len(chunk) < 100:
+            return out
+        offset += 100
+
+
+offerings = {o["name"]: o for o in page("productOffering")}
+prices = {p["name"]: p for p in page("productOfferingPrice")}
+specs = {s["name"]: s for s in page("productSpecification")}
 
 
 def ensure_spec(name, brand, characteristics):
@@ -122,10 +134,15 @@ po_sam = ensure_phone_offering("Samsung Galaxy S26",
 # 3b. An optional, standalone-purchasable add-on: TMF620 soft-bundle
 #     cardinality lower=0 means the customer MAY include it (0..1).
 price_sports = ensure_price("Sports Pass Monthly", 12.99)
+# A TV pass is not an iPhone: it gets ITS OWN spec. Sharing the handset's spec
+# (as this seed once did) made one spec belong to two fulfilment families, so
+# the CFS the spec names could never be right for both — cfs_check.py counts
+# exactly that, and the fix belongs here, not in the CFS seed.
+spec_sports = ensure_spec("GenAlpha Sports Pass", "GenAlpha", [])
 sports = ensure_phone_offering(
     "GenAlpha Sports Pass",
     "Every match, live — an optional add-on you can drop onto the bundle or buy on its own.",
-    spec_std, price_sports)
+    spec_sports, price_sports)
 
 
 def mandatory(entity):
