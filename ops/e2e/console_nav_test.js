@@ -116,8 +116,8 @@ async function groupLabels(page) {
   if (JSON.stringify(ai) !== JSON.stringify(['Work', 'Decisions', 'Audit'])) await fail(`AI & Automation groups: ${ai}`);
   await openDept(page, 'Customer Bills');
   const money = await groupLabels(page);
-  if (money.length) await fail(`Money is flat but shows groups: ${money}`);
-  console.log('OK Marketing and AI & Automation grouped; Money stays flat');
+  if (money.length) await fail(`Billing & Revenue is flat but shows groups: ${money}`);
+  console.log('OK Marketing and AI & Automation grouped; Billing & Revenue stays flat');
 
   /* ---------- 3. a draft offering and a live one ---------- */
   const draftName = `Nav draft ${run}`;

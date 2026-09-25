@@ -54,7 +54,7 @@ async function desks(page) {
   const patDesks = await desks(pat.page);
   const patGroups = Object.keys(patDesks);
   if (!patGroups.includes('Catalog & Pricing')) fail('pat lost his catalog: ' + patGroups);
-  for (const g of ['Money', 'Marketing', 'Sales', 'Sales setup']) {
+  for (const g of ['Billing & Revenue', 'Marketing', 'Sales', 'Sales setup']) {
     if (patGroups.includes(g)) fail(`pat sees the ${g} desk: ` + JSON.stringify(patDesks[g]));
   }
   const patAI = patDesks['AI & Automation'] || [];
@@ -70,19 +70,19 @@ async function desks(page) {
   const finn = await loginConsole(browser, 'finn@bss.local', 'finn');
   const finnDesks = await desks(finn.page);
   const finnGroups = Object.keys(finnDesks);
-  if (!finnGroups.includes('Money')) fail('finn has no money desk: ' + finnGroups);
-  if ((finnDesks['Money'] || []).length < 6) {
-    fail('finn is missing money tabs: ' + JSON.stringify(finnDesks['Money']));
+  if (!finnGroups.includes('Billing & Revenue')) fail('finn has no billing desk: ' + finnGroups);
+  if ((finnDesks['Billing & Revenue'] || []).length < 6) {
+    fail('finn is missing billing tabs: ' + JSON.stringify(finnDesks['Billing & Revenue']));
   }
-  const finnDisputes = (finnDesks['Money'] || []).filter((t) => t === 'Disputes');
+  const finnDisputes = (finnDesks['Billing & Revenue'] || []).filter((t) => t === 'Disputes');
   if (finnDisputes.length !== 1) {
     fail('exactly ONE Disputes tab expected, got ' + finnDisputes.length);
   }
   for (const g of ['Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform', 'Care & Ops']) {
     if (finnGroups.includes(g)) fail(`finn sees ${g}: ` + JSON.stringify(finnDesks[g]));
   }
-  console.log('OK FINN (finance): Money only — '
-    + finnDesks['Money'].join(', ') + '. The duplicate Disputes tab is dead.');
+  console.log('OK FINN (finance): Billing & Revenue only — '
+    + finnDesks['Billing & Revenue'].join(', ') + '. The duplicate Disputes tab is dead.');
   // the negative pair: the hidden tab's API refuses him too
   const finnTok = await token(ctx0.request, 'finn@bss.local', 'finn');
   const finnPost = await ctx0.request.post(
@@ -105,7 +105,7 @@ async function desks(page) {
     fail('gro is missing marketing tabs: ' + JSON.stringify(groDesks['Marketing']));
   }
   if (!groGroups.includes('Sales')) fail('gro (quote:read) has no sales desk: ' + groGroups);
-  for (const g of ['Money', 'Catalog & Pricing', 'AI & Automation', 'Platform', 'Care & Ops']) {
+  for (const g of ['Billing & Revenue', 'Catalog & Pricing', 'AI & Automation', 'Platform', 'Care & Ops']) {
     if (groGroups.includes(g)) fail(`gro sees ${g}: ` + JSON.stringify(groDesks[g]));
   }
   const groTok = await token(ctx0.request, 'gro@bss.local', 'gro');
@@ -125,7 +125,7 @@ async function desks(page) {
   const mktDesks = await desks(mkt.page);
   const mktGroups = Object.keys(mktDesks);
   if (!mktGroups.includes('Marketing')) fail('mkt has no marketing desk: ' + mktGroups);
-  for (const g of ['Sales', 'Sales setup', 'Money', 'Catalog & Pricing', 'Care & Ops']) {
+  for (const g of ['Sales', 'Sales setup', 'Billing & Revenue', 'Catalog & Pricing', 'Care & Ops']) {
     if (mktGroups.includes(g)) fail(`mkt (marketing-staff) sees ${g}: ` + JSON.stringify(mktDesks[g]));
   }
   console.log('OK MKT (marketing-staff): Marketing only — ' + (mktDesks['Marketing'] || []).join(', '));
@@ -137,7 +137,7 @@ async function desks(page) {
   const selGroups = Object.keys(selDesks);
   if (!selGroups.includes('Sales')) fail('sel has no sales desk: ' + selGroups);
   if (!selGroups.includes('Sales setup')) fail('sel (quote:write) has no sales-setup desk: ' + selGroups);
-  for (const g of ['Marketing', 'Money', 'Catalog & Pricing', 'Care & Ops']) {
+  for (const g of ['Marketing', 'Billing & Revenue', 'Catalog & Pricing', 'Care & Ops']) {
     if (selGroups.includes(g)) fail(`sel (sales-staff) sees ${g}: ` + JSON.stringify(selDesks[g]));
   }
   console.log('OK SEL (sales-staff): Sales + Sales setup, no Marketing — '
@@ -154,7 +154,7 @@ async function desks(page) {
     fail('omar (workforce:use) should see the AI Workforce: ' + JSON.stringify(omarAI));
   }
   if (omarAI.includes('Runbooks')) fail('runbook signing is ai:admin — omar must not see it');
-  for (const g of ['Money', 'Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup']) {
+  for (const g of ['Billing & Revenue', 'Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup']) {
     if (omarGroups.includes(g)) fail(`omar sees ${g}: ` + JSON.stringify(omarDesks[g]));
   }
   // negative pair: watching the crew is his; GOVERNING it is not
@@ -173,7 +173,7 @@ async function desks(page) {
   const demo = await loginConsole(browser, 'demo', 'demo');
   const demoDesks = await desks(demo.page);
   const demoGroups = Object.keys(demoDesks);
-  for (const g of ['Catalog & Pricing', 'Money', 'Care & Ops', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform']) {
+  for (const g of ['Catalog & Pricing', 'Billing & Revenue', 'Care & Ops', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform']) {
     if (!demoGroups.includes(g)) fail('demo is missing the ' + g + ' desk: ' + demoGroups);
   }
   if (!(demoDesks['AI & Automation'] || []).includes('AI Workforce')) {

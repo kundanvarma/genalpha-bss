@@ -167,7 +167,7 @@ const WORKSPACES = [
     quiet: ['copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
-  { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
+  { label: 'Billing & Revenue', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
     'shadowDrift'] },
   { label: 'Reporting', tabs: ['reporting'] },
