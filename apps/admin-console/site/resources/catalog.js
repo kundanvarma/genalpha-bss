@@ -14,8 +14,8 @@ const RESOURCES = [
       // row 2 — lifecycle and window
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
       { name: 'version', label: 'Version', placeholder: '1.0' },
-      { name: 'validFrom', label: 'Available from', placeholder: '2026-10-01T00:00:00+02:00', hint: 'ISO date-time; blank = immediately' },
-      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time; blank = forever' },
+      { name: 'validFrom', label: 'Available from', kind: 'date', read: (o) => (o.validFor || {}).startDateTime, hint: 'Blank = available immediately' },
+      { name: 'validTo', label: 'Available until', kind: 'date', endOfDay: true, read: (o) => (o.validFor || {}).endDateTime, hint: 'The last day it is sold. Blank = forever' },
       // row 3 — what it is
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
       { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
@@ -66,8 +66,9 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true, half: true },
       { name: 'brand', label: 'Brand', half: true, hint: 'Shown on device cards; blank for plans' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
-      { name: 'validFrom', label: 'Available from', placeholder: 'blank = immediately', hint: 'ISO date-time' },
-      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time' },
+      // A specification has no selling window: TMF620 puts `validFor` on the
+      // OFFERING, and this form's two date fields were silently dropped by the
+      // API for as long as they existed. Removed rather than faked.
       { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'jsontext', wide: true,
         hint: 'JSON array. Facts the shop shows and the systems read: Data, Validity, chargingSpecId, sliceProfile, zeroRatedApps. "configurable": true makes a picker.',
         placeholder: '[{"name": "Data", "configurable": false, "productSpecCharacteristicValue": [{"value": "20 GB"}]}]' },

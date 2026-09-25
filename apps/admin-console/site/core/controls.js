@@ -19,6 +19,43 @@ function textControl(field, type) {
   return [input];
 }
 
+/* A calendar, not a typed timestamp. The wire wants an instant (TMF `validFor`
+ * is a date-time); a product manager means a day. So: a native date picker,
+ * read back as the local day, written as that day's first moment — or its last
+ * when the field is the closing end of a window (`endOfDay: true`), because
+ * "available until 31 October" means the whole of the 31st. A field marked
+ * `plain: true` keeps the bare YYYY-MM-DD the API asked for. */
+function dateControl(field) {
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.name = field.name;
+  input.required = Boolean(field.required);
+  const iso = (day, endOfDay) => {
+    const [y, m, d] = day.split('-').map(Number);
+    const at = endOfDay ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d, 0, 0, 0, 0);
+    return at.toISOString();
+  };
+  const dayOf = (value) => {
+    if (!value) return '';
+    const at = new Date(value);
+    if (Number.isNaN(at.getTime())) return String(value).slice(0, 10);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+  };
+  controls[field.name] = {
+    get: () => {
+      const day = input.value.trim();
+      if (!day) return undefined;
+      return field.plain ? day : iso(day, Boolean(field.endOfDay));
+    },
+    // a field may live under another name on the wire (the offering's window is
+    // `validFor.startDateTime`, not `validFrom`) — `read` says where to look;
+    // without it the form opened blank, which it did for as long as it existed
+    set: (item) => { input.value = dayOf(field.read ? field.read(item) : item[field.name]); },
+  };
+  return [input];
+}
+
 function checkboxControl(field) {
   const input = document.createElement('input');
   input.type = 'checkbox';

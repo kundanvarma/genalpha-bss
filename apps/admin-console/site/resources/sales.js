@@ -154,7 +154,7 @@ RESOURCES.push(
       ] },
       { name: 'amount', label: 'Deal value', kind: 'number' },
       { name: 'probability', label: 'Win probability %', kind: 'number' },
-      { name: 'expectedCloseDate', label: 'Expected close (YYYY-MM-DD)' },
+      { name: 'expectedCloseDate', label: 'Expected close', kind: 'date', plain: true },
       { name: 'ownerName', label: 'Owner' },
       { name: 'partyId', label: 'Account party id (enables the 360 timeline)' },
       { name: 'description', label: 'Notes', kind: 'longtext' },
