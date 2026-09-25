@@ -22,7 +22,32 @@ current() {
 import json, os, re, subprocess, sys
 mx = int(sys.argv[1])
 out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {},
-       "htmlInterpolations": {}}
+       "htmlInterpolations": {}, "undeclaredJsx": {}}
+
+# --- rule 6: a JSX component that nothing declares or imports --------------------
+# Vite bundles it as a global and the page throws "X is not defined" the first time
+# that branch renders — a ReferenceError the build never sees. Found live on
+# 25 Sep 2026: Services.jsx used <RouterPanel> without importing it, for months.
+JSX_TAG = re.compile(r'<([A-Z][A-Za-z0-9_]*)')
+# indented too: a component declared inside another component's body (const Err = ... ) is a declaration
+DECLARED = re.compile(r'^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class)\s+([A-Za-z_]\w*)'
+                      r'|^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)', re.M)
+IMPORTED = re.compile(r'^import\s+([^;]+?)\s+from\s+', re.M)
+BUILTIN_TAGS = {'Fragment', 'Suspense', 'StrictMode', 'Profiler'}
+def undeclared_jsx(src):
+    if '<' not in src: return 0
+    names = set()
+    for a, b in DECLARED.findall(src): names.add(a or b)
+    for spec in IMPORTED.findall(src):
+        spec = spec.replace('{', ',').replace('}', ',')
+        for part in spec.split(','):
+            part = part.strip()
+            if not part or part == 'type': continue
+            names.add(part.split(' as ')[-1].strip().lstrip('* ').strip())
+    body = re.sub(r'^import[^\n]*$', '', src, flags=re.M)
+    used = set(JSX_TAG.findall(body))
+    # a dotted tag (<Tab.Screen>) is declared by its head; a destructured default (const {X} = ...) by DECLARED
+    return sum(1 for u in used if u not in names and u not in BUILTIN_TAGS)
 pat = re.compile(r'public .*Map<String, ?Object> [a-zA-Z_]+\(')
 write = re.compile(r'@(Patch|Put|Post)Mapping[^\n]*\n(?:[^\n]*\n){0,3}?[^\n]*@RequestBody\s+(?:final\s+)?Map<String, ?Object>')
 # an identifier KEY: exactly id/ref/…, or ending in Id/Ref, or a known owner-ish name.
@@ -235,6 +260,9 @@ for app in sorted(os.listdir('apps')):
                     if 'innerHTML' in src:
                         h = html_holes(src)
                         if h: out["htmlInterpolations"][p] = h
+                    if f.endswith(('.jsx', '.tsx')):
+                        u = undeclared_jsx(src)
+                        if u: out["undeclaredJsx"][p] = u
 print(json.dumps(out, indent=1, sort_keys=True))
 PY
 }
@@ -267,13 +295,15 @@ for p, n in now.get("htmlInterpolations", {}).items():
     if quick and f and not f.endswith(p): continue
     b = base.get("htmlInterpolations", {}).get(p, 0)
     if n > b: bad.append(f"{p}: {n} unescaped interpolations into innerHTML, baseline {b} — a name or a message off the wire reaches the DOM as markup; wrap it in esc(…), or build the node with createElement + textContent, see docs/engineering-conventions.md §4")
-for p in base["frontendFiles"]:
-    pass
+for p, n in now.get("undeclaredJsx", {}).items():
+    if quick and f and not f.endswith(p): continue
+    b = base.get("undeclaredJsx", {}).get(p, 0)
+    if n > b: bad.append(f"{p}: {n} JSX component(s) used but never declared or imported, baseline {b} — the page throws 'X is not defined' the first time that branch renders; import it")
 if bad:
     print("ARCHITECTURE RATCHET — regression:"); [print("  - " + m) for m in bad]; sys.exit(2)
 tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
 tw = sum(now.get("rawMapWrites", {}).values()); twb = sum(base.get("rawMapWrites", {}).values())
 tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards", {}).values())
 th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])})")
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])})")
 PY

@@ -2,26 +2,24 @@
  "frontendFiles": {
   "apps/admin-console/site/home.js": 310,
   "apps/business-console/site/app.js": 609,
-  "apps/csr-console/src/api.js": 791,
   "apps/csr-console/src/pages/Assist.jsx": 322,
   "apps/csr-console/src/pages/Customer360.jsx": 727,
   "apps/csr-console/src/sdk/genalpha-sdk.js": 303,
   "apps/mobile/src/screens/Home.js": 434,
-  "apps/storefront/src/api.js": 1217,
   "apps/storefront/src/checkout.js": 315,
-  "apps/storefront/src/i18n.js": 568,
   "apps/storefront/src/pages/Bills.jsx": 347,
-  "apps/storefront/src/pages/Cart.jsx": 1259,
+  "apps/storefront/src/pages/Cart.jsx": 1025,
   "apps/storefront/src/pages/Family.jsx": 546,
   "apps/storefront/src/pages/Home.jsx": 320,
   "apps/storefront/src/pages/Offering.jsx": 591,
   "apps/storefront/src/pages/Orders.jsx": 340,
-  "apps/storefront/src/pages/Services.jsx": 813,
+  "apps/storefront/src/pages/Services.jsx": 414,
   "apps/storefront/src/pages/Shop.jsx": 628,
   "apps/storefront/src/pages/UsageControls.jsx": 310
  },
  "htmlInterpolations": {},
  "mapReturns": {},
  "nullIdGuards": {},
- "rawMapWrites": {}
+ "rawMapWrites": {},
+ "undeclaredJsx": {}
 }
