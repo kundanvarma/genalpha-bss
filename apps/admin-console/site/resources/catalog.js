@@ -19,7 +19,7 @@ const RESOURCES = [
       // row 3 — what it is
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
       { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
-      { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'jsontext', wide: true, placeholder: '[{"id": "<offering id>", "name": "Taranga Fiber 300", "relationshipType": "requires", "role": "prompt"}, {"id": "<offering id>", "name": "Taranga TV", "relationshipType": "excludes"}]', hint: 'TMF620 relationships the configurator enforces: requires (role auto-add | prompt | block), excludes, exchangableTo (the like-for-like change list).' },
+      { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'relationships', wide: true, hint: 'What this offer needs, rules out, or can be changed to. The configurator enforces it in every channel.' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
       // row 4 — placement and price
       { name: 'category', label: 'Categories', kind: 'reflist', resource: 'category', referredType: 'Category', half: true, hint: 'Drive shop placement and fulfilment' },
@@ -113,11 +113,21 @@ const RESOURCES = [
       { name: 'version', label: 'Version', placeholder: '1.0' },
       { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
-      { name: 'unitOfMeasure', label: 'Per unit of', kind: 'jsontext', placeholder: '{"amount": 1, "units": "seat"}', hint: 'Quantity pricing: the price applies per this many (per seat, per 5 GB). Blank = a flat price.' },
-      { name: 'validFor', label: 'Price window', kind: 'jsontext', placeholder: '{"startDateTime": "2026-10-01T00:00:00Z", "endDateTime": "2026-12-31T23:59:59Z"}', hint: 'When this price line applies (an effective-dated segment). Blank = always. Never edit a live price on an offering with subscribers — add a dated segment.' },
-      { name: 'pricingLogicAlgorithm', label: 'Algorithm', kind: 'jsontext', wide: true, placeholder: '[{"plaSpecId": "perUnitAbove", "characteristic": "extraProfiles", "threshold": 2, "unitPrice": 10}]  or  [{"plaSpecId": "stepped", "characteristic": "quantity", "tier": [{"valueFrom": 1, "valueTo": 10, "price": 20}, {"valueFrom": 11, "valueTo": 999, "price": 15, "format": "perUnit"}]}]', hint: 'A named algorithm from the documented set: perUnitAbove (base plus unit price above a threshold) or stepped (a tier table on a characteristic or the quantity). Never free-form.' },
-      { name: 'prodSpecCharValueUse', label: 'Applies only when', kind: 'jsontext', wide: true, placeholder: '[{"name": "screens", "productSpecCharacteristicValue": [{"value": "5+"}]}]  or a range: [{"name": "extraProfiles", "productSpecCharacteristicValue": [{"valueFrom": 3, "valueTo": 10}]}]', hint: 'The configured choice this price is conditioned on. The specification must declare the choice and its values, or the catalog refuses the offering.' },
+      { name: 'unitOfMeasure', label: 'Per unit of', kind: 'unitofmeasure', hint: 'Quantity pricing: the price applies per this many (per seat, per 5 GB). Blank = a flat price.' },
+      { name: 'validFrom', label: 'Price from', kind: 'date', read: (p) => (p.validFor || {}).startDateTime, hint: 'When this price line starts. Blank = always' },
+      { name: 'validTo', label: 'Price until', kind: 'date', endOfDay: true, read: (p) => (p.validFor || {}).endDateTime, hint: 'Its last day. Blank = forever. Never edit a live price on an offering with subscribers — add a dated segment' },
+      { name: 'pricingLogicAlgorithm', label: 'Algorithm', kind: 'algorithm', wide: true, hint: 'A named algorithm from the documented set, never a formula: per unit above a threshold, or a tier table.' },
+      { name: 'prodSpecCharValueUse', label: 'Applies only when', kind: 'pricecondition', wide: true, hint: 'The configured choice this price rides on. The specification must declare the choice and its values, or the catalog refuses the offering.' },
     ],
+    // two calendars, one TMF window — the same shape the offering assembles
+    assemble: (body) => {
+      const out = { ...body };
+      if (body.validFrom || body.validTo) {
+        out.validFor = { startDateTime: body.validFrom || undefined, endDateTime: body.validTo || undefined };
+      }
+      delete out.validFrom; delete out.validTo;
+      return out;
+    },
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
   {
@@ -128,7 +138,7 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true },
       { name: 'productOffering', label: 'Offering', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'stockedQuantity', label: 'Stocked', kind: 'quantity' },
-      { name: 'stockedProduct', label: 'Variant (optional)', kind: 'jsontext', wide: true, placeholder: '{"productOffering": {"id": "<offering id>"}, "productCharacteristic": [{"name": "boxColour", "value": "Icy Blue"}]}', hint: 'TMF687 stockedProduct: count this row per configured variant (a colour, a storage size). Blank = the offering as a whole. The configurator marks a variant with no stock as not selectable.' },
+      { name: 'stockedProduct', label: 'Variant (optional)', kind: 'stockvariant', wide: true, hint: 'Count this row per configured variant (a colour, a storage size). Blank = the offering as a whole.' },
     ],
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
