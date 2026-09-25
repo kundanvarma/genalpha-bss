@@ -144,6 +144,36 @@ PY
   [ -z "$mismatch" ] || fail "$lock pins $mismatch — React refuses a mismatched pair (blank page); bump both together"
 done
 
+# ------------------------------------- no JSON box on a commercial page ----
+# docs/engineering-conventions.md §4 says a page a commercial user opens never
+# carries a raw `jsontext` field, names how many are left, and says the ratchet
+# holds the line. All three halves are machine-checked here, because a rule with
+# a remembered number is the shape every stale claim on 23 Sep had: the metric
+# must exist, the baseline must PIN it (an unpinned metric compares against
+# nothing and can never go red), and the number in the prose is read off the
+# tree by the ratchet itself, never typed.
+# Hung on the METRIC, not on the sentence: deleting the conventions row would
+# otherwise switch this whole block off in silence, which is the same failure
+# one rung up. A metric with no rule behind it is drift too.
+if grep -q 'commercialJsonBoxes' ops/arch/ratchet.sh; then
+  grep -q 'Never a JSON box on a page a commercial user opens' docs/engineering-conventions.md \
+    || fail "ops/arch/ratchet.sh counts commercialJsonBoxes but docs/engineering-conventions.md §4 states no such rule" \
+            "a metric nobody wrote down is a number, not a convention"
+  grep -q '"commercialJsonBoxes"' ops/arch/baseline.json \
+    || fail "ops/arch/baseline.json does not pin commercialJsonBoxes" \
+            "an unpinned metric compares against nothing — the rule reads enforced and is not"
+  BOXES=$(ops/arch/ratchet.sh --metric commercialJsonBoxes 2>/dev/null || echo unreadable)
+  grep -qE '[0-9]+ JSON box(es)? remain' docs/engineering-conventions.md \
+    || fail "conventions §4 carries the JSON-box rule but states no count" \
+            "write 'N JSON boxes remain' in the Check column so the number can be checked"
+  # anywhere the count is stated, not only in the conventions file
+  CLAIMED_BOXES=$(grep -rhoE '[0-9]+ JSON box(es)? remain' README.md CLAUDE.md docs/*.md 2>/dev/null | grep -oE '^[0-9]+' | sort -u)
+  for n in $CLAIMED_BOXES; do
+    [ "$n" = "$BOXES" ] || fail "a document says $n JSON boxes remain on commercial pages; the console has $BOXES" \
+      "fix: ops/arch/ratchet.sh --metric commercialJsonBoxes is the source; change the number in docs/engineering-conventions.md"
+  done
+fi
+
 # ------------------------------------------------------------ gates bite ----
 # A gate that cannot fail is worse than no gate: it is believed. Every script
 # we call a gate must have a path that exits non-zero — in shell, or in an

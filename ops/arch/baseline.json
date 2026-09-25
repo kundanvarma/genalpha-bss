@@ -1,5 +1,9 @@
 {
  "categoryFallbacks": 0,
+ "commercialJsonBoxes": {
+  "campaign": 1,
+  "journey": 1
+ },
  "frontendFiles": {
   "apps/admin-console/site/home.js": 310,
   "apps/business-console/site/app.js": 609,
