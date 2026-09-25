@@ -41,6 +41,7 @@ public class ServiceSpecificationMapper {
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setServiceSpecCharacteristic(readJsonObjectList(entity.getServiceSpecCharacteristicJson()));
         dto.setServiceSpecRelationship(readJsonObjectList(entity.getServiceSpecRelationshipJson()));
+        dto.setResourceSpecification(readJsonObjectList(entity.getResourceSpecificationJson()));
         dto.setType(typeFor(entity.getServiceType()));
         dto.setBaseType(BASE_TYPE);
         dto.setSchemaLocation(ApiConstants.SERVICE_SCHEMA_BASE + dto.getType() + ".schema.json");
@@ -83,6 +84,7 @@ public class ServiceSpecificationMapper {
         entity.setLastUpdate(dto.getLastUpdate());
         entity.setServiceSpecCharacteristicJson(writeJsonObjectList(dto.getServiceSpecCharacteristic()));
         entity.setServiceSpecRelationshipJson(writeJsonObjectList(dto.getServiceSpecRelationship()));
+        entity.setResourceSpecificationJson(writeJsonObjectList(dto.getResourceSpecification()));
         return entity;
     }
 
@@ -112,6 +114,9 @@ public class ServiceSpecificationMapper {
         }
         if (patch.getServiceSpecRelationship() != null) {
             entity.setServiceSpecRelationshipJson(writeJsonObjectList(patch.getServiceSpecRelationship()));
+        }
+        if (patch.getResourceSpecification() != null) {
+            entity.setResourceSpecificationJson(writeJsonObjectList(patch.getResourceSpecification()));
         }
     }
 
