@@ -179,7 +179,7 @@ export default function Home({ navigation }) {
   const c = palette();
   const numberFor = (name) => services.find((s) => s.name === name
     && (s.supportingResource || []).length)?.supportingResource[0].value;
-  const openBill = bills.find((b) => b.state !== 'settled');
+  const openBill = bills.find((b) => (b.billSituation?.value || b.state) !== 'paid' && b.state !== 'settled');
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={{ padding: 14 }}

@@ -51,13 +51,22 @@ const PAGE_KPIS = {
   },
   customerBill: async () => {
     const bills = await authFetch(`${active.base}/customerBill?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    const now = Date.now();
-    const unpaid = bills.filter((b) => !/settled|paid|closed/i.test(b.state || ''));
-    const overdue = unpaid.filter((b) => b.paymentDueDate && new Date(b.paymentDueDate).getTime() < now);
-    return [
-      { label: 'unpaid', value: unpaid.length, tone: unpaid.length ? 'warn' : 'ok', ids: unpaid.map((b) => b.id) },
+    // what the BILL says about itself, not what this page can guess: the chip
+    // used to test `paymentDueDate`, which no bill carries, so "overdue" read
+    // zero however late the book was
+    const is = (b, ...values) => values.includes((b.billSituation || {}).value);
+    const outstanding = bills.filter((b) => !is(b, 'paid', 'writtenOff', 'issued'));
+    const overdue = bills.filter((b) => is(b, 'overdue'));
+    const arrangement = bills.filter((b) => is(b, 'arrangement'));
+    const chips = [
+      { label: 'outstanding', value: outstanding.length, tone: outstanding.length ? 'warn' : 'ok', ids: outstanding.map((b) => b.id) },
       { label: 'overdue', value: overdue.length, tone: overdue.length ? 'bad' : 'ok', ids: overdue.map((b) => b.id) },
     ];
+    // only when there are any: an arrangement is good news, and a zero chip is noise
+    if (arrangement.length) {
+      chips.push({ label: 'under arrangement', value: arrangement.length, tone: 'ok', ids: arrangement.map((b) => b.id) });
+    }
+    return chips;
   },
   productOrder: async () => {
     const orders = await authFetch(`${active.base}/productOrder?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);

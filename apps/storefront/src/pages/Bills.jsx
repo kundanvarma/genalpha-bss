@@ -1,20 +1,9 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n.js';
+import { CASE_CONSEQUENCE, Situation } from './bills/Situation.jsx';
+
 import { billRates, createPayment, disputeBill, myBills, myCollectionCase, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, promiseToPay, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
 
-/* The consequences line the law wants said plainly, per ladder rung. */
-const CASE_CONSEQUENCE = {
-  reminded: 'A payment reminder has been sent (the statutory reminder fee rides the bill). '
-    + 'If the balance stays unpaid, a payment demand follows and services can later be restricted.',
-  warned: 'A payment demand has been sent. Unless the balance is paid, outgoing services can be '
-    + 'restricted at the earliest one month after the demand — emergency numbers always stay reachable.',
-  restricted: 'Outgoing services are restricted — emergency numbers still work. '
-    + 'Unless the balance is paid, the line will be suspended next.',
-  suspended: 'Your line is suspended for non-payment. No subscription charges accrue while it is '
-    + 'suspended — paying restores your services at once.',
-  terminated: 'This subscription was terminated for non-payment. Please contact us to settle the remaining balance.',
-  writtenOff: 'This balance has been closed. Please contact us if you believe this is wrong.',
-};
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -219,7 +208,7 @@ export default function Bills() {
               </div>
               <div className="rowend">
                 <span className="linetotal">{bill.amountDue.value.toFixed(2)} {bill.amountDue.unit}</span>
-                <span className={`state ${bill.state}`}>{bill.state}</span>
+                <Situation bill={bill} />
                 <a className="ghost" data-testid="bill-pdf" style={{ textDecoration: 'none' }}
                    href={`/tmf-api/customerBillManagement/v4/customerBill/${bill.id}/document.pdf`}
                    target="_blank" rel="noreferrer"
