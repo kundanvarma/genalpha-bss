@@ -146,9 +146,13 @@ done
 # must exist, the baseline must PIN it (an unpinned metric compares against
 # nothing and can never go red), and the number in the prose is read off the
 # tree by the ratchet itself, never typed.
-if grep -q 'Never a JSON box on a page a commercial user opens' docs/engineering-conventions.md; then
-  grep -q 'commercialJsonBoxes' ops/arch/ratchet.sh \
-    || fail "conventions §4 says the ratchet refuses a new JSON box on a commercial page, but ops/arch/ratchet.sh has no commercialJsonBoxes metric"
+# Hung on the METRIC, not on the sentence: deleting the conventions row would
+# otherwise switch this whole block off in silence, which is the same failure
+# one rung up. A metric with no rule behind it is drift too.
+if grep -q 'commercialJsonBoxes' ops/arch/ratchet.sh; then
+  grep -q 'Never a JSON box on a page a commercial user opens' docs/engineering-conventions.md \
+    || fail "ops/arch/ratchet.sh counts commercialJsonBoxes but docs/engineering-conventions.md §4 states no such rule" \
+            "a metric nobody wrote down is a number, not a convention"
   grep -q '"commercialJsonBoxes"' ops/arch/baseline.json \
     || fail "ops/arch/baseline.json does not pin commercialJsonBoxes" \
             "an unpinned metric compares against nothing — the rule reads enforced and is not"
