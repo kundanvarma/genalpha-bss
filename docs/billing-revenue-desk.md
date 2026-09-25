@@ -194,9 +194,10 @@ at least one page under it, and disappears with the last one.
 | Overview, Billing, Payments, Accounting, Configuration | `billing:admin` |
 | Collections | `billing:admin` (Cases, Dunning) **or** `risk:assess` (Risk) |
 
-Those are the roles the services themselves enforce, which is the point: a tab
-a token can see is a tab whose API answers it, and a tab it cannot see is one
-that would have answered 403. So finance-staff — `billing:admin`, `billing:read`,
+Those are roles the services themselves enforce, which is the point: a tab a
+token can see is a tab whose API answers it, never a button that leads to a 403.
+The gate errs strict where it must — see the Accounting note under Honest limits
+— but it never errs open. So finance-staff — `billing:admin`, `billing:read`,
 `party:read` — is shown all six destinations and every page in them except
 Risk, and a risk analyst holding `risk:assess` alone is shown Billing & Revenue
 holding **Collections and nothing else**, with Risk the only page under it.
