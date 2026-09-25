@@ -35,7 +35,7 @@ knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
 loyalty_test                loyalty
 omnichannel_test            campaign party-interaction communication
-price_builder_test          insight
+price_builder_test          product-stock insight
 process_memory_test         process trouble-ticket
 referral_test               campaign revenue usage
 registry_address_test       geographic-address mock-freg insight

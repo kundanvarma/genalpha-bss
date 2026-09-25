@@ -90,6 +90,8 @@ function renderEditor() {
       f.kind === 'unitofmeasure' ? unitOfMeasureControl(f) :
       f.kind === 'algorithm' ? pricingAlgorithmControl(f) :
       f.kind === 'pricecondition' ? priceConditionControl(f) :
+      f.kind === 'relationships' ? offeringRelationshipControl(f) :
+      f.kind === 'stockvariant' ? stockVariantControl(f) :
       f.kind === 'select' ? selectControl(f) :
       f.kind === 'multiselect' ? multiselectControl(f) :
       f.kind === 'recipe' ? recipeControl(f) :

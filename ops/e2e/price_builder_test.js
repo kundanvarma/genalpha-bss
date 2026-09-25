@@ -1,10 +1,11 @@
-/* A price is built, not typed. Suite #236.
+/* A price is built, and a relationship and a variant are picked. Suite #236.
  *
- * Four JSON boxes stood between a commercial product manager and their own
- * prices: what a price is charged per, its window, its algorithm, and the
- * configured choice it rides on. Each is a control now. This suite proves the
- * thing that matters about replacing a payload with a form — that the payload
- * did not change:
+ * Six JSON boxes stood between a commercial product manager and their own
+ * catalog: what a price is charged per, its window, its algorithm, the choice
+ * it rides on, what an offering requires or excludes, and which variant a
+ * stock row counts. Each is a control now. This suite proves the thing that
+ * matters about replacing a payload with a form — that the payload did not
+ * change:
  *
  *  - BUILT: a price authored entirely through the controls stores EXACTLY the
  *    JSON the old box would have written, compared key by key against the
@@ -16,13 +17,16 @@
  *    displayed would quietly restringify them.
  *  - UNMODELLED KEYS SURVIVE: an algorithm entry's own `name` — a key no
  *    control shows — is still there after an edit through the form.
- *  - READ BACK: reopening the price shows exactly what is stored.
+ *  - PICKED: an offering that excludes another, and a stock row counting one
+ *    variant, both authored without an identifier being typed.
+ *  - READ BACK: reopening every one of them shows what was saved.
  */
 const { chromium } = require('playwright');
 
 const API = 'http://localhost:8080';
 const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
 const CAT = '/tmf-api/productCatalogManagement/v4';
+const STOCK = '/tmf-api/productStockManagement/v4';
 const CONSOLE = 'http://localhost:8080/console/';
 const fail = (m) => { throw new Error(m); };
 const ok = (m) => console.log('OK ' + m);
@@ -194,6 +198,58 @@ async function saveAndWait(page) {
   if (kept[0]?.unitPrice !== 12) fail(`the edit did not reach the wire: ${JSON.stringify(kept)}`);
   ok(`UNMODELLED KEYS SURVIVE: editing the unit price kept the entry's own name ("${kept[0].name}") that no control shows`);
 
+  /* ---------- PICKED: requires / excludes, and a stock variant ---------- */
+  const other = (await call('POST', `${CAT}/productOffering`, staff, {
+    name: `${tag} the other offer`, lifecycleStatus: 'Active', version: '1.0', isBundle: false,
+  })).body;
+  const offering = (await call('POST', `${CAT}/productOffering`, staff, {
+    name: `${tag} seat offer`, lifecycleStatus: 'Active', version: '1.0', isBundle: false,
+    productSpecification: { id: spec.id, name: spec.name, '@referredType': 'ProductSpecification' },
+  })).body;
+  if (!other?.id || !offering?.id) fail('could not create the fixture offerings');
+
+  await page.reload();
+  await page.waitForSelector('#username', { timeout: 20000 });
+  await open(page, 'Product Offerings', `${tag} seat offer`);
+  const rel = page.locator('.field-relationships');
+  await rel.locator('button', { hasText: '+ Relationship' }).click();
+  await page.waitForTimeout(300);
+  const relRow = rel.locator('select');
+  await relRow.nth(0).selectOption('excludes');
+  await page.waitForTimeout(200);
+  await rel.locator('select').nth(1).selectOption({ label: `${tag} the other offer` });
+  await page.screenshot({ path: '/tmp/relationship-picker.png' });
+  await saveAndWait(page);
+
+  const savedOffering = (await call('GET', `${CAT}/productOffering/${offering.id}`, staff)).body || {};
+  const links = savedOffering.productOfferingRelationship || [];
+  if (links.length !== 1 || links[0].relationshipType !== 'excludes' || links[0].id !== other.id) {
+    fail(`the relationship did not store as the box would have written it: ${JSON.stringify(links)}`);
+  }
+  if (links[0].role !== undefined) fail(`an excludes rule must carry no role: ${JSON.stringify(links[0])}`);
+  ok(`PICKED: "${tag} seat offer" excludes "${tag} the other offer" — chosen by name, no identifier typed`);
+
+  const stock = (await call('POST', `${STOCK}/productStock`, staff, {
+    name: `${tag} seat stock`, stockedQuantity: { amount: 5, units: 'unit' },
+    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
+  })).body;
+  if (!stock?.id) fail('could not create the fixture stock row');
+
+  await page.reload();
+  await page.waitForSelector('#username', { timeout: 20000 });
+  await open(page, 'Product Stock', `${tag} seat stock`);
+  const variant = page.locator('.field-stockvariant');
+  const pickers = variant.locator('select');
+  if (!(await pickers.count())) fail('the variant pickers never rendered from the offering’s specification');
+  await pickers.first().selectOption('5+');
+  await saveAndWait(page);
+  const savedStock = (await call('GET', `${STOCK}/productStock/${stock.id}`, staff)).body || {};
+  const chars = (savedStock.stockedProduct || {}).productCharacteristic || [];
+  if (!same(chars, [{ name: 'screens', value: '5+' }])) {
+    fail(`the variant did not store as the box would have written it: ${JSON.stringify(savedStock.stockedProduct)}`);
+  }
+  ok('PICKED: a stock row counts the "screens 5+" variant, chosen from the specification’s own choices');
+
   /* ---------- READ BACK ---------- */
   await page.reload();
   await page.waitForSelector('#username', { timeout: 20000 });
@@ -224,9 +280,13 @@ async function saveAndWait(page) {
   await browser.close();
 
   /* ---------- leave the shelf as we found it ---------- */
+  await call('DELETE', `${STOCK}/productStock/${stock.id}`, staff);
+  await call('DELETE', `${CAT}/productOffering/${offering.id}`, staff);
+  await call('DELETE', `${CAT}/productOffering/${other.id}`, staff);
   await call('DELETE', `${CAT}/productOfferingPrice/${price.id}`, staff);
   await call('DELETE', `${CAT}/productSpecification/${spec.id}`, staff);
 
-  console.log('\nALL PRICE-BUILDER CHECKS PASSED — a price is built from controls and stores the payload the JSON box'
-    + ' wrote, a numeric choice stays a number, and a key no control shows survives an edit.');
+  console.log('\nALL PRICE-BUILDER CHECKS PASSED — a price is built from controls and stores the payload the JSON box wrote,'
+    + ' a numeric choice stays a number, a key no control shows survives an edit, and a relationship and a variant are'
+    + ' picked from the catalog rather than typed.');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

@@ -19,7 +19,7 @@ const RESOURCES = [
       // row 3 — what it is
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
       { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
-      { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'jsontext', wide: true, placeholder: '[{"id": "<offering id>", "name": "Taranga Fiber 300", "relationshipType": "requires", "role": "prompt"}, {"id": "<offering id>", "name": "Taranga TV", "relationshipType": "excludes"}]', hint: 'TMF620 relationships the configurator enforces: requires (role auto-add | prompt | block), excludes, exchangableTo (the like-for-like change list).' },
+      { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'relationships', wide: true, hint: 'What this offer needs, rules out, or can be changed to. The configurator enforces it in every channel.' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
       // row 4 — placement and price
       { name: 'category', label: 'Categories', kind: 'reflist', resource: 'category', referredType: 'Category', half: true, hint: 'Drive shop placement and fulfilment' },
@@ -138,7 +138,7 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true },
       { name: 'productOffering', label: 'Offering', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'stockedQuantity', label: 'Stocked', kind: 'quantity' },
-      { name: 'stockedProduct', label: 'Variant (optional)', kind: 'jsontext', wide: true, placeholder: '{"productOffering": {"id": "<offering id>"}, "productCharacteristic": [{"name": "boxColour", "value": "Icy Blue"}]}', hint: 'TMF687 stockedProduct: count this row per configured variant (a colour, a storage size). Blank = the offering as a whole. The configurator marks a variant with no stock as not selectable.' },
+      { name: 'stockedProduct', label: 'Variant (optional)', kind: 'stockvariant', wide: true, hint: 'Count this row per configured variant (a colour, a storage size). Blank = the offering as a whole.' },
     ],
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
