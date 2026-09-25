@@ -11,6 +11,9 @@ import react from '@vitejs/plugin-react';
  * the desks and needs no module loader in the page.
  */
 export default defineConfig({
+  // the React plugin gives the automatic JSX runtime and the dev niceties;
+  // esbuild's default transform happened to work without it, which is luck, not a contract
+  plugins: [react()],
   // lib mode does not set NODE_ENV for the bundled dependencies, and React
   // ships its development build unless told otherwise — 648 kB against 140 kB,
   // with the slow paths and the warnings a console does not want in production
