@@ -111,6 +111,40 @@ ai_offering = offering(
     "Edge GPU Inference Service",
     [ref(ai_base, "ProductOfferingPrice")])
 
+# --- 2b. What used to be decided by the offering's NAME is catalog data (step 3):
+#     the slice product's spec names the Priority slice CFS and carries its slice
+#     intent and delivery path; the AI product's spec names the Edge inference CFS.
+SERVICE_CATALOG = f"{GATEWAY}/tmf-api/serviceCatalogManagement/v4"
+cfs_by_name = {c["name"]: c for c in req("GET", f"{SERVICE_CATALOG}/serviceSpecification?serviceType=CFS&limit=100")}
+
+
+def stamp(offer, cfs_name, characteristics):
+    cfs = cfs_by_name.get(cfs_name)
+    if cfs is None:
+        print(f"no CFS '{cfs_name}' yet — run seed_service_specifications.py first; '{offer['name']}' left as is")
+        return
+    spec_id = (offer.get("productSpecification") or {}).get("id")
+    spec = req("GET", f"{CATALOG}/productSpecification/{spec_id}")
+    have = {c.get("name"): c for c in spec.get("productSpecCharacteristic") or []}
+    chars = [have[n] if n in have else {"name": n, "configurable": False,
+             "productSpecCharacteristicValue": [{"value": v, "isDefault": True}]} for n, v in characteristics.items()]
+    for n, c in have.items():
+        if n not in characteristics:
+            chars.append(c)
+    current = (spec.get("serviceSpecification") or [{}])[0].get("id")
+    if current == cfs["id"] and all(n in have for n in characteristics):
+        print(f"exists: '{spec['name']}' -> {cfs_name}")
+        return
+    req("PATCH", f"{CATALOG}/productSpecification/{spec_id}", {
+        "productSpecCharacteristic": chars,
+        "serviceSpecification": [{"id": cfs["id"], "href": cfs.get("href"), "name": cfs["name"],
+                                  "@referredType": "ServiceSpecification"}]})
+    print(f"spec: '{spec['name']}' -> {cfs_name} ({', '.join(characteristics) or 'no characteristics'})")
+
+
+stamp(slice_offering, "Priority slice", {"sliceProfile": "priority", "deliveryPath": "fibre-route-stadium-north"})
+stamp(ai_offering, "Edge inference", {})
+
 # --- 3. Token metering: TMF635 rates AI usage like any other consumption.
 allowances = {(a["productOffering"]["id"], a["usageType"])
               for a in req("GET", f"{USAGE}/usageAllowance?limit=100")}

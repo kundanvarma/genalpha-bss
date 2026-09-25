@@ -37,6 +37,7 @@ RESOURCE_SPECS = {
     "wholesale-access": ("Wholesale access", "An access line on another operator's fibre (MEF Sonata)."),
     "partner-entitlement": ("Partner entitlement", "An activation on a partner's platform; this BSS holds the code."),
     "cpe": ("Customer premises equipment", "The router or set-top box managed over the ACS."),
+    "edge-gpu": ("Edge GPU", "A GPU drawn from the edge pool next to where the data is born."),
 }
 # seam -> (RFS name, the product-spec characteristics it consumes, required?)
 # required = the orchestrator realises it for EVERY order of the CFS; an optional RFS is
@@ -46,12 +47,16 @@ RFS = {
     "number": ("Number assignment", ["msisdn"], True),
     "sim": ("SIM provisioning", ["simType", "eid"], True),
     "ocs": ("Charging subscriber", ["chargingSpecId", "zeroRatedApps", "overageTier"], False),
-    "slice": ("Slice binding", ["sliceProfile", "boostHours", "sliceChargingSpecId", "guaranteedDlMbps"], False),
+    "slice": ("Slice binding", ["sliceProfile", "boostHours", "sliceChargingSpecId", "guaranteedDlMbps", "deliveryPath"], False),
     "wholesale-access": ("Wholesale access order", ["accessLayer", "speed"], False),
     "partner-entitlement": ("Partner entitlement activation", [], True),  # NOT "Partner activation": that is the CFS
     "cpe": ("Equipment management", [], False),
+    "edge-gpu": ("GPU allocation", [], True),
 }
-# CFS name -> the seams it needs today; an empty list is an honest "in-house"
+# CFS name -> the seams it needs today; an empty list is an honest "in-house" (or,
+# for family billing-only, "nothing to provision"). A (seam, required) pair
+# overrides the seam's default required flag for that CFS: the slice is optional
+# on a mobile line and on a top-up, but IS the priority-slice product.
 CHAIN = {
     "Mobile line": ["number", "sim", "ocs", "slice"],
     "Broadband access": ["wholesale-access", "cpe"],
@@ -59,7 +64,15 @@ CHAIN = {
     "Device shipment": [],
     "Partner activation": ["partner-entitlement"],
     "Security feature": [],
+    "Priority slice": [("slice", True)],
+    "Edge inference": ["edge-gpu"],
+    "Billing-only product": [],
+    "Top-up with boost": [("slice", False)],
 }
+
+
+def seam_and_required(entry):
+    return entry if isinstance(entry, tuple) else (entry, RFS[entry][2])
 
 
 def token():
@@ -172,14 +185,15 @@ for cfs_name, seams in CHAIN.items():
         print(f"no CFS '{cfs_name}' on this tenant (its family is not sold here, or seed_service_specifications has not run)")
         continue
     want = []
-    for seam in seams:
+    for entry in seams:
+        seam, required = seam_and_required(entry)
         r = rfs[seam]
         edge = {**ref(r, "ServiceSpecification"), "relationshipType": "reliesOn",
                 "serviceSpecRelationshipCharacteristic": [
                     {"name": "consumes", "valueType": "array",
                      "serviceSpecCharacteristicValue": [{"value": ",".join(RFS[seam][1])}]},
                     {"name": "required", "valueType": "boolean",
-                     "serviceSpecCharacteristicValue": [{"value": "true" if RFS[seam][2] else "false"}]}]}
+                     "serviceSpecCharacteristicValue": [{"value": "true" if required else "false"}]}]}
         want.append(edge)
     have = cfs.get("serviceSpecRelationship") or []
     def shape(edges):
@@ -189,10 +203,10 @@ for cfs_name, seams in CHAIN.items():
                 for e in edges]
     same = shape(have) == shape(want)
     if same:
-        print(f"exists: {cfs_name} -> {[RFS[s][0] for s in seams] or 'no RFS (realised in-house)'}")
+        print(f"exists: {cfs_name} -> {[RFS[seam_and_required(e)[0]][0] for e in seams] or 'no RFS'}")
         continue
     req("PATCH", f"{SERVICE_CATALOG}/serviceSpecification/{cfs['id']}", {"serviceSpecRelationship": want})
     wired += 1
-    print(f"cfs: {cfs_name} -> {[RFS[s][0] for s in seams] or 'no RFS (realised in-house)'}")
+    print(f"cfs: {cfs_name} -> {[RFS[seam_and_required(e)[0]][0] for e in seams] or 'no RFS'}")
 
 print(f"done: {len(resource_spec)} resource specs, {len(rfs)} RFS, {wired} CFS wired, {missing} CFS absent on this tenant")
