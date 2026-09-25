@@ -81,6 +81,9 @@ export default function App() {
           );
         },
         tabBarActiveTintColor: brand.brandColor,
+        // WCAG 2.2 AA: the navigator's default inactive grey (#8e8e8f) is 3.27:1 on
+        // white; the PR smoke's axe scan of My page caught it on 25 Sep. 5.7:1 now.
+        tabBarInactiveTintColor: '#5f6368',
         tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>{ICONS[route.name]}</Text>,
       })}>
         <Tab.Screen name="Home" component={Home} />
