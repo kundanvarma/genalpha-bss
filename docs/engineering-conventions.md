@@ -142,6 +142,7 @@ with its suites green.
 | A Java class does one thing and stays under ~400 lines; a service package has a `controller`, `service`, `mapper`, `dto`, `entity`, `repository` split. | Review; ArchUnit rules where a component has them. |
 | A front-end file stays under **300 lines**; a React component renders one concern. | `ops/arch/ratchet.sh`: front-end file line counts may only fall from baseline. |
 | No file grows past what an agent can read in one pass; split before adding. | Same ratchet. |
+| Every JSX component a file renders is declared in that file or imported into it. Vite bundles an unknown capitalised tag as a global and the build passes; the page throws `X is not defined` the first time that branch renders. The storefront's Services page rendered `<RouterPanel>` without importing it for months — only lines with a router hit it. | `ops/arch/ratchet.sh`: undeclared JSX components per file, baseline zero; a split that forgets an import goes red before the commit. |
 
 ## 3. Data, events, tenancy
 
