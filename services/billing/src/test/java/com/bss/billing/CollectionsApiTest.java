@@ -363,6 +363,57 @@ class CollectionsApiTest {
                 .andExpect(jsonPath("$.holds.promiseToPay").doesNotExist());
     }
 
+    /**
+     * The UX paper's core demand, end to end through the API: a bill past its
+     * due date reads `overdue`; the moment an extension is granted the SAME
+     * bill reads `arrangement` with the new date — and the original due date
+     * is still there, because the customer was given more time, not a
+     * different bill.
+     */
+    @Test
+    void anApprovedExtensionStopsTheBillReadingAsOverdue() throws Exception {
+        ensurePolicy();
+        String owner = "cust-situation";
+        daysAhead(0);
+        String billId = runAndGetBillId(owner);
+
+        // before its due date: the calm state
+        mockMvc.perform(get(BASE + "/customerBill/" + billId).with(staff()))
+                .andExpect(jsonPath("$.dueDate").isNotEmpty())
+                .andExpect(jsonPath("$.billSituation.value").value("outstanding"));
+
+        // past it: overdue, and the reason says since when
+        daysAhead(29);
+        mockMvc.perform(get(BASE + "/customerBill/" + billId).with(staff()))
+                .andExpect(jsonPath("$.billSituation.value").value("overdue"))
+                .andExpect(jsonPath("$.billSituation.reason").value(org.hamcrest.Matchers.startsWith("Overdue since")))
+                .andExpect(jsonPath("$.billSituation.arrangementUntil").doesNotExist());
+
+        // the desk's list agrees
+        mockMvc.perform(get(BASE + "/billSituation?situation=overdue&limit=100").with(staff()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + billId + "')]").isNotEmpty());
+
+        // an extension is granted — nothing about the bill itself changes
+        sweep();
+        String caseId = caseOf(owner);
+        mockMvc.perform(post(BASE + "/collectionCase/" + caseId + "/promiseToPay")
+                        .with(staff()).contentType("application/json").content("{\"days\":10}"))
+                .andExpect(status().isOk());
+
+        // the same bill, read again: an arrangement, not a late payer
+        mockMvc.perform(get(BASE + "/customerBill/" + billId).with(staff()))
+                .andExpect(jsonPath("$.billSituation.value").value("arrangement"))
+                .andExpect(jsonPath("$.billSituation.reason")
+                        .value(org.hamcrest.Matchers.startsWith("Payment arrangement in place until")))
+                .andExpect(jsonPath("$.billSituation.arrangementUntil").isNotEmpty())
+                .andExpect(jsonPath("$.billSituation.originalDueDate").isNotEmpty());
+
+        // and the desk's overdue list no longer chases it
+        mockMvc.perform(get(BASE + "/billSituation?situation=overdue&limit=100").with(staff()))
+                .andExpect(jsonPath("$[?(@.id == '" + billId + "')]").isEmpty());
+    }
+
     // ---- dispute hold is amount-scoped ----
 
     @Test
