@@ -152,8 +152,15 @@ const run = Date.now();
   for (let i = 0; i < 10 && !throwaway; i++) {
     await page.waitForTimeout(1000);
     throwaway = await page.evaluate(async () => {
-      const res = await authFetch('/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100');
-      return (await res.json()).find((p) => p.name === 'E2E Throwaway Price') || null;
+      // the catalog caps a page at 100 and the demo tenant has ~190 prices: page, don't peek
+      for (let offset = 0; offset < 1000; offset += 100) {
+        const res = await authFetch(`/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100&offset=${offset}`, { headers: { 'Cache-Control': 'no-cache' } });
+        const rows = await res.json();
+        const hit = rows.find((p) => p.name === 'E2E Throwaway Price');
+        if (hit) return hit;
+        if (rows.length < 100) return null;
+      }
+      return null;
     });
   }
   if (!throwaway || Number(throwaway.price?.value) !== 9.99) {

@@ -129,7 +129,11 @@ public class StorefrontTenantConfigController {
                 + "', termsUrl: '" + js(termsUrl)
                 + "', tagline: '" + js(tagline)
                 + "', priceParity: '" + js(tenant != null ? tenant.getPriceParityMode() : "uniform")
-                + "', businessSales: " + businessSales + " };\n";
+                + "', businessSales: " + businessSales
+                // the vendor behind each seam this tenant configures (tenants.yml); seams not
+                // listed here are served by the fleet's built-in adapter — the console's
+                // decomposition panel reads this, so it never guesses a vendor
+                + ", seamVendors: { ocs: '" + js(tenant != null && tenant.getOcsProvider() != null ? tenant.getOcsProvider() : "mock") + "' } };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")
