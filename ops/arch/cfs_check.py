@@ -225,8 +225,10 @@ for svc in services:
         continue
     if any(x["seam"] == CATEGORY_FALLBACK for x in rows):
         # the category table fulfilled this service (its spec named no CFS): a
-        # counted debt (ratchet metric categoryFallbacks), never a disagreement
-        fallbacks += 1
+        # counted debt (ratchet metric categoryFallbacks), never a disagreement.
+        # A terminated service is no longer debt — nobody is served by it.
+        if svc.get("state") != "terminated":
+            fallbacks += 1
         continue
     if cfs_id not in declared:
         orphaned += 1

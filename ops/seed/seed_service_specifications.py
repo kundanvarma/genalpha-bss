@@ -156,6 +156,19 @@ for o in page(f"{CATALOG}/productOffering"):
     cats = o.get("category") or []
     cat = cats[0].get("name") if cats and isinstance(cats[0], dict) else None
     spec_id = (o.get("productSpecification") or {}).get("id")
+    if cat in FAMILY_OF_CATEGORY and not spec_id and FAMILY_OF_CATEGORY[cat] == "billing-only":
+        # a billing-only offering with no product spec at all (an insurance or a
+        # plain top-up seeded before specs mattered): give it the minimal spec the
+        # CFS reference needs, so "nothing to provision" is catalog data and not
+        # the counted fallback. Only billing-only — a line without a spec is a
+        # catalog defect this seed must not paper over.
+        spec = req("POST", f"{CATALOG}/productSpecification",
+                   {"name": f"{o['name']} spec", "lifecycleStatus": "Active", "productSpecCharacteristic": []})
+        req("PATCH", f"{CATALOG}/productOffering/{o['id']}",
+            {"productSpecification": {"id": spec["id"], "href": spec.get("href"), "name": spec["name"],
+                                      "@referredType": "ProductSpecification"}})
+        spec_id = spec["id"]
+        print(f"spec created: '{spec['name']}' for the spec-less billing-only offering '{o['name']}'")
     if cat in FAMILY_OF_CATEGORY and spec_id:
         families_of_spec.setdefault(spec_id, {})[FAMILY_OF_CATEGORY[cat]] = o["name"]
 
