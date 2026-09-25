@@ -109,6 +109,12 @@ spring:
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
             - Path=/tmf-api/serviceCatalogManagement/**
+        # TMF634 Resource Catalog (resource specs = the seams the RFS realise)
+        # lives with the product catalog too (ADR-0021). No edge cache, same reason.
+        - id: resource-catalog
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/tmf-api/resourceCatalogManagement/**
         # TMF760: the configurator lives WITH the catalog it computes from
         - id: product-configurator
           uri: ${CATALOG_URL:http://localhost:8081}

@@ -14,6 +14,13 @@ public final class ApiConstants {
      */
     public static final String SERVICE_CATALOG_V3_BASE_PATH = "/tmf-api/serviceCatalogManagement/v3";
 
+    /** TMF634 Resource Catalog Management — resource specifications (the seams the RFS realise). ADR-0021. */
+    public static final String RESOURCE_CATALOG_BASE_PATH = "/tmf-api/resourceCatalogManagement/v4";
+
+    /** The canonical schema home for TMF634 payloads. */
+    public static final String RESOURCE_SCHEMA_BASE =
+            "https://raw.githubusercontent.com/tmforum-apis/Open_Api_And_Data_Model/master/schemas/Resource/";
+
     /** The canonical schema home for TMF633 payloads (the TM Forum Open API and Data Model repository). */
     public static final String SERVICE_SCHEMA_BASE =
             "https://raw.githubusercontent.com/tmforum-apis/Open_Api_And_Data_Model/master/schemas/Service/";

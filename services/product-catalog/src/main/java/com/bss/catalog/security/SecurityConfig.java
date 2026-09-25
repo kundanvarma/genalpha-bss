@@ -67,6 +67,12 @@ public class SecurityConfig {
                         .requestMatchers(ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**",
                                 ApiConstants.SERVICE_CATALOG_V3_BASE_PATH + "/**")
                                 .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
+                        // TMF634 Resource Catalog: the same doors as the service catalog —
+                        // browsing a resource spec is browsing the catalog; authoring one
+                        // is the same back-office act as authoring a CFS/RFS.
+                        .requestMatchers(HttpMethod.GET, ApiConstants.RESOURCE_CATALOG_BASE_PATH + "/**").permitAll()
+                        .requestMatchers(ApiConstants.RESOURCE_CATALOG_BASE_PATH + "/**")
+                                .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
                         // launch governance: reading the desk is catalog:read, every
                         // door is catalog:write; approve/reject check catalog:approve inside
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/governance/**").hasAuthority(READ)
