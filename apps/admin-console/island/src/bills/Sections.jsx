@@ -5,7 +5,12 @@ import { day, labelOf, money, moment, period, plain, shortId, situationOf } from
  * never puts an identifier where a business event belongs. */
 
 export function Section({ title, question, empty, rows, children, testid }) {
-  const nothing = !children && (!rows || rows.length === 0);
+  // `rows` is the section's own answer to "do I have any facts?". It has to win
+  // over `children`, because a section built from conditional expressions always
+  // HAS children — an array of nulls — and testing children alone rendered an
+  // empty box where the sentence belongs. A section that passes no rows (the
+  // bill itself) always has something to say and keeps its children.
+  const nothing = rows ? rows.length === 0 : !children;
   return (
     <section data-testid={testid} style={{ borderTop: '1px solid var(--line)', padding: '16px 0' }}>
       <h3 style={{ margin: '0 0 2px', fontSize: 15 }}>{title}</h3>
@@ -46,8 +51,7 @@ const Table = ({ head, children }) => (
 export function BillSection({ bill, lines, who }) {
   const s = situationOf(bill);
   return (
-    <Section testid="section-bill" title="Bill" question="What was charged, and why?"
-      empty="This bill carries no charge lines." rows={lines}>
+    <Section testid="section-bill" title="Bill" question="What was charged, and why?">
       <p style={{ margin: '0 0 10px' }}>
         {money(bill.amountDue)} for {who || 'this customer'}, covering {period(bill.billingPeriod)}.
         {' '}{plain(s.reason) || labelOf(s.value)}

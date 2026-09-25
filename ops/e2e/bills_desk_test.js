@@ -132,6 +132,13 @@ async function api(path, tok) {
     const text = (await el.innerText()).trim();
     if (text.split('\n').length < 3) fail(`the ${section} section says nothing at all: "${text}"`);
   }
+  // a section with no facts must SAY so — it used to render an empty box,
+  // because a section built from conditional expressions always has children
+  for (const [section, sentence] of [['payments', 'Nothing has been paid'], ['adjustments', 'Nothing has been adjusted']]) {
+    const text = await page.locator(`[data-testid="section-${section}"]`).innerText();
+    const bare = text.replace(/^.*\n.*\n?/, '').trim();   // past the title and the question
+    if (!bare) fail(`the ${section} section is an empty box; it should say "${sentence}…"`);
+  }
   const workspace = (await page.locator('[data-testid="bill-workspace"]').innerText());
   if (!workspace.includes(rich.billNo)) fail('the workspace does not name the bill it opened');
   const uuid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/;
