@@ -103,7 +103,11 @@ jobs:
       # its fulfilment family; a spec without one is a product the orchestrator
       # can only decompose by guessing from a category string. Live-only, like
       # the RLS check: the seeds compose the catalog, so it is judged here.
-      - name: Every sellable spec names a CFS
+      # Step 2 of the same arc rides the same script: for every CFS the smoke
+      # fleet has realised services for, what the catalog declares (RFS, with a
+      # required flag) must agree with what the orchestrator recorded (TMF638
+      # realisations). Red on an undeclared seam or a required RFS never realised.
+      - name: Every sellable spec names a CFS, and catalog and orchestrator agree
         run: python3 ops/arch/cfs_check.py
 
       - name: Install Playwright
