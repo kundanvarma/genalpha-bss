@@ -9,6 +9,11 @@ package com.bss.som.client;
  */
 public interface PartnerEntitlementClient {
 
+    /** Who provides this seam for the fleet: the adapter in use, named honestly. */
+    default String vendor() {
+        return getClass().getSimpleName();
+    }
+
     /** Provision the entitlement with the partner; returns the activation code. */
     String activate(String offeringName, String customerPartyId);
 }

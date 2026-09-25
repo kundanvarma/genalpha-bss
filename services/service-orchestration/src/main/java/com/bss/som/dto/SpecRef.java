@@ -22,6 +22,11 @@ public record SpecRef(String id, String href, String name, String version) {
         return new SpecRef(id, "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/" + id, name, null);
     }
 
+    /** The TMF634 resource specification (served by the product catalog) an issued resource realises. */
+    public static SpecRef resourceSpec(String id, String name) {
+        return new SpecRef(id, "/tmf-api/resourceCatalogManagement/v4/resourceSpecification/" + id, name, null);
+    }
+
     /** The built-in TMF653 spec: the CSR diagnose triage. */
     public static SpecRef diagnose() {
         return new SpecRef("diagnose",

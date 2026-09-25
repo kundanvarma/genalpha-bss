@@ -14,6 +14,11 @@ package com.bss.som.client;
  */
 public interface OcsProvisioningClient {
 
+    /** Who provides online charging for this tenant: the adapter the router picked, named honestly. */
+    default String vendor(String tenantId) {
+        return getClass().getSimpleName();
+    }
+
     void provision(String tenantId, String partyId, String serviceId, String chargingSpecId);
 
     /** Provision with the apps the plan zero-rates — the OCS rates those to nothing. */

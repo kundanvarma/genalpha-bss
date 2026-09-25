@@ -32,6 +32,12 @@ public class TenantOcsRouter implements OcsProvisioningClient {
         this.settings = settings;
     }
 
+    @Override
+    public String vendor(String tenantId) {
+        String provider = settings.forTenant(tenantId).provider();
+        return provider == null || provider.isBlank() ? "none" : provider;
+    }
+
     /** The adapter serving this tenant, or null when none applies. */
     public OcsProviderAdapter adapterFor(String tenantId) {
         String provider = settings.forTenant(tenantId).provider();

@@ -18,6 +18,11 @@ import java.security.SecureRandom;
 @ConditionalOnProperty(name = "bss.wholesale.oss", havingValue = "mock", matchIfMissing = true)
 public class MockWholesaleAccessClient implements WholesaleAccessClient {
 
+    @Override
+    public String vendor() {
+        return "mock-oss";
+    }
+
     private static final Logger log = LoggerFactory.getLogger(MockWholesaleAccessClient.class);
     private static final String DIGITS = "0123456789";
 

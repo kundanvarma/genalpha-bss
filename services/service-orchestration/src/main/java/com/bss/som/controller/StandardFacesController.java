@@ -66,6 +66,7 @@ public class StandardFacesController {
     private final ResourceAssignmentRepository assignments;
     private final NumberQuarantineRepository quarantine;
     private final InventoryResourceRepository inventory;
+    private final com.bss.som.repository.ServiceRealisationRepository realisations;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
     private final ObjectMapper objectMapper;
@@ -74,7 +75,9 @@ public class StandardFacesController {
             ServiceTestSpecRepository testSpecs,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             NumberQuarantineRepository quarantine, InventoryResourceRepository inventory,
+            com.bss.som.repository.ServiceRealisationRepository realisations,
             TenantScope tenantScope, PartyScope partyScope, ObjectMapper objectMapper) {
+        this.realisations = realisations;
         this.som = som;
         this.tests = tests;
         this.testSpecs = testSpecs;
@@ -327,7 +330,18 @@ public class StandardFacesController {
     }
 
     private ResourceView assignmentView(ResourceAssignment a) {
-        return ResourceView.assigned(a.getId(), a.getValue(), a.getPoolId(), a.getServiceId(), a.getOwnerPartyId());
+        ResourceView view = ResourceView.assigned(a.getId(), a.getValue(), a.getPoolId(), a.getServiceId(), a.getOwnerPartyId());
+        if (a.getServiceId() == null) {
+            return view;
+        }
+        // WHAT KIND of thing this issued resource is: the TMF634 spec named by the
+        // RFS the orchestrator realised for its seam (a partner code or a number)
+        String seam = "partner".equals(a.getPoolId()) ? "partner-entitlement" : "number";
+        return realisations.findByTenantIdAndServiceIdOrderByRealisedAtAsc(a.getTenantId(), a.getServiceId()).stream()
+                .filter(r -> seam.equals(r.getSeam()) && r.getResourceSpecId() != null)
+                .findFirst()
+                .map(r -> view.realising(r.getResourceSpecId(), r.getResourceSpecName()))
+                .orElse(view);
     }
 
     /* ---------- TMF633 serviceSpecification (read-only, derived) ----------

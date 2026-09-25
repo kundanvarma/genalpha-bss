@@ -9,6 +9,11 @@ package com.bss.som.client;
  */
 public interface WholesaleAccessClient {
 
+    /** Who provides this seam: the OSS adapter in use, named honestly. */
+    default String vendor() {
+        return getClass().getSimpleName();
+    }
+
     /** Place an access-seeker order with the owner; returns its reference + state. */
     AccessOrderResult order(String accessOwner, String accessLayer, Integer bandwidthMbps,
             String postCode, String serviceId, String buyerRef);

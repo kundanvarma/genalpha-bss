@@ -72,6 +72,8 @@ public class OrchestrationService {
     private final com.bss.som.client.WholesaleQualificationClient wholesaleQualification;
     private final com.bss.som.client.WholesaleAccessClient wholesaleAccess;
     private final com.bss.som.client.WholesaleRateCardClient wholesaleRateCard;
+    /** Step 2 of catalog-to-provisioning: what this orchestrator realised, per service. */
+    private final com.bss.som.repository.ServiceRealisationRepository realisations;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -95,7 +97,9 @@ public class OrchestrationService {
             com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders,
             com.bss.som.client.WholesaleQualificationClient wholesaleQualification,
             com.bss.som.client.WholesaleAccessClient wholesaleAccess,
-            com.bss.som.client.WholesaleRateCardClient wholesaleRateCard) {
+            com.bss.som.client.WholesaleRateCardClient wholesaleRateCard,
+            com.bss.som.repository.ServiceRealisationRepository realisations) {
+        this.realisations = realisations;
         this.wholesaleOrders = wholesaleOrders;
         this.wholesaleQualification = wholesaleQualification;
         this.wholesaleAccess = wholesaleAccess;
@@ -345,6 +349,7 @@ public class OrchestrationService {
                 entitlement.setOwnerPartyId(owner);
                 entitlement.setAssignedAt(OffsetDateTime.now());
                 assignments.save(entitlement);
+                realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(), entitlement.getValue());
             }
             // Keep-your-number: if the customer ported a number in, activate on
             // it and skip the pool draw entirely.
@@ -361,6 +366,7 @@ public class OrchestrationService {
                 assignment.setOwnerPartyId(owner);
                 assignment.setAssignedAt(OffsetDateTime.now());
                 assignments.save(assignment);
+                realise(tenant, serviceId, offeringId, "number", "ported-in", portedNumber);
                 numbered = true;
                 poolType = null; // do not also draw from the pool
             }
@@ -400,11 +406,17 @@ public class OrchestrationService {
                 assignment.setOwnerPartyId(instance.getOwnerPartyId());
                 assignment.setAssignedAt(OffsetDateTime.now());
                 assignments.save(assignment);
+                realise(tenant, serviceId, offeringId, ResourcePool.MSISDN.equals(pool.getResourceType()) ? "number" : pool.getResourceType(),
+                        "own-pool", value);
             });
             // Every numbered line rides a SIM: minted operator-side with its
             // PUK. The PIN lives on the card — set via the SIM-platform seam.
             if (numbered) {
                 attachKitSimOrMint(tenant, serviceId, productOrderId);
+                // the SIM is issued operator-side (minted, or a starter kit stamped at the counter)
+                realise(tenant, serviceId, offeringId, "sim", "house-sim-issuer",
+                        sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+                                .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
                 accrueCommission(tenant, productOrder, productOrderId, serviceId, name);
                 // charging lifecycle: the catalog references the OCS rate
                 // plan (chargingSpecId); the subscriber and its counters are
@@ -415,6 +427,7 @@ public class OrchestrationService {
                     ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
                     // the BSS-defined overage steps ride to the charging system, so real-time and bill-time agree
                     ocs.pushOverageTiers(tenant, serviceId, chargingSpec, usageAllowances.tiersOf(so.getOfferingId()));
+                    realise(tenant, serviceId, offeringId, "ocs", ocs.vendor(tenant), chargingSpec);
                 }
                 // the entitlement server learns which SIM (and number) now belongs to
                 // this party and plan — the phone's next TS.43 check-in tells the truth
@@ -433,6 +446,7 @@ public class OrchestrationService {
                         moveToSliceChargingPlan(tenant, line, intent.chargingSpecId());
                     });
                     slices.apply(tenant, serviceId, intent.profile(), null);
+                    realise(tenant, serviceId, offeringId, "slice", slices.vendor(), intent.profile());
                 });
             }
 
@@ -779,6 +793,7 @@ public class OrchestrationService {
         wo.setPostCode(postCode);
         wo.setExternalId(res.externalId());
         wo.setState(res.state());
+        realise(tenant, serviceId, idOf(item.get("productOffering")), "wholesale-access", wholesaleAccess.vendor(), res.externalId());
         wo.setCreatedAt(OffsetDateTime.now());
         if (com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(res.state())) {
             wo.setActivatedAt(OffsetDateTime.now());
@@ -970,6 +985,42 @@ public class OrchestrationService {
         return n.contains("mobile") || n.contains("orange") || n.contains("prepaid") || n.contains("sim")
                 || n.contains("5g") || n.contains("4g") || n.contains("phone plan")
                 || (n.contains("day") && (n.contains("gb") || n.contains("data") || n.contains("voice")));
+    }
+
+    /**
+     * RECORD a realisation: the orchestrator just exercised a seam for this
+     * service. Matched against the RFS list the product spec's CFS declares —
+     * matched means the catalog said so; unmatched (rfsId null) means the code
+     * did something the catalog never declared. Step 2 is descriptive: this
+     * never changes what was done, and a failure to record never fails the order.
+     */
+    private void realise(String tenant, String serviceId, String offeringId, String seam, String vendor, String externalRef) {
+        try {
+            java.util.List<CatalogClient.Rfs> declared = catalog.cfsOf(offeringId)
+                    .map(c -> catalog.rfsOf(c.id())).orElse(java.util.List.of());
+            Optional<CatalogClient.Rfs> match = Realisations.declaredFor(declared, seam);
+            com.bss.som.entity.ServiceRealisation r = new com.bss.som.entity.ServiceRealisation();
+            r.setId(UUID.randomUUID().toString());
+            r.setTenantId(tenant);
+            r.setServiceId(serviceId);
+            r.setSeam(seam);
+            r.setVendor(vendor);
+            r.setExternalRef(externalRef == null ? null : externalRef.length() > 160 ? externalRef.substring(0, 160) : externalRef);
+            match.ifPresent(m -> {
+                r.setRfsId(m.id());
+                r.setRfsName(m.name());
+                r.setResourceSpecId(m.resourceSpecId());
+                r.setResourceSpecName(m.resourceSpecName());
+            });
+            r.setRealisedAt(OffsetDateTime.now());
+            realisations.save(r);
+            if (match.isEmpty() && !declared.isEmpty()) {
+                log.info("realisation: service {} exercised seam '{}' which its CFS never declared ({} RFS declared)",
+                        serviceId, seam, declared.size());
+            }
+        } catch (RuntimeException e) {
+            log.warn("realisation not recorded for service {} seam {}: {}", serviceId, seam, e.getMessage());
+        }
     }
 
     /**
