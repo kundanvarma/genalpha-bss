@@ -10,6 +10,14 @@ function copilotProposalCard(reply, context, log) {
   const rows = [];
   for (const spec of proposal.specs || []) {
     rows.push(`spec · ${spec.name}`);
+    // the fulfilment pattern the copilot proposes for this spec, and what the product lacks for it (CFS step 3)
+    const fp = spec.fulfilmentPattern;
+    if (fp && fp.cfsName) {
+      rows.push(`fulfilment · ${fp.cfsName}${fp.reason ? ` — ${fp.reason}` : ''}`);
+      for (const m of fp.missingConsumed || []) rows.push(`  ⚠ ${m.effect}`);
+    } else {
+      rows.push('fulfilment · no pattern proposed — pick one on the specification after it is created');
+    }
     // the customer's choices, in the open: a configurable characteristic and its allowed values
     for (const c of spec.productSpecCharacteristic || []) {
       const vals = (c.productSpecCharacteristicValue || c.values || []).map((v) => (v && typeof v === 'object' ? v.value : v)).filter(Boolean);

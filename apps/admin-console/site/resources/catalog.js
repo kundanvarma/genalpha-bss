@@ -71,7 +71,34 @@ const RESOURCES = [
       { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'jsontext', wide: true,
         hint: 'JSON array. Facts the shop shows and the systems read: Data, Validity, chargingSpecId, sliceProfile, zeroRatedApps. "configurable": true makes a picker.',
         placeholder: '[{"name": "Data", "configurable": false, "productSpecCharacteristicValue": [{"value": "20 GB"}]}]' },
+      // how products built on this spec are fulfilled: a pattern by name, consequences in words (CFS step 3, ticket 8a)
+      { name: 'serviceSpecification', label: 'Fulfilment', kind: 'fulfilment', wide: true,
+        hint: 'Pick how the orchestrator fulfils products built on this specification. What each pattern needs is spelled out underneath.' },
     ],
+    // changing the pattern on an existing spec is a governed action with a receipt, not a raw write
+    beforeSave: async (body, editingId) => {
+      const picked = (body.serviceSpecification || [])[0];
+      const before = fulfilmentState.original;
+      if (!editingId || (picked?.id || '') === (before || '')) return body;
+      if (!picked) { fulfilmentState.receipt = null; return body; } // clearing to "none" stays a plain edit
+      const res = await authFetch('/ontology/v1/actions/assignFulfilmentPattern/execute', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: { specId: editingId, cfsId: picked.id } }) });
+      const receipt = await res.json().catch(() => ({}));
+      if (!res.ok || !receipt.done) throw new Error(receipt.refusal || receipt.message || `fulfilment pattern refused (HTTP ${res.status})`);
+      fulfilmentState.receipt = { pattern: picked.name, id: receipt.decisionId };
+      const rest = { ...body }; delete rest.serviceSpecification; // the action wrote it
+      return rest;
+    },
+    afterSave: () => {
+      const r = fulfilmentState.receipt; fulfilmentState.receipt = null;
+      if (!r) return;
+      document.querySelector('[data-testid="fulfilment-receipt"]')?.remove();
+      const p = document.createElement('p');
+      p.className = 'dim'; p.dataset.testid = 'fulfilment-receipt';
+      p.textContent = `Fulfilment set to ${r.pattern} — recorded with receipt …${String(r.id || '').slice(-8)}.`;
+      document.querySelector('.panel-head')?.after(p);
+    },
     columns: ['name', 'brand', 'lifecycleStatus', 'lastUpdate'],
   },
   {
@@ -106,6 +133,74 @@ const RESOURCES = [
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
 ];
+
+/* The Fulfilment picker (CFS step 3, ticket 8a): the product manager picks a customer-facing
+ * service BY NAME with its family in words; the resource-facing services it relies on appear
+ * underneath as sentences ("Number assignment (always)", "Charging subscriber (only when the
+ * product carries a charging plan)"), never as controls. get() is the standard TMF620
+ * serviceSpecification reference list; the save routes a change through the governed action. */
+const fulfilmentState = { original: null, receipt: null };
+const FAMILY_WORDS = { mobile: 'a network line', internet: 'an install', tv: 'a digital entitlement', device: 'a parcel',
+  partner: 'activated with the partner', security: 'a feature toggle', compute: 'compute on the edge', 'billing-only': 'nothing to provision' };
+const CONSUMED_WORDS = { chargingSpecId: 'a charging plan', zeroRatedApps: 'zero-rated apps', overageTier: 'overage tiers', sliceProfile: 'a slice profile',
+  boostHours: 'boost hours', sliceChargingSpecId: 'a slice charging plan', guaranteedDlMbps: 'a guaranteed speed', deliveryPath: 'a delivery path',
+  accessLayer: 'an access layer', speed: 'a speed', msisdn: 'a chosen number', simType: 'a SIM type', eid: 'an eSIM identifier' };
+function fulfilmentControl(field) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  select.append(new Option('(none — the orchestrator falls back to the category)', ''));
+  const consequences = document.createElement('p');
+  consequences.className = 'dim'; consequences.dataset.testid = 'fulfilment-consequences';
+  const specValue = (s, list, name) => { const c = (s[list] || []).find((x) => x.name === name); const v = c ? (c[list.replace('Characteristic', 'CharacteristicValue')] || [])[0] : null; return v ? v.value : undefined; };
+  const byId = {}; let pending = null;
+  const listCfs = authFetch(`${SERVICE_CATALOG_BASE}/serviceSpecification?serviceType=CFS&limit=100`, { headers: { 'Cache-Control': 'no-cache' } })
+    .then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  listCfs.then((cfss) => {
+    for (const cfs of cfss.filter((c) => c.serviceType === 'CFS' && !/^SUITE\d+/.test(c.name || '')).sort((a, b) => String(a.name).localeCompare(String(b.name)))) {
+      byId[cfs.id] = cfs;
+      const family = specValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily');
+      const option = new Option(`${cfs.name}${FAMILY_WORDS[family] ? ` — ${FAMILY_WORDS[family]}` : ''}`, cfs.id);
+      option.dataset.name = cfs.name;
+      select.append(option);
+    }
+    if (pending) { select.value = pending; pending = null; }
+    describe();
+  });
+  async function describe() {
+    const cfs = byId[select.value];
+    if (!cfs) { consequences.textContent = select.value ? 'Reading the pattern…' : 'No pattern: the orchestrator decides from the offering\'s category, as it always did.'; return; }
+    const edges = (cfs.serviceSpecRelationship || []).filter((e) => e.relationshipType === 'reliesOn');
+    if (!edges.length) {
+      const family = specValue(cfs, 'serviceSpecCharacteristic', 'fulfilmentFamily');
+      consequences.textContent = family === 'billing-only' ? 'Nothing to provision: products on this pattern only bill.' : 'Needs nothing from the network or a partner: realised inside this BSS.';
+      return;
+    }
+    const parts = [];
+    for (const edge of edges) {
+      const rfs = edge.name || (await authFetch(`${SERVICE_CATALOG_BASE}/serviceSpecification/${edge.id}`).then((r) => (r.ok ? r.json() : null)).catch(() => null))?.name || 'a resource-facing service';
+      const chars = edge.serviceSpecRelationshipCharacteristic || [];
+      const required = ((chars.find((c) => c.name === 'required') || {}).serviceSpecCharacteristicValue || [{}])[0].value;
+      const consumes = (((chars.find((c) => c.name === 'consumes') || {}).serviceSpecCharacteristicValue || [{}])[0].value || '').split(',').map((x) => x.trim()).filter(Boolean);
+      const when = String(required) === 'false' ? ` (only when the product carries ${consumes.map((c) => CONSUMED_WORDS[c] || c).join(' or ') || 'what it needs'})` : ' (always)';
+      parts.push(`${rfs}${when}`);
+    }
+    consequences.textContent = `Needs: ${parts.join('; ')}.`;
+  }
+  select.addEventListener('change', describe);
+  controls[field.name] = {
+    get: () => {
+      if (!select.value) return [];
+      const o = select.selectedOptions[0];
+      return [{ id: select.value, href: `${SERVICE_CATALOG_BASE}/serviceSpecification/${select.value}`, name: o.dataset.name || o.textContent, '@referredType': 'ServiceSpecification' }];
+    },
+    set: (item) => {
+      const id = item?.serviceSpecification?.[0]?.id || '';
+      fulfilmentState.original = id || null;
+      if ([...select.options].some((o) => o.value === id)) { select.value = id; describe(); } else { pending = id; }
+    },
+  };
+  return [select, consequences];
+}
 
 /* The Decomposition panel (CFS step 2): product spec → customer-facing service (its
  * fulfilment family) → resource-facing services (what each consumes) → resource

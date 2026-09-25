@@ -24,6 +24,7 @@ device_entitlement_test     device-entitlement mock-ts43-device mock-smdp mock-h
 engagement_test             communication insight
 family_phase2_test          communication
 frequency_dnc_test          mock-social communication
+fulfilment_picker_test      intelligence ontology
 fulfilment_test             fulfilment mock-bring mock-postnord mock-logistics
 interaction_timeline_test   communication party-interaction campaign
 knowledge_help_test         knowledge intelligence

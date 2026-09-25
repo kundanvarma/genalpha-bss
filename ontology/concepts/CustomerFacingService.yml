@@ -1,0 +1,20 @@
+concept: CustomerFacingService
+version: 1
+introduced: 2026-09-25
+meaning: The service a product specification promises to the customer — a fulfilment pattern by name (Mobile line, Broadband access, Billing-only product), declaring its family and the resource-facing services it relies on.
+lineage:
+  sid: CustomerFacingServiceSpec (Service Specification ABE)
+  tmf: [TMF633 serviceSpecification]
+  oda: TMFC002 Service Catalog Management
+backedBy: { capability: serviceCatalog.specification, resource: serviceSpecification }
+states:
+  field: serviceType
+  values: [CFS, RFS]
+  live: [CFS]
+properties:
+  - { name: name, path: name, type: string }
+  - { name: family, path: "serviceSpecCharacteristic[name=fulfilmentFamily]", type: string, meaning: "the family label — mobile, internet, tv, device, partner, security, compute, billing-only" }
+links:
+  - { name: reliesOn, to: CustomerFacingService, via: "serviceSpecRelationship[relationshipType=reliesOn].id", cardinality: many, meaning: the resource-facing services this pattern needs }
+events: []
+pages: [productSpecification]

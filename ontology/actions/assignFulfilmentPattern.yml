@@ -1,0 +1,34 @@
+action: assignFulfilmentPattern
+version: 1
+introduced: 2026-09-25
+status: active
+meaning: Point a product specification at the customer-facing service that fulfils it. This is the edit that decides what the orchestrator does for every product built on the spec — a number and a SIM, an install, an entitlement, or nothing at all — so it is governed with a receipt whether a product manager or an agent does it.
+intent: A product manager (or the product copilot on their behalf, or an agent) has picked a fulfilment pattern by name for a product specification and wants it applied.
+concept: ProductSpecification
+inputs:
+  - { name: specId, type: ref, concept: ProductSpecification, required: true, meaning: "the product specification being pointed at a pattern" }
+  - { name: cfsId, type: ref, concept: CustomerFacingService, required: true, meaning: "the customer-facing service (fulfilment pattern) to point it at" }
+preconditions:
+  - id: pattern-is-customer-facing
+    check: state
+    concept: CustomerFacingService
+    of: cfsId
+    in: [CFS]
+    says: a fulfilment pattern is a customer-facing service — a resource-facing service is a step inside one, not something a product can name
+permissions:
+  anyOf:
+    - { role: catalog:write }
+governance: { autonomy: medium, approval: none, audit: mandatory }
+executes:
+  capability: catalog.assignFulfilmentPattern
+  pathVars: { id: "${specId}" }
+  template:
+    serviceSpecification:
+      - id: "${cfsId}"
+        href: "${cfs.href}"
+        name: "${cfs.name}"
+        "@referredType": ServiceSpecification
+effects: []
+emits:
+  - { event: DecisionRecordedEvent, component: ontology }
+pages: [productSpecification]

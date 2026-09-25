@@ -107,6 +107,8 @@ async function save(event) {
       if (value !== undefined) body[f.name] = value;
     }
     if (active.assemble) body = active.assemble(body);
+    // a resource may route part of a save through a governed action (a receipt, not a raw write)
+    if (active.beforeSave) body = await active.beforeSave(body, editingId);
   } catch (e) {
     el('editor-error').textContent = e.message;
     el('editor-error').hidden = false;
@@ -128,6 +130,7 @@ async function save(event) {
   }
   stopEditing();
   loadList();
+  if (active.afterSave) active.afterSave();
 }
 
 // the submit hook: the form's VALUES SHAPE (short fields kept, free text as presence),
