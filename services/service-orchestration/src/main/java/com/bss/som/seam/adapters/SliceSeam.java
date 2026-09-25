@@ -47,13 +47,29 @@ public class SliceSeam implements SeamAdapter {
 
     /** The slice intent as the consumed values spell it — the same four names the product spec carries. */
     public static Optional<SliceIntent> intentOf(SeamContext ctx) {
-        String profile = ctx.value("sliceProfile");
+        return intentOf(ctx.values());
+    }
+
+    /** The same, from a consumed-values map (a billing-only boost pass has no service of its own, hence no context). */
+    public static Optional<SliceIntent> intentOf(java.util.Map<String, String> values) {
+        String profile = values == null ? null : values.get("sliceProfile");
         if (profile == null || profile.isBlank()) {
             return Optional.empty();
         }
-        String chargingSpec = ctx.value("sliceChargingSpecId");
-        return Optional.of(new SliceIntent(profile, ctx.intValue("boostHours"),
-                chargingSpec == null ? null : chargingSpec.trim(), ctx.intValue("guaranteedDlMbps")));
+        String chargingSpec = values.get("sliceChargingSpecId");
+        return Optional.of(new SliceIntent(profile.trim(), intOf(values.get("boostHours")),
+                chargingSpec == null ? null : chargingSpec.trim(), intOf(values.get("guaranteedDlMbps"))));
+    }
+
+    private static Integer intOf(String v) {
+        if (v == null || v.isBlank()) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(v.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @Override
