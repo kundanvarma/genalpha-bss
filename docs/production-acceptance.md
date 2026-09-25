@@ -49,7 +49,7 @@ environment-specific half.
 | Alerts route to humans (Alertmanager → pager / Slack) | OPERATOR | A test alert received by the on-call route | rules exist (`infra/prometheus/alert-rules.yml`); FIRING pages nobody until routed |
 | Distributed tracing (OpenTelemetry) end to end | SHARED | A trace spanning gateway → service → outbox → consumer | backlog; metrics exist, traces do not |
 | SLOs written down and measured | OPERATOR | SLO document with the smoke SLO (`#57`) as the regression tripwire | — |
-| Immutable release artifacts: per-commit tags, digests, SBOM, signature, provenance | REPO (in progress) | Release note links tag → digest → SBOM → signature for the release SHA | TAR-10/18 — see the CI change that lands with this checklist |
+| Immutable release artifacts: per-commit tags, digests, SBOM, signature, provenance | REPO | `cosign verify` and `gh attestation verify` succeed for every image of the release SHA | every image is published to GHCR under its source SHA, signed keyless with cosign and attested with build provenance on every push to main (`ci.yml`, job *Every service image builds*); the SBOM rides the image as a CycloneDX attestation; the digest list is a 400-day artifact |
 | Runtime JDK exercised by automated proof | REPO | PR smoke boots the Java 25 images | `browser-proof.yml`; claims gate binds the README to the Dockerfiles |
 
 ## 5. Security and compliance assurance
@@ -74,6 +74,8 @@ evidence is not "probably fine" — it is open, and the launch waits.
 - This is a checklist, not a certification. The repo cannot prove an
   operator's platform; it can only make the seams explicit and keep its own
   half green on every change.
-- Two REPO rows are still in progress at the time of writing: immutable
-  release artifacts (TAR-10/18) and distributed tracing. They are listed
-  as open, not as done.
+- One REPO row is still open at the time of writing: distributed tracing.
+- Publishing runs only on a push to `main`; a pull request builds and scans
+  but cannot sign (no OIDC token), so the first proof of the publish steps is
+  the first `main` run after they land — verify it with the two commands
+  above before quoting this row.

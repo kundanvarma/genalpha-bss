@@ -56,6 +56,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: tests
     timeout-minutes: 90
+    # On a push to main this job also PUBLISHES: every image goes to GHCR under
+    # its source SHA, signed keyless with cosign (Sigstore, the runner's OIDC
+    # identity) and attested with build provenance. A pull request only builds
+    # and scans — it has no id-token, so nothing can be signed from a PR.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,3 +141,56 @@ jobs:
           name: image-scans-${{ github.sha }}
           path: scans/
           retention-days: 90
+
+      # IMMUTABLE RELEASE ARTIFACTS (TAR-10/18, docs/production-acceptance.md §4):
+      # tag = the source SHA (never `latest`; the chart refuses `latest` in
+      # production), digest recorded, SBOM attached as a cosign attestation,
+      # signature keyless, provenance from GitHub's attestation store. Verify:
+      #   cosign verify ghcr.io/<owner>/genalpha-bss/<svc>@<digest> \
+      #     --certificate-identity-regexp 'github.com/<owner>/genalpha-bss' \
+      #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+      #   gh attestation verify oci://ghcr.io/<owner>/genalpha-bss/<svc>@<digest> -R <owner>/genalpha-bss
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install cosign
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+      - name: Publish, sign and attach the SBOM to each image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          : > image-digests.txt
+          {
+            echo; echo "## Published images for ${{ github.sha }}"; echo
+            echo "| image | digest |"; echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for dir in services/*/; do
+            svc="$(basename "$dir")"
+            [ -f "$dir/Dockerfile" ] || continue
+            ref="ghcr.io/$owner/genalpha-bss/$svc"
+            docker tag "bss/$svc:${{ github.sha }}" "$ref:${{ github.sha }}"
+            docker push -q "$ref:${{ github.sha }}"
+            digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$ref:${{ github.sha }}" | cut -d@ -f2)"
+            cosign sign --yes "$ref@$digest"
+            cosign attest --yes --type cyclonedx --predicate "sboms/$svc.cdx.json" "$ref@$digest"
+            echo "${digest#sha256:}  $ref" >> image-digests.txt
+            echo "| $ref | $digest |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Attest build provenance for every published image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-checksums: image-digests.txt
+      - name: Keep the digest list
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: image-digests-${{ github.sha }}
+          path: image-digests.txt
+          retention-days: 400
