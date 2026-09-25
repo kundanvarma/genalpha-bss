@@ -51,7 +51,12 @@ export function moment(value) {
 export function money(m) {
   if (!m || m.value === null || m.value === undefined) return '—';
   const n = Number(m.value);
-  return `${Number.isFinite(n) ? n.toFixed(2) : m.value} ${m.unit || ''}`.trim();
+  // grouped, because a desk total runs to six figures and 282766.90 is read
+  // by counting digits; one bill's 25.00 is unchanged by it
+  const shown = Number.isFinite(n)
+    ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : m.value;
+  return `${shown} ${m.unit || ''}`.trim();
 }
 
 export function period(p) {
@@ -67,7 +72,10 @@ export const shortId = (id) => (id ? String(id).slice(0, 8) : '');
 
 const ID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
 /** A millisecond epoch the seeds append to make a name unique, dash and all. */
-const STAMP = /-?\b1[0-9]{12}\b/g;
+// no word boundary in front: a seeded name carries the epoch glued to the
+// word ("Mia Journey1783934553605"), which is where an operator actually
+// meets it. The boundary at the end still keeps longer references whole.
+const STAMP = /-?1[0-9]{12}\b/g;
 
 /** An ISO day, with or without a time after it. */
 const ISO_DAY = /\b\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z?)?\b/g;

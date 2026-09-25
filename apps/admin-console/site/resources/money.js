@@ -3,6 +3,19 @@
 
 RESOURCES.push(
   {
+    // The desk's first screen: what needs attention, what is queued, where the
+    // book stands. A React island (ADR-0022) because the paper's priority rule
+    // — exceptions loud, queues visible, normal states calm — is a layout, not
+    // a table. Every figure is a fact a service already decided.
+    path: 'billingOverview',
+    title: 'Overview',
+    island: 'billingOverview',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'customerBill',
     base: BILLING_BASE,
     // "Bills": on this desk the customer context is implicit. The page is a

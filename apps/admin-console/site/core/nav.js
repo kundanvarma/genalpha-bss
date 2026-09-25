@@ -17,6 +17,8 @@ const TAB_ROLE = {
   productOfferingPrice: 'catalog:write',
   productStock: 'stock:read',
   customerBill: 'billing:admin',
+  // the desk's own screens carry the desk's gate
+  billingOverview: 'billing:admin',
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
@@ -170,7 +172,10 @@ const WORKSPACES = [
     quiet: ['copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
-  { label: 'Billing & Revenue', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
+  // Overview first, then the book, then the two workflows. The remaining peer
+  // tabs keep their places until #117 re-homes them under the six areas.
+  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill',
+    'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
     'shadowDrift'] },
   { label: 'Reporting', tabs: ['reporting'] },
@@ -205,6 +210,24 @@ const WORKSPACES = [
   // that may read it must not thereby see the admin's Platform desk (suite console_workspaces)
   { label: 'What the BSS can do', tabs: ['ontology'] },
 ];
+
+/* The one way into a page from outside the rail. A React island (ADR-0022)
+ * that says "37 outstanding" must be able to take the operator to the bills
+ * behind the 37; without this it would reach into the shell's DOM and click a
+ * tab by its label. An unknown path is ignored rather than blanking the page. */
+window.consoleGoTo = function consoleGoTo(path) {
+  const target = RESOURCES.find((r) => r.path === path);
+  if (!target) return false;
+  active = target;
+  offset = 0;
+  listFilter = '';
+  listSortCol = null;
+  stopEditing();
+  sessionStorage.setItem('bss.console.tab', target.path);
+  renderTabs();
+  loadList();
+  return true;
+};
 
 function renderTabs() {
   const tabButton = (r) => {

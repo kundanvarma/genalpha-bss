@@ -12,6 +12,7 @@ audience_sql_test           bss-bridge insight
 b2b_test                    communication quote
 bill_distribution_test      mock-distribution
 bill_situation_test         billing party-account
+billing_overview_test       billing party payment communication risk
 bills_desk_test             billing party accounting payment
 bss_traits_test             bss-bridge insight
 campaign_lifecycle_test     campaign
