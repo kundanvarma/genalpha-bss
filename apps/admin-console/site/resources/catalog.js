@@ -113,11 +113,21 @@ const RESOURCES = [
       { name: 'version', label: 'Version', placeholder: '1.0' },
       { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
-      { name: 'unitOfMeasure', label: 'Per unit of', kind: 'jsontext', placeholder: '{"amount": 1, "units": "seat"}', hint: 'Quantity pricing: the price applies per this many (per seat, per 5 GB). Blank = a flat price.' },
-      { name: 'validFor', label: 'Price window', kind: 'jsontext', placeholder: '{"startDateTime": "2026-10-01T00:00:00Z", "endDateTime": "2026-12-31T23:59:59Z"}', hint: 'When this price line applies (an effective-dated segment). Blank = always. Never edit a live price on an offering with subscribers — add a dated segment.' },
-      { name: 'pricingLogicAlgorithm', label: 'Algorithm', kind: 'jsontext', wide: true, placeholder: '[{"plaSpecId": "perUnitAbove", "characteristic": "extraProfiles", "threshold": 2, "unitPrice": 10}]  or  [{"plaSpecId": "stepped", "characteristic": "quantity", "tier": [{"valueFrom": 1, "valueTo": 10, "price": 20}, {"valueFrom": 11, "valueTo": 999, "price": 15, "format": "perUnit"}]}]', hint: 'A named algorithm from the documented set: perUnitAbove (base plus unit price above a threshold) or stepped (a tier table on a characteristic or the quantity). Never free-form.' },
-      { name: 'prodSpecCharValueUse', label: 'Applies only when', kind: 'jsontext', wide: true, placeholder: '[{"name": "screens", "productSpecCharacteristicValue": [{"value": "5+"}]}]  or a range: [{"name": "extraProfiles", "productSpecCharacteristicValue": [{"valueFrom": 3, "valueTo": 10}]}]', hint: 'The configured choice this price is conditioned on. The specification must declare the choice and its values, or the catalog refuses the offering.' },
+      { name: 'unitOfMeasure', label: 'Per unit of', kind: 'unitofmeasure', hint: 'Quantity pricing: the price applies per this many (per seat, per 5 GB). Blank = a flat price.' },
+      { name: 'validFrom', label: 'Price from', kind: 'date', read: (p) => (p.validFor || {}).startDateTime, hint: 'When this price line starts. Blank = always' },
+      { name: 'validTo', label: 'Price until', kind: 'date', endOfDay: true, read: (p) => (p.validFor || {}).endDateTime, hint: 'Its last day. Blank = forever. Never edit a live price on an offering with subscribers — add a dated segment' },
+      { name: 'pricingLogicAlgorithm', label: 'Algorithm', kind: 'algorithm', wide: true, hint: 'A named algorithm from the documented set, never a formula: per unit above a threshold, or a tier table.' },
+      { name: 'prodSpecCharValueUse', label: 'Applies only when', kind: 'pricecondition', wide: true, hint: 'The configured choice this price rides on. The specification must declare the choice and its values, or the catalog refuses the offering.' },
     ],
+    // two calendars, one TMF window — the same shape the offering assembles
+    assemble: (body) => {
+      const out = { ...body };
+      if (body.validFrom || body.validTo) {
+        out.validFor = { startDateTime: body.validFrom || undefined, endDateTime: body.validTo || undefined };
+      }
+      delete out.validFrom; delete out.validTo;
+      return out;
+    },
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
   {
