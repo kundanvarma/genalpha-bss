@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
  */
 public final class Realisations {
 
-    /** The seams the orchestrator can exercise today; a CFS declaring another one is a catalog mistake. */
+    /** The seams the orchestrator can exercise today; a CFS declaring another one is planned as "no adapter". */
     public static final Set<String> SEAMS = Set.of(
-            "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe");
+            "number", "sim", "ocs", "slice", "wholesale-access", "partner-entitlement", "cpe", "edge-gpu");
 
     private Realisations() {
     }

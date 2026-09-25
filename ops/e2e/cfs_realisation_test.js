@@ -8,14 +8,15 @@
  * live gate ops/arch/cfs_check.py goes red when the two disagree. This proves
  * the whole loop against the live stack with fixtures authored through the API:
  *
- *  - REALISED: a mobile line whose CFS declares only the number RFS is ordered;
- *    its service lists the number realisation matched to the RFS (declared),
- *    with vendor and the drawn number, and the issued number references the
- *    resource spec; the SIM the code also provisioned shows as an UNDECLARED
- *    realisation — the catalog lagging the code.
- *  - GATE BITES: cfs_check.py exits 2 and names that CFS and the sim seam.
- *  - RECONCILED: declaring the SIM RFS on the CFS turns the gate green again —
- *    the fix is catalog data, not code.
+ *  - OBEYS (step 3): a mobile line whose CFS declares only the number RFS is
+ *    ordered; its service lists the number realisation matched to the RFS,
+ *    with vendor and the drawn number, the issued number references the
+ *    resource spec — and NO SIM is provisioned, because none was declared.
+ *  - OBEYS FORWARD: declaring the SIM RFS makes the next order provision one.
+ *  - GATE BITES: a REQUIRED RFS on a seam the environment never calls for at
+ *    order time (equipment) is never realised; cfs_check.py exits 2 naming it.
+ *  - RECONCILED: marking that RFS optional turns the gate green again — the
+ *    fix is catalog data, not code.
  *  - GATE CLEAN after the fixtures are gone (their services stay; a service
  *    whose CFS is gone carries no evidence and is skipped, counted).
  */
@@ -130,9 +131,11 @@ const edge = (rfs, required) => ({ id: rfs.id, href: rfs.href, name: rfs.name, '
   if (!number) fail(`no number realisation on the service: ${JSON.stringify(svc.supportingService)}`);
   if (number.id !== rfsNumber.id || number.declared !== true) fail(`the number realisation is not matched to the declared RFS: ${JSON.stringify(number)}`);
   if (!number.vendor || !number.externalRef) fail(`the number realisation names no vendor or number: ${JSON.stringify(number)}`);
+  // STEP 3: the orchestrator OBEYS the CFS — only the number RFS is declared, so no SIM is provisioned
   const sim = realisations.find((x) => x.seam === 'sim');
-  if (!sim || sim.declared !== false) fail(`expected an UNDECLARED sim realisation (the code provisions a SIM the CFS never declared): ${JSON.stringify(realisations)}`);
-  ok(`REALISED: TMF638 lists ${realisations.length} realisations — number matched to "${rfsNumber.name}" (vendor ${number.vendor}, ${number.externalRef}); sim undeclared (vendor ${sim.vendor})`);
+  if (sim) fail(`the CFS declares no SIM RFS, yet a SIM was provisioned: ${JSON.stringify(realisations)}`);
+  if (realisations.some((x) => x.declared === false)) fail(`a CFS-bearing spec can no longer realise an undeclared seam: ${JSON.stringify(realisations)}`);
+  ok(`OBEYS: TMF638 lists ${realisations.length} realisation — number matched to "${rfsNumber.name}" (vendor ${number.vendor}, ${number.externalRef}); no SIM, because none was declared`);
 
   /* ---------- TMF639: the issued number knows its resource spec ---------- */
   const resources = (await call('GET', `${RES}?serviceId=${svc.id}`, staff)).body || [];
@@ -140,29 +143,45 @@ const edge = (rfs, required) => ({ id: rfs.id, href: rfs.href, name: rfs.name, '
   if (!issued) fail(`no issued resource references the resource spec ${rsNumber.id}: ${JSON.stringify(resources).slice(0, 400)}`);
   ok(`RESOURCE: TMF639 resource "${issued.name || issued.value || issued.id}" references resource spec "${rsNumber.name}"`);
 
-  /* ---------- the gate sees the disagreement ---------- */
-  const red = gate();
-  if (red.code !== 2) fail(`cfs_check.py should exit 2 on the undeclared sim realisation; got ${red.code}\n${red.out}`);
-  const mine = findings(red.out).filter((l) => l.includes(cfs.name));
-  if (!mine.some((l) => l.includes("'sim'"))) fail(`the gate did not name CFS "${cfs.name}" and seam sim:\n${red.out}`);
-  ok(`GATE BITES: cfs_check.py exits 2 — "${mine[0].trim().slice(0, 120)}…"`);
-
-  /* ---------- reconcile: declare the SIM RFS on the CFS; catalog data, not code ---------- */
+  /* ---------- declare more: the SIM RFS (required) and an RFS on a seam the environment never calls for at order time (cpe, required) ---------- */
   const rsSim = await created('POST', `${RCAT}/resourceSpecification`, staff, { name: `${tag} SIM profile`, lifecycleStatus: 'Active', version: '1.0', category: 'seam',
     resourceSpecCharacteristic: [{ name: 'seam', valueType: 'string', configurable: false, resourceSpecCharacteristicValue: [{ value: 'sim', isDefault: true }] }] });
   const rfsSim = await created('POST', `${SCAT}/serviceSpecification`, staff, { name: `${tag} SIM provisioning`, serviceType: 'RFS', lifecycleStatus: 'Active', version: '1.0',
     serviceSpecCharacteristic: [seamChar('sim')], resourceSpecification: [ref(rsSim, 'ResourceSpecification')] });
-  await created('PATCH', `${SCAT}/serviceSpecification/${cfs.id}`, staff, { serviceSpecRelationship: [edge(rfsNumber, true), edge(rfsSim, true)] });
-  // the orchestrator's record of the past order does not change; the gate judges declarations against seams, so the sim seam is now declared
+  const rsCpe = await created('POST', `${RCAT}/resourceSpecification`, staff, { name: `${tag} Customer premises equipment`, lifecycleStatus: 'Active', version: '1.0', category: 'seam',
+    resourceSpecCharacteristic: [{ name: 'seam', valueType: 'string', configurable: false, resourceSpecCharacteristicValue: [{ value: 'cpe', isDefault: true }] }] });
+  const rfsCpe = await created('POST', `${SCAT}/serviceSpecification`, staff, { name: `${tag} Equipment management`, serviceType: 'RFS', lifecycleStatus: 'Active', version: '1.0',
+    serviceSpecCharacteristic: [seamChar('cpe')], resourceSpecification: [ref(rsCpe, 'ResourceSpecification')] });
+  await created('PATCH', `${SCAT}/serviceSpecification/${cfs.id}`, staff, { serviceSpecRelationship: [edge(rfsNumber, true), edge(rfsSim, true), edge(rfsCpe, true)] });
+  // the orchestrator caches the chain for a short while (RestCatalogClient.CATALOG_TTL_MS = 10 s); an edit reaches the next order after that
+  await sleep(11000);
+  const order2 = await call('POST', ORD, cust, { description: offering.name, productOrderItem: [{ id: '1', action: 'add', productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' } }] });
+  if (order2.status !== 201) fail(`second order: ${order2.status} ${order2.text.slice(0, 200)}`);
+  const so2 = await serviceOrderFor(order2.body.id, staff);
+  const svc2 = await serviceFor(so2.id, cust);
+  const seams2 = (svc2.supportingService || []).filter((x) => x.seam).map((x) => x.seam).sort();
+  if (!seams2.includes('sim') || !seams2.includes('number')) fail(`declaring the SIM RFS did not make the orchestrator provision a SIM: ${seams2}`);
+  if (seams2.includes('cpe')) fail('equipment is never provisioned at order time, yet a cpe realisation appeared');
+  ok(`OBEYS FORWARD: with the SIM RFS declared the next order realises ${seams2.join(' + ')} — the catalog changed what the orchestrator does, no code did`);
+
+  /* ---------- the gate sees the disagreement: a REQUIRED RFS no order ever realised ---------- */
+  const red = gate();
+  if (red.code !== 2) fail(`cfs_check.py should exit 2 on the required cpe RFS nobody realised; got ${red.code}\n${red.out}`);
+  const mine = findings(red.out).filter((l) => l.includes(cfs.name));
+  if (!mine.some((l) => l.includes("'cpe'") && l.includes('required'))) fail(`the gate did not name CFS "${cfs.name}" and the required cpe seam:\n${red.out}`);
+  ok(`GATE BITES: cfs_check.py exits 2 — "${mine.find((l) => l.includes("'cpe'")).trim().slice(0, 130)}…"`);
+
+  /* ---------- reconcile: the equipment RFS is optional — catalog data, not code ---------- */
+  await created('PATCH', `${SCAT}/serviceSpecification/${cfs.id}`, staff, { serviceSpecRelationship: [edge(rfsNumber, true), edge(rfsSim, true), edge(rfsCpe, false)] });
   const green = gate();
   const still = findings(green.out).filter((l) => l.includes(cfs.name));
-  if (still.length) fail(`the gate still blames "${cfs.name}" after the SIM RFS was declared:\n${still.join('\n')}`);
-  ok(`RECONCILED: declaring the SIM RFS clears the finding for "${cfs.name}" (gate exit ${green.code}${green.code ? ', other findings belong to other CFS' : ''})`);
+  if (still.length) fail(`the gate still blames "${cfs.name}" after the cpe RFS was made optional:\n${still.join('\n')}`);
+  ok(`RECONCILED: marking the equipment RFS optional clears the finding for "${cfs.name}" (gate exit ${green.code}${green.code ? ', other findings belong to other CFS' : ''})`);
 
   /* ---------- leave the shelf as we found it ---------- */
   for (const [p, id] of [[`${CAT}/productOffering`, offering.id], [`${CAT}/productSpecification`, spec.id], [`${CAT}/productOfferingPrice`, price.id],
-    [`${SCAT}/serviceSpecification`, cfs.id], [`${SCAT}/serviceSpecification`, rfsNumber.id], [`${SCAT}/serviceSpecification`, rfsSim.id],
-    [`${RCAT}/resourceSpecification`, rsNumber.id], [`${RCAT}/resourceSpecification`, rsSim.id]]) {
+    [`${SCAT}/serviceSpecification`, cfs.id], [`${SCAT}/serviceSpecification`, rfsNumber.id], [`${SCAT}/serviceSpecification`, rfsSim.id], [`${SCAT}/serviceSpecification`, rfsCpe.id],
+    [`${RCAT}/resourceSpecification`, rsNumber.id], [`${RCAT}/resourceSpecification`, rsSim.id], [`${RCAT}/resourceSpecification`, rsCpe.id]]) {
     await call('DELETE', `${p}/${id}`, staff);
   }
   const after = gate();
