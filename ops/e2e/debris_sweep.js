@@ -19,7 +19,11 @@ async function token() {
 (async () => {
   const tok = await token();
   const H = { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' };
-  const stale = (name) => / \d{12,}$/.test(name || '');
+  // a fixture name carries the run's epoch — seconds (10 digits) or millis (13),
+  // anywhere in the name: "Advisor 1787910483898 7 GB" and "Mig Plan 1787398347"
+  // sat on the shelf for weeks because the old pattern wanted it at the end;
+  // a glued prefix ("SUITE1790318986519 …") counts too, so no word boundary in front
+  const stale = (name) => /(?:^|\D)1[6-9]\d{8}(\d{3})?\b/.test(name || '');
   const get = async (path) => {
     const r = await fetch(`${API}${path}`, { headers: H });
     return r.ok ? r.json() : [];
