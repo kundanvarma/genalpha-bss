@@ -93,6 +93,11 @@ function renderPageRow(resource) {
   // see drops out, an emptied primary drops out with it; a page in `tabs` that
   // no primary claims still gets a seat under "More"; `quiet` pages (the
   // copilot) keep their tab stub but never sit in the row.
+  // A `whole` primary IS one screen, and that screen carries its own areas —
+  // Journal and Chart of accounts are two chips on the Accounting island, so a
+  // second line here would be the same choice twice, one above the other. Its
+  // pages keep their group membership (the right primary lights up), their tab
+  // stub, their path and their role gate; they just get no seat in the row.
   const quiet = new Set(ws.quiet || []);
   const placed = new Set();
   const sets = ws.groups.map((g) => ({ g, pages: g.tabs.map((p) => pages.find((r) => r.path === p)).filter(Boolean) })).filter((x) => x.pages.length);
@@ -107,6 +112,10 @@ function renderPageRow(resource) {
     primaries.append(b);
   }
   const sub = document.createElement('div'); sub.className = 'subnav'; sub.dataset.testid = 'subnav'; sub.dataset.group = current.g.label;
-  for (const r of current.pages) sub.append(pageButton(r));
-  row.append(primaries, sub);
+  // `short` renames a page in the row only — it was declared here and never
+  // passed, so every `short:` in nav.js has been dead data since the row was
+  // built. The rail, the crumb and the resource title keep the full name.
+  if (!current.g.whole) for (const r of current.pages) sub.append(pageButton(r, (current.g.short || {})[r.path]));
+  row.append(primaries);
+  if (sub.childElementCount) row.append(sub);
 }

@@ -33,6 +33,17 @@ async function loginConsole(browser, user, pass) {
   return { ctx, page };
 }
 
+/* The destinations of a department, for the persona looking at it. Billing &
+ * Revenue is six of them since #117, and which of the six a token is shown is
+ * decided by the same per-page role gates the rail uses. */
+async function destinations(page, dept) {
+  await page.locator('#tabs .tabgroup-label', { hasText: dept }).first().click();
+  await page.waitForSelector('#pagerow:not([hidden])', { timeout: 20000 });
+  await page.waitForTimeout(900);
+  return page.evaluate(() =>
+    [...document.querySelectorAll('#pagerow .primary-tab')].map((e) => e.textContent));
+}
+
 async function desks(page) {
   return page.evaluate(() => {
     const out = {};
@@ -81,8 +92,19 @@ async function desks(page) {
   for (const g of ['Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform', 'Care & Ops']) {
     if (finnGroups.includes(g)) fail(`finn sees ${g}: ` + JSON.stringify(finnDesks[g]));
   }
-  console.log('OK FINN (finance): Billing & Revenue only — '
-    + finnDesks['Billing & Revenue'].join(', ') + '. The duplicate Disputes tab is dead.');
+  // #117: the money desk is six destinations, and finance-staff holds the
+  // roles for all six. Risk is the one page inside them it does NOT hold.
+  const finnAreas = await destinations(finn.page, 'Billing & Revenue');
+  const SIX = ['Overview', 'Billing', 'Payments', 'Collections', 'Accounting', 'Configuration'];
+  if (JSON.stringify(finnAreas) !== JSON.stringify(SIX)) {
+    fail('finance sees ' + JSON.stringify(finnAreas) + ', expected ' + JSON.stringify(SIX));
+  }
+  if ((finnDesks['Billing & Revenue'] || []).includes('Risk')) {
+    fail('Risk is risk:assess and finance-staff does not hold it');
+  }
+  console.log('OK FINN (finance): Billing & Revenue only — ' + SIX.join(' · ')
+    + ' — every page but Risk, which is risk:assess.'
+    + ' The duplicate Disputes tab is dead.');
   // the negative pair: the hidden tab's API refuses him too
   const finnTok = await token(ctx0.request, 'finn@bss.local', 'finn');
   const finnPost = await ctx0.request.post(
@@ -178,6 +200,15 @@ async function desks(page) {
   }
   if (!(demoDesks['AI & Automation'] || []).includes('AI Workforce')) {
     fail('the crew tab is named AI Workforce now');
+  }
+  // the operator holds risk:assess too, so his Collections carries all three
+  const demoAreas = await destinations(demo.page, 'Billing & Revenue');
+  if (JSON.stringify(demoAreas) !== JSON.stringify(
+    ['Overview', 'Billing', 'Payments', 'Collections', 'Accounting', 'Configuration'])) {
+    fail('the operator sees ' + JSON.stringify(demoAreas) + ' on the money desk');
+  }
+  if (!(demoDesks['Billing & Revenue'] || []).includes('Risk')) {
+    fail('the operator holds risk:assess and should see Risk');
   }
   // the DOM contract the fleet's suites click by: same .tab, same text
   await demo.page.locator('.tab', { hasText: 'Journal' }).click();
