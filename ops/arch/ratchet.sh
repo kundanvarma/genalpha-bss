@@ -1,5 +1,5 @@
 #!/bin/bash
-# The architecture ratchet: a check the agent can run. Two counts that may only fall.
+# The architecture ratchet: a check the agent can run. Counts that may only fall.
 #   1. public methods returning Map<String, Object> per service (typed core, open edge)
 #   2. lines per front-end source file over the size rule
 #   3. PATCH/PUT handlers that accept a raw Map<String, Object> body (mass-assignment surface; a record cannot carry a field it does not declare)
@@ -7,9 +7,16 @@
 #      which as a write mints a fake reference and as a lookup or delete matches IS NULL (six real bugs)
 #   5. unescaped interpolations into innerHTML in a front end — operator or customer text
 #      reaching the DOM as markup is cross-site scripting with a care agent's session
+#   6. JSX components a file renders but never declares or imports (a ReferenceError the build never sees)
+#   7. raw JSON text boxes (kind: 'jsontext') on the admin-console pages a COMMERCIAL department
+#      opens — a product manager cannot write JSON. Designer-only pages (the service and resource
+#      specification forms, on the Wholesale desk) are out of scope and named in the metric below.
 # Usage: ops/arch/ratchet.sh            compare against ops/arch/baseline.json, exit 2 on regression
 #        ops/arch/ratchet.sh --baseline  rewrite the baseline from the current tree (deliberate, reviewed)
 #        ops/arch/ratchet.sh --quick <f> check only the service/app that owns file <f> (edit hook)
+#        ops/arch/ratchet.sh --metric <name>  print the CURRENT total of one metric (ops/arch/claims.sh
+#                                        reads commercialJsonBoxes this way, so the prose states a
+#                                        generated number rather than a remembered one)
 #        ops/arch/ratchet.sh --live      also read the LIVE metric categoryFallbacks from ops/arch/cfs_check.py
 #                                        (services the category table fulfilled because their spec named no
 #                                        CFS — step 3's counted debt; may only fall). Needs a fleet; without
@@ -28,7 +35,87 @@ current() {
 import json, os, re, subprocess, sys
 mx = int(sys.argv[1])
 out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {},
-       "htmlInterpolations": {}, "undeclaredJsx": {}}
+       "htmlInterpolations": {}, "undeclaredJsx": {}, "commercialJsonBoxes": {}}
+
+# --- rule 7: a raw JSON box on a page a commercial user opens -------------------
+# A product manager cannot write JSON, and the back office used to ask them to:
+# eleven `kind: 'jsontext'` fields, the worst of them on the pages a commercial
+# owner lives in (#107). The controls exist now; this counts what is left, PER
+# PAGE, so a new box on a commercial page is a regression even where none stood.
+# Membership is read from the console's own WORKSPACES list, not from a copy here:
+# a page that MOVES onto a commercial desk starts counting the day it moves.
+# OUT OF SCOPE, deliberately: the designer's service and resource specification
+# forms (Wholesale desk, TMF633/TMF634 payload editors for an engineer) — named
+# in DESIGNER_ONLY so the exemption is a line somebody can argue with, not silence.
+COMMERCIAL_DEPTS = {'Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup', 'Billing & Revenue'}
+DESIGNER_ONLY = {'serviceSpecification', 'resourceSpecification'}
+CONSOLE = os.path.join('apps', 'admin-console', 'site')
+NAV = os.path.join(CONSOLE, 'core', 'nav.js')
+JSONBOX = re.compile(r"kind:\s*['\"]jsontext['\"]")
+PATH_DECL = re.compile(r"path:\s*'([^']+)'")
+LABEL = re.compile(r"label:\s*'((?:[^'\\]|\\.)*)'")
+TABS = re.compile(r"tabs:\s*\[(.*?)\]", re.S)
+
+def console_tabs():
+    """(pages the commercial desks open, pages ANY desk opens) off WORKSPACES.
+
+    Never returns a quiet empty set: a console that cannot be read would make
+    this metric count zero for ever, which reads exactly like a pass. If the
+    list moves or a department is renamed, the ratchet stops with a message."""
+    with open(NAV, errors='ignore') as fh: src = fh.read()
+    i = src.find('const WORKSPACES = [')
+    if i < 0:
+        sys.exit(f"ratchet: {NAV} has no WORKSPACES list — the commercial-page metric has no page list")
+    depth = 0; end = -1
+    for j in range(src.index('[', i), len(src)):
+        if src[j] == '[': depth += 1
+        elif src[j] == ']':
+            depth -= 1
+            if depth == 0: end = j; break
+    if end < 0:
+        sys.exit(f"ratchet: {NAV}'s WORKSPACES list is not closed — cannot read the commercial desks")
+    body = src[i:end]
+    tabs = set(); every = set(); seen = set()
+    for m in LABEL.finditer(body):
+        seen.add(m.group(1))
+        # a department's own `tabs:` is the flat union and comes before its `groups:`
+        t = TABS.search(body, m.end())
+        if not t: continue
+        pages = set(re.findall(r"'([^']+)'", t.group(1)))
+        every |= pages
+        if m.group(1) in COMMERCIAL_DEPTS: tabs |= pages
+    missing = sorted(COMMERCIAL_DEPTS - seen)
+    if missing:
+        sys.exit("ratchet: nav.js names no department " + ", ".join(missing)
+                 + " — a desk was renamed; update COMMERCIAL_DEPTS in ops/arch/ratchet.sh")
+    return tabs, every
+
+def json_boxes():
+    if not os.path.isfile(NAV): return {}          # no admin console in this tree
+    tabs, every = console_tabs(); boxes = {}
+    for dp, dn, fs in os.walk(CONSOLE):
+        dn[:] = [d for d in dn if d not in ('node_modules', 'dist', 'build')]
+        for f in sorted(fs):
+            if not f.endswith('.js') or f.endswith('.min.js'): continue
+            p = os.path.join(dp, f)
+            with open(p, errors='ignore') as fh: src = fh.read()
+            if 'jsontext' not in src: continue
+            for m in JSONBOX.finditer(src):
+                owner = None                       # the page is the nearest path: above the field
+                for d in PATH_DECL.finditer(src[:m.start()]): owner = d.group(1)
+                if owner in DESIGNER_ONLY:         # the declared exception
+                    continue
+                if owner in tabs:
+                    key = owner
+                elif owner in every:               # a page on a non-commercial desk: not this rule's business
+                    continue
+                else:
+                    # no page above it, or a page no desk opens: counted, never assumed
+                    # safe. An unclassified page is how a box would otherwise slip past
+                    # the whole metric in silence.
+                    key = f"{p} ({owner or 'no page declared'})"
+                boxes[key] = boxes.get(key, 0) + 1
+    return boxes
 
 # --- rule 6: a JSX component that nothing declares or imports --------------------
 # Vite bundles it as a global and the page throws "X is not defined" the first time
@@ -273,6 +360,7 @@ for app in sorted(os.listdir('apps')):
                     if f.endswith(('.jsx', '.tsx')):
                         u = undeclared_jsx(src)
                         if u: out["undeclaredJsx"][p] = u
+out["commercialJsonBoxes"] = json_boxes()
 print(json.dumps(out, indent=1, sort_keys=True))
 PY
 }
@@ -283,6 +371,15 @@ live_fallbacks() {
   python3 ops/arch/cfs_check.py 2>/dev/null | grep -oE '^metric categoryFallbacks=[0-9]+' | grep -oE '[0-9]+$' || true
 }
 LIVE=$(live_fallbacks "$@")
+
+if [ "${1:-}" = "--metric" ]; then
+  # one metric's CURRENT total, for a document that must state a generated number
+  current | python3 -c 'import json, sys
+m = json.load(sys.stdin).get(sys.argv[1])
+if m is None: sys.exit(f"ratchet: no metric named {sys.argv[1]}")
+print(sum(m.values()) if isinstance(m, dict) else m)' "${2:-}"
+  exit 0
+fi
 
 if [ "${1:-}" = "--baseline" ]; then
   current > "$BASE"
@@ -330,6 +427,15 @@ for p, n in now.get("undeclaredJsx", {}).items():
     if quick and f and not f.endswith(p): continue
     b = base.get("undeclaredJsx", {}).get(p, 0)
     if n > b: bad.append(f"{p}: {n} JSX component(s) used but never declared or imported, baseline {b} — the page throws 'X is not defined' the first time that branch renders; import it")
+for page, n in now.get("commercialJsonBoxes", {}).items():
+    # --quick passes the edited FILE; this metric is keyed by page, so the whole
+    # console is rechecked whenever a console file is the one being edited
+    if quick and f and 'apps/admin-console/' not in f: continue
+    b = base.get("commercialJsonBoxes", {}).get(page, 0)
+    if n <= b: continue
+    where = (f"on the '{page}' page, which a commercial department opens" if '(' not in page
+             else f"in {page} — on no page any desk opens, so nothing classifies it; declare the page in nav.js or give the field a control")
+    bad.append(f"admin console: {n} raw JSON text box(es) {where}, baseline {b} — a product manager cannot write JSON; give the field a control (apps/admin-console/site/core/controls.js), see docs/engineering-conventions.md §4")
 if bad:
     print("ARCHITECTURE RATCHET — regression:"); [print("  - " + m) for m in bad]; sys.exit(2)
 tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
@@ -337,5 +443,5 @@ tw = sum(now.get("rawMapWrites", {}).values()); twb = sum(base.get("rawMapWrites
 tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards", {}).values())
 th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
 fb = f"; category fallbacks {live} (baseline {base.get('categoryFallbacks', '?')})" if live != "" else ""
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); commercial JSON boxes {sum(now.get("commercialJsonBoxes", {}).values())} (baseline {sum(base.get("commercialJsonBoxes", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
 PY
