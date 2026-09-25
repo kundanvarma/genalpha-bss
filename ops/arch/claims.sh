@@ -123,6 +123,21 @@ for f in $(grep -ohE '`[a-z0-9_]+_test`' docs/ctk-conformance.md docs/capability
   [ -f "ops/e2e/$f.js" ] || fail "docs cite suite '$f' but ops/e2e/$f.js does not exist"
 done
 
+# react and react-dom are ONE version or the app is a blank page: React refuses
+# to render a mismatched pair (error #527). Dependabot bumps them as two PRs,
+# and merging one half blanked the CSR console and the mobile app on 25 Sep.
+for lock in apps/*/package-lock.json; do
+  mismatch=$(python3 - "$lock" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1])).get("packages", {})
+r = (p.get("node_modules/react") or {}).get("version")
+d = (p.get("node_modules/react-dom") or {}).get("version")
+print(f"react {r} but react-dom {d}" if r and d and r != d else "")
+PY
+)
+  [ -z "$mismatch" ] || fail "$lock pins $mismatch — React refuses a mismatched pair (blank page); bump both together"
+done
+
 # ------------------------------------------------------------ gates bite ----
 # A gate that cannot fail is worse than no gate: it is believed. Every script
 # we call a gate must have a path that exits non-zero — in shell, or in an
