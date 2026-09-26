@@ -411,7 +411,7 @@ whose button opened it, the same rule the diagnosis report was fixed to in #142.
 
 ### Proof
 
-`ops/e2e/csr_customer_context_test.js` (#243), in a browser as `agent-anna`
+`ops/e2e/csr_customer_context_test.js` (#244), in a browser as `agent-anna`
 through the gateway with a real token. Position and applicability are the point,
 so both are measured, not eyeballed:
 

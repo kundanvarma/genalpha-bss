@@ -1,4 +1,4 @@
-/* Suite #243 — csr_customer_context_test: the customer stays in front of the
+/* Suite #244 — csr_customer_context_test: the customer stays in front of the
  * agent, and an action inside a row belongs to that row.
  *
  * Two tickets off the agent-console UX review (#144), paired because both land
