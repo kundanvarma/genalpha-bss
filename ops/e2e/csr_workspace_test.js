@@ -113,12 +113,14 @@ async function agentLogin(page, username) {
   console.log('OK header is compact:', Math.round(headerH), 'px');
 
   // --- 4. universal search: an ORDER id lands on the customer; a TICKET id too; recent customers appear
+  // Since #147 the answer is TYPED: the order itself gets a row in the Orders
+  // group, and the customer behind it gets one of their own in Customers.
   await a.fill('.searchbar input', orderId);
-  await a.locator('[data-testid="resolved-via"]', { hasText: 'order' }).waitFor({ timeout: 15000 });
+  await a.locator('[data-testid="group-order"]').waitFor({ timeout: 15000 });
   await a.locator('.rowlink', { hasText: `Workspace${run}` }).waitFor({ timeout: 15000 });
-  console.log('OK an order id resolves to its customer');
+  console.log('OK an order id shows the order, typed, and the customer who owns it');
   await a.fill('.searchbar input', ticketId);
-  await a.locator('[data-testid="resolved-via"]', { hasText: 'ticket' }).waitFor({ timeout: 15000 });
+  await a.locator('[data-testid="group-ticket"]').waitFor({ timeout: 15000 });
   await a.locator('.rowlink', { hasText: `Workspace${run}` }).click();
   await a.locator('h1', { hasText: `Workspace${run}` }).waitFor({ timeout: 15000 });
   console.log('OK a ticket id resolves to its customer and opens the 360');

@@ -118,12 +118,31 @@ line actions keep their ids, and each area is deep-linkable by hash
 
 ## Search and the queue
 
-**Universal search.** One box. A name or email searches parties; a phone number
-finds the owner of the line; any id the caller reads out — a customer id, an order,
-a ticket, a product — resolves to the customer behind it, and the page says how it
-got there ("Found by ticket 3f2a…"). Rows show email, phones and city so the right
-Paula can be picked without opening three of them. The six customers this agent
-opened last are chips above the results.
+**Universal search, typed (2026-09-26).** One box — the prompt now says what it
+searches and nothing else: *Search customers, orders, tickets, subscriptions…* —
+and every result says **what it is** before it says anything else. Results are
+grouped under **Customers**, **Subscriptions**, **Orders**, **Tickets**,
+**Devices**, each row badged with its own type, because "open this" is only safe
+when the agent knows what they are opening. A reference the caller reads out is
+probed against every object type at once and each hit becomes its own row, plus a
+row for the customer behind it: the agent chooses the object instead of being
+routed to a guess. Opening one lands on that object's own place — an order or a
+ticket on the customer's **Activity**, a subscription on **Services**, a device
+on its own agreement on the device desk, never on a list to search again. A phone
+number returns the line it runs on *and* who holds it. An empty result says why,
+and how the other types are found.
+
+**A row an agent can tell apart, and hit.** The row element *is* the anchor — the
+full width of the list, at least 40 px tall, with a visible hover and a 2 px
+focus ring — so pointer or keyboard, the thing you aim at is the thing you open.
+`↓` from the box walks the results, `↑` walks back, `Enter` opens, and `Tab`
+reaches them too. Each customer row carries what tells two similar people apart:
+the customer reference, whether they are a person or a business and their
+household role, the email, up to two phones, the town, and how many
+subscriptions actually run — the demo tenant genuinely holds pairs who share an
+email *and* a name, and that pair is now separable from the results alone. It
+stops there on purpose: identification and fast selection, not a mini dashboard.
+The six customers this agent opened last are still chips above the results.
 
 **The queue as a queue.** A dense list — severity, issue, customer *name*, age,
 time in state, status — sorted critical first then oldest, with the selected
@@ -222,6 +241,45 @@ queue with the customer's name, and the recent-customers chips.
 Regression: `csr_test`, `a11y_test` (zero axe violations), `console_sso_guard_test`,
 `knowledge_test`, `porting_test`, `ontology_test`, `care_chat_test`, `copilot_test`,
 `decision_log_test`.
+
+## Typed search (2026-09-26) — CSR-UX-002 and CSR-UX-003
+
+`ops/e2e/csr_typed_search_test.js` (#242) seeds **two customers with the same
+given name, the same family name and the same email address**, one holding a
+subscription and one holding none, and then proves in a browser as `agent-anna`
+through the gateway: the simple prompt; both twins found from that one email and
+separable by reference, phone and subscription count; the row is an `<a>` that
+spans the list, hover repaints it, a click 8 px from its right edge opens that
+customer; `↓` focuses the first result with a measured 2 px `:focus-visible`
+ring, `↓ Enter` opens the second, `Tab` reaches rows as well; an order, a ticket
+and a subscription reference each landing in the group that names them and on the
+right area of the right customer; a phone number returning the line and its
+holder; an empty result explaining itself; and, as `demo` (the device desk needs
+`device:read`), a device-agreement reference opening **that** agreement on the
+device desk with a way back to the list. The suite deletes its two customers and
+their subscription and then asserts that nothing named after the run is left —
+four suites used to leak customers into every agent's search results.
+
+### Honest limits
+
+- **Free text reaches customers only.** No component offers a text search over
+  orders, tickets or catalogue offerings — `?q=` is a party-account feature, and
+  `productOffering?name=` is an exact match. Those types are therefore found by
+  the reference the caller reads out, and the empty state says so rather than
+  implying the search looked and failed.
+- **Catalogue products are not a result type.** There is no reference lookup for
+  an offering that has an agent-side destination; the six types the review names
+  are five here.
+- **`agent-anna` cannot see device results** — she has no `device:read`, so the
+  device probe returns nothing for her and the group never appears. That is the
+  role model working, not a bug, and it is why the device half of the suite signs
+  in as `demo`.
+- **The subscription count is a second round trip** per visible row (capped at
+  eight), read off a `fields=id,status` projection. A slow product inventory
+  shows the row without its count rather than delaying identification.
+- **Natural-language search is not here.** It was explicitly future work in
+  #147, and it builds on this typed-result model: a model chooses the type and
+  the reference; the rows stay what they are.
 
 ## Situation, summarised (2026-09-15)
 

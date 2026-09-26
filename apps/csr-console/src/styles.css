@@ -205,6 +205,41 @@ main.wide { max-width: 1100px; }
 }
 .rowlink { text-decoration: none; color: inherit; }
 .rowlink:hover strong { color: var(--teal); }
+
+/* --- typed search results (#146, #147) ------------------------------------
+ * The whole row is the target, so the row itself carries the hover and the
+ * focus ring — there is no small blue word to aim at. Focus is drawn INSIDE
+ * the row (outline-offset negative) so a ring at the list edge is never
+ * clipped, and it is a ring, not a colour change, because colour alone is not
+ * a focus state. */
+.resultgroup { margin-top: 18px; }
+.resultgroup .grouphead {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--dim); margin: 0 0 2px; padding: 0 4px;
+}
+.row.result { align-items: flex-start; padding: 11px 8px; cursor: pointer; }
+.row.result .resultbody { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.row.result .resulthead { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.row.result:hover { background: var(--teal-soft); }
+.row.result:focus-visible, .row.result:focus {
+  outline: 2px solid var(--teal); outline-offset: -2px; background: var(--teal-soft);
+}
+.row.result.noplace { cursor: default; }
+.typebadge {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px;
+  letter-spacing: 0.07em; text-transform: uppercase; padding: 2px 7px;
+  border: 1px solid var(--line); background: var(--card); color: var(--dim);
+  flex: none;
+}
+.typebadge[data-type="customer"] { color: var(--teal-text); border-color: var(--teal); }
+.resultfacts { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.resultfacts .fact { display: inline-flex; gap: 5px; align-items: baseline; }
+/* The label stays the dim token, never a faded one: text at 0.65 opacity is
+ * how a row quietly drops under 4.5:1 and axe stops calling the desk clean. */
+.resultfacts .factlabel { color: var(--dim); }
+.resultfacts .factvalue { color: var(--ink); }
+.resultfacts .factvalue.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.resultwhy { font-style: italic; }
 .col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
 @media (max-width: 860px) { .col2 { grid-template-columns: 1fr; } }
 .ticket { border: 1px solid var(--line); background: var(--card); padding: 4px 14px 12px; margin-bottom: 12px; }

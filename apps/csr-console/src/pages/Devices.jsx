@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { acceptRevaluation, deviceAgreements, deleteResidual, gradeTradeIn,
   rejectRevaluation, residualTable, tradeInValuations, upsertResidual,
   withdrawalCases } from '../api.js';
@@ -17,6 +18,10 @@ const d = (v) => (v ? new Date(v).toLocaleDateString(undefined, { month: 'short'
 
 export default function Devices() {
   const canWrite = hasRole('device:write');
+  // A device result in the one search box lands HERE, on its own agreement —
+  // a typed result must open the object, never a list the agent searches again.
+  const [params, setParams] = useSearchParams();
+  const focusId = params.get('agreement');
   const [status, setStatus] = useState('all');
   const [agreements, setAgreements] = useState(null);
   const [awaiting, setAwaiting] = useState([]);   // accepted + in-transit → gradable
@@ -72,8 +77,15 @@ export default function Devices() {
                   onClick={() => setStatus(s)}>{s}</button>
         ))}
       </div>
+      {focusId && (
+        <p className="dim small" data-testid="agreement-focus">
+          One agreement, opened from search.{' '}
+          <button className="linkish" data-testid="agreement-focus-clear"
+                  onClick={() => setParams({}, { replace: true })}>Show every agreement</button>
+        </p>
+      )}
       <div className="rows" data-testid="agreement-list">
-        {(agreements || []).map((a) => (
+        {(agreements || []).filter((a) => !focusId || a.id === focusId).map((a) => (
           <div className="row" key={a.id} data-testid="agreement-row">
             <div>
               <strong>{a.device?.name || a.device?.id || 'Device'}</strong>
@@ -90,6 +102,8 @@ export default function Devices() {
           </div>
         ))}
         {agreements && !agreements.length && <p className="dim small">No agreements with this status.</p>}
+        {agreements && agreements.length > 0 && focusId && !agreements.some((a) => a.id === focusId)
+          && <p className="dim small">That agreement is not in the “{status}” list.</p>}
         {!agreements && <p className="dim small">Loading agreements…</p>}
       </div>
 
