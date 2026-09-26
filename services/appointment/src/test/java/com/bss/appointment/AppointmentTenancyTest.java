@@ -12,6 +12,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -65,8 +66,25 @@ class AppointmentTenancyTest {
         return JsonPath.read(result.getResponse().getContentAsString(), "$.id");
     }
 
+    /**
+     * A slot on a day somebody actually works.
+     *
+     * `daysAhead` only spaces these tests apart; the DAY OF THE WEEK it lands on
+     * is an accident of the calendar, and that accident used to decide whether
+     * this class passed. ScheduleRosterTest seeds tenant-b a roster of MON–SAT,
+     * and a roster with nobody on shift is capacity 0 — a 409 from
+     * RosterScheduleProvider that reads exactly like "the slot is fully booked".
+     * So whenever today + daysAhead fell on a Sunday, the tenant-b booking in
+     * slotCapacityIsPerTenant was refused and the test failed for a reason that
+     * had nothing to do with tenancy. One day in seven, in a suite nobody had
+     * changed. Skipping Sunday makes the day of the week deliberate.
+     */
     private static OffsetDateTime futureSlot(int daysAhead, int hour) {
-        return LocalDate.now().plusDays(daysAhead).atTime(LocalTime.of(hour, 0)).atOffset(ZoneOffset.UTC);
+        LocalDate day = LocalDate.now().plusDays(daysAhead);
+        if (day.getDayOfWeek() == DayOfWeek.SUNDAY) {
+            day = day.plusDays(1);
+        }
+        return day.atTime(LocalTime.of(hour, 0)).atOffset(ZoneOffset.UTC);
     }
 
     @Test
