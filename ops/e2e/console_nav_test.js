@@ -114,10 +114,22 @@ async function groupLabels(page) {
   await openDept(page, 'Decisions');
   const ai = await groupLabels(page);
   if (JSON.stringify(ai) !== JSON.stringify(['Work', 'Decisions', 'Audit'])) await fail(`AI & Automation groups: ${ai}`);
+  // Billing & Revenue was the last flat department: fourteen peer tabs. It is
+  // six destinations on the revenue lifecycle now (#117), and four of them are
+  // one screen each carrying their own areas, so those show no second line.
   await openDept(page, 'Bills');
   const money = await groupLabels(page);
-  if (money.length) await fail(`Billing & Revenue is flat but shows groups: ${money}`);
-  console.log('OK Marketing and AI & Automation grouped; Billing & Revenue stays flat');
+  const six = ['Overview', 'Billing', 'Payments', 'Collections', 'Accounting', 'Configuration'];
+  if (JSON.stringify(money) !== JSON.stringify(six)) await fail(`Billing & Revenue primaries: ${money}`);
+  const moneyRow = await page.evaluate(() => ({
+    on: document.querySelector('#pagerow .primary-tab.on')?.textContent,
+    sub: [...document.querySelectorAll('#pagerow .subnav .pagetab')].map((b) => b.textContent),
+  }));
+  if (moneyRow.on !== 'Billing' || JSON.stringify(moneyRow.sub) !== JSON.stringify(['Bills', 'Disputes'])) {
+    await fail(`Bills sits under ${moneyRow.on} with ${JSON.stringify(moneyRow.sub)}`);
+  }
+  console.log('OK Marketing, AI & Automation and Billing & Revenue all grouped;'
+    + ' the money desk reads ' + six.join(' · '));
 
   /* ---------- 3. a draft offering and a live one ---------- */
   const draftName = `Nav draft ${run}`;

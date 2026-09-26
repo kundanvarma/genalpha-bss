@@ -156,7 +156,67 @@ loud thing on the page) and **Shadow billing** (what would bill differently next
 cycle). Each keeps its own tab, its own path and its own role gate, and lands
 on its own area of the page, so every deep link and every suite still works.
 
+## Six destinations, and who may stand in each
+
+The desk exposed fourteen peer tabs, which meant an operator had to know the
+ledger's data model before they could find a task. It reads as the revenue
+lifecycle now:
+
+| Destination | What is there | Why |
+|---|---|---|
+| **Overview** | what needs attention, what is queued, where the book stands | the day starts with exceptions, not a table |
+| **Billing** | Bills · Disputes | money owed, and the money owed that is being argued about |
+| **Payments** | unapplied cash, payments received, reconciliation | money received is its own job, not a tab inside money owed |
+| **Collections** | Cases · Dunning · Risk | money that is late: the case, the ladder behind it, and the score the case aggregates |
+| **Accounting** | Journal · Chart of accounts | what the books say, and what the books are told to say |
+| **Configuration** | financial changes, bill formats, deliveries, shadow billing | setup, off the daily path |
+
+Four of the six are one screen each, and that screen carries its own areas —
+Configuration's four chips, Accounting's two, the sections on Payments. Those
+show no second row of navigation, because a choice printed twice, one line
+above itself, is worse than a choice printed once. Billing and Collections are
+genuinely several pages, so those do get a second row.
+
+**Nothing moved house.** Every one of the fourteen keeps its path, its title
+and its role gate, so `#/billFormatProfile`, the ⌘K palette and every suite
+that clicks a tab by its text land exactly where they did. One name changed,
+and only in the row: the collection-case list is **Cases** there, so the row
+under Collections does not read "Collections".
+
+### Role visibility
+
+Which destinations an operator is shown is decided by the same per-page role
+gates the rail has always used — a destination appears when the token can see
+at least one page under it, and disappears with the last one.
+
+| Destination | Shown to |
+|---|---|
+| Overview, Billing, Payments, Accounting, Configuration | `billing:admin` |
+| Collections | `billing:admin` (Cases, Dunning) **or** `risk:assess` (Risk) |
+
+Those are roles the services themselves enforce, which is the point: a tab a
+token can see is a tab whose API answers it, never a button that leads to a 403.
+The gate errs strict where it must — see the Accounting note under Honest limits
+— but it never errs open. So finance-staff — `billing:admin`, `billing:read`,
+`party:read` — is shown all six destinations and every page in them except
+Risk, and a risk analyst holding `risk:assess` alone is shown Billing & Revenue
+holding **Collections and nothing else**, with Risk the only page under it.
+Departments are composite roles a tenant's IdP admin edits from the Staff desk,
+not code.
+
+Hiding a page is ergonomics; the 403 underneath is the security. Both are
+proven, per persona, in the suite below.
+
 ## Proof
+
+`ops/e2e/billing_ia_test.js` (suite #239) proves the shape and the gates with
+real tokens: the six primaries in lifecycle order, each destination's second
+row exactly as the table above says, all fourteen old tabs still opening under
+the destination they were re-homed to, finance-staff's Collections carrying
+Cases and Dunning but not Risk (with `riskManagement` answering him 403), and a
+narrow role landing on its own area alone. That last one grants `risk:assess`
+to a CSR through the console's own TMF672 door, looks at what they see, then
+takes it back and proves the department goes with the role.
 
 `ops/e2e/bills_desk_test.js` (suite #235) drives the real console with a real
 token: the table's columns and the absence of a View button, the search
@@ -227,8 +287,60 @@ nothing.
   event and account code are served; searching a party means going through the
   bill.
 - **Journal and Chart of accounts still have their own tabs.** They open the
-  same page on their own view, so the grouping is real, but folding them into
-  one primary named Accounting belongs to the information-architecture arc.
+  same page on their own view, and they now sit under one primary named
+  Accounting, which shows no second row because the page's own chips are the
+  choice. The tabs survive as the deep-link and palette contract.
+
+### The information architecture
+
+- **Four destinations have no second row of navigation**, because their screen
+  carries its own areas. The ticket asked for "six primaries with secondary
+  navigation"; printing a row that repeats the chips already on the page would
+  have honoured the words and wronged the operator. The secondary navigation
+  for those four is inside the page, and the suite asserts the chips are really
+  there — otherwise this would just be a row quietly deleted.
+- **Unapplied cash has no seat in the row.** The Payments screen states it,
+  counts it and offers the match form, so the older plain-table tab would be
+  the same worklist named twice. That table is still the better page for a long
+  queue — it pages and searches, where the screen shows the hundred most recent
+  — and it is still reachable by path and from the palette. Merging the two is
+  a follow-up.
+- **The finance roles are one role.** `billing:admin` is what the billing and
+  revenue services enforce for almost everything here, so a collections agent,
+  a controller and an administrator are the same token today, and each is shown
+  all five of its destinations. The spec's user story asking a narrow role to
+  see only its areas is honoured by the mechanism, and proven with the one
+  genuinely narrow finance-adjacent role that exists (`risk:assess`); splitting
+  `billing:admin` into per-area authorities is a change to the services, not to
+  a console, and it is not built.
+- **The console's gate on Accounting is stricter than the API's.** The revenue
+  service serves the journal and the chart to `billing:read`; the console shows
+  them on `billing:admin`. The reason is structural: `billing:read` is part of
+  the composite every self-registered customer holds, so the console cannot use
+  it as a gate without opening the desk to shoppers. Erring strict hides a page
+  from someone whose token would have answered — the safe direction, but a
+  read-only controller cannot be given the books without `billing:admin` today.
+- **Bills is not walled by a 403.** A bill list is `billing:read`, so the
+  negative pair that proves the other destinations are really shut cannot be
+  drawn there. The suite asserts the 403 where there is one to assert —
+  Payments, Configuration and Risk — and says so rather than claiming a wall
+  that is not built.
+- **Risk still shows ids and seed epochs where customers belong.** Looking at
+  the narrow persona's screen — which is Risk and nothing else — the customer
+  column reads `2316c36f…` for a party that does not resolve and
+  `Gi Roshort1790365042479` for one that does. The generic table already asks
+  the party service for a name and falls back to an id stub when there is none,
+  so the first is the honest fallback for the seeded parties that have no party
+  record; the second is a real name with a seed epoch glued to it, which the
+  React screens strip with `plain()` and the vanilla table has no equivalent
+  for. This arc re-homed that page, it did not build it, and neither defect is
+  new — but a role whose whole desk is that one page reads them first, so they
+  are named here rather than left for someone to find. The fix is `plain()` in
+  the shell's `partyName`, which would improve every generic table at once.
+- **The page heading is the page's, not the destination's.** Under Collections
+  the row says Cases and the heading still says Collections. `short` renames a
+  page in the row only, deliberately, so the crumb and the title stay stable —
+  but it does mean one screen is called two things.
 - **An account's name is the tenant's, its posting key is not.** The thirty
   posting keys the subledger books against are fixed in the service; a tenant
   can rename and re-code them but cannot invent a thirty-first.

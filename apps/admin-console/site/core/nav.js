@@ -99,9 +99,6 @@ const TAB_ROLE = {
   // the AI audit trail rides along with AI power, by design (auditability)
   audit: ['catalog:write', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
   policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
-  // the island proof page is the platform's own, like the rest of that department:
-  // without a gate every persona saw a Platform department they have no business in
-  islandHealth: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
   'desk-suggestions': ['catalog:write', 'ai:admin'], // AI & Automation is the product owner's and the admin's room (suite #87)
   // the decision log and the contracts are the product owner's and the admin's room, like the suggestions (gro, marketing, sees no AI desk)
@@ -110,8 +107,8 @@ const TAB_ROLE = {
   'device-entitlements': ['entitlement:read'],
   // the ontology is every staff member's to read; an action's own permissions decide who may run it
   ontology: ['catalog:read', 'ordering:write', 'ai:use', 'insight:read'],
-  // the island seam's proof page is a developer's page, not a desk: ungated it
-  // put a Platform department on every persona's rail holding one dev page
+  // the island seam's proof page is a developer's page, not a desk: ungated it put a Platform
+  // department on every persona's rail holding one dev page (listed twice, same value — deduped #117)
   islandHealth: 'roles:admin',
 };
 let visible = RESOURCES;
@@ -181,12 +178,26 @@ const WORKSPACES = [
     quiet: ['copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
-  // Overview first, then the book, then the two workflows. The remaining peer
-  // tabs keep their places until #117 re-homes them under the six areas.
-  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'payments', 'collections',
-    'journalEntry', 'accountMapping', 'financialConfiguration', 'dispute',
-    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
-    'shadowDrift'] },
+  // SIX DESTINATIONS ON THE REVENUE LIFECYCLE, not fourteen peer tabs (#117).
+  // Every tab keeps its path, title and role gate, so #/billFormatProfile, the
+  // ⌘K palette and every suite clicking a tab by text land where they did.
+  // A dispute is contested money OWED, so it sits with its bill, not with money merely late;
+  // Dunning is the ladder behind a case, Risk one of the six things a case aggregates.
+  // `whole` = the destination IS one screen carrying its own areas, so the row never repeats it.
+  { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'dispute',
+    'payments', 'remittance/unapplied', 'collections', 'dunning', 'partyRiskAssessment',
+    'journalEntry', 'accountMapping', 'financialConfiguration', 'billFormatProfile',
+    'billDistribution', 'shadowDrift'],
+    groups: [
+      { label: 'Overview', tabs: ['billingOverview'], whole: true },
+      { label: 'Billing', tabs: ['customerBill', 'dispute'] },
+      { label: 'Payments', tabs: ['payments', 'remittance/unapplied'], whole: true },
+      { label: 'Collections', tabs: ['collections', 'dunning', 'partyRiskAssessment'],
+        short: { collections: 'Cases' } },
+      { label: 'Accounting', tabs: ['journalEntry', 'accountMapping'], whole: true },
+      { label: 'Configuration', tabs: ['financialConfiguration', 'billFormatProfile',
+        'billDistribution', 'shadowDrift'], whole: true },
+    ] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'device-entitlements', 'article'] },
   // "Growth" split by persona (the marketer, the seller, the sales-ops admin) —
@@ -223,9 +234,14 @@ const WORKSPACES = [
 /* The one way into a page from outside the rail. A React island (ADR-0022)
  * that says "37 outstanding" must be able to take the operator to the bills
  * behind the 37; without this it would reach into the shell's DOM and click a
- * tab by its label. An unknown path is ignored rather than blanking the page. */
+ * tab by its label. An unknown path is ignored rather than blanking the page.
+ *
+ * It looks in `visible`, not in RESOURCES: a door that skips the rail must not
+ * also skip the rail's gate. Searching every resource let this global open a
+ * page the token's roles hide — the API 403s underneath, so it was ergonomics
+ * rather than a breach, but a gate with a way around it is not a gate. */
 window.consoleGoTo = function consoleGoTo(path) {
-  const target = RESOURCES.find((r) => r.path === path);
+  const target = visible.find((r) => r.path === path);
   if (!target) return false;
   active = target;
   offset = 0;
