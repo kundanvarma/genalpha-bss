@@ -23,7 +23,6 @@
  * trusted: the strip is switched to position:static and must go off screen,
  * and a generic button is injected into a product row and must be caught.
  */
-const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { chromium } = require('playwright');
