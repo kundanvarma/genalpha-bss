@@ -232,3 +232,64 @@ nothing else is due until then" instead of "overdue", and info lines say "no
 action needed". The customer's Home reads the same summary with their own
 token. Customers' verdicts on offers (maybe later, not interested) land in the
 same decision log the desk's ranking learns from.
+
+## Wayfinding: the brand goes home, help never dead-ends (2026-09-26)
+
+Two findings from the interaction review of the agent console (spec #144), the
+two that were pure dead ends.
+
+**The brand is the way home** (#145). The logo sat where every web application
+puts "home" and was wired to nothing — an image and two spans. It is now one
+link over the whole brand (logo, area wordmark, org badge) to the desk's default
+workspace, which is Customers today and can become a home page later without the
+affordance changing. The accessible name is the *tenant's* brand name from the
+gateway's per-channel config — `MyGenAlpha CSR home` on the default host,
+`Taranga CSR home` on Taranga's — never a name compiled into the build. It is the
+first stop on Tab and draws a 3 px outline when a keyboard puts focus on it. The
+logo keeps the `onError` fallback that hides it for a tenant with no logo
+document.
+
+**Help never opens into a dead end** (#151, the immediate half). The drawer used
+to answer *"No help written for this page yet."* — an expectation created and
+broken in one sentence, with nowhere to go. It now offers the next step: search,
+ask where the agent holds `ai:use`, and questions that belong to the screen the
+agent is standing on (Customers asks about a suspended service and an eSIM swap;
+Tickets asks about escalation and handover). Picking one fills the search box,
+which both searches and arms Ask.
+
+Underneath it was, on the first screen an agent sees, a typo: the drawer built
+its shelf tag with `.replace('customer', 'customers')` over the whole path
+segment, so the landing page asked the knowledge base for `csr:customerss` and
+the article tagged `csr:customers` was never found. The dead end the review
+photographed was help that existed and could not be reached.
+
+### Proof
+
+`ops/e2e/csr_wayfinding_test.js` (#241), in a browser as `agent-anna` through the
+gateway: the brand is exactly one `<a>` with the logo and wordmark inside it and
+nothing of the brand outside it; its accessible name follows a rewritten tenant
+config, so no constant can pass; the first Tab lands on it with `:focus-visible`
+and an outline that goes from `none` to solid; Enter goes home and so does a
+click on the logo image itself; a broken logo still hides itself and the link
+survives it. Then: the landing screen shows its authored article instead of the
+dead end, an unmatched search offers a next step and suggestions rather than an
+apology, picking one arms the search and Ask, the suggestion set differs between
+Customers and Tickets, and a screen with no article at all (`csr:migrations` on
+the demo fleet) still opens on *How can I help?* with somewhere to go.
+
+Both halves were watched failing first: with the brand reverted to a `<div>` the
+suite stops on "the brand is not an `<a>`", and with the old sentence restored it
+stops on "the old dead-end sentence is still rendered".
+
+### Honest limits
+
+- The larger half of #151 — the contextual knowledge assistant that reads the
+  customer and service in front of the agent and guides troubleshooting — is
+  **not** built. This is the empty-state half only.
+- The suggested questions are a hand-written list per screen, not learned from
+  what agents actually ask. The knowledge-gap ledger already records unanswered
+  questions; nothing yet feeds it back into this list.
+- The destination is still Customers. A home or dashboard page for the desk is
+  its own ticket.
+- Only the CSR console's brand is a link. The admin, business, dealer and
+  partner consoles still have the same dead logo.

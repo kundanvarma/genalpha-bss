@@ -8,6 +8,7 @@ import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
 import Chats from './pages/Chats.jsx';
 import Knowledge from './pages/Knowledge.jsx';
+import Brand from './Brand.jsx';
 import HelpDrawer from './HelpDrawer.jsx';
 import IncidentBar from './IncidentBar.jsx';
 import Palette, { MOD } from './Palette.jsx';
@@ -63,11 +64,7 @@ export default function App() {
   return (
     <>
       <header className="top">
-        <div className="brand">
-          <img className="brandlogo" src={window.BSS_CSR_CONFIG?.logoUrl || '/tmf-api/documentManagement/v4/document/brand-logo'} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-          <span className="area">csr console</span>
-          {claims.org && <span className="orgbadge">{claims.org}</span>}
-        </div>
+        <Brand org={claims.org} />
         <nav className="nav" aria-label="Work" onClick={(e) => { const a = e.target.closest && e.target.closest('a'); if (a) desk('tab.open', a.getAttribute('href') || a.textContent); }}>
         <span className="navgroup">
           <NavLink to="/" end>Customers</NavLink>
