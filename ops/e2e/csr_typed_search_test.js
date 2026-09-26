@@ -1,4 +1,4 @@
-/* Suite #242 — one search box, typed results, and a row you can actually hit.
+/* Suite #243 — one search box, typed results, and a row you can actually hit.
  *
  * CSR-UX-002 (#146) and CSR-UX-003 (#147), proven in a browser through the
  * gateway with a real agent token:

@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { askKnowledge, searchKnowledge, shelfKnowledge } from './api.js';
 import { hasRole } from './auth.js';
+import HelpEmpty from './HelpEmpty.jsx';
 
 /** Contextual help: the published articles tagged for THIS screen (csr:<route>),
  * audience-gated by the server from the agent's token. Search all help, and — with
  * ai:use — ask; the answer is grounded on the same shelf and cached server-side. */
 export default function HelpDrawer() {
   const { pathname } = useLocation();
-  const context = 'csr:' + (pathname.split('/')[1] || 'customers').replace('customer', 'customers');
+  // The shelf tag for this screen. The old line ran .replace('customer', 'customers')
+  // over the whole segment, so the LANDING page asked for csr:customerss and the
+  // desk's own help shelf — which exists — never matched: the dead end #151 was
+  // filed about was, on the first screen an agent sees, a typo.
+  const segment = pathname.split('/')[1] || 'customers';
+  const context = 'csr:' + (segment === 'customer' ? 'customers' : segment);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [articles, setArticles] = useState([]);
@@ -38,7 +44,8 @@ export default function HelpDrawer() {
           <div className="help-head"><h2>Help</h2><button type="button" className="ghost" data-testid="help-close" onClick={() => setOpen(false)}>×</button></div>
           <input placeholder="Search all help…" value={q} data-testid="help-search" onChange={(e) => setQ(e.target.value)} />
           <div data-testid="help-list">
-            {!articles.length && <p className="dim" data-testid="help-empty">{q.trim() ? 'Nothing found. Try other words.' : 'No help written for this page yet.'}</p>}
+            {/* never a dead end: the fallback offers a next step, not an apology (#151) */}
+            {!articles.length && <HelpEmpty q={q} context={context} canAsk={hasRole('ai:use')} onPick={setQ} />}
             {articles.map((a) => (
               <details key={a.id} data-testid="help-article"><summary>{a.title}</summary><div className="help-body">{a.body}</div></details>
             ))}
