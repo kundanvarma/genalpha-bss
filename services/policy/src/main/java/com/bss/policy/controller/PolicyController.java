@@ -9,6 +9,7 @@ import com.bss.policy.dto.PolicyRulePatch;
 import com.bss.policy.dto.PolicyRuleRequest;
 import com.bss.policy.dto.PolicyRuleView;
 import com.bss.policy.dto.PriceResult;
+import com.bss.policy.dto.ReferencingRule;
 import com.bss.policy.dto.Teaser;
 import com.bss.policy.service.PolicyService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -73,6 +74,26 @@ public class PolicyController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Which rules name this offering — the offering page's read-back, so a
+     * product manager can see the 50 NOK off before they wonder where it came
+     * from, and the three rules still pointing at an offering before they
+     * retire it. Pricing AND blocking, enabled AND disabled.
+     *
+     * This is a SEPARATE door from {@code /price/teaser} on purpose. The teaser
+     * is anonymous by design; a negotiated company rate must never reach a
+     * reader who has not been granted {@code policy:read}. Being a GET under
+     * the base path, this read inherits exactly that authority — the same one
+     * the rules page itself reads through — from {@code SecurityConfig}.
+     *
+     * The literal path wins over {@code /policyRule/{id}} by PathPattern
+     * specificity, so "referencing" is never read as a rule id.
+     */
+    @GetMapping("/policyRule/referencing")
+    public List<ReferencingRule> referencing(@RequestParam String offeringId) {
+        return service.rulesReferencing(offeringId);
     }
 
     /** The personalization decision: the insight component asks, the

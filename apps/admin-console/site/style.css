@@ -475,3 +475,14 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; font-size: 1
 .ask-copilot { margin-right: 6px; }
 .side-drawer.copilot-drawer { width: min(760px, 96vw); }
 .side-drawer.copilot-drawer #copilot-panel { max-width: none; }
+
+/* the rules that reference an offering (#157): a read-only window on the offering form */
+.offering-rules { display: flex; flex-direction: column; gap: 8px; }
+.offering-rules .muted { color: var(--dim); font-size: 12.5px; margin: 0; }
+.offering-rule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.offering-rule-list li { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 10px 14px; background: var(--card); }
+.offering-rule-list li[data-enabled="false"] { border-left-color: #f59e0b; }
+.offering-rule-list li[data-enabled="true"] { border-left-color: #2e7d32; }
+.offering-rule-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.offering-rule-head button { margin-left: auto; }
+.offering-rule-list li p { margin: 6px 0 0; font-size: 13.5px; }

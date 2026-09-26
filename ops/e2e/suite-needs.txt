@@ -42,6 +42,7 @@ interaction_timeline_test   communication party-interaction campaign
 knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
 loyalty_test                loyalty
+offering_rules_panel_test   policy product-catalog console
 omnichannel_test            campaign party-interaction communication
 party_debris_test           party-account product-inventory product-ordering billing revenue party-interaction communication campaign shopping-cart trouble-ticket appointment insight user-roles
 price_builder_test          product-stock insight

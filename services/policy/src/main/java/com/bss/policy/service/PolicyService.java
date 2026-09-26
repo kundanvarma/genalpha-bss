@@ -10,6 +10,7 @@ import com.bss.policy.dto.PolicyRuleRequest;
 import com.bss.policy.dto.PolicyRuleView;
 import com.bss.policy.dto.PriceResult;
 import com.bss.policy.dto.PriceResult.Adjustment;
+import com.bss.policy.dto.ReferencingRule;
 import com.bss.policy.dto.Teaser;
 import com.bss.policy.engine.PolicyEngine;
 import com.bss.policy.entity.PolicyRule;
@@ -180,6 +181,34 @@ public class PolicyService {
                     audience, rule.getAdjustmentType(), rule.getAdjustmentValue(), related));
         }
         return teasers;
+    }
+
+    /**
+     * The read-back an offering never had: every rule that NAMES this
+     * offering — pricing and blocking, enabled and DISABLED, each with its
+     * state. A rule can apply to a basket, a company or a customer type, so it
+     * cannot live on one offering; the attachment is therefore one-way in the
+     * model, and this is the reverse read.
+     *
+     * Deliberately NOT {@link #teasers(String)}. That is the anonymous shop
+     * window, so it walks the enabled PRICING rules and hands out marketing
+     * copy only. This is back-office configuration behind {@code policy:read}:
+     * a quantity cap, an incompatibility, and above all a rule somebody
+     * switched off, which is the one thing you need when you are asking why
+     * nothing is happening — or what still points here before you retire it.
+     *
+     * A blank offering id matches nothing rather than everything.
+     */
+    @Transactional(readOnly = true)
+    public List<ReferencingRule> rulesReferencing(String offeringId) {
+        if (offeringId == null || offeringId.isBlank()) {
+            return List.of();
+        }
+        List<ReferencingRule> rules = new ArrayList<>();
+        for (PolicyRule rule : repository.findByConditionContainingOrderByPriorityAsc(offeringId)) {
+            rules.add(ReferencingRule.of(rule));
+        }
+        return rules;
     }
 
     /**
