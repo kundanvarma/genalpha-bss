@@ -325,6 +325,18 @@ nothing.
   drawn there. The suite asserts the 403 where there is one to assert —
   Payments, Configuration and Risk — and says so rather than claiming a wall
   that is not built.
+- **Risk still shows ids and seed epochs where customers belong.** Looking at
+  the narrow persona's screen — which is Risk and nothing else — the customer
+  column reads `2316c36f…` for a party that does not resolve and
+  `Gi Roshort1790365042479` for one that does. The generic table already asks
+  the party service for a name and falls back to an id stub when there is none,
+  so the first is the honest fallback for the seeded parties that have no party
+  record; the second is a real name with a seed epoch glued to it, which the
+  React screens strip with `plain()` and the vanilla table has no equivalent
+  for. This arc re-homed that page, it did not build it, and neither defect is
+  new — but a role whose whole desk is that one page reads them first, so they
+  are named here rather than left for someone to find. The fix is `plain()` in
+  the shell's `partyName`, which would improve every generic table at once.
 - **The page heading is the page's, not the destination's.** Under Collections
   the row says Cases and the heading still says Collections. `short` renames a
   page in the row only, deliberately, so the crumb and the title stay stable —
