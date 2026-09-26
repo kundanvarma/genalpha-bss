@@ -351,3 +351,104 @@ stops on "the old dead-end sentence is still rendered".
   its own ticket.
 - Only the CSR console's brand is a link. The admin, business, dealer and
   partner consoles still have the same dead logo.
+
+## The customer stays in front of the agent; an action belongs to its row (2026-09-26)
+
+The second pair from the UX review of the agent console (#144): CSR-UX-004
+(#148) and CSR-UX-005 (#149). They are one change because they land in the same
+two files, and because they answer two of the review's three questions — *which
+customer am I working on* and *what will this action change*.
+
+### The customer identity strip
+
+The workspace's top bar was sticky. The customer header was not, so the one fact
+an agent must never lose scrolled away exactly when they were deep in a list of
+services, bills or orders taking consequential actions. It is now a compact
+sticky strip directly under the top bar, and it carries only what a decision
+needs:
+
+- **who** — name, and the account reference an agent reads out (the full id is
+  on hover, never on the screen);
+- **what kind of customer** — Consumer or Business, off the party record's
+  organisation, never guessed from the name;
+- **what state** — active, all services paused, no running service, deceased;
+- **how to reach them** — email, their first numbers, address where it may be
+  shown, and the re-verify-against-the-register action that used to live here;
+- **whether the caller has been identified** — a red *identity not verified*
+  until the agent checks the caller and says what they checked; then a green
+  chip naming the check and the time. The check is written to the customer's
+  record as an interaction, not only to the screen;
+- **two numbers that change the next move** — active services, and money
+  outstanding. Both are buttons into the area that owns them.
+
+Everything deeper stays where it was. A strip that grows into a summary page
+stops being an anchor, so nothing else was allowed in.
+
+The strip's `top` is measured from the header at runtime rather than pinned to a
+constant: the header wraps on a narrow desk, and a constant would be wrong
+exactly when it mattered.
+
+### An action inside a row must apply to that row
+
+`upgradeButton(p)` was rendered on **both** branches of a service row — on the
+running service, and on a commercial product with nothing running under it. So
+"Upgrade options" appeared on objects that could not take the journey, and a
+button inside a row is read as being about that row.
+
+It is now three things instead of one:
+
+- a row with a running service under an active product offers the journey
+  **scoped to that object and named for it** — *Change plan* on a line,
+  *Change package* on TV;
+- a product row with nothing running offers *View product* — what the customer
+  bought — and nothing that pretends a service exists;
+- the **generic** journey, where no object has been chosen yet, moved up to the
+  Services header as *Add or upgrade services*, which lists the objects that
+  can change and a way to order something new.
+
+And the answer follows the row too: the options card now renders under the row
+whose button opened it, the same rule the diagnosis report was fixed to in #142.
+
+### Proof
+
+`ops/e2e/csr_customer_context_test.js` (#244), in a browser as `agent-anna`
+through the gateway with a real token. Position and applicability are the point,
+so both are measured, not eyeballed:
+
+- the workspace is scrolled ~2 900 px and the strip is still on screen, clear of
+  the top bar, with the identity chip inside the viewport;
+- the customer and the identity check survive Overview → Services → Activity →
+  Billing & account;
+- every button in every row is checked against its row: a plan change needs both
+  a running service and the product it realises, a line check needs a line, and
+  the words "Upgrade options" may not appear on a row at all;
+- the options card is asserted to be the **next sibling** of the row that asked.
+
+Both checks were watched failing on purpose, inside the run itself: the strip is
+switched to `position: static` and must measure off screen, and the old
+"Upgrade options" button is injected back into a product row and must be caught.
+A run where either negative control stays green fails the suite.
+
+### Honest limits
+
+- **The identity check is a desk fact, not a party attribute.** It lives in the
+  agent's session (and the interaction log), because no component stores an
+  identity-verification state for a party yet. It survives a reload and every
+  area, not a new browser session or a second agent. A stored, expiring
+  verification with a level — and sensitive actions *refusing* until it holds —
+  is the next step; today the strip makes the state loud, and nothing blocks.
+- **No electronic identity.** The checks offered are the ones an agent can
+  actually do on a call. BankID/eID is a seam that does not exist, so it is not
+  in the list.
+- **Customer status is derived, not declared.** `Individual` carries no status
+  field; the word comes from the registry flags and the running services. A
+  declared lifecycle state on the party would be better.
+- **The row's kind is still guessed from its name.** *Change package* only
+  appears on TV because four regular expressions say a name looks like TV. That
+  is #143, sequenced ahead of #150, and deliberately untouched here.
+- **The contextual sets in #149 are not all built.** *Add data*, *Add channels*,
+  *Add mesh point* and add-on *Manage/Remove* have no action behind them today;
+  a button that cannot keep its promise is worse than no button, so only the
+  actions that exist are on the rows.
+- The strip wraps to two lines on a customer with a long contact line. Nothing
+  is hidden, but it costs vertical space on every page of the workspace.
