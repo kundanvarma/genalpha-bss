@@ -5,6 +5,14 @@ export async function deviceAgreements(status) {
   return json(await authFetch(`${DEVICE}/deviceAgreement${status ? `?status=${encodeURIComponent(status)}` : ''}`));
 }
 
+/** One financing agreement by its reference — the search box's device lookup.
+ * Null, not an error: the one box probes every object type at once and most
+ * probes are meant to miss. */
+export async function deviceAgreementById(id) {
+  const res = await authFetch(`${DEVICE}/deviceAgreement/${encodeURIComponent(id)}`);
+  return res.ok ? res.json() : null;
+}
+
 export async function tradeInValuations(status) {
   return json(await authFetch(`${DEVICE}/tradeInValuation${status ? `?status=${encodeURIComponent(status)}` : ''}`));
 }

@@ -25,6 +25,7 @@ console_test                porting insight campaign product-stock
 copilot_experience_test     intelligence mock-llm
 copilot_test                intelligence mock-llm
 csr_test                    assurance trouble-ticket recommendation intelligence knowledge
+csr_typed_search_test       trouble-ticket device-commerce product-ordering product-inventory service-orchestration party-account
 csr_wayfinding_test         knowledge intelligence party-account trouble-ticket
 decision_log_test           campaign insight
 device_commerce_test        revenue device-commerce
