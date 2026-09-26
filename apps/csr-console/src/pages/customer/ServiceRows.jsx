@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { hasRole } from '../../auth.js';
 import { simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, transferService,
   findCustomerByEmail, diagnoseService, ceaseService, logInteraction, routerOf, restartRouter } from '../../api.js';
@@ -79,7 +79,9 @@ export function ServiceActions({ sv, id, act, puks, setPuks, onDiagnosis, compac
         title={kind === 'broadband' ? 'Line, access and router — is it the network, the box or the plan?' : kind === 'mobile' ? '"It feels slow" — outage on their path? out of data? paused?' : 'Is it the network, the plan or the device?'}
         onClick={() => act(async () => {
           const report = await diagnoseService(sv.id);
-          onDiagnosis?.({ ...report, serviceName: sv.name, kind });
+          // serviceId is what lets Customer360 put the report under the row
+          // this button lives in, instead of at the foot of the list.
+          onDiagnosis?.({ ...report, serviceId: sv.id, serviceName: sv.name, kind });
           await logInteraction({
             description: `Line check on ${number || sv.name}: ` + report.findings.map((f) => f.code).join(', '),
             channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console', relatedParty: party(id),
@@ -235,6 +237,55 @@ export function Diagnosis({ diagnosis }) {
         <strong>{diagnosis.serviceName ? `${diagnosis.serviceName}: ` : ''}{cause ? `likely issue — ${cause.message}` : 'nothing wrong found on this service'}</strong>
       </p>
       {diagnosis.findings.filter((f) => f !== cause).map((f, i) => <p key={i} className="dim small">{f.message}</p>)}
+    </div>
+  );
+}
+
+/**
+ * The customer's products and services, and — the point of this component —
+ * the diagnosis report rendered UNDER the row it is about.
+ *
+ * It used to hang at the foot of the whole list. An agent clicks Diagnose on
+ * the TV line while looking at the TV line, and the answer appeared below the
+ * fibre line at the bottom of the card, off screen on a customer with six
+ * services. The report already knew its service; nothing used it.
+ */
+export function ServicesList({ rows, full, usage, id, act, puks, setPuks, diagnosis, setDiagnosis,
+  upgradeButton, upgradeCard, onSeeAll, err }) {
+  const shown = full ? rows : rows.slice(0, 6);
+  const placed = diagnosis && shown.some(({ service: sv }) => sv && sv.id === diagnosis.serviceId);
+  return (
+    <div className="rows services" data-testid="services-list">
+      {!rows.length && <p className="dim small">No products or services on this customer.</p>}
+      {shown.map(({ product: p, service: sv, count }) => (
+        <Fragment key={(p && p.id) || sv.id}>
+          <div className={`row svc ${sv ? serviceKind(sv) : 'product'}`}
+            data-testid={sv && numberOf(sv) ? 'service-number' : undefined}>
+            <div>
+              <strong>{(p || sv).name}</strong>{count > 1 && <span className="dim small"> ×{count}</span>}
+              {sv && <div><ServiceFacts sv={sv} usage={usage} /></div>}
+              {!sv && p && <div className="dim small">product · no running service under it</div>}
+            </div>
+            {sv ? (
+              <ServiceActions sv={sv} id={id} act={act} puks={puks} setPuks={setPuks}
+                onDiagnosis={setDiagnosis} compact={!full} extra={upgradeButton(p)} />
+            ) : (
+              <div className="rowend"><span className={`state ${p.status}`}>{p.status}</span>{upgradeButton(p)}</div>
+            )}
+          </div>
+          {sv && diagnosis && diagnosis.serviceId === sv.id && <Diagnosis diagnosis={diagnosis} />}
+        </Fragment>
+      ))}
+      {!full && rows.length > 6 && (
+        <button className="linkish" data-testid="services-all" onClick={onSeeAll}>
+          All {rows.length} products and services →
+        </button>
+      )}
+      {upgradeCard}
+      {err}
+      {/* A report about a service the short list does not show still has to land
+          somewhere: keep the old foot-of-the-list position for exactly that case. */}
+      {diagnosis && !placed && <Diagnosis diagnosis={diagnosis} />}
     </div>
   );
 }
