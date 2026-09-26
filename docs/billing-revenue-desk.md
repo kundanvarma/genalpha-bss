@@ -448,6 +448,14 @@ refuses a run that does not produce it — because a checker that crashes and
 prints nothing reads exactly like a pass, which is the failure this whole gate
 exists to prevent.
 
+**The sentinel guard was itself broken when it was written**, and breaking it on
+purpose is the only reason anyone knows. It read
+`ran=$(grep -c … || echo 0)`; `grep -c` prints `0` *and* exits 1 when it finds
+nothing, so the `||` appended a second `0`, the string never equalled `0`, and
+the guard concluded that every crashed run had done its checks. It used `grep -q`
+after that. Each of the eight claims above was then made false on purpose and
+watched exiting non-zero, because a gate nobody has seen fail is not a gate.
+
 ---
 
 ## Honest limits

@@ -144,7 +144,7 @@ for n in $(grep -rhoE 'suite #[0-9]+' README.md CLAUDE.md docs/*.md 2>/dev/null 
 done
 
 # ------------------------------------------- the Billing & Revenue arc ----
-# docs/billing-revenue-desk.md makes five structural claims a reader has every
+# docs/billing-revenue-desk.md makes six structural claims a reader has every
 # reason to trust and no way to check: the eight bill situations and their
 # precedence, the four channel modules that read them and own no clock, the six
 # destinations in lifecycle order, how many pages sit under the department, and
@@ -153,10 +153,22 @@ done
 # The helper's SENTINEL is required, not optional: a checker that crashes prints
 # nothing on stdout, and "no drift" is exactly how a pass looks. Hanging the
 # gate on evidence that the checks RAN is the lesson of every stale claim here.
-billing_drift=$(python3 ops/arch/billing_claims.py 2>"$PWD/.claims-billing.err")
-billing_ran=$(grep -c 'billing-claims: checked [1-9]' "$PWD/.claims-billing.err" 2>/dev/null || echo 0)
-rm -f "$PWD/.claims-billing.err"
-if [ "$billing_ran" = 0 ]; then
+billing_err=$(mktemp)
+billing_drift=$(python3 ops/arch/billing_claims.py 2>"$billing_err")
+# grep -q, never `x=$(grep -c ...|| echo 0)`: grep -c PRINTS 0 and EXITS 1 on no
+# match, so the `||` appends a second 0 and the string never equals "0" — the
+# guard then believed every crash had run its checks. Found by crashing it.
+if grep -q 'billing-claims: checked [1-9]' "$billing_err"; then
+  billing_ran=yes
+else
+  billing_ran=no
+fi
+if [ "$billing_ran" = no ]; then
+  # show what it said instead — a traceback is the answer to "why no sentinel"
+  sed 's/^/         /' "$billing_err" >&2
+fi
+rm -f "$billing_err"
+if [ "$billing_ran" = no ]; then
   fail "ops/arch/billing_claims.py produced no sentinel — it did not run its checks" \
        "an empty stdout from a crashed checker reads exactly like a pass"
 elif [ -n "$billing_drift" ]; then
