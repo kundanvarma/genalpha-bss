@@ -32,6 +32,9 @@ const RESOURCES = [
       // row 7 — how the orchestrator will fulfil it, read off the catalog (product spec → CFS → RFS → resource spec)
       { name: 'decomposition', label: 'Decomposition', kind: 'decomposition', wide: true,
         hint: 'What this offering needs from the network and partners, as the catalog declares it. Read-only.' },
+      // row 8 — the read-back a rule's own page cannot give: which rules name THIS offering (#157)
+      { name: 'offeringRules', label: 'Rules that name this offering', kind: 'offeringrules', wide: true,
+        hint: 'Every pricing and blocking rule whose condition names this offering, the switched-off ones included. Read-only — rules are edited on the Rules page.' },
     ],
     assemble: (body) => {
       const out = { ...body };

@@ -17,4 +17,14 @@ public interface PolicyRuleRepository extends JpaRepository<PolicyRule, String> 
     }
 
     List<PolicyRule> findAllByOrderByPriorityAsc(Pageable pageable);
+
+    /**
+     * Every rule whose authored CONDITION carries this text — every domain,
+     * enabled and disabled alike. An offering is attached to a rule by having
+     * its id inside the condition, so this substring read is the reverse of
+     * that attachment (the same way {@code teasers()} has always found them).
+     * Spring Data escapes LIKE wildcards in a {@code Containing} argument, so
+     * a caller cannot widen the match with a % of their own.
+     */
+    List<PolicyRule> findByConditionContainingOrderByPriorityAsc(String fragment);
 }

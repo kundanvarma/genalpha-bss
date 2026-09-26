@@ -7,6 +7,7 @@ import com.bss.policy.dto.PolicyRulePatch;
 import com.bss.policy.dto.PolicyRuleRequest;
 import com.bss.policy.dto.PolicyRuleView;
 import com.bss.policy.dto.PriceResult;
+import com.bss.policy.dto.ReferencingRule;
 import com.bss.policy.dto.Teaser;
 import com.bss.policy.entity.PolicyRule;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -20,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -131,5 +133,25 @@ class DtoRoundTripTest {
         assertEquals("{\"name\":\"Snap\",\"message\":\"Snap deal\",\"audience\":\"consumer\",\"adjustmentType\":\"percent\","
                 + "\"adjustmentValue\":-10.0000,\"relatedOfferingIds\":[\"o2\"]}",
                 write(new Teaser("Snap", "Snap deal", "consumer", "percent", new BigDecimal("-10.0000"), List.of("o2"))));
+    }
+
+    /**
+     * The offering's read-back carries the rule's STATE and never its
+     * condition: the panel says which rules touch the offering, the rules page
+     * says on what terms. A disabled rule writes the same keys as a live one —
+     * "enabled":false is the fact the whole read exists for, so nothing may
+     * leave it off.
+     */
+    @Test
+    void referencingRule_carriesTheStateAndNotTheCondition() throws Exception {
+        assertEquals("{\"id\":\"r1\",\"href\":\"/tmf-api/policyManagement/v4/policyRule/r1\",\"name\":\"Snap\","
+                + "\"description\":null,\"domain\":\"pricing\",\"effect\":\"adjust\",\"enabled\":true,\"priority\":5,"
+                + "\"message\":null,\"adjustmentType\":\"percent\",\"adjustmentValue\":-10.0000,"
+                + "\"lastUpdate\":\"2026-09-22T10:00:00Z\",\"@type\":\"ReferencingRule\"}",
+                write(ReferencingRule.of(rule())));
+        PolicyRule off = rule();
+        off.setEnabled(false);
+        assertTrue(write(ReferencingRule.of(off)).contains("\"enabled\":false"));
+        assertFalse(write(ReferencingRule.of(off)).contains("condition"));
     }
 }
