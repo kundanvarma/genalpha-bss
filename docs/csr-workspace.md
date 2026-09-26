@@ -265,7 +265,7 @@ photographed was help that existed and could not be reached.
 
 ### Proof
 
-`ops/e2e/csr_wayfinding_test.js` (#241), in a browser as `agent-anna` through the
+`ops/e2e/csr_wayfinding_test.js` (#242), in a browser as `agent-anna` through the
 gateway: the brand is exactly one `<a>` with the logo and wordmark inside it and
 nothing of the brand outside it; its accessible name follows a rewritten tenant
 config, so no constant can pass; the first Tab lands on it with `:focus-visible`
