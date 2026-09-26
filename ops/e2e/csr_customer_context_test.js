@@ -30,7 +30,11 @@ const { chromium } = require('playwright');
 
 const API = 'http://localhost:8080';
 const CSR = `${API}/csr/`;
+const KC = 'http://localhost:8085';
 const SHOTS = process.env.SHOT_DIR || os.tmpdir();
+/* The seeded demo family: several services, a product with nothing running
+ * under it, and a workspace tall enough that scrolling proves something. */
+const CUSTOMER_EMAIL = 'paula@family.example';
 const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
 const shot = async (page, name) => {
   const p = path.join(SHOTS, `csr-context-${name}.png`);
@@ -38,6 +42,24 @@ const shot = async (page, name) => {
   console.log(`  screenshot ${p}`);
   return p;
 };
+
+/** The seeded family's id, off the API with a real agent token — so the suite
+ * knows which of the fleet's many Paulas it means before it searches. */
+async function seededCustomer() {
+  const r = await fetch(`${KC}/realms/bss/protocol/openid-connect/token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'password', client_id: 'bss-demo', username: 'agent-anna', password: 'agent' }),
+  });
+  if (!r.ok) fail(`token for agent-anna: ${r.status}`);
+  const tok = (await r.json()).access_token;
+  const res = await fetch(`${API}/tmf-api/party/v4/individual?limit=50&q=${encodeURIComponent(CUSTOMER_EMAIL)}`,
+    { headers: { Authorization: `Bearer ${tok}`, 'X-Channel': 'care' } });
+  if (!res.ok) fail(`party search: ${res.status} (is party-account up?)`);
+  const hits = (await res.json()).filter((c) => (c.contactMedium || [])
+    .some((m) => m.characteristic && m.characteristic.emailAddress === CUSTOMER_EMAIL));
+  if (!hits.length) fail(`no customer at ${CUSTOMER_EMAIL} — is the demo data seeded?`);
+  return hits[0];
+}
 
 /* The agent console signs in as an AGENT (agent-anna / agent), never demo/demo,
  * and a fresh context ALWAYS meets Keycloak — so wait for the form
@@ -111,13 +133,20 @@ const rowShapes = (page) => page.evaluate(() => [...document.querySelectorAll('[
   const browser = await chromium.launch();
   const page = await (await browser.newContext({ viewport: { width: 1500, height: 820 } })).newPage();
 
+  const who = await seededCustomer();
   await agentLogin(page);
 
-  // an agent reaches a customer by searching, so the suite does too
-  await page.fill('[data-testid="cust-search"]', 'Paula');
-  await page.waitForTimeout(2500);
-  const hit = page.locator('a[href*="/customer/"], [data-testid="cust-result"]').first();
-  if (!(await hit.count())) fail('the search found no customer named Paula — is the demo data seeded?');
+  // An agent reaches a customer by searching, so the suite does too — but it
+  // knows WHICH customer it means. A fleet that has run suites for a day is
+  // full of people called Paula, and "the first link on the page" (recent
+  // customer chips are links too) lands on whoever was opened last. This suite
+  // needs the seeded family: the one whose workspace is long enough that
+  // scrolling proves something.
+  await page.fill('[data-testid="cust-search"]', CUSTOMER_EMAIL);
+  await page.waitForSelector('[data-testid="search-results"]', { timeout: 30000 });
+  const hit = page.locator(`[data-testid="search-results"] a[href*="/customer/${who.id}"]`).first();
+  await hit.waitFor({ timeout: 20000 })
+    .catch(() => fail(`searching for ${CUSTOMER_EMAIL} did not offer ${who.givenName} ${who.familyName} (${who.id})`));
   await hit.click();
   await page.waitForSelector('[data-testid="services-list"]', { timeout: 40000 });
   await page.waitForSelector('[data-testid="cust-strip"]', { timeout: 20000 });
@@ -263,8 +292,14 @@ const rowShapes = (page) => page.evaluate(() => [...document.querySelectorAll('[
   /* ---------------- 6. the answer lands under the object it is about --------- */
   const changer = page.locator('[data-testid^="csr-upgrade-options-"]').first();
   if (!(await changer.count())) fail('no plan-change action after the reload');
+  const opened = (await changer.textContent()).trim();
   await changer.click();
-  await page.waitForSelector('[data-testid="upgrade-card"]', { timeout: 40000 });
+  // the desk puts a refusal in a toast and beside the block that raised it;
+  // a suite that only says "timeout" makes the next agent guess
+  await page.waitForSelector('[data-testid="upgrade-card"]', { timeout: 40000 }).catch(async () => {
+    const said = await page.locator('[data-testid="toast"], [data-testid="error-services"]').allTextContents();
+    fail(`"${opened}" produced no options card: ${said.join(' | ') || 'no error shown either'}`);
+  });
   await page.waitForTimeout(1000);
   const place = await page.evaluate(() => {
     const list = document.querySelector('[data-testid="services-list"]');
