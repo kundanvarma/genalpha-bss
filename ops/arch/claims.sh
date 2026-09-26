@@ -128,6 +128,85 @@ grep -qiE "CTKs certified" README.md \
 for f in $(grep -ohE '`[a-z0-9_]+_test`' docs/ctk-conformance.md docs/capability-map.md 2>/dev/null | tr -d '`' | sort -u); do
   [ -f "ops/e2e/$f.js" ] || fail "docs cite suite '$f' but ops/e2e/$f.js does not exist"
 done
+# ...and a suite named by PATH, anywhere. A document that cites `ops/e2e/x.js`
+# as its proof is making the strongest claim in this repository, so the file it
+# names must be on disk — in EVERY document, not the two that happened to be
+# checked first.
+for p in $(grep -rhoE 'ops/e2e/[a-z0-9_]+\.js' README.md CLAUDE.md docs/*.md 2>/dev/null | sort -u); do
+  [ -f "$p" ] || fail "a document cites '$p' as its proof, and that file does not exist"
+done
+# A suite NUMBER is prose — there is no registry — but it can never be larger
+# than the number of suites there are. #129 landed on "a suite count nobody
+# added up"; this is the same arithmetic one rung down.
+for n in $(grep -rhoE 'suite #[0-9]+' README.md CLAUDE.md docs/*.md 2>/dev/null | grep -oE '[0-9]+' | sort -un); do
+  [ "$n" -le "$SUITES" ] || fail "a document cites suite #$n; ops/e2e holds $SUITES suites" \
+    "a suite number above the count cannot name a suite that exists"
+done
+# ...and where a suite DECLARES its own number in its header, the document that
+# cites it must agree. This is as close to a registry as the tree has: it stops a
+# document renumbering a suite on its own, which is how BR-11 nearly shipped a
+# renamed #240 while the file still said #239. It cannot catch two FILES claiming
+# one number (nine pairs already do) — that is named in docs/billing-revenue-desk.md.
+disagree=$(python3 - <<'PY'
+import glob, os, re
+pat = re.compile(r'`?ops/e2e/([a-z0-9_]+)\.js`?\s*\((?:suite\s*)?#(\d+)\)')
+for doc in ['README.md', 'CLAUDE.md'] + sorted(glob.glob('docs/*.md')):
+    try:
+        text = open(doc, encoding='utf-8').read()
+    except OSError:
+        continue
+    for name, cited in pat.findall(text):
+        path = f'ops/e2e/{name}.js'
+        if not os.path.exists(path):
+            continue                      # the existence check above owns this
+        own = re.search(r'[Ss]uite #(\d+)', open(path, encoding='utf-8').read(1200))
+        if own and own.group(1) != cited:
+            print(f"{doc} cites {name} as #{cited}; {path} declares #{own.group(1)}")
+PY
+)
+if [ -n "$disagree" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && fail "$line" "change the document or the suite's own header — not one of them"
+  done <<EOF
+$disagree
+EOF
+fi
+
+# ------------------------------------------- the Billing & Revenue arc ----
+# docs/billing-revenue-desk.md makes six structural claims a reader has every
+# reason to trust and no way to check: the eight bill situations and their
+# precedence, the four channel modules that read them and own no clock, the six
+# destinations in lifecycle order, how many pages sit under the department, and
+# nav.js sitting exactly on the front-end ceiling. Each is read off the source.
+#
+# The helper's SENTINEL is required, not optional: a checker that crashes prints
+# nothing on stdout, and "no drift" is exactly how a pass looks. Hanging the
+# gate on evidence that the checks RAN is the lesson of every stale claim here.
+billing_err=$(mktemp)
+billing_drift=$(python3 ops/arch/billing_claims.py 2>"$billing_err")
+# grep -q, never `x=$(grep -c ...|| echo 0)`: grep -c PRINTS 0 and EXITS 1 on no
+# match, so the `||` appends a second 0 and the string never equals "0" — the
+# guard then believed every crash had run its checks. Found by crashing it.
+if grep -q 'billing-claims: checked [1-9]' "$billing_err"; then
+  billing_ran=yes
+else
+  billing_ran=no
+fi
+if [ "$billing_ran" = no ]; then
+  # show what it said instead — a traceback is the answer to "why no sentinel"
+  sed 's/^/         /' "$billing_err" >&2
+fi
+rm -f "$billing_err"
+if [ "$billing_ran" = no ]; then
+  fail "ops/arch/billing_claims.py produced no sentinel — it did not run its checks" \
+       "an empty stdout from a crashed checker reads exactly like a pass"
+elif [ -n "$billing_drift" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && fail "$line"
+  done <<EOF
+$billing_drift
+EOF
+fi
 
 # A suite's downstreams are DATA (ops/e2e/suite-needs.txt) and the proof runner
 # starts them with ONE `docker compose up`. A single name that is not a service
