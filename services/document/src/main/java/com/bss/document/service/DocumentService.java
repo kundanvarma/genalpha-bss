@@ -41,8 +41,13 @@ public class DocumentService {
 
     /** Channel media only — this is a brand asset store, not a file dump. */
     /** Printed in the refusal, so the order is the wire's, not a hash's. */
+    /**
+     * AVIF is here because a product manager's phone and every modern export
+     * dialogue produce it by default, and every browser this BSS supports
+     * renders it. Refusing it sent someone away thinking artwork was broken.
+     */
     private static final Set<String> IMAGE_TYPES = new LinkedHashSet<>(List.of(
-            "image/svg+xml", "image/png", "image/jpeg", "image/webp"));
+            "image/svg+xml", "image/png", "image/jpeg", "image/webp", "image/avif"));
     private static final int MAX_BYTES = 512 * 1024;
 
     /** Served when a referenced asset can't be resolved — never a broken image. */

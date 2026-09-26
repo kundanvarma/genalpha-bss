@@ -11,7 +11,7 @@ import Assist from './Assist.jsx';
 import { rememberRecent } from './Customers.jsx';
 import NewMenu from './customer/NewMenu.jsx';
 import Activity, { timelineOf, dt, chan } from './customer/Activity.jsx';
-import { ServiceFacts, ServiceActions, DangerZone, Diagnosis, numberOf, serviceKind } from './customer/ServiceRows.jsx';
+import { DangerZone, ServicesList, numberOf } from './customer/ServiceRows.jsx';
 import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, stillOwing } from './customer/Money.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue, authFetch } from '../auth.js';
@@ -300,28 +300,9 @@ export default function Customer360() {
   );
 
   const serviceRows = (full) => (
-    <div className="rows services" data-testid="services-list">
-      {!rows.length && <p className="dim small">No products or services on this customer.</p>}
-      {(full ? rows : rows.slice(0, 6)).map(({ product: p, service: sv, count }) => (
-        <div className={`row svc ${sv ? serviceKind(sv) : 'product'}`} key={(p && p.id) || sv.id} data-testid={sv && numberOf(sv) ? 'service-number' : undefined}>
-          <div>
-            <strong>{(p || sv).name}</strong>{count > 1 && <span className="dim small"> ×{count}</span>}
-            {sv && <div><ServiceFacts sv={sv} usage={usage} /></div>}
-            {!sv && p && <div className="dim small">product · no running service under it</div>}
-          </div>
-          {sv ? (
-            <ServiceActions sv={sv} id={id} act={act} puks={puks} setPuks={setPuks} onDiagnosis={setDiagnosis} compact={!full}
-              extra={upgradeButton(p)} />
-          ) : (
-            <div className="rowend"><span className={`state ${p.status}`}>{p.status}</span>{upgradeButton(p)}</div>
-          )}
-        </div>
-      ))}
-      {!full && rows.length > 6 && <button className="linkish" data-testid="services-all" onClick={() => go('services')}>All {rows.length} products and services →</button>}
-      {upgradeCard}
-      <Err scope="services" />
-      <Diagnosis diagnosis={diagnosis} />
-    </div>
+    <ServicesList rows={rows} full={full} usage={usage} id={id} act={act} puks={puks} setPuks={setPuks}
+      diagnosis={diagnosis} setDiagnosis={setDiagnosis} upgradeButton={upgradeButton} upgradeCard={upgradeCard}
+      onSeeAll={() => go('services')} err={<Err scope="services" />} />
   );
 
   const ordersBlock = (list) => (

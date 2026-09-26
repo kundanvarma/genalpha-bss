@@ -29,6 +29,7 @@ csr_wayfinding_test         knowledge intelligence party-account trouble-ticket
 decision_log_test           campaign insight
 device_commerce_test        revenue device-commerce
 device_entitlement_test     device-entitlement mock-ts43-device mock-smdp mock-hss
+diagnosis_in_place_test    assurance trouble-ticket recommendation intelligence knowledge
 engagement_test             communication insight
 family_phase2_test          communication
 frequency_dnc_test          mock-social communication
