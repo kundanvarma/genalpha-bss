@@ -43,7 +43,25 @@ def req(method, url, body=None):
 
 
 # ---- 1. categories -------------------------------------------------------
-CATEGORIES = ["Mobile plans", "Broadband", "Devices", "TV & Add-ons", "Top-ups", "Bundles"]
+# A category answers "how is this SOLD"; a fulfilment family answers "how is
+# this PROVISIONED". They are different lists and they had drifted: `compute`
+# has been a family since step 3 with no category to sell it through, and two
+# real offerings sat with no category at all — which is what becomes the
+# literal word "service" on the agent desk. The last three close that.
+CATEGORIES = [
+    "Mobile plans", "Broadband", "Devices", "TV & Add-ons", "Top-ups", "Bundles",
+    # Managed for its whole life over the ACS — restart, firmware, Wi-Fi
+    # clients. NOT "Devices": a handset ships and is done, a mesh point or
+    # router or set-top box is only beginning. Different shopping intent,
+    # different fulfilment (the `cpe` seam).
+    "Equipment",
+    # Compute the operator sells at the edge. The `compute` family and the
+    # edge-gpu seam both exist; this is the shelf they were missing.
+    "Edge & compute",
+    # A venue slice or a priority profile is a business network product, not a
+    # consumer mobile plan, and belongs on its own shelf.
+    "Network services",
+]
 existing_cats = {c["name"]: c for c in req("GET", f"{CATALOG}/category?limit=100")}
 cats = {}
 for name in CATEGORIES:
@@ -85,6 +103,13 @@ TAGS = {
     "GenAlpha Mobile 10 GB": "Mobile plans",
     "GenAlpha Mobile 50 GB": "Mobile plans",
     "Data Top-Up 5 GB": "Top-ups",
+    # The three that had no category at all. An offering with none is stored
+    # with the literal category "service", which is why the agent desk read
+    # "Service" where a type belongs — a shelf nobody could find and a label
+    # nobody could use.
+    "Edge AI Inferencing": "Edge & compute",
+    "Stadium 5G Slice": "Network services",
+    "Apple iPhone 17 Pro 256GB": "Devices",
 }
 for name, cat in TAGS.items():
     o = offerings.get(name)

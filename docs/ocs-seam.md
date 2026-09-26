@@ -107,6 +107,130 @@ never parked by marketing quiet hours, never spends the marketing frequency
 budget, and its messages reach communication stamped `category:
 transactional` (no marketing footer). Opt-outs still apply per channel.
 
+## Adding a third: an operator who already runs Matrixx or CSG
+
+The seam is the stable part. `OcsSeam` never changes, no product changes, no
+other tenant is touched, and nothing in the catalog moves — a product names the
+*step*, never the vendor. Two cases, in order of cost.
+
+### Case A — no code at all
+
+Most vendor deployments sit behind an integration gateway that already speaks
+the plain subscriber / rate-plan REST shape. If it does, the shipped `http`
+adapter is the adapter, and onboarding is four lines in `infra/tenants/tenants.yml`:
+
+```yaml
+        ocs-provider: ${OCS_PROVIDER_NORDFONE:http}
+        ocs-base-url: ${OCS_BASE_URL_NORDFONE:https://ocs-gw.internal.nordfone.example}
+        ocs-username: ${OCS_USERNAME_NORDFONE:bss}
+        ocs-password: ${OCS_PASSWORD_NORDFONE:change-me-in-the-secret-store}
+```
+
+Credentials are environment overrides on purpose: the file ships the shape, the
+secret store ships the value. **Try this first.** Writing an adapter for an API
+the generic one already speaks is work nobody needs.
+
+### Case B — one class
+
+When the vendor's API is its own shape, you write one adapter. It implements
+`OcsProviderAdapter`, declares the name the tenant file selects, and translates
+six intents. Spring finds it by annotation; nothing registers it by hand.
+
+```java
+@Component
+public class MatrixxOcsProvisioningClient implements OcsProviderAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(MatrixxOcsProvisioningClient.class);
+
+    private final RestClient.Builder builder;
+    private final OcsSettings settings;
+    private final Map<String, RestClient> clients = new ConcurrentHashMap<>();
+
+    public MatrixxOcsProvisioningClient(RestClient.Builder builder, OcsSettings settings) {
+        this.builder = builder;
+        this.settings = settings;
+    }
+
+    /** The name tenants.yml selects: ocs-provider: matrixx */
+    @Override
+    public String name() {
+        return "matrixx";
+    }
+
+    /** No base URL for this tenant = no charging here; every call a logged no-op. */
+    @Override
+    public boolean enabledFor(String tenantId) {
+        return settings.forTenant(tenantId).enabled();
+    }
+
+    private RestClient client(String tenantId) {
+        OcsSettings.Binding b = settings.forTenant(tenantId);
+        return b.enabled() ? clients.computeIfAbsent(b.baseUrl(),
+                url -> builder.clone().baseUrl(url).build()) : null;
+    }
+
+    @Override
+    public void provision(String tenantId, String partyId, String serviceId, String chargingSpecId,
+            List<String> zeroRatedApps) {
+        RestClient rc = client(tenantId);
+        if (rc == null) {
+            return;
+        }
+        try {
+            // whatever this vendor calls a subscriber on a rate plan
+            rc.post().uri("/v1/subscriptions")
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("externalId", serviceId, "owner", partyId, "offer", chargingSpecId))
+                    .retrieve().toBodilessEntity();
+            log.info("OCS(matrixx): subscription for service {} on offer {}", serviceId, chargingSpecId);
+        } catch (RuntimeException e) {
+            // fail open: activation is not held hostage by charging; reconcile later
+            log.warn("OCS(matrixx) provisioning failed for service {} ({}) — activation proceeds",
+                    serviceId, e.getMessage());
+        }
+    }
+
+    // provision(…4 args), changeRatePlan, suspend, resume, transfer — the same shape.
+    // pushOverageTiers has a default: override it only if this OCS holds tiers.
+}
+```
+
+Then the tenant file selects it:
+
+```yaml
+        ocs-provider: ${OCS_PROVIDER_NORDFONE:matrixx}
+        ocs-base-url: ${OCS_BASE_URL_NORDFONE:https://matrixx.internal.nordfone.example}
+```
+
+### The third thing, which is not optional
+
+**A stand-in in the fleet.** A seam without one cannot be run by a developer or
+a browser suite, and an integration nobody can exercise is an integration
+nobody can trust. Either point the tenant's dev binding at the bundled
+`integrations/mock-ocs`, or add a mock of the vendor's own shape beside it.
+This is why `sigscale-ocs` is in the compose fleet rather than a diagram.
+
+### Six intents, and that is the whole contract
+
+| BSS intent | when |
+|---|---|
+| `provision` | a line activates |
+| `changeRatePlan` | an upgrade or downgrade |
+| `pushOverageTiers` | a spec carries usage tiers (has a default — skip it if the OCS does not hold tiers) |
+| `suspend` / `resume` | a pause, or a collections hold lifted |
+| `transfer` | the line moves to a new owner |
+
+If a vendor is expected to do something outside that set — balance enquiry,
+policy control — the interface grows, and that is a wider change than one
+class.
+
+### What it costs the second time
+
+Nothing. Adapters are keyed by **vendor**, not by customer: the next operator
+already running Matrixx sets one configuration line and writes no code. That is
+the property that makes integration work converge instead of multiply — and the
+reason an adapter is never rewritten for a new customer.
+
 ## What is deliberately not here
 
 - **5G Nchf / CHF.** SigScale ships a separate CHF (`sigscale/chf`, thin as of
