@@ -5,7 +5,9 @@ fourteen peer tabs. An operator had to know the internal model before they
 could find a task — and worse, the same customer looked different in different
 places, because a bill's lateness was read from a raw state plus whatever each
 channel decided about it. An approved ten-day extension did not stop the bill
-reading as overdue in Collections, on the CSR desk or in the customer's app.
+reading as overdue on the desk, on the CSR desk or in the customer's app.
+Collections was the one place that already agreed, because the dunning ladder
+had always read the promise itself (`// the promise holds the ladder`).
 
 This document is the Billing & Revenue arc: what a finance operator can do on
 the desk today, and the one thing underneath it that made the desk possible. It
@@ -25,10 +27,12 @@ Normal states stay calm; exceptions are loud.
 
 ## The architectural half: what is true about this bill right now
 
-A bill's situation is not a field and not a flag. It is a judgement over six
-facts — the bill's stored state, what has been allocated against it, whether a
-promise to pay is standing, whether a dispute is open, the day it fell due, and
-the tenant's today — and it is made in exactly one place:
+A bill's situation is not a field and not a flag. It is a judgement over seven
+facts — the bill's stored state, what it was raised for, what has been allocated
+against it, whether a promise to pay is standing, whether a dispute is open, the
+day it fell due, and the tenant's today. What it was raised for is load-bearing:
+`amountDue` less `allocated` is what separates paid and issued from outstanding.
+The judgement is made in exactly one place:
 `services/billing/src/main/java/com/bss/billing/service/BillSituations.java`.
 The calculator is pure: facts in, a situation out, no repository and no clock of
 its own, so every combination that changes the answer is a unit test
@@ -52,12 +56,14 @@ justify it — the original due date, the due date that applies *now*, and the
 arrangement's date when there is one — so a screen can explain itself without
 asking a second question.
 
-### Served three ways, read four
+### Served two ways, read four
 
 The situation is served as a house block beside the standard TMF678 bill
-(`billSituation`), on a list endpoint the desk counts with, and in the
-customer-facing bill summary the app and the CSR desk already read. The
-standard payload stays standard; the house field rides beside it.
+(`billSituation`) and on a list endpoint the desk counts with. Both are the same
+bill record, so the app, the shop and the CSR desk read the block from the bill
+they already fetch rather than from a surface of their own — there is no separate
+bill-summary endpoint. The standard payload stays standard; the house field rides
+beside it.
 
 Four channels read it, and each has exactly one module that turns a situation
 into words and a tone:
@@ -284,7 +290,7 @@ under **Technical details**, where a support call can still reach them.
 The filter bar narrows by date range, by kind of business event and by account
 code, and **the count above the table is the service's judged total for that
 filter** — not the length of the page. That distinction is the whole reason the
-journal needed a service change: this tenant's book holds four thousand
+journal needed a service change: this tenant's book holds four thousand-odd
 postings and a page serves fifty, so a page-counted figure reads as a plausible
 lie. `X-Total-Count` on `/revenue/v1/journalEntry` is the answer, and the
 export honours the same filter, built from one query string in one file. A
@@ -357,16 +363,18 @@ intro and its KPI chips on an island page — otherwise the page said the same
 thing twice, in older words and with a different number.
 
 The islands live under `apps/admin-console/island/src/` — `bills/`, `billing/`,
-`accounting/`, `configuration/` — each file well under the 300-line front-end
-rule, with the words and the tone of each desk in one place (`words.js`,
+`accounting/`, `configuration/` — every file inside the 300-line front-end
+rule, the largest at 234 lines, with the words and the tone of each desk in one place (`words.js`,
 `ladder.js`) so a change of language is a change in one file.
 
-Two seams were added to the shell for them, and only two:
-`window.mountIsland` puts a React root in a panel, and `window.consoleGoTo`
-is the one way into a page from outside the rail. Without the second an island
-would reach into the shell's DOM and click a tab by its label. `consoleGoTo`
-reads the same visibility the rail reads, so it cannot open a page the token's
-roles hide.
+The seam is small and worth naming precisely. On the shell's side,
+`renderCustomPane()` (`site/core/list.js`, dispatched by
+`site/core/list-dispatch.js`) is what decides an island renders at all instead of
+a generic table. The island bundle defines `window.mountIsland`, which puts a
+React root in that panel, and the shell defines `window.consoleGoTo`, the one way
+into a page from outside the rail — without it an island would reach into the
+shell's DOM and click a tab by its label. `consoleGoTo` reads the same visibility
+the rail reads, so it cannot open a page the token's roles hide.
 
 The demo tenant's own data had to be cleaned up before the customer column on
 Bills was worth looking at — three quarters of its people were dead suite runs.
@@ -380,11 +388,18 @@ before it acts, is in **[Demo data hygiene](demo-data-hygiene.md)**.
 Five suites, each driving the real console or the real channels through the
 gateway with a real token.
 
-`ops/e2e/bill_situation_test.js` (suite #233) is the arc's acceptance test: a
-bill past its due date reads `overdue` in the back office, on the CSR desk and
-in the customer's app; an approved extension flips all three to `arrangement`
-with the new date; the dunning case stops chasing. One fact, four channels, one
-answer.
+`ops/e2e/bill_situation_test.js` (suite #233) proves that one fact reaches every
+surface with one meaning: an overdue bill reads identically through the TMF678
+door and on the desk's situation list, the shop shows the block's own words with
+its reason, and the back office's overdue chip counts what the bills say rather
+than a field no bill carries. The fact it *changes* to prove they move together
+is a **dispute** — opened, and both surfaces change in the same breath; resolved,
+and both go back. That is the arrangement case's mechanism, proven with the one
+fact a suite may safely flip on a shared demo tenant.
+
+**The arrangement flip itself is not proven in a browser**, and that is the arc's
+most load-bearing gap rather than a detail — see Honest limits. It is proven as a
+unit test, `CollectionsApiTest.anApprovedExtensionStopsTheBillReadingAsOverdue`.
 
 `ops/e2e/bills_desk_test.js` (suite #235) drives the Bills desk: the table's
 columns and the absence of a View button, the search placeholder, a zero count
@@ -401,13 +416,13 @@ in that order.
 
 `ops/e2e/accounting_configuration_test.js` (suite #238) drives Accounting and
 Configuration: the journal's count equals the subledger's own total, no
-identifier is visible above the technical fold, a filter narrows the screen and
-the downloaded file to the same number, an account leads with what it books, a
+identifier is visible above the technical fold, a filter narrows the screen, and the
+export carries strictly less than the whole book with its header intact, an account leads with what it books, a
 proposal changes nothing until it is activated, approve before validate and
 activate before approve are both refused by the service, a broken account code
 is refused at the ladder AND at the direct remap, a product manager gets 403
-both ways, and the activated change carries four names. `ChartGuardTest` covers
-every input combination of the validator without a fleet.
+both ways, and the activated change carries four names. `ChartGuardTest` covers the
+validator's five refusal rules in ten tests, without a fleet.
 
 `ops/e2e/billing_ia_test.js` (suite #240) proves the shape and the gates with
 real tokens: the six primaries in lifecycle order, each destination's second
@@ -428,9 +443,9 @@ recorded in `ops/e2e/suite-needs.txt`.
 
 ### What is checked, and by what
 
-Every number and every structural claim in this document is read off the code
-by `ops/arch/claims.sh`, which calls `ops/arch/billing_claims.py`. None of them
-is typed from memory, and each has been watched going red:
+Every **structural** claim in this document is read off the code by
+`ops/arch/claims.sh`, which calls `ops/arch/billing_claims.py`, and each has been
+watched going red:
 
 | The claim | Where the truth lives |
 |---|---|
@@ -444,11 +459,23 @@ is typed from memory, and each has been watched going red:
 | every suite number it cites | no higher than the count of tracked suites |
 | how many suites this section claims | the suite paths named in it |
 
+| a suite number this document cites | that suite file's own `Suite #N` header |
+
 A count is checked in **every phrasing and every file**, not only where it reads
 most naturally. One fact gets said several ways — "fourteen peer tabs",
 "fourteen old tabs", "fourteen pages" — and the README says the short version of
 the same thing; a phrasing nobody checks is how a stale number survives the fix
 to its neighbour.
+
+**And what is not checked, said plainly**, because a gate's own scope is a claim
+too. These are observations from a run, or figures read out of a service once, and
+no gate holds them: the overdue counts on the Overview (103 counted wrongly,
+3 815 actually), the size of this tenant's book, the fifty rows a journal page
+serves, the twenty cleared cases a state count called open, the hundred-bill page,
+the ten-thousand-line export cap, the thirty posting keys. Several are verifiable
+by hand — `EXPORT_CAP`, `PAGE`, the chart's default size — and gating them is
+worth doing; today they are prose, and this paragraph is the honest boundary of
+the table above.
 
 The helper prints a sentinel naming how many claims it checked, and the gate
 refuses a run that does not produce it — because a checker that crashes and
@@ -469,6 +496,38 @@ non-zero, because a gate nobody has seen fail is not a gate.
 
 ### The situation
 
+- **The arrangement flip is not proven in a browser** — the one gap worth
+  reading twice, because `arrangement` is the rung this whole arc exists for.
+  No demo tenant can show it end to end: the tenant that has bills (`genalpha`)
+  has no active dunning policy, so `promiseToPay` answers 409, and the tenant
+  that has a policy (`taranga`) has no bills. Suite #233 therefore flips a
+  **dispute** to prove the channels move together, because a dispute is the one
+  fact a suite may safely change on a shared tenant — switching a dunning policy
+  on would walk the ladder across the whole demo book. The arrangement rung
+  itself is proven only as a unit test,
+  `CollectionsApiTest.anApprovedExtensionStopsTheBillReadingAsOverdue`. A seeded
+  tenant with both a policy and bills is what would close this, and it is not
+  built.
+- **A promise to pay is per account, not per bill.** One approved extension
+  therefore stops *every* bill on that account reading as overdue, not only the
+  bill it was granted for. That is usually what a collections agent means, and
+  occasionally it is not; per-bill arrangements are not built, and the blast
+  radius is worth knowing before an extension is granted.
+- **There is no per-account payment term.** The ticket asked for a term per
+  account with a tenant default; only the tenant half exists to read. The term is
+  the tenant's active dunning policy, and fourteen days when a tenant has none.
+- **The backfill used fourteen days flat**, not each tenant's own term, so every
+  bill raised before the due-date migration carries a due date derived that way.
+  Bills raised since carry the real term. Any `overdue` answer about an old bill
+  rests on that approximation.
+- **`allocated` comes from the installment plan.** A bill the store already marks
+  `partiallyPaid` without a plan behind it has no itemised amount anywhere, so
+  the stored state is honoured and the outstanding figure stays the full amount —
+  the situation is right about the *state* and pessimistic about the money.
+- **The mobile Home screen reads the situation inline** rather than importing the
+  shared helper, to keep that file at its ratchet baseline. So "each channel has
+  exactly one module" is true of the four modules the gate checks, and there is
+  one shortcut on one screen that does not use its channel's.
 - **The situation has no history.** It is computed from today's facts every
   time it is asked. "Was this bill overdue on the 14th" cannot be answered, and
   a promise to pay that has lapsed leaves no trace in the situation itself —
@@ -570,7 +629,7 @@ non-zero, because a gate nobody has seen fail is not a gate.
 - **The finance roles are one role.** `billing:admin` is what the billing and
   revenue services enforce for almost everything here, so a collections agent,
   a controller and an administrator are the same token today, and each is shown
-  all five of its destinations. The spec's user story asking a narrow role to
+  all six destinations. The spec's user story asking a narrow role to
   see only its areas is honoured by the mechanism, and proven with the one
   genuinely narrow finance-adjacent role that exists (`risk:assess`); splitting
   `billing:admin` into per-area authorities is a change to the services, not to
@@ -614,14 +673,21 @@ non-zero, because a gate nobody has seen fail is not a gate.
 
 ### Proving it
 
-- **A suite number is prose, and there is no registry.** The gate checks that
-  every suite this document names exists as a file, and that no number cited
-  anywhere is higher than the count of tracked suites — but nothing binds a
-  number to a name, so two documents can still claim the same one. That is not
-  hypothetical: `billing_ia_test` and `party_debris_test` were both written up
-  as #239 by two branches landing the same night, and this document moved the
-  first to #240 because it merges second. A numbered ledger in the repository
-  would make the identity checkable, and it is not built.
+- **A suite number is prose, and there is no registry.** A suite file may
+  declare `Suite #N` in its header, and the gate now holds a document's citation
+  to whatever the file it cites says — so a document cannot renumber a suite on
+  its own. But only **75 of the 240** suite files declare a number at all, and
+  among those there are already **nine collisions**: #87 through #93 in a row
+  from the wholesale epoch, plus #236 (`billing_overview_test` and
+  `price_builder_test`) and #239, which is where this arc met the problem —
+  `billing_ia_test` and `party_debris_test` were both written up as #239 by two
+  branches landing the same night. `party_debris_test` merged first and keeps it;
+  `billing_ia_test` is #240, in this document *and* in its own header, which is
+  what makes the new check pass rather than paper over it. Nothing stops the
+  tenth collision. A numbered ledger, or a number generated from the file list
+  instead of typed, is the real fix and it is not built — which means #236 is
+  still wrong for one of the two suites claiming it, and this arc did not decide
+  which.
 - **Every suite in this arc is nightly, not the pull-request tier.** They need
   billing, revenue, payment, party-account, communication, intelligence and
   user-roles; the smoke slice seeds the catalog and no billing. Nothing here is

@@ -142,6 +142,35 @@ for n in $(grep -rhoE 'suite #[0-9]+' README.md CLAUDE.md docs/*.md 2>/dev/null 
   [ "$n" -le "$SUITES" ] || fail "a document cites suite #$n; ops/e2e holds $SUITES suites" \
     "a suite number above the count cannot name a suite that exists"
 done
+# ...and where a suite DECLARES its own number in its header, the document that
+# cites it must agree. This is as close to a registry as the tree has: it stops a
+# document renumbering a suite on its own, which is how BR-11 nearly shipped a
+# renamed #240 while the file still said #239. It cannot catch two FILES claiming
+# one number (nine pairs already do) — that is named in docs/billing-revenue-desk.md.
+disagree=$(python3 - <<'PY'
+import glob, os, re
+pat = re.compile(r'`?ops/e2e/([a-z0-9_]+)\.js`?\s*\((?:suite\s*)?#(\d+)\)')
+for doc in ['README.md', 'CLAUDE.md'] + sorted(glob.glob('docs/*.md')):
+    try:
+        text = open(doc, encoding='utf-8').read()
+    except OSError:
+        continue
+    for name, cited in pat.findall(text):
+        path = f'ops/e2e/{name}.js'
+        if not os.path.exists(path):
+            continue                      # the existence check above owns this
+        own = re.search(r'[Ss]uite #(\d+)', open(path, encoding='utf-8').read(1200))
+        if own and own.group(1) != cited:
+            print(f"{doc} cites {name} as #{cited}; {path} declares #{own.group(1)}")
+PY
+)
+if [ -n "$disagree" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && fail "$line" "change the document or the suite's own header — not one of them"
+  done <<EOF
+$disagree
+EOF
+fi
 
 # ------------------------------------------- the Billing & Revenue arc ----
 # docs/billing-revenue-desk.md makes six structural claims a reader has every
