@@ -523,3 +523,49 @@ kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11
 .svc-facts span:empty { display: none; }
 
 .assist-script { margin: 8px 0 4px; padding: 8px 12px; border-left: 3px solid var(--teal); background: var(--teal-soft); font-style: italic; }
+
+/* ---------- CSR-UX-004 (#148): the customer identity strip ----------
+ * Sticky under the sticky top bar, so the answer to "which customer am I
+ * working on" is on screen while the agent scrolls and acts. Its `top` is set
+ * in the component from the measured height of the header — the header wraps
+ * on a narrow desk, so a constant would be wrong exactly when it mattered.
+ * The negative margins bleed it to the edges of <main>'s padding so it reads
+ * as a band rather than a card that happens to be stuck. */
+.cust-strip {
+  position: sticky; z-index: 15;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  margin: -18px -20px 12px; padding: 8px 20px;
+  /* opaque on purpose: the top bar's translucency lets the page show through,
+     and an anchor an agent reads at a glance must never have a bill number
+     bleeding behind the customer's name */
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 12px -12px rgba(16, 32, 36, 0.5);
+}
+.cust-strip .strip-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cust-strip .avatar.big { width: 34px; height: 34px; font-size: 0.8rem; margin: 0; }
+.cust-strip h1.strip-name { font-size: 16px; display: block; line-height: 1.2; margin: 0; }
+.cust-strip .strip-ref { display: block; }
+.cust-strip .strip-item { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.cust-strip .strip-numbers { display: flex; gap: 8px; margin-left: auto; }
+.cust-strip select.small { font: inherit; font-size: 12px; padding: 3px 6px; border: 1px solid var(--line);
+  border-radius: var(--radius-s); background: var(--paper); color: var(--ink); }
+.strip-metric {
+  border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--card);
+  padding: 4px 10px; cursor: pointer; font: inherit; color: var(--ink); white-space: nowrap;
+}
+.strip-metric:hover { border-color: var(--teal); }
+.strip-metric:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.strip-metric.warn { border-color: var(--danger); color: var(--danger); }
+@media (max-width: 900px) { .cust-strip .strip-numbers { margin-left: 0; } }
+
+/* ---------- CSR-UX-005 (#149): actions that belong to their object ---------- */
+.add-upgrade { margin: 0 0 8px; }
+.add-upgrade > summary { display: inline-block; cursor: pointer; padding: 5px 11px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: var(--radius-s); color: var(--dim); list-style: none; }
+.add-upgrade > summary::-webkit-details-marker { display: none; }
+.add-upgrade > summary:hover { border-color: var(--teal); color: var(--teal-text); }
+.add-upgrade > summary:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+.rowend:has(.prod-detail) { flex-wrap: wrap; justify-content: flex-end; }
+.prod-detail { flex-basis: 100%; margin-top: 6px; text-align: right; }
+.prod-detail p { margin: 2px 0; }

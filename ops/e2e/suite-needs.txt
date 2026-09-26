@@ -24,6 +24,7 @@ cfs_realisation_test        product-ordering service-orchestration party-account
 console_test                porting insight campaign product-stock
 copilot_experience_test     intelligence mock-llm
 copilot_test                intelligence mock-llm
+csr_customer_context_test   assurance trouble-ticket recommendation intelligence knowledge ontology product-inventory billing
 csr_test                    assurance trouble-ticket recommendation intelligence knowledge
 csr_typed_search_test       trouble-ticket device-commerce product-ordering product-inventory service-orchestration party-account
 csr_wayfinding_test         knowledge intelligence party-account trouble-ticket

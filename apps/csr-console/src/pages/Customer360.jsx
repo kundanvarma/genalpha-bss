@@ -11,7 +11,10 @@ import Assist from './Assist.jsx';
 import { rememberRecent } from './Customers.jsx';
 import NewMenu from './customer/NewMenu.jsx';
 import Activity, { timelineOf, dt, chan } from './customer/Activity.jsx';
-import { DangerZone, ServicesList, numberOf } from './customer/ServiceRows.jsx';
+import { ServicesList, numberOf } from './customer/ServiceRows.jsx';
+import { DangerZone } from './customer/DangerZone.jsx';
+import CustomerStrip from './customer/CustomerStrip.jsx';
+import { AddOrUpgrade, UpgradeCard } from './customer/Upgrades.jsx';
 import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, stillOwing } from './customer/Money.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue, authFetch } from '../auth.js';
@@ -250,58 +253,22 @@ export default function Customer360() {
     </form>
   );
 
-  const upgradeCard = upgrade && (
-    <div className="rows" data-testid="upgrade-card">
-      <p className="dim small">{upgrade.name}: {upgrade.options.length ? 'could become' : 'has no dearer plan in its family on this channel.'}</p>
-      {upgrade.options.map((o) => (
-        <div className="row" key={o.id}>
-          <span>{o.name} <span className="dim small">{o.monthly}/month</span></span>
-          <div className="rowend">
-            <button className="ghost" data-testid={`csr-upgrade-check-${o.id}`}
-                onClick={() => act(async () => {
-                  const c = await bss.checkUpgradeSubscription({ subscriptionId: upgrade.productId, targetOfferingId: o.id });
-                  setUpgrade((u) => ({ ...u, verdicts: { target: o, ...c }, said: null }));
-                }, 'services')}>Check</button>
-            {upgrade.verdicts?.target?.id === o.id && upgrade.verdicts.allowed && (
-              <button className="primary" data-testid={`csr-upgrade-do-${o.id}`}
-                  onClick={() => act(async () => {
-                    const done = await bss.upgradeSubscription({ subscriptionId: upgrade.productId, targetOfferingId: o.id });
-                    setUpgrade((u) => ({ ...u, said: done.said, verdicts: null }));
-                    await logInteraction({ description: `Plan upgraded through the ontology: ${done.said}`, channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console', relatedParty: party(id) });
-                  }, 'services')}>Upgrade</button>
-            )}
-          </div>
-        </div>
-      ))}
-      {upgrade.verdicts && (
-        <div data-testid="upgrade-verdicts">
-          <p className={upgrade.verdicts.allowed ? 'dim small' : 'error'}>
-            {upgrade.verdicts.allowed ? `${upgrade.verdicts.target.name}: this could happen.` : `Refused: ${upgrade.verdicts.refusal}`}
-          </p>
-          {upgrade.verdicts.preconditions.map((v) => (
-            <p key={v.id} className="dim small">{v.verdict === 'holds' ? '✓' : v.verdict === 'fails' ? '✗' : '?'} {v.says}{v.detail ? ` — ${v.detail}` : ''}</p>
-          ))}
-          <p className="dim small">Permission: {upgrade.verdicts.permission?.says}. Policy: {upgrade.verdicts.policy?.says}.</p>
-        </div>
-      )}
-      {upgrade.said && <p data-testid="upgrade-said">{upgrade.said}</p>}
-    </div>
-  );
-
-  const upgradeButton = (p) => p && p.status === 'active' && hasRole('ordering:write') && (
-    <button className="ghost" data-testid={`csr-upgrade-options-${p.id}`}
-        title="What this could become — from the operational ontology, with every condition checked before anything changes"
-        onClick={() => act(async () => {
-          const options = await bss.availableUpgrades(p.id);
-          setUpgrade({ productId: p.id, name: p.name, options, verdicts: null, said: null });
-        }, 'services')}>
-      Upgrade options
-    </button>
-  );
+  // CSR-UX-005 (#149): the journey is opened from ONE object — a row's own
+  // "Change plan", or the customer-level "Add or upgrade services" — and the
+  // card it produces lands under that object's row.
+  const openOptions = (p) => act(async () => {
+    const options = await bss.availableUpgrades(p.id);
+    setUpgrade({ productId: p.id, name: p.name, options, verdicts: null, said: null });
+  }, 'services');
+  const startOrder = () => {
+    const b = document.querySelector('[data-testid="new-order"]');
+    if (b) { b.click(); b.scrollIntoView({ block: 'center' }); }
+  };
+  const upgradeCard = <UpgradeCard upgrade={upgrade} setUpgrade={setUpgrade} bss={bss} act={act} id={id} />;
 
   const serviceRows = (full) => (
     <ServicesList rows={rows} full={full} usage={usage} id={id} act={act} puks={puks} setPuks={setPuks}
-      diagnosis={diagnosis} setDiagnosis={setDiagnosis} upgradeButton={upgradeButton} upgradeCard={upgradeCard}
+      diagnosis={diagnosis} setDiagnosis={setDiagnosis} onOptions={openOptions} upgrade={upgrade} upgradeCard={upgradeCard}
       onSeeAll={() => go('services')} err={<Err scope="services" />} />
   );
 
@@ -403,41 +370,11 @@ export default function Customer360() {
         </div>
       )}
       <Err scope="page" />
-      <h1>
-        <span className="avatar big">{(customer.givenName?.[0] || '?').toUpperCase()}{(customer.familyName?.[0] || '').toUpperCase()}</span>
-        {customer.givenName} {customer.familyName}
-      </h1>
-      {customer.deceased === true && (
-        <div className="notice danger" data-testid="deceased-flag">
-          Deceased — the registry reports this customer as deceased. Route the matter to estate handling; do not market, dun, or make outbound contact.
-        </div>
-      )}
-      {addressProtected && (
-        <div className="notice protectednote" data-testid="address-protected">
-          Address protected — do not request or record it. Deliveries go to a pickup point; the address appears in no console, export or directory.
-        </div>
-      )}
-      <p className="dim small identity-line">
-        {email || <span title={customer.id}>{customer.id.slice(0, 8)}…</span>}
-        {numbers.length > 0 && <> · <span data-testid="cust-numbers">
-          📞 {numbers.slice(0, 4).map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
-          {numbers.length > 4 && <span className="dim">+{numbers.length - 4} more under Services</span>}
-        </span></>}
-        {showableAddress && <> · {showableAddress.street1}, {showableAddress.postCode} {showableAddress.city}</>}
-        {!addressProtected && registered && <span className="ok" data-testid="registered-hint"> · ✓ registered address on file</span>}
-        {showableAddress && (
-          <> · <button className="linkish small" data-testid="reverify-address" disabled={regCheck === 'checking'}
-            onClick={async () => {
-              setRegCheck('checking');
-              try { const m = await verifyPartyAddress(customer, address); setRegCheck(m ? m.outcome : 'unavailable'); } catch { setRegCheck('unavailable'); }
-            }}>{regCheck === 'checking' ? 'Checking register…' : 'Re-verify address'}</button>
-          {regCheck && regCheck !== 'checking' && (
-            <span data-testid="reverify-result" className={regCheck === 'match' ? 'ok' : 'dim'}>
-              {' '}{regCheck === 'match' ? '✓ matches the national register' : regCheck === 'unavailable' ? 'no registry for this market' : 'could not be verified against the register'}
-            </span>
-          )}</>
-        )}
-      </p>
+      <CustomerStrip id={id} customer={customer} act={act} email={email} numbers={numbers}
+        address={address} registered={registered} addressProtected={addressProtected}
+        showableAddress={showableAddress} activeServices={activeServices} openBills={openBills}
+        rowCount={rows.length} onArea={go} />
+      <Err scope="identity" />
       <NewMenu id={id} customer={customer} suggestions={suggestions} act={act} onNote={() => { go('overview'); setTimeout(focusNote, 80); }} />
       <Err scope="new" />
 
@@ -498,6 +435,7 @@ export default function Customer360() {
               <div className="zone" data-testid="zone-lines">
                 <h2>Services <span className="dim small">{rows.length ? `${rows.length} · ${activeServices.filter((s) => s.state === 'active').length} active` : ''}</span>
                   <button className="linkish small" onClick={() => go('services')}>All actions →</button></h2>
+                <AddOrUpgrade rows={rows} onOptions={openOptions} onAdd={startOrder} />
                 {serviceRows(false)}
               </div>
 
@@ -554,7 +492,8 @@ export default function Customer360() {
           {area === 'services' && (
             <>
               <h2>Services <span className="dim small">{rows.length ? `${rows.length} · ${activeServices.filter((s) => s.state === 'active').length} active${paused.length ? ` · ${paused.length} paused` : ''}` : ''}</span></h2>
-              <p className="zone-note">What each service is decides what it can do here: a PUK belongs to a SIM, a line check to a line. Two direct actions, the rest under More…, ceasing in the danger zone.</p>
+              <p className="zone-note">What each service is decides what it can do here: a PUK belongs to a SIM, a line check to a line. Two direct actions, the rest under More…, ceasing in the danger zone. A journey that belongs to the customer rather than to one line lives above the list.</p>
+              <AddOrUpgrade rows={rows} onOptions={openOptions} onAdd={startOrder} />
               {serviceRows(true)}
               <DangerZone services={activeServices} agreements={agreements} id={id} act={act} />
             </>

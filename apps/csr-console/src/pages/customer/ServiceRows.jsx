@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
-import { hasRole } from '../../auth.js';
 import { simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, transferService,
-  findCustomerByEmail, diagnoseService, ceaseService, logInteraction, routerOf, restartRouter } from '../../api.js';
+  findCustomerByEmail, diagnoseService, logInteraction, routerOf, restartRouter } from '../../api.js';
+import { ChangePlanButton, ProductActions } from './Upgrades.jsx';
 
 /* Capability-driven service rows. What a service IS decides which actions exist
  * on it: a PUK belongs to a SIM, a Wi-Fi check to a broadband line, a channel
@@ -194,39 +194,6 @@ export function ServiceActions({ sv, id, act, puks, setPuks, onDiagnosis, compac
   );
 }
 
-/** Ceasing, with the consequence in front of the agent before the click. */
-export function DangerZone({ services, agreements = [], id, act }) {
-  const [open, setOpen] = useState(false);
-  const ceasable = services.filter((sv) => sv.state === 'active' && hasRole('service:write'));
-  if (!ceasable.length) return null;
-  return (
-    <details className="danger-zone" data-testid="danger-zone" open={open} onToggle={(e) => setOpen(e.target.open)}>
-      <summary>Danger zone — cease a service</summary>
-      <p className="small">Ceasing disconnects the service at once, releases its number to quarantine, ends what depends on it and cannot be undone. Use Pause for a break, Transfer to move it to someone else.</p>
-      {ceasable.map((sv) => {
-        const number = numberOf(sv);
-        const agreement = agreements.find((g) => g.status === 'active' && (g.name || '').toLowerCase().includes((sv.name || '').toLowerCase().split(' ')[0]));
-        const consequences = [
-          `${sv.name} stops now`,
-          number ? `number ${number} is released (quarantined, not reusable at once)` : null,
-          agreement ? `the agreement "${agreement.name}" ends — a residual may be billed` : null,
-          (sv.serviceRelationship || []).length ? 'dependent services stop with it' : null,
-        ].filter(Boolean);
-        return (
-          <div className="row" key={sv.id}>
-            <span>{sv.name} {number && <span className="msisdn">{number}</span>}<span className="dim small" style={{ display: 'block' }}>{consequences.join(' · ')}</span></span>
-            <button className="ghost danger" data-testid="cease-service"
-                    onClick={() => window.confirm(`Cease ${sv.name}?\n\n• ${consequences.join('\n• ')}\n\nThis cannot be undone.`)
-                      && act(() => ceaseService(sv.id, 'ceased by agent'), 'services')}>
-              Cease
-            </button>
-          </div>
-        );
-      })}
-    </details>
-  );
-}
-
 /** The diagnosis, conclusion first. */
 export function Diagnosis({ diagnosis }) {
   if (!diagnosis) return null;
@@ -251,15 +218,17 @@ export function Diagnosis({ diagnosis }) {
  * services. The report already knew its service; nothing used it.
  */
 export function ServicesList({ rows, full, usage, id, act, puks, setPuks, diagnosis, setDiagnosis,
-  upgradeButton, upgradeCard, onSeeAll, err }) {
+  onOptions, upgrade, upgradeCard, onSeeAll, err }) {
   const shown = full ? rows : rows.slice(0, 6);
   const placed = diagnosis && shown.some(({ service: sv }) => sv && sv.id === diagnosis.serviceId);
+  const cardPlaced = upgrade && shown.some(({ product: p }) => p && p.id === upgrade.productId);
   return (
     <div className="rows services" data-testid="services-list">
       {!rows.length && <p className="dim small">No products or services on this customer.</p>}
       {shown.map(({ product: p, service: sv, count }) => (
         <Fragment key={(p && p.id) || sv.id}>
-          <div className={`row svc ${sv ? serviceKind(sv) : 'product'}`}
+          <div className={`row svc ${sv ? serviceKind(sv) : 'product'}`} data-row-product={p ? p.id : undefined}
+            data-row-kind={sv ? 'service' : 'product'}
             data-testid={sv && numberOf(sv) ? 'service-number' : undefined}>
             <div>
               <strong>{(p || sv).name}</strong>{count > 1 && <span className="dim small"> ×{count}</span>}
@@ -268,12 +237,15 @@ export function ServicesList({ rows, full, usage, id, act, puks, setPuks, diagno
             </div>
             {sv ? (
               <ServiceActions sv={sv} id={id} act={act} puks={puks} setPuks={setPuks}
-                onDiagnosis={setDiagnosis} compact={!full} extra={upgradeButton(p)} />
+                onDiagnosis={setDiagnosis} compact={!full}
+                extra={<ChangePlanButton product={p} service={sv} kind={serviceKind(sv)} onOptions={onOptions} />} />
             ) : (
-              <div className="rowend"><span className={`state ${p.status}`}>{p.status}</span>{upgradeButton(p)}</div>
+              <ProductActions product={p} />
             )}
           </div>
           {sv && diagnosis && diagnosis.serviceId === sv.id && <Diagnosis diagnosis={diagnosis} />}
+          {/* the answer lands under the object it is about, exactly as the diagnosis does */}
+          {p && upgrade && upgrade.productId === p.id && upgradeCard}
         </Fragment>
       ))}
       {!full && rows.length > 6 && (
@@ -281,7 +253,7 @@ export function ServicesList({ rows, full, usage, id, act, puks, setPuks, diagno
           All {rows.length} products and services →
         </button>
       )}
-      {upgradeCard}
+      {upgrade && !cardPlaced && upgradeCard}
       {err}
       {/* A report about a service the short list does not show still has to land
           somewhere: keep the old foot-of-the-list position for exactly that case. */}
