@@ -128,6 +128,44 @@ grep -qiE "CTKs certified" README.md \
 for f in $(grep -ohE '`[a-z0-9_]+_test`' docs/ctk-conformance.md docs/capability-map.md 2>/dev/null | tr -d '`' | sort -u); do
   [ -f "ops/e2e/$f.js" ] || fail "docs cite suite '$f' but ops/e2e/$f.js does not exist"
 done
+# ...and a suite named by PATH, anywhere. A document that cites `ops/e2e/x.js`
+# as its proof is making the strongest claim in this repository, so the file it
+# names must be on disk — in EVERY document, not the two that happened to be
+# checked first.
+for p in $(grep -rhoE 'ops/e2e/[a-z0-9_]+\.js' README.md CLAUDE.md docs/*.md 2>/dev/null | sort -u); do
+  [ -f "$p" ] || fail "a document cites '$p' as its proof, and that file does not exist"
+done
+# A suite NUMBER is prose — there is no registry — but it can never be larger
+# than the number of suites there are. #129 landed on "a suite count nobody
+# added up"; this is the same arithmetic one rung down.
+for n in $(grep -rhoE 'suite #[0-9]+' README.md CLAUDE.md docs/*.md 2>/dev/null | grep -oE '[0-9]+' | sort -un); do
+  [ "$n" -le "$SUITES" ] || fail "a document cites suite #$n; ops/e2e holds $SUITES suites" \
+    "a suite number above the count cannot name a suite that exists"
+done
+
+# ------------------------------------------- the Billing & Revenue arc ----
+# docs/billing-revenue-desk.md makes five structural claims a reader has every
+# reason to trust and no way to check: the eight bill situations and their
+# precedence, the four channel modules that read them and own no clock, the six
+# destinations in lifecycle order, how many pages sit under the department, and
+# nav.js sitting exactly on the front-end ceiling. Each is read off the source.
+#
+# The helper's SENTINEL is required, not optional: a checker that crashes prints
+# nothing on stdout, and "no drift" is exactly how a pass looks. Hanging the
+# gate on evidence that the checks RAN is the lesson of every stale claim here.
+billing_drift=$(python3 ops/arch/billing_claims.py 2>"$PWD/.claims-billing.err")
+billing_ran=$(grep -c 'billing-claims: checked [1-9]' "$PWD/.claims-billing.err" 2>/dev/null || echo 0)
+rm -f "$PWD/.claims-billing.err"
+if [ "$billing_ran" = 0 ]; then
+  fail "ops/arch/billing_claims.py produced no sentinel — it did not run its checks" \
+       "an empty stdout from a crashed checker reads exactly like a pass"
+elif [ -n "$billing_drift" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && fail "$line"
+  done <<EOF
+$billing_drift
+EOF
+fi
 
 # A suite's downstreams are DATA (ops/e2e/suite-needs.txt) and the proof runner
 # starts them with ONE `docker compose up`. A single name that is not a service
