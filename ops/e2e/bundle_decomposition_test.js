@@ -57,6 +57,13 @@ async function form(url, params) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
   return r.json();
 }
+/* The PERSON this run mints. A suite that creates a customer owes the demo
+ * tenant the same courtesy it pays the catalog: take them away at the end —
+ * by the rule in party_debris.js, which refuses to shred accounting history.
+ * Recorded on this object rather than returned, so the call sites below stay
+ * exactly as they were. */
+const parties = require('./party_debris');
+const fixture = {};
 /* A brand-new customer with a clean inventory — so the upgrade leg reads its
  * one product without fighting a shared persona's capped product page. */
 async function freshCustomer(tag) {
@@ -75,7 +82,10 @@ async function freshCustomer(tag) {
   if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
   const tok = (await form(`${KCB}/realms/bss/protocol/openid-connect/token`,
     { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
-  await call('POST', '/tmf-api/party/v4/individual', tok, { givenName: 'Bundle', familyName: 'Tester' });
+  const person = await call('POST', '/tmf-api/party/v4/individual', tok,
+    { givenName: 'Bundle', familyName: 'Tester' });
+  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId: users[0].id,
+    partyId: (person.body || {}).id });
   return tok;
 }
 
@@ -187,6 +197,16 @@ async function freshCustomer(tag) {
   if (bad.status < 400) fail('an off-menu speed (750) was accepted');
   if (!/allowed values/.test(bad.body && bad.body.message || '')) fail('the refusal did not name the allowed tiers');
   ok(`GUARDRAIL: an off-menu speed (750) is refused — "${bad.body.message}"`);
+
+  /* ---------- and take the fixture PERSON away too ---------- */
+  const swept = await parties.removeFixtureParty(parties.ctxFor(staff), fixture);
+  if (swept.action === 'left') {
+    fail(`the fixture customer was left behind: ${swept.detail}`);
+  }
+  // 'blocked' = a component was unreadable, so the cleanup refused to guess;
+  // the fixture stays and the party sweep will report it. Say so, do not fail.
+  console.log(`${swept.action === 'blocked' ? 'WARN' : 'OK'} FIXTURE PERSON `
+    + `${swept.action}: ${swept.detail}`);
 
   console.log('\nALL BUNDLE-DECOMPOSITION CHECKS PASSED — a triple-play fulfils as the several things it is,'
     + ' TV waits for the broadband it rides, a physical SIM reserves the number until it lands, the order'
