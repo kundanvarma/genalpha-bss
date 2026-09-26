@@ -2,6 +2,31 @@
 'use strict';
 
 /**
+ * What the server said, not what the status number was.
+ *
+ * The document component refuses an unsupported image by NAMING the formats it
+ * takes. Printing "upload failed: HTTP 400" throws that away and leaves the
+ * product manager staring at a file that looks fine to them — which is exactly
+ * what happened with an .avif export. Show the reason; fall back to the status
+ * only when there is genuinely nothing to read.
+ */
+async function refusal(res) {
+  try {
+    const body = await res.text();
+    if (body) {
+      let said = body;
+      try {
+        const parsed = JSON.parse(body);
+        said = parsed.message || parsed.error || parsed.detail || body;
+      } catch { /* not JSON — the raw text is the message */ }
+      said = String(said).trim();
+      if (said) return said.length > 300 ? `${said.slice(0, 300)}…` : said;
+    }
+  } catch { /* body already consumed or unreadable — fall through */ }
+  return `upload failed: HTTP ${res.status}`;
+}
+
+/**
  * Product artwork without JSON or a separate DAM: upload an image, it lands
  * in the document component (TMF667) and the offering's attachment list —
  * exactly what the storefront and app render. Name an image "gallery-*" for
@@ -70,7 +95,7 @@ function artworkControl(field) {
           category: 'offering', mimeType: picked.type || 'image/png', content: btoa(binary),
         }),
       });
-      if (!res.ok) throw new Error(`upload failed: HTTP ${res.status}`);
+      if (!res.ok) throw new Error(await refusal(res));
       const doc = await res.json();
       entries.push({ name: role.value || `gallery-${entries.length + 1}`,
         mimeType: picked.type || 'image/png', url: doc.attachmentUrl, '@type': 'Attachment' });
