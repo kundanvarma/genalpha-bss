@@ -193,16 +193,28 @@ def drift():
     elif pages is not None and said != pages:
         out.append(f"{DOC} says {said} pages under {WORKSPACE}; {NAV} lists {pages}")
 
-    # 5 — the spelled-out counts, WHEREVER they are claimed. The README makes
-    # the same two claims in a shorter voice, and a row nobody checks is how a
-    # stale number survives: the doc gets fixed and the summary does not.
+    # 5 — the spelled-out counts, in EVERY phrasing and wherever they are
+    # claimed. One fact gets said several ways ("fourteen peer tabs", "fourteen
+    # old tabs", "fourteen pages"), and the README says the short version; a
+    # phrasing nobody checks is how a stale number survives a fix to its
+    # neighbour.
     checked += 1
-    for noun, truth, source in (("situations", len(known), SITU_DTO),
-                                ("destinations", len(labels or []), NAV)):
+    suites = len(set(re.findall(r"ops/e2e/([a-z0-9_]+)\.js", doc)))
+    for noun, truth, source in (
+        (r"situations", len(known), SITU_DTO),
+        (r"(?:destinations|primaries)", len(labels or []), NAV),
+        (r"(?:pages|(?:peer|old) tabs)", pages, NAV),
+        (r"suites, each driving", suites, "the suite paths this document names"),
+    ):
+        if truth is None:
+            continue
+        pattern = re.compile(r"\b(" + "|".join(WORDS) + r")\s+(" + noun + r")", re.I)
         for path in ("README.md", DOC):
-            for word in set(re.findall(r"\b(" + "|".join(WORDS) + r")\s+" + noun, read(path))):
-                if WORDS[word] != truth:
-                    out.append(f"{path} says {word} {noun}; {source} has {truth}")
+            # the matched PHRASE in the message, never the pattern — a drift line
+            # is read by someone in a hurry looking for the words to change
+            for word, phrase in set(pattern.findall(read(path))):
+                if WORDS[word.lower()] != truth:
+                    out.append(f'{path} says "{word} {phrase}"; {source} has {truth}')
 
     # 6 — nav.js sits exactly on the front-end ceiling
     checked += 1

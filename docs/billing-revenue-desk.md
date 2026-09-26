@@ -442,6 +442,13 @@ is typed from memory, and each has been watched going red:
 | `nav.js` is at the front-end ceiling | `wc -l` against `MAX_FE_LINES` in `ops/arch/ratchet.sh` |
 | every suite this document names | the file exists in `ops/e2e/` |
 | every suite number it cites | no higher than the count of tracked suites |
+| how many suites this section claims | the suite paths named in it |
+
+A count is checked in **every phrasing and every file**, not only where it reads
+most naturally. One fact gets said several ways — "fourteen peer tabs",
+"fourteen old tabs", "fourteen pages" — and the README says the short version of
+the same thing; a phrasing nobody checks is how a stale number survives the fix
+to its neighbour.
 
 The helper prints a sentinel naming how many claims it checked, and the gate
 refuses a run that does not produce it — because a checker that crashes and
@@ -453,8 +460,8 @@ purpose is the only reason anyone knows. It read
 `ran=$(grep -c … || echo 0)`; `grep -c` prints `0` *and* exits 1 when it finds
 nothing, so the `||` appended a second `0`, the string never equalled `0`, and
 the guard concluded that every crashed run had done its checks. It used `grep -q`
-after that. Each of the eight claims above was then made false on purpose and
-watched exiting non-zero, because a gate nobody has seen fail is not a gate.
+after that. Every claim above was then made false on purpose and watched exiting
+non-zero, because a gate nobody has seen fail is not a gate.
 
 ---
 
