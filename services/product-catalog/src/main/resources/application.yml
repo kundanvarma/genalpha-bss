@@ -55,6 +55,27 @@ springdoc:
 bss:
   events:
     topic: bss.catalog.events
+  geo:
+    # THE CRAWLER ROSTER, as configuration — "user-agent:group" per entry.
+    # Which bots exist and what each one is FOR is each vendor's own fact and
+    # it drifts: OpenAI separated GPTBot (training) from OAI-SearchBot
+    # (retrieval), and that separation is the whole reason `ai-visibility:
+    # search-ai` can exist. An operator corrects a rename with
+    # BSS_GEO_CRAWLERS=... and waits for no release.
+    #
+    # ORDER IS LOAD-BEARING. `search-only` names every entry below, and a live
+    # tenant is on it, so this list's order is the order its robots.txt has
+    # always shipped in. Reordering or adding a name REWRITES that operator's
+    # published posture — a decision, never a tidy-up.
+    crawlers: >-
+      GPTBot:training,
+      OAI-SearchBot:retrieval,
+      ClaudeBot:training,
+      anthropic-ai:training,
+      PerplexityBot:retrieval,
+      Google-Extended:training,
+      CCBot:training,
+      Bytespider:training
   downstream:
     # the configurator consults policy: block rules (machine seam) and
     # the public deal engine's indicative price — both fail open

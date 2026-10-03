@@ -443,6 +443,10 @@ bss:
         # forgets this variable gets the safe answer, not the demo answer.
         # The laptop fleet opts in explicitly (docker-compose.yml, gateway).
         agent-commerce: ${AGENT_COMMERCE:off}
+        # GEO posture: open | search-ai | search-only | dark. The catalog
+        # generates robots.txt from it; the gateway reads it only to stamp
+        # noindex for a dark tenant, which a Disallow cannot do.
+        ai-visibility: ${AI_VISIBILITY:open}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
@@ -451,6 +455,7 @@ bss:
         locale: "no"
         currency: NOK
         agent-commerce: ${AGENT_COMMERCE_NOVA:off}
+        ai-visibility: ${AI_VISIBILITY_NOVA:search-only}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
 
 management:

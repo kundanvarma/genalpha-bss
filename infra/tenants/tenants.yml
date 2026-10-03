@@ -415,7 +415,13 @@ bss:
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
-        ai-visibility: "search-only"
+        # The fourth posture, and the one most operators actually want: be
+        # findable in an AI answer, stay out of a training corpus. OAI-SearchBot
+        # and PerplexityBot are allowed; GPTBot, ClaudeBot, CCBot,
+        # Google-Extended and the rest of the training roster are disallowed by
+        # name. A simulation tenant carries it so the suite can prove the two
+        # groups diverge in one document — no live operator's posture moved.
+        ai-visibility: ${AI_VISIBILITY_NORDLYS:search-ai}
         hosts: [shop.nordlys.localhost, csr.nordlys.localhost, console.nordlys.localhost, biz.nordlys.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_NORDLYS:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_NORDLYS:https://www.google-analytics.com}

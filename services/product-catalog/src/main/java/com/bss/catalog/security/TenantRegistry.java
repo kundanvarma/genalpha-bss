@@ -77,7 +77,14 @@ public class TenantRegistry {
         /** THE OVERLAY SEAM: this tenant's legacy BSS catalog — read-through
          * federation; empty means no legacy estate (native mode). */
         private String legacyCatalogBaseUrl;
-        /** GEO: crawler visibility — open | search-only | dark. */
+        /**
+         * GEO: crawler visibility — open | search-ai | search-only | dark, read
+         * as {@link com.bss.catalog.seo.Visibility}. `search-ai` is "AI search
+         * yes, model training no"; `search-only` blocks both and is unchanged
+         * from the day it shipped, because a tenant is live on it. An absent or
+         * misspelled value reads as search-only, so a typo cannot publish a
+         * tenant that did not ask to be published.
+         */
         private String aiVisibility = "search-only";
         /** Launch governance: none (default — a write is a launch) | envelope (pre-approved
          *  envelopes launch by themselves, everything else asks) | always (every launch asks). */

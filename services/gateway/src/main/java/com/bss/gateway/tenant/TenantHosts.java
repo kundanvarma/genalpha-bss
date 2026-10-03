@@ -99,6 +99,16 @@ public class TenantHosts {
          * with no business line shouldn't advertise one on its consumer shop.
          */
         private boolean businessSales = false;
+        /**
+         * GEO crawler posture — tenants.yml {@code ai-visibility}:
+         * open | search-ai | search-only | dark. The catalog generates
+         * robots.txt from it; the gateway reads it for one thing only, which
+         * robots.txt cannot do: a {@code dark} tenant's public pages carry
+         * noindex, because Disallow stops a FETCH and leaves a URL somebody
+         * else linked to perfectly indexable. Defaults to the cautious value,
+         * so a deployment that forgets the key does not publish a tenant.
+         */
+        private String aiVisibility = "search-only";
         private List<String> hosts = new ArrayList<>();
 
         public String getId() {
@@ -315,6 +325,19 @@ public class TenantHosts {
 
         public void setAgentCommerce(String agentCommerce) {
             this.agentCommerce = agentCommerce;
+        }
+
+        public String getAiVisibility() {
+            return aiVisibility;
+        }
+
+        public void setAiVisibility(String aiVisibility) {
+            this.aiVisibility = aiVisibility;
+        }
+
+        /** True where a Disallow is not enough and the page must say noindex itself. */
+        public boolean isDark() {
+            return aiVisibility != null && "dark".equalsIgnoreCase(aiVisibility.trim());
         }
 
         public boolean isBusinessSales() {
