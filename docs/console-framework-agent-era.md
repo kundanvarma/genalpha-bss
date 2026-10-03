@@ -74,7 +74,7 @@ a PSP. Every one of those is catalog, ordering and payment work. None of it is
 back-office UI.
 
 The per-tenant gates are already modelled — `agent-commerce: off | discovery |
-full` and `ai-visibility: dark | search-only | open`, with a newborn operator
+full` and `ai-visibility: dark | search-only | search-ai | open`, with a newborn operator
 dark by default. What is missing is the feed and the checkout conformance, not a
 console rewrite.
 

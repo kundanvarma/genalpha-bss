@@ -128,6 +128,20 @@ class UsagePolicyApiTest {
                 .andExpect(status().isCreated());
     }
 
+    /**
+     * A moment inside the period {@link #rateBody} rates, but before a pass
+     * that started yesterday — genuinely out of window AND genuinely rated.
+     * Stepping back from `now()` instead landed in the previous period on the
+     * 1st to the 10th of a month: a date bug in the test, not a product one.
+     */
+    private OffsetDateTime outsideTheWindowButInThisPeriod() {
+        OffsetDateTime periodStart = LocalDate.now().withDayOfMonth(1)
+                .atStartOfDay().atOffset(java.time.ZoneOffset.UTC);
+        OffsetDateTime justBeforeThePass = OffsetDateTime.now().minusDays(2);
+        // whichever is later: never before the period, never inside the window
+        return justBeforeThePass.isBefore(periodStart) ? periodStart.plusHours(1) : justBeforeThePass;
+    }
+
     private String rateBody(String party) {
         LocalDate start = LocalDate.now().withDayOfMonth(1);
         return "{\"relatedPartyId\": \"" + party + "\", \"periodStart\": \"" + start
@@ -389,9 +403,11 @@ class UsagePolicyApiTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.zoneEntered").value(true));
         usage("tp-cust", "po-tp", "tp data", 1.0, "world-1", null);
-        // outside the pass window (before validFrom): rates like home usage
-        usage("tp-cust", "po-tp", "tp data", 2.0, "world-1",
-                OffsetDateTime.now().minusDays(10));
+        // Outside the pass window but INSIDE the rated period: it has to be
+        // both. `now().minusDays(10)` was neither — on the 1st to the 10th of
+        // any month that date falls in the PREVIOUS period, the rating run
+        // never sees it, and this test failed for ten days in every thirty.
+        usage("tp-cust", "po-tp", "tp data", 2.0, "world-1", outsideTheWindowButInThisPeriod());
 
         // one rating pass: 10 home + 4 zone (pass-covered) + 2 out-of-window
         // = 12 chargeable vs 10 allowed -> 2 GB overage at 2.00

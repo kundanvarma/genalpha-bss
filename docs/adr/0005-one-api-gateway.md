@@ -31,7 +31,9 @@ decide what a channel may see — forty times, forty ways.
   fleet-wide ceiling for everyone) behind a `RateLimitStore` seam; Redis
   when shared, in-memory otherwise; an unreachable Redis fails open.
 - **Per-tenant gates** live here: `agent-commerce off|discovery|full`,
-  `ai-visibility` at robots.txt, crawler dual-serve by User-Agent.
+  `ai-visibility dark|search-only|search-ai|open` at robots.txt, crawler
+  dual-serve by User-Agent, and the `noindex` header a dark tenant needs
+  because a Disallow leaves a bare URL indexable (`CrawlerVisibilityFilter`).
 - **Browse cache** (`LocalResponseCache`) is on the **catalog route only**,
   keyed by `X-Tenant-Id`, caching only token-absent `public` responses the
   catalog marks cacheable; stock, personalization, cart, order and bill are

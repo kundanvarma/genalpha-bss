@@ -7,6 +7,7 @@
 accounting_configuration_test revenue billing party-account
 agentic_workforce_test      trouble-ticket mock-legacy
 ai_slice_test               quote assurance mock-5gc intelligence
+ai_visibility_states_test   product-catalog storefront
 audience_scheduler_test     bss-bridge insight
 audience_snapshot_test      bss-bridge insight
 audience_sql_test           bss-bridge insight

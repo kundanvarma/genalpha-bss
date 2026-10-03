@@ -1,4 +1,4 @@
-/* Structured data is SERIALISED, and three facts stopped being constants. Suite #246.
+/* Structured data is SERIALISED, and three facts stopped being constants. Suite #247.
  *
  * SEO-2 (#178). The crawler-facing page used to assemble its schema.org
  * document from 22 string fragments with its own escaping, and three of its

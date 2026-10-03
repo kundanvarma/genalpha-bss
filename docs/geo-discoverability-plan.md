@@ -182,3 +182,85 @@ What an operator can now rely on, in operator language:
   `X-Forwarded-Host`, which is the only thing that knows the host a visitor
   came in on; a request that reaches the component directly keeps relative
   URLs rather than publishing an internal service name.
+
+## The fourth posture — "AI search yes, training no" (SEO-1, #177)
+
+**2026-10-03 — suite #246, `ops/e2e/ai_visibility_states_test.js` (#246).**
+
+The three-state switch above had a governance bug in it, found by an
+engineering review of the Shop spec (#176) rather than by a failure. The
+state named *"classic search yes, AI answer/training bots no"* blocked
+`GPTBot` and `OAI-SearchBot` in the same list. Those are not the same
+crawler and OpenAI documents them as separately controllable: `GPTBot`
+collects pages into a training corpus, `OAI-SearchBot` fetches a page to
+answer a question now and cite the source. Blocking them together meant
+**no tenant could express the posture most operators actually want** —
+be findable in an AI answer, stay out of the training data. It was not a
+crash; it was a setting an operator would have believed.
+
+### What a tenant can now say
+
+| `ai-visibility` | Classic search | AI search / retrieval | Training crawlers | `llms.txt` | noindex |
+|---|---|---|---|---|---|
+| `dark` | blocked | blocked | blocked | 404 | **yes** |
+| `search-only` | allowed | blocked | blocked | 404 | no |
+| `search-ai` *(new)* | allowed | **allowed** | blocked | 200 | no |
+| `open` | allowed | allowed | allowed | 200 | no |
+
+`search-only` was **not** redefined. A tenant is live on it, and quietly
+changing the meaning of a posture an operator chose would move their
+privacy stance without them asking. Its document is pinned twice — by
+sha256 in the suite against the bytes captured from the running fleet
+before the split, and as a literal in `CrawlerPolicyTest` — so a reorder
+or an added vendor name turns a build red rather than shipping.
+
+### Retrieval and training are a tag, not two lists
+
+`bss.geo.crawlers` (product-catalog) is **one ordered list** of
+`user-agent:group` entries, read from configuration with a
+`BSS_GEO_CRAWLERS` override, because which bots exist and what each is
+for is a third-party fact that drifts — a vendor rename must not need a
+release. One ordered list rather than a retrieval list and a training
+list, on purpose: emitting a retrieval block and then a training block
+would have reordered the live tenant's robots.txt, and byte-identical is
+the whole requirement. `CrawlerPolicy` generates the document; nothing
+about a crawler is a constant in code.
+
+### A Disallow is not a noindex
+
+`dark` published `User-agent: *\nDisallow: /` and nothing else, which
+asks a crawler not to **fetch** the page. It does not ask anyone not to
+**list** it: a search engine that finds a dark tenant's URL on somebody
+else's site can index the bare URL *precisely because* it obeyed the
+Disallow and never learned there was nothing to show. A dark tenant's
+public responses now carry `X-Robots-Tag: noindex, nofollow`, stamped at
+the gateway by `CrawlerVisibilityFilter` — the gateway because that is
+the only place a per-tenant header can reach a page (the storefront
+serves one static build and knows nothing about tenants), and only for
+`dark`, because noindex on a `search-only` tenant would delist the
+classic search it explicitly asked to keep.
+
+### Honest limits
+
+- **Crawler names and their separation are a third-party fact** as of
+  3 October 2026. That is why the roster is configuration: it can be
+  corrected by an operator without a release. It will drift.
+- **`robots.txt` is advisory.** A crawler that ignores it is unaffected
+  by any of this. This makes the *stated* policy expressible, not
+  enforced; nothing here is a technical control.
+- **The shipped roster is exactly the eight names `search-only` already
+  blocked**, no additions. Anthropic's `Claude-SearchBot` and Google's
+  own retrieval agents belong in the retrieval group and are **not**
+  there, because adding a name changes the live tenant's published
+  document. Growing the roster is a deliberate decision, made in
+  configuration, not a tidy-up.
+- **noindex is a header, not a meta tag.** The storefront ships one
+  static shell for every tenant, so a per-tenant `<meta name="robots">`
+  needs the server-side rendering of #180. Crawlers honour the header;
+  this is the mechanism, not a workaround — but a reader looking for the
+  tag in the HTML will not find it.
+- **`search-ai` is carried by a simulation tenant** (`nordlys`) so the
+  suite can prove the two groups diverge in one document. No live
+  operator was moved onto it.
+- The 2026-07-24 deferrals above still stand: insight `ai-answer`
+  referrer tagging and public help-center FAQ pages are unbuilt.

@@ -6,6 +6,8 @@ import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.JsonLd;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
+import com.bss.catalog.seo.CrawlerPolicy;
+import com.bss.catalog.seo.Visibility;
 import com.bss.catalog.service.ProductOfferingService;
 import com.bss.catalog.service.SchemaOrgProjection;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,10 +36,12 @@ import java.util.Map;
  * warehouse, the lifecycle and the tenant's own configuration
  * ({@link SchemaOrgProjection}).
  *
- * The per-tenant `ai-visibility` switch (open | search-only | dark)
- * drives robots.txt — the lever crawlers actually obey. llms.txt ships
- * for `open` tenants, honestly labeled: it is speculative courtesy, not
- * the feature.
+ * The per-tenant `ai-visibility` switch (open | search-ai | search-only |
+ * dark) drives robots.txt — the lever crawlers actually obey. The roster of
+ * crawlers and what each one is FOR lives in {@link CrawlerPolicy}, so a
+ * tenant can say "AI search yes, training no" and a vendor rename needs no
+ * release. llms.txt ships where AI answer engines are welcome, honestly
+ * labeled: it is speculative courtesy, not the feature.
  */
 @RestController
 @RequestMapping("/seo")
@@ -48,23 +52,25 @@ public class GeoController {
     private final JsonLd jsonLd;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
+    private final CrawlerPolicy crawlers;
 
     public GeoController(ProductOfferingService offerings, SchemaOrgProjection projection,
-            JsonLd jsonLd, TenantRegistry tenants, TenantScope tenantScope) {
+            JsonLd jsonLd, TenantRegistry tenants, TenantScope tenantScope, CrawlerPolicy crawlers) {
         this.offerings = offerings;
         this.projection = projection;
         this.jsonLd = jsonLd;
         this.tenants = tenants;
         this.tenantScope = tenantScope;
+        this.crawlers = crawlers;
     }
 
     private TenantRegistry.TenantEntry tenant() {
         return tenants.byId(tenantScope.currentTenantId());
     }
 
-    private String visibility() {
+    private Visibility visibility() {
         TenantRegistry.TenantEntry t = tenant();
-        return t == null || t.getAiVisibility() == null ? "search-only" : t.getAiVisibility();
+        return Visibility.of(t == null ? null : t.getAiVisibility());
     }
 
     private String brand() {
@@ -76,7 +82,7 @@ public class GeoController {
 
     @GetMapping(value = "/offering/{id}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> offering(@PathVariable("id") String id, HttpServletRequest request) {
-        if ("dark".equals(visibility())) {
+        if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
         ProductOfferingDto offering = offerings.findById(id);
@@ -138,7 +144,7 @@ public class GeoController {
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
     public ResponseEntity<String> sitemap() {
-        if ("dark".equals(visibility())) {
+        if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
         StringBuilder sb = new StringBuilder(
@@ -155,23 +161,16 @@ public class GeoController {
 
     @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> robots() {
-        // the lever crawlers actually obey — driven by the tenant's switch
-        String v = visibility();
-        String body;
-        if ("dark".equals(v)) {
-            body = "User-agent: *\nDisallow: /\n";
-        } else if ("open".equals(v)) {
-            body = "User-agent: *\nAllow: /\n\nSitemap: /sitemap.xml\n";
-        } else { // search-only: classic search yes, AI answer/training bots no
-            StringBuilder sb = new StringBuilder();
-            for (String bot : List.of("GPTBot", "OAI-SearchBot", "ClaudeBot", "anthropic-ai",
-                    "PerplexityBot", "Google-Extended", "CCBot", "Bytespider")) {
-                sb.append("User-agent: ").append(bot).append("\nDisallow: /\n\n");
-            }
-            sb.append("User-agent: *\nAllow: /\n\nSitemap: /sitemap.xml\n");
-            body = sb.toString();
+        // the lever crawlers actually obey — the tenant's posture decides WHICH
+        // crawlers are named; CrawlerPolicy knows what each one is for
+        Visibility v = visibility();
+        ResponseEntity.BodyBuilder res = ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN);
+        if (v.noindex()) {
+            // Disallow asks a crawler not to FETCH; it does not stop a URL
+            // somebody else links to from being listed. The tenant said dark.
+            res.header("X-Robots-Tag", CrawlerPolicy.NOINDEX);
         }
-        return ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(body);
+        return res.body(crawlers.robotsTxt(v));
     }
 
     @GetMapping(value = "/llms.txt", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -179,8 +178,9 @@ public class GeoController {
         // honest label: speculative courtesy for LLM crawlers — adoption is
         // real (~10% of sites) but bot consumption is negligible today; the
         // load-bearing GEO work is the bot-readable pages and robots.txt
-        if (!"open".equals(visibility())) {
-            throw new NotFoundException("llms.txt is published by open tenants only");
+        if (!visibility().publishesLlmsTxt()) {
+            throw new NotFoundException(
+                    "llms.txt is published where AI answer engines are welcome");
         }
         StringBuilder sb = new StringBuilder("# " + brand() + "\n\n> A telecom operator. "
                 + "Offerings below are live catalog data; each links to a crawlable page "
