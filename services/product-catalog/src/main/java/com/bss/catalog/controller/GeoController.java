@@ -247,8 +247,14 @@ public class GeoController {
     private static final java.util.regex.Pattern SAFE_HOST =
             java.util.regex.Pattern.compile("[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?");
 
+    /**
+     * Spring's escaper, not a hand-rolled one. The four-replace version missed
+     * the single quote — harmless inside a double-quoted attribute, wrong the
+     * moment anyone writes one in single quotes — and a static analyser cannot
+     * tell a home-made escaper from no escaper at all, so it read every
+     * attribute here as unescaped. One known-good implementation answers both.
+     */
     private String esc(String s) {
-        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;")
-                .replace(">", "&gt;").replace("\"", "&quot;");
+        return s == null ? "" : org.springframework.web.util.HtmlUtils.htmlEscape(s);
     }
 }
