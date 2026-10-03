@@ -228,10 +228,24 @@ public class GeoController {
         if (host == null || host.isBlank()) {
             return "";
         }
+        host = host.split(",")[0].trim();
+        // These values end up in an href and in canonical/JSON-LD URLs, and
+        // they arrive in a REQUEST HEADER. Escaping is not enough there: a
+        // scheme of "javascript" survives every entity escape and still runs.
+        // So the scheme is chosen from a closed set, never echoed, and a host
+        // that is not a plain host[:port] is refused back to relative URLs.
+        if (!SAFE_HOST.matcher(host).matches()) {
+            return "";
+        }
         String proto = request.getHeader("X-Forwarded-Proto");
-        return (proto == null || proto.isBlank() ? "http" : proto.split(",")[0].trim())
-                + "://" + host.split(",")[0].trim();
+        String first = proto == null ? "" : proto.split(",")[0].trim();
+        String scheme = "https".equalsIgnoreCase(first) ? "https" : "http";
+        return scheme + "://" + host;
     }
+
+    /** host or host:port — letters, digits, dots, hyphens; nothing that could carry a scheme. */
+    private static final java.util.regex.Pattern SAFE_HOST =
+            java.util.regex.Pattern.compile("[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?");
 
     private String esc(String s) {
         return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;")
