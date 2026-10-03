@@ -22,7 +22,9 @@ three per-tenant seams federate its catalog, hand fulfilment back to its queue, 
 workforce work its incident backlog — legacy stays the master, never two writers. AI ANSWER-ENGINE crawlers (GPTBot-class, which
 execute no JavaScript) get a third face of the same catalog: the gateway dual-serves shop URLs
 by User-Agent into bot-readable HTML with schema.org JSON-LD, behind a per-tenant
-`ai-visibility: open | search-only | dark` switch executed at robots.txt (suite #68).
+`ai-visibility: open | search-ai | search-only | dark` switch executed at robots.txt
+(suites #68 and #246) — `search-ai` is "AI search yes, training no", and `dark` adds a
+noindex header because a Disallow leaves a bare URL indexable.
 
 The platform also reaches **operator-to-operator**. On **open-access fibre** (opening now across
 the Nordics) a retail order's fiber component can ride a third party's network: the orchestrator
@@ -309,10 +311,14 @@ the acting tenant's machine identity.
   no JavaScript, so the gateway dual-serves `/shop/offering/*` by User-Agent: crawlers receive
   complete HTML with schema.org Product/Offer JSON-LD rendered LIVE from TMF620 (the suite
   proves bot price == catalog price — the faces are proven equal, never maintained equal);
-  humans keep the untouched SPA. The per-tenant `ai-visibility` switch (open | search-only |
-  dark) executes at robots.txt — the lever crawlers actually obey — with search-only as the
-  middle state: classic search yes, AI answer/training bots no. Newborn tenants default
-  search-only; llms.txt ships for open tenants, honestly labeled speculative.
+  humans keep the untouched SPA. The per-tenant `ai-visibility` switch (open | search-ai |
+  search-only | dark) executes at robots.txt — the lever crawlers actually obey. The roster of
+  crawlers is configuration tagged **retrieval** or **training** (`bss.geo.crawlers`), so
+  `search-ai` says the thing operators actually want — AI search yes, model training no —
+  which `search-only` could not say while it blocked GPTBot and OAI-SearchBot in one list
+  (suite #246). `dark` also answers `X-Robots-Tag: noindex`, because a Disallow stops a fetch
+  and leaves a bare URL indexable. Newborn tenants default search-only; llms.txt ships where
+  AI answer engines are welcome, honestly labeled speculative.
 - **The loop closes only by opt-in.** The workforce package's `worker-controller` is the sole
   holder of container spawn-rights (docker.sock / a scoped ServiceAccount — deployed via
   `--profile workforce`, never by default): one dashboard click hires a RUNNING worker with the
