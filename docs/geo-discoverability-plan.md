@@ -112,3 +112,73 @@ the beacon schema and gets its own slot; the knowledge-base FAQ pages as
 public help-center are the second follow-up. Legacy-federated offerings
 ride the bot pages automatically (the price fallback covers embedded
 refs). Regressions green: storefront, agentic_commerce #64.
+
+**2026-10-03 — SEO-2 (#178): the structured data is serialised, and three
+facts stopped being constants.** Suite #246 (`geo_structured_data_test`).
+
+What an operator can now rely on, in operator language:
+
+- **A product name can contain anything.** The crawler-facing document used to
+  be assembled from 22 string fragments with its own escaping, so the first
+  offering named with a quote, a backslash or a newline published structured
+  data no crawler would accept — and a rejected document is invisible, not
+  merely untidy. It is now written by Jackson from records (`SchemaOrg`,
+  `SchemaOrgProjection`, `JsonLd`). `Fiber 500 "Pro" \ Home`, with a newline
+  and a `</script>` tag in its description, round-trips byte for byte.
+- **Availability is read, not assumed.** Every page used to say *InStock*,
+  including a mobile plan, which is not a thing a warehouse keeps. The
+  warehouse now answers for a stock-managed product (*InStock* / *OutOfStock*,
+  from the TMF687 rows the configurator already reads) and ordering semantics
+  answer where it keeps no rows (*OnlineOnly*, or *InStoreOnly* for a
+  dealer-only offer, or *Discontinued* once it is off the ladder).
+- **The headline price is the one the customer pays every month.** The
+  generator preferred the one-time component, so *GenAlpha Fiber 1000* — a
+  39.99/month line with a 49.00 installation fee — advertised **49.00** as its
+  price. That is a commercial misstatement, not a formatting slip. A
+  subscription's Offer now carries the sum of its recurring charges (the same
+  arithmetic the shop shows a human, bundle discount included) with the
+  billing period declared beside it, and the page still tells a person about
+  the one-time charge in words.
+- **Language and money belong to the operator.** The page declares the
+  tenant's own `locale` (genalpha `en`, nova `no`) instead of `en` for
+  everybody, and prices in the tenant's own `currency` where a price names no
+  unit of its own. The shop shell (`apps/storefront/index.html`) no longer
+  spells a language at all: the gateway's per-hostname `tenant-config.js`
+  stamps it, because one build serves every operator.
+- **Pictures and specifications reach the page.** Image attachments are
+  published as absolute, fetchable URLs (a datasheet beside them is not a
+  product image), and specification characteristics — data allowance, speed,
+  network, roaming — are structured properties with their units instead of
+  being dropped.
+
+### Honest limits
+
+- **"Validates" is not what is asserted.** There is no offline schema.org
+  validator in this repo and the suite has no network, so suite #246 asserts
+  **well-formed JSON** (a real parse of the exact bytes in the script element)
+  plus the presence and correctness of the required fields. Whether Google
+  accepts the document is a separate question and is deliberately not claimed.
+- **No reviews, no ratings.** This page displays none, so publishing them
+  would be fabricated structured data — the kind that gets a site penalised.
+  Nothing in the generator can emit them.
+- **Two availability answers are a guard, not a proven path.** The catalog's
+  own door already answers 404 for a retired, expired or dealer-only offering
+  to an anonymous crawler, so *Discontinued* and *InStoreOnly* cannot be
+  reached through the page today. They are pinned by the service's unit tests
+  and will become reachable when SEO-1/SEO-3 change that door; the suite says
+  plainly that it does not walk them.
+- **A characteristic named as a code stays off the page.** A fact the author
+  wrote as `chargingSpecId`, `volte` or `sliceProfile`, with no description
+  and no unit, is internal and is withheld — screens speak operator language,
+  and a crawler's page is a screen. The consequence is that a genuinely
+  customer-facing fact authored as a key (`dataAllowance`, `maxDownMbps`) is
+  withheld too. The fix is to name it for a person in the catalog, not to
+  loosen the rule.
+- **One truthful headline, not a breakdown.** The Offer carries one price. A
+  full breakdown — activation fees, early-termination, per-seat arithmetic —
+  belongs in the richer feeds, and the schema Offer is not the place to put
+  it.
+- **Absolute URLs need the gateway.** They are built from the gateway's
+  `X-Forwarded-Host`, which is the only thing that knows the host a visitor
+  came in on; a request that reaches the component directly keeps relative
+  URLs rather than publishing an internal service name.
