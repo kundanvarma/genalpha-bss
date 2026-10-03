@@ -133,7 +133,12 @@ public class StorefrontTenantConfigController {
                 // the vendor behind each seam this tenant configures (tenants.yml); seams not
                 // listed here are served by the fleet's built-in adapter — the console's
                 // decomposition panel reads this, so it never guesses a vendor
-                + ", seamVendors: { ocs: '" + js(tenant != null && tenant.getOcsProvider() != null ? tenant.getOcsProvider() : "mock") + "' } };\n";
+                + ", seamVendors: { ocs: '" + js(tenant != null && tenant.getOcsProvider() != null ? tenant.getOcsProvider() : "mock") + "' } };\n"
+                // The document's LANGUAGE is a tenant fact, and one build of a
+                // channel serves every tenant — so the shell cannot spell it. This
+                // is the only place that knows which operator the hostname means,
+                // and the locale is already resolved above.
+                + "document.documentElement.lang = '" + js(locale) + "';\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")

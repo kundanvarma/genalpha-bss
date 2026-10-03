@@ -104,6 +104,17 @@ public class TenantRegistry {
         public int getApprovalExpiryDays() { return approvalExpiryDays; }
         public void setApprovalExpiryDays(int approvalExpiryDays) { this.approvalExpiryDays = approvalExpiryDays; }
         private String brandName;
+        /** The language this operator sells in (tenants.yml) — the shop's own
+         *  `locale`, so the crawler-facing page and the shop never disagree. */
+        private String locale;
+        /** The money this operator prices in — used where a price declares no
+         *  unit of its own, so no literal currency is ever published. */
+        private String currency;
+
+        public String getLocale() { return locale; }
+        public void setLocale(String locale) { this.locale = locale; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
 
         public String getAiVisibility() { return aiVisibility; }
         public void setAiVisibility(String v) { this.aiVisibility = v; }

@@ -1,14 +1,16 @@
 package com.bss.catalog.controller;
 
 import com.bss.catalog.dto.ProductOfferingDto;
-import com.bss.catalog.dto.ProductOfferingPriceDto;
+import com.bss.catalog.dto.SchemaOrg;
 import com.bss.catalog.exception.NotFoundException;
+import com.bss.catalog.mapper.JsonLd;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
 import com.bss.catalog.seo.CrawlerPolicy;
 import com.bss.catalog.seo.Visibility;
-import com.bss.catalog.service.ProductOfferingPriceService;
 import com.bss.catalog.service.ProductOfferingService;
+import com.bss.catalog.service.SchemaOrgProjection;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
  * GENERATIVE DISCOVERABILITY (GEO): the crawler-facing face of the shop.
@@ -30,6 +29,12 @@ import static com.bss.catalog.mapper.Wire.idOf;
  * live from TMF620 (never authored, never synced; the suite proves the
  * bot price equals the catalog price). The gateway dual-serves by
  * User-Agent: humans get the SPA, crawlers get this.
+ *
+ * The structured data is SERIALISED from records ({@link SchemaOrg} through
+ * {@link JsonLd}), not assembled from text, and the three facts that used to
+ * be constants — availability, language, currency — are read from the
+ * warehouse, the lifecycle and the tenant's own configuration
+ * ({@link SchemaOrgProjection}).
  *
  * The per-tenant `ai-visibility` switch (open | search-ai | search-only |
  * dark) drives robots.txt — the lever crawlers actually obey. The roster of
@@ -43,15 +48,17 @@ import static com.bss.catalog.mapper.Wire.idOf;
 public class GeoController {
 
     private final ProductOfferingService offerings;
-    private final ProductOfferingPriceService prices;
+    private final SchemaOrgProjection projection;
+    private final JsonLd jsonLd;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final CrawlerPolicy crawlers;
 
-    public GeoController(ProductOfferingService offerings, ProductOfferingPriceService prices,
-            TenantRegistry tenants, TenantScope tenantScope, CrawlerPolicy crawlers) {
+    public GeoController(ProductOfferingService offerings, SchemaOrgProjection projection,
+            JsonLd jsonLd, TenantRegistry tenants, TenantScope tenantScope, CrawlerPolicy crawlers) {
         this.offerings = offerings;
-        this.prices = prices;
+        this.projection = projection;
+        this.jsonLd = jsonLd;
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.crawlers = crawlers;
@@ -74,42 +81,63 @@ public class GeoController {
     /* ---------- the bot-readable offering page ---------- */
 
     @GetMapping(value = "/offering/{id}", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> offering(@PathVariable("id") String id) {
+    public ResponseEntity<String> offering(@PathVariable("id") String id, HttpServletRequest request) {
         if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
-        ProductOfferingDto o = offerings.findById(id);
-        ProductOfferingPriceDto p = pickPrice(o);
-        String name = esc(o.getName());
-        String desc = esc(o.getDescription() == null ? "" : o.getDescription());
-        String amount = p == null ? null : String.valueOf(p.getPrice().value());
-        String currency = p == null ? "EUR" : p.getPrice().unitOr("EUR");
-        String category = o.getCategory() == null || o.getCategory().isEmpty()
-                ? "" : esc(String.valueOf(o.getCategory().get(0).get("name")));
+        ProductOfferingDto offering = offerings.findById(id);
+        TenantRegistry.TenantEntry tenant = tenant();
+        SchemaOrgProjection.OfferingPage page = projection.page(offering, brand(),
+                currency(tenant), baseUrl(request));
+        SchemaOrg.Product product = page.product();
 
-        String jsonLd = "{\"@context\":\"https://schema.org\",\"@type\":\"Product\","
-                + "\"name\":\"" + name + "\",\"description\":\"" + desc + "\","
-                + (category.isEmpty() ? "" : "\"category\":\"" + category + "\",")
-                + "\"brand\":{\"@type\":\"Organization\",\"name\":\"" + esc(brand()) + "\"}"
-                + (amount == null ? "" : ",\"offers\":{\"@type\":\"Offer\",\"price\":\"" + amount
-                        + "\",\"priceCurrency\":\"" + currency
-                        + "\",\"availability\":\"https://schema.org/InStock\"}")
-                + "}";
-
-        String html = "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
-                + "<title>" + name + " — " + esc(brand()) + "</title>"
-                + "<meta name=\"description\" content=\"" + desc + "\">"
-                + "<link rel=\"canonical\" href=\"/shop/offering/" + esc(id) + "\">"
-                + "<script type=\"application/ld+json\">" + jsonLd + "</script>"
-                + "</head><body>"
-                + "<h1>" + name + "</h1>"
-                + (category.isEmpty() ? "" : "<p>Category: " + category + "</p>")
-                + "<p>" + desc + "</p>"
-                + (amount == null ? "" : "<p>Price: <b>" + amount + " " + currency + "</b></p>")
-                + "<p>Sold by " + esc(brand()) + ". <a href=\"/shop/offering/" + esc(id)
-                + "\">View in the shop</a></p>"
-                + "</body></html>";
-        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html);
+        // the structured data is SERIALISED from the record — Jackson owns the
+        // escaping, so a name carrying a quote, a backslash or a newline is a
+        // value, never a broken document
+        StringBuilder html = new StringBuilder();
+        html.append("<!doctype html><html lang=\"").append(esc(language(tenant)))
+                .append("\"><head><meta charset=\"utf-8\">")
+                .append("<title>").append(esc(product.name())).append(" — ").append(esc(brand()))
+                .append("</title>");
+        if (product.description() != null) {
+            html.append("<meta name=\"description\" content=\"").append(esc(product.description()))
+                    .append("\">");
+        }
+        html.append("<link rel=\"canonical\" href=\"").append(esc(product.url())).append("\">")
+                .append("<script type=\"application/ld+json\">").append(jsonLd.write(product))
+                .append("</script></head><body>")
+                .append("<h1>").append(esc(product.name())).append("</h1>");
+        for (String image : product.image()) {
+            html.append("<img src=\"").append(esc(image)).append("\" alt=\"")
+                    .append(esc(product.name())).append("\">");
+        }
+        if (product.category() != null) {
+            html.append("<p>Category: ").append(esc(product.category())).append("</p>");
+        }
+        if (product.description() != null) {
+            html.append("<p>").append(esc(product.description())).append("</p>");
+        }
+        if (page.headline() != null) {
+            html.append("<p>Price: <b>").append(esc(page.headline().text())).append("</b>");
+            if (page.upfront() != null) {
+                html.append(" plus ").append(esc(page.upfront().text())).append(" once");
+            }
+            html.append("</p>");
+        }
+        if (!product.additionalProperty().isEmpty()) {
+            html.append("<dl>");
+            for (SchemaOrg.PropertyValue property : product.additionalProperty()) {
+                html.append("<dt>").append(esc(property.name())).append("</dt><dd>")
+                        .append(esc(property.value()))
+                        .append(property.unitText() == null ? "" : " " + esc(property.unitText()))
+                        .append("</dd>");
+            }
+            html.append("</dl>");
+        }
+        html.append("<p>Sold by ").append(esc(brand())).append(". <a href=\"")
+                .append(esc(product.url())).append("\">View in the shop</a></p>")
+                .append("</body></html>");
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html.toString());
     }
 
     /* ---------- sitemap / robots / llms.txt ---------- */
@@ -172,39 +200,61 @@ public class GeoController {
 
     /* ---------- helpers ---------- */
 
-    private ProductOfferingPriceDto pickPrice(ProductOfferingDto offering) {
-        List<Map<String, Object>> refs = offering.getProductOfferingPrice();
-        if (refs == null) {
-            return null;
-        }
-        Map<String, ProductOfferingPriceDto> index = prices.findAll(0, 500, Map.of()).items()
-                .stream().collect(Collectors.toMap(ProductOfferingPriceDto::getId,
-                        Function.identity(), (a, b) -> a));
-        List<ProductOfferingPriceDto> resolved = refs.stream()
-                .map(ref -> {
-                    String priceId = idOf(ref);
-                    ProductOfferingPriceDto hit = index.get(priceId);
-                    if (hit != null) {
-                        return hit;
-                    }
-                    if (ref.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
-                        ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
-                        dto.setId(priceId);
-                        dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
-                        dto.setPrice(com.bss.catalog.dto.Money.of(p));
-                        return dto;
-                    }
-                    return null;
-                })
-                .filter(p -> p != null && p.getPrice() != null && p.getPrice().value() != null)
-                .filter(p -> p.getProdSpecCharValueUse() == null || p.getProdSpecCharValueUse().isEmpty())
-                .toList();
-        return resolved.stream().filter(p -> "oneTime".equals(p.getPriceType())).findFirst()
-                .orElseGet(() -> resolved.stream().findFirst().orElse(null));
+    /**
+     * The language the operator sells in, from the resolved tenant (tenants.yml
+     * `locale` — the same value the shop's own channel config carries). The page
+     * used to declare `en` for every tenant, including the Norwegian ones.
+     */
+    private String language(TenantRegistry.TenantEntry tenant) {
+        return tenant == null || tenant.getLocale() == null || tenant.getLocale().isBlank()
+                ? "und" : tenant.getLocale();
     }
 
+    /** The money the operator prices in, used only where a price names no unit. */
+    private String currency(TenantRegistry.TenantEntry tenant) {
+        return tenant == null || tenant.getCurrency() == null || tenant.getCurrency().isBlank()
+                ? null : tenant.getCurrency();
+    }
+
+    /**
+     * Scheme and host as the VISITOR sees them, for absolute canonical and image
+     * URLs. Only the gateway's X-Forwarded headers can answer this: the
+     * component's own Host header is an internal service name behind the
+     * gateway, and publishing that would be worse than publishing a relative
+     * URL — so an unforwarded request keeps relative URLs.
+     */
+    private String baseUrl(HttpServletRequest request) {
+        String host = request.getHeader("X-Forwarded-Host");
+        if (host == null || host.isBlank()) {
+            return "";
+        }
+        host = host.split(",")[0].trim();
+        // These values end up in an href and in canonical/JSON-LD URLs, and
+        // they arrive in a REQUEST HEADER. Escaping is not enough there: a
+        // scheme of "javascript" survives every entity escape and still runs.
+        // So the scheme is chosen from a closed set, never echoed, and a host
+        // that is not a plain host[:port] is refused back to relative URLs.
+        if (!SAFE_HOST.matcher(host).matches()) {
+            return "";
+        }
+        String proto = request.getHeader("X-Forwarded-Proto");
+        String first = proto == null ? "" : proto.split(",")[0].trim();
+        String scheme = "https".equalsIgnoreCase(first) ? "https" : "http";
+        return scheme + "://" + host;
+    }
+
+    /** host or host:port — letters, digits, dots, hyphens; nothing that could carry a scheme. */
+    private static final java.util.regex.Pattern SAFE_HOST =
+            java.util.regex.Pattern.compile("[A-Za-z0-9.-]{1,253}(:[0-9]{1,5})?");
+
+    /**
+     * Spring's escaper, not a hand-rolled one. The four-replace version missed
+     * the single quote — harmless inside a double-quoted attribute, wrong the
+     * moment anyone writes one in single quotes — and a static analyser cannot
+     * tell a home-made escaper from no escaper at all, so it read every
+     * attribute here as unescaped. One known-good implementation answers both.
+     */
     private String esc(String s) {
-        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;")
-                .replace(">", "&gt;").replace("\"", "&quot;");
+        return s == null ? "" : org.springframework.web.util.HtmlUtils.htmlEscape(s);
     }
 }

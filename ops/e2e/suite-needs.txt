@@ -39,6 +39,7 @@ frequency_dnc_test          mock-social communication
 fulfilment_dry_run_test     product-ordering service-orchestration product-catalog
 fulfilment_picker_test      intelligence ontology
 fulfilment_test             fulfilment mock-bring mock-postnord mock-logistics
+geo_structured_data_test    product-catalog product-stock document
 interaction_timeline_test   communication party-interaction campaign
 knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
