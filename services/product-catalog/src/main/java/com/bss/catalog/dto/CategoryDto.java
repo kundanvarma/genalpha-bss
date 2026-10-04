@@ -23,6 +23,16 @@ public class CategoryDto {
     @JsonProperty("@type")
     private String type = "Category";
 
+    @com.fasterxml.jackson.annotation.JsonProperty("parentId")
+    private String parentId;
+
+    @com.fasterxml.jackson.annotation.JsonProperty("lifecycleStatus")
+    private String lifecycleStatus;
+
+    /** How many offerings sit on this shelf — read-only, so an empty shelf is visible. */
+    @com.fasterxml.jackson.annotation.JsonProperty("offeringCount")
+    private Integer offeringCount;
+
     public CategoryDto() {
     }
 
@@ -56,6 +66,30 @@ public class CategoryDto {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public Integer getOfferingCount() {
+        return offeringCount;
+    }
+
+    public void setOfferingCount(Integer offeringCount) {
+        this.offeringCount = offeringCount;
     }
 
     public String getType() {

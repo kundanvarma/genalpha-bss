@@ -1,5 +1,6 @@
 import { Accounting } from './accounting/Accounting.jsx';
 import { Bills } from './bills/Bills.jsx';
+import { Categories } from './catalog/Categories.jsx';
 import { Collections } from './billing/Collections.jsx';
 import { Configuration } from './configuration/Configuration.jsx';
 import { Overview } from './billing/Overview.jsx';
@@ -11,6 +12,7 @@ import { Health } from './Health.jsx';
 export const Islands = {
   accounting: Accounting,
   bills: Bills,
+  category: Categories,
   billingOverview: Overview,
   collections: Collections,
   financialConfiguration: Configuration,
