@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, getCustomer,
   interactionsPage, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf,
-  activeServicesOf, agreementsOf, completeCutover, paymentMethodsOf,
+  activeServicesOf, agreementsOf, completeCutover, fulfilmentFamilies, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   verifyPartyAddress, autoTopupOf, creditDecisionsOf, directorySettingsOf, linkRegistryPerson,
   poolsOf, runRegistrySync, saveDirectorySetting, spendPoliciesOf } from '../api.js';
@@ -11,7 +11,7 @@ import Assist from './Assist.jsx';
 import { rememberRecent } from './Customers.jsx';
 import NewMenu from './customer/NewMenu.jsx';
 import Activity, { timelineOf, dt, chan } from './customer/Activity.jsx';
-import { ServicesList, numberOf } from './customer/ServiceRows.jsx';
+import { ServicesList, numberOf, primeFulfilmentFamilies } from './customer/ServiceRows.jsx';
 import { DangerZone } from './customer/DangerZone.jsx';
 import CustomerStrip from './customer/CustomerStrip.jsx';
 import { AddOrUpgrade, UpgradeCard } from './customer/Upgrades.jsx';
@@ -156,6 +156,8 @@ export default function Customer360() {
     ticketsOf(id).then(setTickets).catch(() => {});
     cartsOf(id).then(setCarts).catch(() => {});
     activeServicesOf(id).then(setActiveServices);
+    // what the catalog DECLARES each service is, so the desk stops guessing (#143)
+    fulfilmentFamilies().then(primeFulfilmentFamilies).catch(() => {});
     portingOrdersOf(id).then(setPortingOrders);
     appointmentsOf(id).then(setAppointments).catch(() => {});
   };

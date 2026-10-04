@@ -50,3 +50,4 @@ ops/cloud/aws-demo/box.env
 # the back office's React island bundle: built in the image from apps/admin-console/island
 apps/admin-console/site/island/
 apps/admin-console/island/node_modules/
+.service-kind-bundle.cjs

@@ -20,6 +20,27 @@ export async function agreementsOf(customerId) {
   } catch { return []; }
 }
 
+/**
+ * THE DECLARED ANSWER (#143 step 1). Each customer-facing service spec says
+ * what it is — `fulfilmentFamily` — and the desk used to ignore it and
+ * pattern-match names instead, falling through to the word "Service". The
+ * catalog already knows; this is the desk asking. Read once per customer view:
+ * there are fewer than a dozen specs, and they do not change inside a session.
+ */
+export async function fulfilmentFamilies() {
+  const rows = await json(await authFetch(
+    '/tmf-api/serviceCatalogManagement/v4/serviceSpecification?limit=100')).catch(() => []);
+  const byId = {};
+  for (const spec of Array.isArray(rows) ? rows : []) {
+    for (const ch of spec.serviceSpecCharacteristic || []) {
+      if (ch.name !== 'fulfilmentFamily') continue;
+      const value = (ch.serviceSpecCharacteristicValue || [])[0];
+      if (value && value.value) byId[spec.id] = String(value.value);
+    }
+  }
+  return byId;
+}
+
 export async function activeServicesOf(customerId) {
   try {
     return await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${customerId}`));
