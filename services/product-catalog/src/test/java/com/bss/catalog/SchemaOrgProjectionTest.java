@@ -39,6 +39,7 @@ class SchemaOrgProjectionTest {
     private ProductSpecificationService specifications;
     private StockReader stock;
     private LifecyclePolicy lifecycle;
+    private com.bss.catalog.service.ProductOfferingService offerings;
     private SchemaOrgProjection projection;
 
     @BeforeEach
@@ -47,7 +48,11 @@ class SchemaOrgProjectionTest {
         specifications = mock(ProductSpecificationService.class);
         stock = mock(StockReader.class);
         lifecycle = mock(LifecyclePolicy.class);
-        projection = new SchemaOrgProjection(prices, specifications, stock, lifecycle);
+        offerings = mock(com.bss.catalog.service.ProductOfferingService.class);
+        // the projection is now assembled once and worn differently by each
+        // surface; this test still asks the schema.org face the same questions
+        projection = new SchemaOrgProjection(new com.bss.catalog.seo.PublicCatalog(
+                offerings, prices, specifications, stock, lifecycle));
         // the default world: orderable online, nothing in a warehouse
         when(stock.availability(anyString())).thenReturn(Availability.NONE);
         when(lifecycle.sellableDto(any())).thenReturn(true);

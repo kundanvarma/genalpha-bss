@@ -264,3 +264,104 @@ classic search it explicitly asked to keep.
   operator was moved onto it.
 - The 2026-07-24 deferrals above still stand: insight `ai-answer`
   referrer tagging and public help-center FAQ pages are unbuilt.
+
+## One projection behind every surface (SEO-3, #179)
+
+*Built 4 October 2026. The foundation the rendering change sits on.*
+
+Five public faces of the catalog — the crawler page, its schema.org document,
+`sitemap.xml`, `llms.txt` and the agentic-commerce feed — each assembled TMF620
+for themselves. Five readers, five chances to disagree, and they did.
+
+### What was measured, before anything was written
+
+On a running fleet, the seeded triple-play bundle *GenAlpha One Home & Mobile*
+was published two ways at the same instant:
+
+| Surface | Published | |
+|---|---|---|
+| crawler page + JSON-LD | **64.98 EUR / month** plus 49.00 once | the monthly charge |
+| agentic-commerce feed | **49.00 EUR one-time** | the fibre *installation fee* |
+
+Both numbers came from the same four catalog rows (25.00 + 39.99 − 15.00 +
+14.99). Only the rule for choosing between them differed: the page summed the
+recurring charges, the feed took the first one-time price. Each rule was
+defensible alone. Together they were a commercial misstatement, and the wrong
+one was the number an AI shopping agent would quote.
+
+Two more disagreements, same cause:
+
+- **Availability.** The page computed it from the warehouse and the lifecycle;
+  the feed published the constant `in_stock` for everything.
+- **Membership.** `sitemap.xml` and `llms.txt` listed every offering with
+  lifecycle *Active* — a different question from *sellable*. An offering past
+  its window or sold only through a dealer was advertised to search engines and
+  then refused by the page the crawler followed.
+
+### What was built
+
+`PublicCatalog` produces a `PublicOffering`: identity, a **list** of price
+components, the headline charge and the upfront total beside it, availability,
+bundle shape, specification facts, freshness, and **provenance** — the
+offering, specification and price ids each published fact was read from. Every
+surface is now an adapter over it:
+
+| Surface | Adapter |
+|---|---|
+| crawler page + JSON-LD | `SchemaOrgProjection` — schema.org's vocabulary only |
+| `sitemap.xml`, `llms.txt` | `GeoController`, straight from the projection |
+| agentic-commerce feed | `AcpFeedController` — the ACP wire contract unchanged |
+
+**Differences that remain are decisions, and are named in code.** Each surface
+passes the *channel* it speaks for, so an offering sold on the web and withheld
+from AI agents stays a choice. The feed drops an offering it cannot price — a
+row an agent cannot act on is noise — while the sitemap still lists it, because
+a page that says "talk to us" is a legitimate page.
+
+### The cost this nearly hid
+
+The first implementation made the projection eager, so rendering a sitemap
+asked the warehouse and the specification about every offering on the shelf —
+eighty downstream calls for a document that reads neither. Measured: **115
+seconds and a 500**. Availability and facts are now computed on first read
+(`Lazy`), and a test pins the call counts rather than trusting the comment:
+sitemap 115 s → **0.45 s**, llms.txt 143 s → **0.16 s**.
+
+The agentic feed still makes one warehouse call per row, because it is the one
+surface that publishes availability for a whole shelf and the warehouse has no
+bulk read. That is the honest cost of having stopped publishing a constant;
+a bulk availability read is the next thing worth building.
+
+### The proof (suite #248, `one_projection_test.js`)
+
+A fixture with a 42.00 monthly charge and a 99.00 joining fee is created, and
+all four surfaces are read: each must lead with 42.00, and say it recurs. The
+monthly price is then raised to 47.50 — **one PATCH, one catalog row** — and all
+four must move. The offering is then taken out of its window and must leave the
+sitemap, `llms.txt` and the feed together.
+
+That last assertion is the one that matters for the life of this code. "One
+projection" is a claim that rots silently; without a test that holds the faces
+beside each other, it degrades into a fourth assembler within a release or two
+and nothing goes red when it does. The unit test `OneProjectionTest` was run
+against a deliberately reverted rule and watched fail with
+`expected: <64.98> but was: <49.00>` before being trusted.
+
+### Honest limits
+
+- **Paging is unchanged.** One shelf depth (500) is now used everywhere, so a
+  tenant who outgrows it loses the same rows from every surface at once rather
+  than different rows from each. Paging to exhaustion and a sitemap index above
+  the shard threshold remain SEO-4's business (#180).
+- **The feed's availability vocabulary is coarser than ours.** An orderable
+  plan reads `in_stock` there, because ACP has no token for "not a stocked
+  thing, and you can order it". Saying `out_of_stock` would be false and
+  inventing a token would break the contract; the projection keeps the finer
+  distinction and the adapter loses it at the wire.
+- **Provenance is carried, not yet published.** `PublicOffering` records the
+  specification and price ids behind every fact, and no surface prints them
+  yet. The discovery surface that exposes them is #181.
+- **`Lazy` is not thread-safe**, deliberately: a projection is built and read
+  inside one request.
+- The performance figures above were taken on a laptop whose Docker VM had
+  155 MB free; the direction is reliable, the absolute numbers are not.
