@@ -95,13 +95,13 @@ async function created(method, p, tok, body) {
           condition: JSON.stringify({ var: 'verifiedIdentity' }),
           adjustmentType: 'percent', adjustmentValue: 50 }),
         // the sign is the whole point: +50 is a SURCHARGE
-        expect: { adjustmentType: 'percent', adjustmentValue: '50' } },
+        expect: { adjustmentType: 'percent', adjustmentValue: '50', 'adjustmentValue.direction': 'surcharge' } },
 
       { label: 'a discount when an item is in the cart', kind: 'price-when-item',
         rule: await rule('item discount', { domain: 'pricing', effect: 'adjust',
           condition: JSON.stringify({ in: [offering.id, { var: 'offeringIds' }] }),
           adjustmentType: 'amount', adjustmentValue: -50 }),
-        expect: { adjustmentType: 'amount', adjustmentValue: '-50', offeringA: offering.id } },
+        expect: { adjustmentType: 'amount', adjustmentValue: '50', 'adjustmentValue.direction': 'discount', offeringA: offering.id } },
 
       { label: 'a quantity cap', kind: 'quantity-cap',
         rule: await rule('max three', { domain: 'order', effect: 'deny',
@@ -112,13 +112,13 @@ async function created(method, p, tok, body) {
         rule: await rule('volume ten', { domain: 'pricing', effect: 'adjust',
           condition: JSON.stringify({ '>=': [{ var: 'memberCount' }, 10] }),
           adjustmentType: 'percent', adjustmentValue: -15 }),
-        expect: { minMembers: '10', adjustmentValue: '-15' } },
+        expect: { minMembers: '10', adjustmentValue: '15', 'adjustmentValue.direction': 'discount' } },
 
       { label: 'a campaign on a configured choice', kind: 'price-characteristic',
         rule: await rule('icy blue', { domain: 'pricing', effect: 'adjust',
           condition: JSON.stringify({ in: ['color:Icy Blue', { var: 'characteristicValues' }] }),
           adjustmentType: 'amount', adjustmentValue: -200 }),
-        expect: { characteristicName: 'color', characteristicValue: 'Icy Blue', adjustmentValue: '-200' } },
+        expect: { characteristicName: 'color', characteristicValue: 'Icy Blue', adjustmentValue: '200' } },
 
       { label: 'a hand-written condition this form never authored', kind: 'advanced',
         rule: await rule('hand written', { domain: 'order', effect: 'deny',
@@ -171,7 +171,7 @@ async function created(method, p, tok, body) {
 
     /** What the operator can actually SEE and read in a field. */
     const shown = async (field) => {
-      const wrap = page.locator(`[data-field="${field}"]`);
+      const wrap = page.locator(`[data-field="${field.split('.')[0]}"]`);
       if (!(await wrap.count())) return { present: false };
       const visible = await wrap.isVisible();
       const control = page.locator(`[name="${field}"]`).first();
@@ -205,13 +205,11 @@ async function created(method, p, tok, body) {
 
     /* ---------- the sign, which is what the mistake turned on ---------- */
     await openRule(`${tag} verified surcharge`);
-    const label = await page.locator('[data-field="adjustmentValue"]').innerText();
-    if (!/surcharge/i.test(label)) {
-      fail('the adjustment field does not say that a positive number is a surcharge');
-    }
+    const direction = (await shown('adjustmentValue.direction')).value;
     const value = (await shown('adjustmentValue')).value;
-    if (!String(value).startsWith('50')) fail(`the surcharge reads "${value}", not 50`);
-    ok('a +50% surcharge reads as 50 beside a label that says positive = surcharge');
+    if (direction !== 'surcharge') fail(`a +50 rule reopened as "${direction}", not a surcharge`);
+    if (String(value) !== '50') fail(`the amount reads "${value}", not 50`);
+    ok('a +50% rule reopens as Surcharge / 50 — the direction is read back, not inferred by the reader');
 
     console.log('\nPASS rule_reopen_test — a saved rule now says what it does');
   } finally {

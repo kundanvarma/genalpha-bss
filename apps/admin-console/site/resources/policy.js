@@ -1,9 +1,8 @@
 /* Resources 8/9 — audiences, visitor consent, policy rules, number porting. */
 'use strict';
 
-/* assemble() gives an adjustment to every `price-*` kind, so the form must
- * offer one for every `price-*` kind. Two were missing from the gate, leaving a
- * loyalty tier and a characteristic campaign unable to show what they adjust. */
+/* assemble() adjusts every `price-*` kind, so the form must offer one for each;
+ * two were missing, hiding what a loyalty tier and a colour campaign adjust. */
 const PRICING_KINDS = ['price-verified', 'price-when-item', 'price-always', 'price-loyalty-tier',
   'price-company', 'price-characteristic', 'price-volume', 'price-advanced'];
 
@@ -104,6 +103,7 @@ RESOURCES.push(
         { value: 'bronze', label: 'Bronze' },
       ], showWhen: { field: 'ruleKind', in: ['price-loyalty-tier'] } },
       { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
+        absentNote: 'This kind applies to the whole basket, not one product — there is no item to name.',
         showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
       { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
         showWhen: { field: 'ruleKind', in: ['quantity-cap'] } },
@@ -114,7 +114,7 @@ RESOURCES.push(
         { value: 'percent', label: 'Percent of subtotal' },
         { value: 'amount', label: 'Fixed amount' },
       ], showWhen: { field: 'ruleKind', in: PRICING_KINDS } },
-      { name: 'adjustmentValue', label: 'Adjustment value — negative = discount, positive = surcharge', kind: 'number',
+      { name: 'adjustmentValue', label: 'Which way, and how much', kind: 'signed',
         showWhen: { field: 'ruleKind', in: PRICING_KINDS } },
       { name: 'condition', label: 'JSON-logic condition', kind: 'longtext',
         showWhen: { field: 'ruleKind', in: ['advanced', 'price-advanced'] } },
@@ -164,9 +164,9 @@ RESOURCES.push(
             { var: 'characteristicValues' }] });
           break;
         case 'price-loyalty-tier':
-      condition = { '==': [{ var: 'loyaltyTier' }, body.loyaltyTier || 'gold'] };
-      break;
-    case 'price-company':
+          condition = JSON.stringify({ '==': [{ var: 'loyaltyTier' }, body.loyaltyTier || 'gold'] });
+          break;
+        case 'price-company':
           // organizationId only exists in the context when the payer IS a
           // company, so this can never touch a consumer.
           condition = JSON.stringify({ '==': [{ var: 'organizationId' }, idOf(body.organization)] });
@@ -194,12 +194,10 @@ RESOURCES.push(
       };
     },
     // THE INVERSE OF assemble (#159). A saved rule keeps only its derived
-    // condition, so the kind came back empty — and every field is gated on the
-    // kind, so reopening showed a name, a message and nothing else. A rule
-    // adding 50% looked identical to one taking 50 off: that is how a surcharge
-    // shipped as a discount. assemble writes a known shape per kind, so the
-    // kind can be read back out; an unrecognised condition falls back to
-    // "advanced", which shows the raw JSON-logic rather than an empty form.
+    // condition, so the kind came back empty and every field gated on it stayed
+    // hidden — a rule adding 50% looked identical to one taking 50 off. assemble
+    // writes a known shape per kind, so the kind can be read back out; an
+    // unrecognised condition falls back to "advanced" and shows the raw logic.
     disassemble: (item) => {
       const condition = (() => {
         if (!item.condition) return null;
@@ -214,7 +212,6 @@ RESOURCES.push(
       const gte = c['>='] || [];
       const gt = c['>'] || [];
       const and = Array.isArray(c.and) ? c.and : null;
-
       if (inVar === 'interests') return { ruleKind: 'perso-interest', interestCategory: c.in[0], pinnedOffering: ref(item.experience && item.experience.teaserOfferingId) };
       if (inVar === 'segments') return { ruleKind: 'perso-segment', segmentName: c.in[0], pinnedOffering: ref(item.experience && item.experience.teaserOfferingId) };
       if (inVar === 'characteristicValues') {
@@ -239,7 +236,6 @@ RESOURCES.push(
       if (gte.length === 2 && gte[0] && gte[0].var === 'memberCount') return { ruleKind: 'price-volume', minMembers: gte[1] };
       if (eq.length === 2 && eq[0] === 1 && eq[1] === 1) return { ruleKind: 'price-always' };
       if (inVar === 'offeringIds') return { ruleKind: pricing ? 'price-when-item' : 'requires-verified-id', offeringA: ref(c.in[0]) };
-
       // Not a shape this form wrote: show the condition ITSELF, as readable
       // JSON. It goes into a textarea, so it has to be text — handing the
       // parsed object over renders the string "[object Object]", which is a
@@ -249,6 +245,13 @@ RESOURCES.push(
         condition: condition ? JSON.stringify(condition, null, 1) : (item.condition || ''),
       };
     },
+    // A pricing rule naming no product reaches EVERY matching basket (#162): the
+    // operator meant 50 off one phone and saved 50% onto everything. A warning,
+    // never a block — a basket-wide fee is a legitimate rule.
+    confirmSave: (b) => (b.domain === 'pricing' && !/offeringIds|characteristicValues/.test(b.condition || '')
+      ? `This ${Number(b.adjustmentValue) >= 0 ? 'ADDS' : 'takes off'} ${Math.abs(Number(b.adjustmentValue) || 0)}`
+        + `${b.adjustmentType === 'percent' ? '%' : ''} on EVERY basket that matches — it names no product. Save it?`
+      : null),
     columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'adjustmentValue', 'condition', 'lastUpdate'],
     rowAction: {
       label: (item) => (item.enabled ? 'Disable' : 'Enable'),
