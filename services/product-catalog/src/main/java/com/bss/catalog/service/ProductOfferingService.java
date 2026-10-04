@@ -82,12 +82,20 @@ public class ProductOfferingService {
         // First page only, so paging math stays honest.
         List<ProductOfferingDto> federated = offset == 0
                 ? legacy.offeringsFor(tenants.byId(tenantScope.currentTenantId())) : List.of();
+        int shown = 0;
         for (ProductOfferingDto f : federated) {
+            // the overlay used to be appended whatever the caller asked for, so
+            // searching the catalogue for "samsung" answered with two Heritage
+            // DSL lines — rows that match nothing the operator typed
+            if (!matches(f, filters)) {
+                continue;
+            }
             if (staff ? (channel == null || lifecycle.sellableDtoIn(f, channel)) : lifecycle.sellableDtoIn(f, channel)) {
                 items.add(f);
+                shown++;
             }
         }
-        return new PagedResult<>(items, page.getTotalElements() + federated.size());
+        return new PagedResult<>(items, page.getTotalElements() + shown);
     }
 
     /**
@@ -112,8 +120,14 @@ public class ProductOfferingService {
     private Example<ProductOffering> probeFor(Map<String, String> filters) {
         ProductOffering probe = new ProductOffering();
         probe.setTenantId(tenantScope.currentTenantId());
+        // `q` is a SEARCH, not a TMF630 attribute filter: a partial,
+        // case-insensitive match on the name, for a person typing into a box
+        // who does not know the exact title. TMF630's `name` stays exact, so a
+        // machine integration that relied on it is unaffected.
+        String search = filters.get(SEARCH);
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
+                case SEARCH -> probe.setName(f.getValue());
                 case "id" -> probe.setId(f.getValue());
                 case "name" -> probe.setName(f.getValue());
                 case "lifecycleStatus" -> probe.setLifecycleStatus(f.getValue());
@@ -134,7 +148,41 @@ public class ProductOfferingService {
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
+        if (search != null) {
+            if (filters.containsKey("name")) {
+                throw new BadRequestException("use either 'name' (exact) or 'q' (search), not both");
+            }
+            return Example.of(probe, org.springframework.data.domain.ExampleMatcher.matching()
+                    .withMatcher("name", m -> m.contains().ignoreCase()));
+        }
         return Example.of(probe);
+    }
+
+    /** The search box's parameter — a partial name, never an exact attribute. */
+    public static final String SEARCH = "q";
+
+    /**
+     * Does this row answer the caller's search? The DB answered for its own
+     * rows; federated rows never went near it, so the same question has to be
+     * asked of them here or a filtered list shows rows that do not match.
+     */
+    private static boolean matches(ProductOfferingDto dto, Map<String, String> filters) {
+        String search = filters.get(SEARCH);
+        if (search != null && (dto.getName() == null
+                || !dto.getName().toLowerCase(java.util.Locale.ROOT)
+                        .contains(search.toLowerCase(java.util.Locale.ROOT)))) {
+            return false;
+        }
+        String name = filters.get("name");
+        if (name != null && !name.equals(dto.getName())) {
+            return false;
+        }
+        String status = filters.get("lifecycleStatus");
+        if (status != null && !status.equals(dto.getLifecycleStatus())) {
+            return false;
+        }
+        String bundle = filters.get("isBundle");
+        return bundle == null || Boolean.valueOf(bundle).equals(dto.getIsBundle());
     }
 
     @Transactional(readOnly = true)

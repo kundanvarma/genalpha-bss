@@ -6,6 +6,7 @@ const RESOURCES = [
   { path: 'home', title: 'Home', home: true, readOnly: true, fields: [], columns: [] },
   {
     path: 'productOffering',
+    serverSearch: true, // the box searches the catalogue, not this page (#160)
     title: 'Product Offerings',
     fields: [
       // row 1 — identity
@@ -44,8 +45,7 @@ const RESOURCES = [
       delete out.validFrom; delete out.validTo;
       return out;
     },
-    // L1 — governed catalogs climb the ladder one rung at a time; the row
-    // action offers exactly the next rung
+    // L1 — governed catalogs climb one rung at a time; the row action offers the next
     rowAction: {
       label: (item) => {
         const next = { 'In study': 'In design', 'In design': 'In test', 'In test': 'Launched',
@@ -64,13 +64,14 @@ const RESOURCES = [
   },
   {
     path: 'productSpecification',
+    serverSearch: true, // the box searches the catalogue, not this page (#160)
     title: 'Product Specifications',
     fields: [
       { name: 'name', label: 'Name', required: true, half: true },
       { name: 'brand', label: 'Brand', half: true, hint: 'Shown on device cards; blank for plans' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
       // A specification has no selling window: TMF620 puts `validFor` on the
-      // OFFERING, and this form's two date fields were silently dropped by the
+      // OFFERING, so this form's two date fields were silently dropped by the
       // API for as long as they existed. Removed rather than faked.
       { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'characteristics', wide: true,
         hint: 'The facts the shop shows and the systems read. Tick "the customer chooses" and add values to make it a picker in the shop.' },
@@ -106,6 +107,7 @@ const RESOURCES = [
   },
   {
     path: 'productOfferingPrice',
+    serverSearch: true, // the box searches the catalogue, not this page (#160)
     title: 'Product Offering Prices',
     fields: [
       { name: 'name', label: 'Name', required: true, half: true },
@@ -155,8 +157,7 @@ const RESOURCES = [
 const fulfilmentState = { original: null, receipt: null };
 const FAMILY_WORDS = { mobile: 'a network line', internet: 'an install', tv: 'a digital entitlement', device: 'a parcel',
   partner: 'activated with the partner', security: 'a feature toggle', compute: 'compute on the edge', 'billing-only': 'nothing to provision' };
-// CONSUMED_WORDS moved to core/config.js: the characteristics editor offers the
-// same names this picker explains, and one vocabulary cannot drift from itself.
+// CONSUMED_WORDS lives in core/config.js: one vocabulary cannot drift from itself.
 function fulfilmentControl(field) {
   const select = document.createElement('select');
   select.name = field.name;
