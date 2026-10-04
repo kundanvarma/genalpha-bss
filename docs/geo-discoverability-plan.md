@@ -329,8 +329,10 @@ sitemap 115 s → **0.45 s**, llms.txt 143 s → **0.16 s**.
 
 The agentic feed still makes one warehouse call per row, because it is the one
 surface that publishes availability for a whole shelf and the warehouse has no
-bulk read. That is the honest cost of having stopped publishing a constant;
-a bulk availability read is the next thing worth building.
+bulk read. Measured on a fleet with headroom that costs **0.72 s for 37
+offerings** — the honest price of having stopped publishing a constant, and
+cheap enough to leave alone. A bulk availability read is worth building when a
+shelf is ten times this, not before.
 
 ### The proof (suite #248, `one_projection_test.js`)
 
@@ -363,5 +365,10 @@ against a deliberately reverted rule and watched fail with
   yet. The discovery surface that exposes them is #181.
 - **`Lazy` is not thread-safe**, deliberately: a projection is built and read
   inside one request.
-- The performance figures above were taken on a laptop whose Docker VM had
-  155 MB free; the direction is reliable, the absolute numbers are not.
+- **The first performance numbers were taken on a starved laptop and were
+  wrong by two orders of magnitude.** With 155 MB free in the Docker VM the
+  feed read 72 s and one warehouse call took ~1.9 s; after shedding ten
+  unrelated containers the same feed read 0.72 s. The eager-projection defect
+  was real and is fixed, but any figure measured on a saturated fleet says more
+  about the fleet than the code. The numbers quoted above are the ones taken
+  with 3.8 GB free.
