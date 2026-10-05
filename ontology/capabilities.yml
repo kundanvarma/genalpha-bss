@@ -56,6 +56,17 @@ capabilities:
     meaning: List the offerings on the shelf for the caller's channel.
     route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOffering" }
 
+  # The SAME projection the crawler page and the agentic feed read (#181), so an
+  # agent retrieving through MCP cannot be told a different price from one
+  # reading the public feed. Carries provenance, so any fact it quotes can be
+  # checked back against TMF620 by the agent or by a person.
+  - id: productCatalog.discovery
+    version: 1
+    component: product-catalog
+    kind: house-api
+    meaning: Read the public catalogue as factual, traceable product data — whole price, declared facts only, with the catalog ids behind every claim.
+    route: { method: GET, path: "/discovery/v1/products" }
+
   - id: productCatalog.price
     version: 1
     component: product-catalog

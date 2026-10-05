@@ -69,6 +69,13 @@ spring:
             - Path=/robots.txt,/sitemap.xml,/llms.txt
           filters:
             - RewritePath=/(?<f>.*), /seo/$\{f}
+        # The factual discovery surface (#181): one projection, read by agents
+        # and partners instead of scraping the page. The catalog decides who
+        # sees it, from the tenant's own ai-visibility.
+        - id: discovery-feed
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/discovery/v1/**
         - id: acp-product-feed
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:

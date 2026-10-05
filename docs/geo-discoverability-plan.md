@@ -372,3 +372,68 @@ against a deliberately reverted rule and watched fail with
   was real and is fixed, but any figure measured on a saturated fleet says more
   about the fleet than the code. The numbers quoted above are the ones taken
   with 3.8 GB free.
+
+## A factual discovery surface (SEO-5, #181)
+
+*Built 5 October 2026, on the projection SEO-3 laid.*
+
+Generative engines, shopping agents and partners need product data they can be
+held to — not marketing copy, and not a scrape of rendered HTML.
+`/discovery/v1/products` and `/discovery/v1/products/{id}` serve it, as a third
+face on the same `PublicCatalog` projection the crawler page and the
+agentic-commerce feed read.
+
+### What makes it a discovery feed rather than a marketing feed
+
+- **Every fact traces back.** Each product carries the offering id, the
+  specification id and the price ids it was read from, plus the API to check
+  them against. Suite #255 follows one of those price ids into TMF620 and
+  asserts the number matches. A price with no traceable source is marketing.
+- **The whole price, not one number.** The headline, the one-off beside it, and
+  every component behind both — and the components sum to the headline. The
+  agentic feed can carry only one figure and must; this surface does not have
+  to, so a bundle stops being a number an agent has to infer.
+- **Absence is a value.** An offering with no price carries no price object
+  rather than a zero. A specification that declares nothing produces no facts.
+- **Freshness is real.** `generatedAt` per response, `lastUpdate` and the
+  offering's own window per product — because an agent that cannot tell how old
+  a price is will quote a withdrawn one with confidence.
+
+### The agentic contract is untouched
+
+The ACP feed still carries exactly its ten fields, in the same order, with the
+same price shape. The suite asserts that explicitly by rejecting any field the
+feed did not have before: the richer surface sits beside that contract and must
+never leak into it. `agentic_commerce_test` was re-run and is green.
+
+### Who sees it
+
+The tenant's own `ai-visibility` decides, through a dedicated
+`Visibility.servesDiscoveryFeed()` — true for `open` and `search-ai`, false for
+`search-only` and `dark`. A tenant that has said *classic search yes, AI no*
+does not get a machine-readable catalogue, because that posture would otherwise
+be meaningless. A rich public catalogue is also the easiest price-scraping
+surface an operator can expose, and that is a commercial decision rather than a
+technical default.
+
+The same projection is reachable to MCP agents through a new ontology
+capability, `productCatalog.discovery`, so an agent retrieving through MCP and
+an agent reading the public feed cannot be told different prices.
+
+### Honest limits
+
+- **Money carries the catalog's own scale.** A computed sum keeps two decimal
+  places; a stored amount keeps whatever it was stored with, so the same ninety-
+  nine euros can read `99` here and `99.00` elsewhere. Normalising to two places
+  would be wrong for a zero-decimal currency, so nothing is invented — but a
+  consumer that string-matches money will be surprised, and that is worth saying
+  before it is sold.
+- Conditions and eligibility are **not** in the feed. A price conditioned on
+  characteristic picks is excluded entirely rather than published with its
+  condition, exactly as it is on every other public surface. Publishing the
+  condition shape is a further step.
+- `llms.txt` remains what it was: an emerging convention some crawlers read and
+  none are obliged to. Nothing here claims a ranking effect.
+- The surface is proven, its consumption is not. No crawler is obliged to read
+  it, and an agent caching it for a week will still quote a stale price — no
+  feed design prevents that.
