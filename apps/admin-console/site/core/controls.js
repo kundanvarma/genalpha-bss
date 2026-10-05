@@ -148,6 +148,42 @@ function recipeControl(field) {
   return [select];
 }
 
+/**
+ * A signed amount as the two decisions it really is: WHICH WAY, and HOW MUCH.
+ *
+ * It was one number whose sign carried the meaning, explained only in a label:
+ * "negative = discount, positive = surcharge". Typing 50 for "50 off" saved a
+ * rule that charged every matching basket 50% MORE, and called it a discount.
+ * That shipped. The wire format is unchanged — this control still gets() and
+ * sets() one signed number — so nothing downstream moves.
+ */
+function signedControl(field) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;gap:.4rem;align-items:center';
+  const way = document.createElement('select');
+  way.name = field.name + '.direction';
+  way.append(new Option('Discount — take off', 'discount'), new Option('Surcharge — add on', 'surcharge'));
+  const amount = document.createElement('input');
+  amount.type = 'number'; amount.min = '0'; amount.step = 'any';
+  amount.name = field.name; amount.placeholder = field.placeholder || '0';
+  amount.style.width = '7rem';
+  wrap.append(way, amount);
+  controls[field.name] = {
+    get: () => {
+      const v = Number(amount.value);
+      if (amount.value === '' || !Number.isFinite(v)) return undefined;
+      return way.value === 'surcharge' ? Math.abs(v) : -Math.abs(v);
+    },
+    set: (item) => {
+      const v = Number(item[field.name]);
+      if (item[field.name] == null || !Number.isFinite(v)) { way.value = 'discount'; amount.value = ''; return; }
+      way.value = v >= 0 ? 'surcharge' : 'discount';
+      amount.value = String(Math.abs(v));
+    },
+  };
+  return [wrap];
+}
+
 function longTextControl(field) {
   const input = document.createElement('textarea');
   input.name = field.name;

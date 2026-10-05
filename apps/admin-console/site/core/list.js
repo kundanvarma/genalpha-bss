@@ -124,6 +124,12 @@ async function save(event) {
       if (value !== undefined) body[f.name] = value;
     }
     if (active.assemble) body = active.assemble(body);
+    // A resource may ask the operator to confirm a save whose reach is wider
+    // than the form makes obvious — a pricing rule that binds to no product
+    // applies to EVERY matching basket. It warns, it never forbids: a
+    // basket-wide fee is a legitimate rule.
+    const confirmText = active.confirmSave && active.confirmSave(body);
+    if (confirmText && !window.confirm(confirmText)) return;
     // a resource may route part of a save through a governed action (a receipt, not a raw write)
     if (active.beforeSave) body = await active.beforeSave(body, editingId);
   } catch (e) {

@@ -85,6 +85,7 @@ function renderEditor() {
       f.kind === 'decomposition' ? decompositionControl(f) :
       f.kind === 'offeringrules' ? offeringRulesControl(f) :
       f.kind === 'fulfilment' ? fulfilmentControl(f) :
+      f.kind === 'signed' ? signedControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'stepbuilder' ? stepBuilderControl(f) :
       f.kind === 'characteristics' ? characteristicsControl(f) :
@@ -166,6 +167,21 @@ function wireVisibility() {
       // existing row → show everything, never hide data.
       const show = v ? f.showWhen.in.includes(v) : Boolean(editingId);
       if (wrap) wrap.style.display = show ? '' : 'none';
+      // An absent field reads as a broken screen: an operator hunting for
+      // somewhere to name the product finds nothing and no reason. Where the
+      // field declares why it does not apply, say so in its place.
+      if (f.absentNote) {
+        let note = el('fields').querySelector(`[data-absent="${f.name}"]`);
+        if (!note) {
+          note = document.createElement('p');
+          note.dataset.absent = f.name;
+          note.className = 'dim';
+          note.style.cssText = 'margin:.2rem 0 .6rem;font-size:.85rem';
+          note.textContent = f.absentNote;
+          wrap?.after(note);
+        }
+        note.style.display = show || !v ? 'none' : '';
+      }
     }
   };
   for (const name of sources) {
