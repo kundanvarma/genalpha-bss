@@ -32,6 +32,16 @@ function summarize(results) {
       wcag: (v.tags || []).filter((t) => t.startsWith('wcag')).join(','),
       nodes: v.nodes.length,
       sample: v.nodes[0] ? v.nodes[0].target.join(' ') : '',
+      // EVERY node, not just the first. A violation that reproduces only on a
+      // CI runner is diagnosed from the log or not at all, and "x3 (e.g.
+      // .brand)" names one of three elements and describes none of them: it
+      // cost a round trip to find out which three. The markup and axe's own
+      // failure sentence are what make the log enough on its own.
+      detail: v.nodes.map((n) => ({
+        target: n.target.join(' '),
+        html: (n.html || '').replace(/\s+/g, ' ').slice(0, 200),
+        why: (n.failureSummary || '').replace(/\s+/g, ' ').trim(),
+      })),
     });
   }
   // worst impact first

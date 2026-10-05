@@ -5,6 +5,34 @@
  * console, the CSR agent desk and the wholesale partner portal. Any violation
  * fails the suite, so accessibility can't silently rot between releases.
  *
+ * THE RULESET IS PINNED, and that is a deliberate choice rather than caution
+ * about upgrades. axe-core is the gate's definition of "violation", so an
+ * unpinned axe means the bar moves when npm publishes. It did: CI ran
+ * `npm i playwright axe-core`, axe-core 4.14.0 appeared, it promoted
+ * `label-content-name-mismatch` out of experimental, and three PRs that had
+ * been reviewed green went red with no code change — on a page none of them
+ * touched. The version now comes from a committed lockfile via `npm ci`, here
+ * and in run-all-suites.sh, so a laptop and a runner hold the same code to the
+ * same standard.
+ *
+ * WHAT 4.14.0 FOUND, recorded so the pin is a decision and not a hiding place.
+ * On the CSR agent desk, under that newly-promoted rule (WCAG 2.5.3, Label in
+ * Name), with the demo seed loaded it is 51 nodes:
+ *
+ *  - THE BRAND LINK is a genuine failure. Its accessible name is
+ *    "<tenant> CSR home" while its visible text reads "csr console" plus the
+ *    org badge, so a speech-input user saying what they can see does not
+ *    activate it. apps/csr-console/src/Brand.jsx.
+ *  - THE SEARCH RESULT ROWS are the stricter reading. Each row's name is
+ *    "Customer: <name>" while the row also shows a phone number and state
+ *    chips; saying the customer's name does work, and axe wants the whole
+ *    visible row inside the name. Fixing it means deciding what a composite
+ *    row's accessible name should be, which is a design question on the desk,
+ *    not a one-line change. apps/csr-console/src/pages/search/Results.jsx.
+ *
+ * Adopting 4.14.0 means answering the second one; it has its own issue. Until
+ * then the bar stays exactly where it was last reviewed.
+ *
  * Run:  node a11y_test.js
  */
 const { chromium } = require('playwright');
@@ -135,7 +163,17 @@ const SELECTED = WANTED.length
       if (n > 0) {
         console.error(`\nWCAG 2.2 AA violations on ${t.label}:`);
         for (const r of summarize(axe)) {
-          console.error(`  [${r.impact}] ${r.id} x${r.nodes} — ${r.help} (e.g. ${r.sample})`);
+          console.error(`  [${r.impact}] ${r.id} x${r.nodes} — ${r.help}`);
+          // every offending element, so a failure that only happens on a runner
+          // can be read rather than reproduced
+          for (const d of (r.detail || []).slice(0, 8)) {
+            console.error(`      at ${d.target}`);
+            console.error(`         html: ${d.html}`);
+            if (d.why) console.error(`         ${d.why}`);
+          }
+          if ((r.detail || []).length > 8) {
+            console.error(`      … and ${r.detail.length - 8} more node(s)`);
+          }
         }
         await ctx.close();
         await browser.close();
