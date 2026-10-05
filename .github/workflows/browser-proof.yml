@@ -113,7 +113,14 @@ jobs:
       - name: Install Playwright
         working-directory: ops/e2e
         run: |
-          npm i playwright axe-core
+          # `npm ci` against the committed lockfile, NOT `npm i`. The
+          # accessibility gate's strictness is a dependency: `npm i` installed
+          # whatever npm had published most recently, so axe-core 4.14.0
+          # appearing turned three reviewed-green PRs red with no code change —
+          # and `npm i` also rewrites package.json's range as a side effect, so
+          # the gate quietly ratcheted itself. A gate must fail for a reason
+          # somebody can name.
+          npm ci
           npx playwright install --with-deps chromium
 
       # Each suite is a gate: a red suite fails the job. The runner keeps

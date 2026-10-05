@@ -27,11 +27,17 @@ set -u
 cd "$(dirname "$0")/.."
 export PATH=/opt/homebrew/bin:$PATH
 
-# the suites are Playwright — make sure it is installed before we judge all
-# of them (a fresh clone has no node_modules; this is idempotent and quick)
-if [ ! -d ops/e2e/node_modules/playwright ]; then
-  echo "[$(date +%H:%M:%S)] installing Playwright for the suites ..."
-  ( cd ops/e2e && npm i playwright >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1 )
+# the suites are Playwright and axe — make sure both are installed before we
+# judge all of them (a fresh clone has no node_modules; this is quick)
+#
+# FROM THE LOCKFILE. This used to `npm i playwright`, which installed whatever
+# was newest and never installed axe at all — so the accessibility bar depended
+# on what npm had published that morning, and a laptop and a runner could hold
+# the same code to different standards. They did: axe-core 4.14.0 promoted a
+# rule and failed three green PRs with no code change.
+if [ ! -d ops/e2e/node_modules/playwright ] || [ ! -d ops/e2e/node_modules/axe-core ]; then
+  echo "[$(date +%H:%M:%S)] installing the suite harness from the lockfile ..."
+  ( cd ops/e2e && npm ci >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1 )
 fi
 
 RESULTS_DIR="ops/e2e/.proof-run"
