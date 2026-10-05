@@ -6,37 +6,34 @@
  * numbers. Two modules used to read it AT IMPORT TIME (`auth.js`,
  * `address.js`), which is harmless in a browser and fatal on a server: `window`
  * does not exist there, so the module graph threw before anything could render.
- * That was the first thing in the way of server-side rendering (#180).
  *
- * So it is a function, not a captured constant. On the client it reads the
- * global the gateway stamped. On the server the renderer sets it per request,
- * because one process serves every tenant and a value captured at import would
- * be whichever tenant happened to be first.
+ * On a server one process serves every tenant, so the answer has to be scoped
+ * to the request rather than to the module. This file holds only the question;
+ * the server runtime installs the resolver that answers it, which keeps Node's
+ * `async_hooks` out of the browser bundle entirely.
  */
 
-let injected = null;
+let resolver = null;
+
+/**
+ * Server only: how to find the config for the request being rendered.
+ * Installed once by the server entry, which backs it with request-scoped
+ * storage. Absent in the browser, where the global is the answer.
+ */
+export function setConfigResolver(fn) {
+  resolver = fn;
+}
 
 /** The tenant's configuration, wherever this is running. Never null. */
 export function config() {
-  if (injected) {
-    return injected;
+  if (resolver) {
+    const scoped = resolver();
+    if (scoped) {
+      return scoped;
+    }
   }
   if (typeof window !== 'undefined' && window.BSS_STOREFRONT_CONFIG) {
     return window.BSS_STOREFRONT_CONFIG;
   }
   return {};
-}
-
-/**
- * Server only: the config for the request about to be rendered.
- *
- * <p>TRACER LIMIT: this is module state, so it is correct for one render at a
- * time and wrong under concurrency. The renderer sets it immediately before a
- * synchronous `renderToString` and clears it after, which holds today because
- * that render does not await. A multi-tenant SSR process serving concurrent
- * requests needs this moved into request-scoped storage (AsyncLocalStorage),
- * and that is named in the SSR arc rather than left to be discovered.</p>
- */
-export function setConfig(next) {
-  injected = next || null;
 }

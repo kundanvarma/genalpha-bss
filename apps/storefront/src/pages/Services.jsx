@@ -111,7 +111,7 @@ export default function Services() {
     && categoryOf(offerings[products.find((p) => p.name === sv.name)?.productOffering?.id]) === 'Security');
   const numberOf = (sv) => sv.supportingResource.find((r) => r.value).value;
   const number = lines.length > 0;
-  const fmtAmount = (a) => (locale === 'en'
+  const fmtAmount = (a) => (locale() === 'en'
     ? `${a.value.toFixed(2)} ${a.unit}` : intlMoney(a.value, a.unit));
   const latestBill = [...bills].sort((a, b) =>
     String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];

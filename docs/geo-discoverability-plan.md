@@ -541,14 +541,40 @@ before. Suite #257 proves it in plain Node: 3,121 bytes of real page, the
 tenant's brand, both server-resolved products, links carrying `/shop/`, and two
 tenants rendered back to back without leaking into each other.
 
-**What is deliberately not done.** The runtime is not wired to the gateway and
-the crawler User-Agent route is untouched — the ticket's own limit says keep it
-until SSR is proven in production. Only the Shop route reads seeded data; every
-other page would still render its loading state. `setConfig`/`setInitialData`
-are module state around a synchronous render, which is correct for one render at
-a time and must move to request-scoped storage before serving traffic. And
-`i18n.js` still captures the tenant at import, making locale per-process rather
-than per-request — right for one tenant, wrong for concurrent ones.
+#### Request scope, and the language bug under it
+
+The first cut held the tenant in module state around a synchronous render. That
+is *safe today* — `renderToString` does not await, so in single-threaded Node no
+second request can interleave — but it is safe by accident rather than by
+construction, and the accident ends the moment this moves to a streaming
+renderer, which it should for Suspense and time-to-first-byte. Then one
+operator's prices would appear under another's brand, silently and only under
+load.
+
+So the tenant now lives in `AsyncLocalStorage`, installed by the server entry
+through a resolver seam so that Node's `async_hooks` never enters the browser
+bundle (asserted: zero occurrences in the client assets).
+
+Underneath that was a real bug rather than a hypothetical one. **`i18n.js`
+captured the tenant's language and currency as module constants at import.** In
+a browser that is correct — a browser serves one tenant. On a server it meant
+the first operator rendered decided the language for every operator after it:
+a Norwegian tenant served English, with nothing failing. `locale`, `currency`,
+`country`, `intlLocale`, `priceFormat` and `priceNote` are functions now; `t()`
+and `money()` already were, so the nineteen modules that use only those did not
+change, and the two that read values as constants were updated.
+
+Suite #257 proves both through the rendered document: two requests interleaved
+across an await keep their own tenant, and the Norwegian render says *Butikk*
+while the English one does not. Reverting `i18n.js` to capture once fails it
+with *"the Norwegian tenant was served English"*.
+
+**What is still deliberately not done.** The runtime is not wired to the gateway
+and the crawler User-Agent route is untouched — the ticket's own limit says keep
+it until SSR is proven in production. Only the Shop route reads seeded data;
+every other page would still render its loading state. And streaming has not
+been attempted; request scope is in place so that it can be, without the move
+becoming a correctness problem.
 
 Every file touched here was already at or over the 300-line limit, so each
 `import { config }` had to be paid for out of the same file. That is the third

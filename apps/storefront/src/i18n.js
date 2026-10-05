@@ -6,36 +6,38 @@
  */
 import { config } from './config.js';
 
-// SERVER-SAFE, NOT YET SERVER-CORRECT. These are exported as constants and
-// imported by a dozen modules, so making them per-request means changing every
-// consumer — that is the i18n half of the SSR arc (#180), not this tracer. Here
-// it stops `window` throwing during the server build; on a server it captures
-// whatever config was set when the module was first imported, which is right
-// for a single-tenant render and wrong for concurrent tenants. Said out loud so
-// nobody reads a passing tracer as a finished migration.
-const CFG = config();
+// PER REQUEST, NOT PER PROCESS. These were module constants captured when the
+// file was first imported. In a browser that is the tenant, because a browser
+// only ever serves one. On a server one process serves every operator, so a
+// captured constant is whichever tenant happened to be rendered first — and
+// every tenant after it would have been shown that one's language and money.
+// They are functions now; `t()` and `money()` already were, so the nineteen
+// modules that only use those did not change.
 
-export const locale = CFG.locale || 'en';
-export const currency = CFG.currency || 'EUR';
+const locale = () => config().locale || 'en';
+const currency = () => config().currency || 'EUR';
 
 /** ISO country the operator sells in — drives address defaults, number hints, Intl locale. */
-export const country = CFG.country || '';
+const country = () => config().country || '';
 
 /** BCP-47 tag for Intl formatting: the tenant's language + its country when it says one
  * (en-GY, nb-NO), else the historical defaults. */
 const LANG = { no: 'nb', nn: 'nn', en: 'en' };
-export const intlLocale = country
-  ? `${LANG[locale] || locale}-${country}`
-  : ({ no: 'nb-NO', nn: 'nn-NO', en: 'en-IE' }[locale] || locale);
+const intlLocale = () => (country()
+  ? `${LANG[locale()] || locale()}-${country()}`
+  : ({ no: 'nb-NO', nn: 'nn-NO', en: 'en-IE' }[locale()] || locale()));
 
 /** Price formatting the operator's way: minor-unit digits (Guyana shows whole dollars) and
  * how the currency is written ($ vs GY$ vs GYD). */
-export const priceFormat = {
-  ...(Number.isInteger(CFG.priceDecimals) ? { minimumFractionDigits: CFG.priceDecimals, maximumFractionDigits: CFG.priceDecimals } : {}),
-  ...(CFG.currencyDisplay ? { currencyDisplay: CFG.currencyDisplay } : {}),
-};
+const priceFormat = () => ({
+  ...(Number.isInteger(config().priceDecimals)
+    ? { minimumFractionDigits: config().priceDecimals, maximumFractionDigits: config().priceDecimals } : {}),
+  ...(config().currencyDisplay ? { currencyDisplay: config().currencyDisplay } : {}),
+});
 /** A statutory note shown beside prices ("14% VAT included"), when the operator sets one. */
-export const priceNote = CFG.priceNote || '';
+const priceNote = () => config().priceNote || '';
+
+export { locale, currency, country, intlLocale, priceFormat, priceNote };
 
 import { NO_SHOP } from './i18n/no.js';
 import { NO_ACCOUNT } from './i18n/no-account.js';
@@ -46,16 +48,16 @@ const BUNDLES = { no: NO, nn: NN };
 
 /** Translate a UI string; unknown strings pass through in English. */
 export function t(s) {
-  return (BUNDLES[locale] || {})[s] || s;
+  return (BUNDLES[locale()] || {})[s] || s;
 }
 
 /** "kr 299,00" in Norway, "€29.99" in Ireland — from the price's own unit. */
 export function money(value, unit) {
   try {
-    return new Intl.NumberFormat(intlLocale, {
-      style: 'currency', currency: unit || currency, ...priceFormat,
+    return new Intl.NumberFormat(intlLocale(), {
+      style: 'currency', currency: unit || currency(), ...priceFormat(),
     }).format(value);
   } catch {
-    return `${Number(value).toFixed(2)} ${unit || currency}`;
+    return `${Number(value).toFixed(2)} ${unit || currency()}`;
   }
 }

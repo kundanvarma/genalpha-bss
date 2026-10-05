@@ -35,17 +35,18 @@
  *  - NO BROWSER IS TOUCHED. The render runs in plain Node. If any module
  *    reaches for `window`, `document` or `localStorage` at import or during
  *    render of a public page, this throws.
+ *  - REQUEST SCOPE, NOT MODULE SCOPE. Two requests interleaved across an await
+ *    keep their own tenant, and the Norwegian one is served Norwegian while the
+ *    English one is not. Module state cannot survive that test, which is why it
+ *    is here rather than a comment promising it would be fine.
  *
  * HONEST LIMITS, and they are the reason this is a tracer rather than the arc:
  *  - It renders ONE route, the shop root, and only the Shop page reads seeded
  *    data. Every other page still fetches in an effect and would render its
  *    loading state.
- *  - `setConfig` and `setInitialData` are module state around a synchronous
- *    render. One render at a time is true here and must stop being relied on
- *    before this serves real traffic; request-scoped storage is the fix.
- *  - `i18n.js` still captures the tenant at import. On a server that makes
- *    locale and currency per-process rather than per-request — right for one
- *    tenant, wrong for concurrent ones.
+ *  - Streaming is not used. `renderToString` is synchronous, so nothing here
+ *    exercises Suspense or partial flushing; request scope is in place so that
+ *    move does not become a correctness problem, but it has not been made.
  *  - Nothing is deployed. The runtime in `apps/storefront/server/ssr.mjs` is
  *    not wired to the gateway and the crawler User-Agent route is untouched,
  *    deliberately: the ticket's own limit says keep it until SSR is proven in
@@ -65,7 +66,7 @@ const ok = (m) => console.log('OK ' + m);
   { cwd: APP, stdio: ['ignore', 'ignore', 'inherit'] });
   ok('the server bundle builds from the same sources as the client');
 
-  const { render } = await import(path.join(APP, 'dist-ssr/entry-server.js'));
+  const { render, withRequest } = await import(path.join(APP, 'dist-ssr/entry-server.js'));
 
   /* ---------- a real page, not a spinner ---------- */
   const config = { brandName: 'MyGenAlpha', locale: 'en', currency: 'EUR' };
@@ -109,6 +110,33 @@ const ok = (m) => console.log('OK ' + m);
   if (!second.includes('Nova')) fail('a second render did not pick up the second tenant — config is stuck from the first');
   if (second.includes('MyGenAlpha')) fail('the first tenant leaked into the second render');
   ok('two renders, two tenants, no leak between them — and no browser was touched');
+
+  /* ---------- request scope: correct by construction, not by luck ---------- */
+  const A = { brandName: 'MyGenAlpha', locale: 'en', currency: 'EUR' };
+  const B = { brandName: 'Nova', locale: 'no', currency: 'NOK' };
+  const [a, b] = await Promise.all([
+    withRequest(A, data, async () => { await new Promise((r) => setTimeout(r, 30)); return render('/', A, data); }),
+    withRequest(B, data, async () => { await new Promise((r) => setTimeout(r, 10)); return render('/', B, data); }),
+  ]);
+  if (!a.includes('MyGenAlpha') || a.includes('Nova')) fail('the slower request came back wearing the other tenant\'s brand');
+  if (!b.includes('Nova') || b.includes('MyGenAlpha')) fail('the faster request came back wearing the other tenant\'s brand');
+  ok('two requests interleaved across an await keep their own tenant — module state could not survive this');
+
+  /* ---------- the language follows the request, not the process ---------- */
+  // Asserted through the rendered document rather than by importing i18n: the
+  // bundle has its own module instance, and testing the source would prove
+  // something about a copy nobody serves.
+  const [enHtml, noHtml] = await Promise.all([
+    withRequest(A, data, async () => { await new Promise((r) => setTimeout(r, 25)); return render('/', A, data); }),
+    withRequest(B, data, async () => render('/', B, data)),
+  ]);
+  if (!/Butikk|Handlekurv|Kundeservice/.test(noHtml)) {
+    fail('the Norwegian tenant was served English — i18n captured the language once, for whoever rendered first');
+  }
+  if (/Butikk|Handlekurv|Kundeservice/.test(enHtml)) {
+    fail('the English tenant was served Norwegian — the other request\'s language leaked into it');
+  }
+  ok('the language follows the request: the Norwegian render says "Butikk", the English one does not');
 
   console.log('\nPASS ssr_render_test — the shop renders on a server, with no browser and no JavaScript');
 })().catch((e) => { console.error('\nFAIL ' + e.message); process.exit(1); });
