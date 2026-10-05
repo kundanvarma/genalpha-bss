@@ -67,7 +67,10 @@ async function loadList() {
     });
   }
   search.removeAttribute('hidden');
-  search.placeholder = active.serverSearch ? 'Search all visitors by id…' : 'Filter this page…';
+  // A box that says "Filter this page" still reads, when it answers nothing,
+  // like the thing does not exist (#160). Lists that can search the whole
+  // resource say so; the rest keep local filtering and own it in the result.
+  search.placeholder = active.serverSearch ? 'Search all pages…' : 'Filter this page…';
   search.value = listFilter;
   const sortVal = (it, c) => {
     const v = it[c];
@@ -85,7 +88,21 @@ async function loadList() {
       return (x < y ? -1 : x > y ? 1 : 0) * listSortDir;
     });
   }
-  el('total').textContent = listFilter ? `${shown.length} of ${total} total` : `${total} total`;
+  const pagesTotal = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (!listFilter) {
+    el('total').textContent = `${total} total`;
+  } else if (active.serverSearch) {
+    // the server answered for the whole resource: this count IS the answer
+    el('total').textContent = shown.length === 0
+      ? `no match in ${total === 0 ? 'the list' : `${total} total`}`
+      : `${shown.length} match${shown.length === 1 ? '' : 'es'}`;
+  } else if (shown.length === 0 && pagesTotal > 1) {
+    // THE LIE THIS REPLACES: "0 of 56 total", which reads as "it is not there"
+    // when it means "it is not on the page you are looking at".
+    el('total').textContent = `no match on this page — ${pagesTotal - 1} more page${pagesTotal === 2 ? '' : 's'} not searched`;
+  } else {
+    el('total').textContent = `${shown.length} of ${total} total`;
+  }
   if (listFilter && shown.length === 0) desk('search.empty', active.path, { query: listFilter });
   el('listing-head').replaceChildren(listHeadRow());
 
