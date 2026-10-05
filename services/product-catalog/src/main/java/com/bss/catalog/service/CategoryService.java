@@ -26,7 +26,11 @@ public class CategoryService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
-    public CategoryService(CategoryRepository repository, CategoryMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
+    private final com.bss.catalog.repository.ProductOfferingRepository offerings;
+
+    public CategoryService(CategoryRepository repository, CategoryMapper mapper, DomainEventPublisher events,
+            TenantScope tenantScope, com.bss.catalog.repository.ProductOfferingRepository offerings) {
+        this.offerings = offerings;
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
@@ -37,8 +41,48 @@ public class CategoryService {
     public PagedResult<CategoryDto> findAll(int offset, int limit) {
         Page<Category> page = repository.findAllByTenantId(tenantScope.currentTenantId(),
                 new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+        java.util.Map<String, Integer> counts = offeringCounts();
+        java.util.List<CategoryDto> rows = page.getContent().stream().map(entity -> {
+            CategoryDto dto = mapper.toDto(entity);
+            dto.setOfferingCount(counts.getOrDefault(entity.getId(), 0));
+            return dto;
+        }).toList();
+        return new PagedResult<>(rows, page.getTotalElements());
     }
+
+    /**
+     * How many offerings sit on each shelf, so an empty one is visible on the
+     * page rather than discovered by a customer. Offerings keep their category
+     * refs as a JSON list on the row, so this counts over the tenant's
+     * offerings once per list rather than querying per category.
+     */
+    private java.util.Map<String, Integer> offeringCounts() {
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        for (com.bss.catalog.entity.ProductOffering offering
+                : offerings.findByTenantId(tenantScope.currentTenantId())) {
+            String json = offering.getCategoryJson();
+            if (json == null || json.isBlank()) {
+                continue;
+            }
+            for (String id : idsIn(json)) {
+                counts.merge(id, 1, Integer::sum);
+            }
+        }
+        return counts;
+    }
+
+    /** The ids named in a stored category ref list, without parsing the whole shape. */
+    private static java.util.List<String> idsIn(String json) {
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = CATEGORY_ID.matcher(json);
+        while (m.find()) {
+            ids.add(m.group(1));
+        }
+        return ids;
+    }
+
+    private static final java.util.regex.Pattern CATEGORY_ID =
+            java.util.regex.Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
 
     @Transactional(readOnly = true)
     public CategoryDto findById(String id) {
@@ -73,6 +117,16 @@ public class CategoryService {
     public void delete(String id) {
         Category entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        // RETIRE, NEVER ORPHAN: offerings point at a category by id, so deleting
+        // one that is still in use leaves them pointing at nothing. Refusing is
+        // the simplest honest answer — the shelf can be retired instead, which
+        // is what the lifecycle column is for (#155).
+        int inUse = offeringCounts().getOrDefault(id, 0);
+        if (inUse > 0) {
+            throw new com.bss.catalog.exception.BadRequestException(
+                    "this category still holds " + inUse + " offering" + (inUse == 1 ? "" : "s")
+                            + " — move them first, or retire the category instead of deleting it");
+        }
         CategoryDto deleted = mapper.toDto(entity);
         repository.delete(entity);
         events.publish("CategoryDeleteEvent", "category", deleted);

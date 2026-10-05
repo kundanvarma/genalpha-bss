@@ -25,7 +25,32 @@ public class Category {
     @Column(name = "description", length = 2000)
     private String description;
 
+    /** The shelf this one sits under; null is a top-level shelf (#155). */
+    @Column(name = "parent_id", length = 36)
+    private String parentId;
+
+    /** Active or Retired. Offerings point at categories by id, so a shelf is
+     * retired rather than deleted — a delete leaves them pointing at nothing. */
+    @Column(name = "lifecycle_status", length = 32)
+    private String lifecycleStatus;
+
     public Category() {
+    }
+
+    public String getParentId() {
+        return parentId;
+    }
+
+    public void setParentId(String parentId) {
+        this.parentId = parentId;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
     }
 
     public String getId() {

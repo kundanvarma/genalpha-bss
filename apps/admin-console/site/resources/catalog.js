@@ -9,31 +9,26 @@ const RESOURCES = [
     serverSearch: true, // the box searches the catalogue, not this page (#160)
     title: 'Product Offerings',
     fields: [
-      // row 1 — identity
       { name: 'name', label: 'Name', required: true, half: true },
       { name: 'description', label: 'Description', half: true, hint: 'What the shop shows under the name.' },
-      // row 2 — lifecycle and window
+      // the form reads in rows: identity, lifecycle, what it is, price, channels, composition
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
       { name: 'version', label: 'Version', placeholder: '1.0' },
       { name: 'validFrom', label: 'Available from', kind: 'date', read: (o) => (o.validFor || {}).startDateTime, hint: 'Blank = available immediately' },
       { name: 'validTo', label: 'Available until', kind: 'date', endOfDay: true, read: (o) => (o.validFor || {}).endDateTime, hint: 'The last day it is sold. Blank = forever' },
-      // row 3 — what it is
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
       { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
       { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'relationships', wide: true, hint: 'What this offer needs, rules out, or can be changed to. The configurator enforces it in every channel.' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
-      // row 4 — placement and price
       { name: 'category', label: 'Categories', kind: 'reflist', resource: 'category', referredType: 'Category', half: true, hint: 'Drive shop placement and fulfilment' },
       { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice', half: true, hint: 'One or more; discounts are pricing rules' },
-      // row 5 — where it is sold
       { name: 'channel', label: 'Channels', kind: 'multiselect', options: CHANNELS, refType: 'Channel', wide: true, hint: 'Where this offer is sold. Nothing ticked = every channel, including AI agents.' },
-      // row 6 — composition and art
       { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering', wide: true },
       { name: 'attachment', label: 'Artwork', kind: 'artwork', wide: true, hint: 'Gallery shots and colour variants' },
-      // row 7 — how the orchestrator will fulfil it, read off the catalog (product spec → CFS → RFS → resource spec)
+      // how the orchestrator will fulfil it, read off the catalog (product spec → CFS → RFS → resource spec)
       { name: 'decomposition', label: 'Decomposition', kind: 'decomposition', wide: true,
         hint: 'What this offering needs from the network and partners, as the catalog declares it. Read-only.' },
-      // row 8 — the read-back a rule's own page cannot give: which rules name THIS offering (#157)
+      // the read-back a rule's own page cannot give: which rules name THIS offering (#157)
       { name: 'offeringRules', label: 'Rules that name this offering', kind: 'offeringrules', wide: true,
         hint: 'Every pricing and blocking rule whose condition names this offering, the switched-off ones included. Read-only — rules are edited on the Rules page.' },
     ],
@@ -62,6 +57,9 @@ const RESOURCES = [
     },
     columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
   },
+  // The shelves, authored at last (#155) — a React island, per ADR-0022.
+  { path: 'category', base: API_BASE, title: 'Categories', island: 'category',
+    readOnly: true, noCreate: true, fields: [], columns: [] },
   {
     path: 'productSpecification',
     serverSearch: true, // the box searches the catalogue, not this page (#160)
