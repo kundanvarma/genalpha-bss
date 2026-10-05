@@ -32,7 +32,9 @@
  *    ceiling still carries its price on every surface, rather than being
  *    dropped from the agentic feed as unpriced.
  *  - ALL FOUR SURFACES AGREE ON THE COUNT. The shelf is one read; the sitemap,
- *    llms.txt and discovery must publish the same offerings.
+ *    llms.txt and discovery must publish the same offerings. The sitemap also
+ *    carries the category shelves, which are pages rather than products, so
+ *    they are counted separately rather than quietly inflating the total.
  *  - AN UNKNOWN URL IS A 404. /shop/nonsense and a path outside the app both
  *    answer 404, while every real route still answers 200 — the enumeration has
  *    not locked a working page out.
@@ -133,10 +135,14 @@ async function crawl(path) {
     ok(`discovery publishes ${discovery.body.productCount} products, including the one past the ceiling, and does not claim truncation`);
 
     const sitemap = await crawl('/sitemap.xml');
-    const inSitemap = (sitemap.text.match(/<loc>/g) || []).length;
+    // the sitemap also lists the category shelves (#180), which are pages in
+    // their own right — count only the product urls against the product count
+    const shelfUrls = (sitemap.text.match(/\/shop\/category\//g) || []).length;
+    const inSitemap = (sitemap.text.match(/<loc>/g) || []).length - shelfUrls;
     if (inSitemap <= OLD_CEILING) fail(`the sitemap lists ${inSitemap} — still capped`);
     if (!sitemap.text.includes(beyond.id)) fail('the sitemap stops before the offering past the ceiling');
-    ok(`the sitemap lists ${inSitemap} urls, including the one past the ceiling`);
+    if (!shelfUrls) fail('the sitemap lists no category shelves — a crawler gets products with no structure');
+    ok(`the sitemap lists ${inSitemap} product urls plus ${shelfUrls} shelves, including the one past the ceiling`);
 
     const llms = await crawl('/llms.txt');
     const inLlms = (llms.text.match(/\]\(/g) || []).length;

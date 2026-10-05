@@ -98,9 +98,16 @@ async function resolve(path, host) {
   const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
   const route = path.split('?')[0];
 
-  if (route === '/' || route === '/shop') {
-    const offerings = await page('/tmf-api/productCatalogManagement/v4/productOffering?lifecycleStatus=Active', host);
-    return offerings.length ? { offerings } : null;
+  // the shop root and every shelf need the same two reads
+  if (route === '/' || route === '/shop' || /^\/category\/[^/]+\/?$/.test(route)) {
+    const [offerings, priceRows] = await Promise.all([
+      page('/tmf-api/productCatalogManagement/v4/productOffering?lifecycleStatus=Active', host),
+      page('/tmf-api/productCatalogManagement/v4/productOfferingPrice', host),
+    ]);
+    if (!offerings.length) return null;
+    const prices = {};
+    for (const p of priceRows) prices[p.id] = p;
+    return { offerings, prices };
   }
 
   const offeringMatch = route.match(/^\/offering\/([^/]+)\/?$/);

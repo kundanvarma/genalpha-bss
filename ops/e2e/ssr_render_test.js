@@ -45,8 +45,10 @@
  *    account pages still fetch in effects and would render their loading
  *    state; they are behind sign-in and `noindex`, so that is correct rather
  *    than pending.
- *  - Category and help pages are not covered because they are not routes at
- *    all yet. Making them first-class is its own piece of #180.
+ *  - HELP PAGES ARE NOT COVERED, and not for a rendering reason: knowledge
+ *    articles require `knowledge:read`, so there is no anonymous door to render
+ *    from. Making them crawlable means publishing content that is behind
+ *    sign-in today, which is the operator's decision and not a renderer's.
  *  - Streaming is not used. `renderToString` is synchronous, so nothing here
  *    exercises Suspense or partial flushing; request scope is in place so that
  *    move does not become a correctness problem, but it has not been made.
@@ -153,6 +155,39 @@ const ok = (m) => console.log('OK ' + m);
   if (/gatepost/.test(unseeded)) fail('an unseeded route fell back to the boot gate rather than the page');
   if (unseeded.includes('GenAlpha Fiber 1000')) fail('an unseeded render produced data from somewhere');
   ok('an unseeded route still renders the page frame — the client path is unchanged');
+
+  /* ---------- a shelf is a page now, not a tab ---------- */
+  const shelfData = {
+    offerings: [
+      { id: 'm1', name: 'SSR Mobile 60 GB', description: '60 GB', category: [{ name: 'Mobile plans' }],
+        isBundle: false, lifecycleStatus: 'Active' },
+      { id: 'b1', name: 'SSR Home Bundle', description: 'triple play', category: [{ name: 'Bundles' }],
+        isBundle: true, lifecycleStatus: 'Active' },
+    ],
+    prices: {},
+  };
+  const mobile = render('/category/mobile', A, shelfData);
+  if (/gatepost/.test(mobile)) fail('the category page rendered the boot gate');
+  if (!mobile.includes('SSR Mobile 60 GB')) fail('the mobile shelf does not carry the mobile plan');
+  if (mobile.includes('SSR Home Bundle')) {
+    fail('the mobile shelf carries a bundle — the shelf rule differs from the shop tab it was taken from');
+  }
+  if (!mobile.includes('/shop/category/internet')) {
+    fail('a shelf does not link to its siblings — a crawler that lands here cannot reach the rest');
+  }
+  ok(`the mobile shelf renders ${mobile.length} bytes: its own products, not the others, and links onward`);
+
+  const rootWithShelves = render('/', A, shelfData);
+  if (!rootWithShelves.includes('/shop/category/mobile')) {
+    fail('the shop root does not link to its shelves — the crawl graph has no edges, only pages');
+  }
+  ok('the shop root links to every shelf, so the shelves are reachable rather than merely addressable');
+
+  const unknownShelf = render('/category/nonsense', A, shelfData);
+  if (!/Not found|No such part of the shop/.test(unknownShelf)) {
+    fail('an unknown shelf rendered an empty page — a crawler reads that as a real shelf with no products');
+  }
+  ok('an unknown shelf says so rather than rendering an empty one');
 
   /* ---------- the language follows the request, not the process ---------- */
   // Asserted through the rendered document rather than by importing i18n: the

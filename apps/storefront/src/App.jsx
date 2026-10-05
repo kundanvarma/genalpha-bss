@@ -12,6 +12,7 @@ import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Home from './pages/Home.jsx';
 import Offering from './pages/Offering.jsx';
+import Category from './pages/Category.jsx';
 import FamilyMember from './pages/FamilyMember.jsx';
 import Family from './pages/Family.jsx';
 import Cart from './pages/Cart.jsx';
@@ -181,6 +182,7 @@ export default function App() {
           <Route path="/" element={customer ? <Home /> : <Shop />} />
           <Route path="/shop" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
+          <Route path="/category/:slug" element={<Category />} />
           <Route path="/family" element={<Family />} />
           <Route path="/family/:id" element={<FamilyMember />} />
           <Route path="/cart" element={<Cart />} />

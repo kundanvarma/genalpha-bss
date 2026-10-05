@@ -8,6 +8,7 @@ import { myActiveServices } from '../api.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 import { initialData } from '../ssr-data.js';
+import { ShelfLinks } from './lines.jsx';
 
 export default function Shop() {
   const [offerings, setOfferings] = useState(() => initialData()?.offerings ?? null); // server-seeded (#180)
@@ -59,7 +60,6 @@ export default function Shop() {
       }).catch(() => {});
     }
   }, []);
-
   // Load each mobile plan's spec characteristics so the comparison table shows
   // real per-plan values (Data / Network / Calls & texts, plus whatever else the specs declare).
   useEffect(() => {
@@ -79,7 +79,6 @@ export default function Shop() {
 
   if (error) return <p className="error">{error}</p>;
   if (!offerings) return <p className="dim">Loading offers…</p>;
-
   const bundles = offerings.filter((o) => o.isBundle);
   let singles = offerings.filter((o) => !o.isBundle);
   const picks = recommended.map((id) => offerings.find((o) => o.id === id))
@@ -177,6 +176,7 @@ export default function Shop() {
           )}
         </>
       )}
+      <ShelfLinks />{/* real URLs for every shelf — the crawl graph (#180) */}
       {(() => {
         // Shop by line of business — tabs, the way a telco storefront is laid
         // out (Mobile · Internet · TV · Devices · Security · Bundles), instead

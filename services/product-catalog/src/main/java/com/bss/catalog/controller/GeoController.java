@@ -160,6 +160,14 @@ public class GeoController {
         // which is not the same question: an offering past its window, or sold
         // only through a dealer, was advertised to search engines and then
         // refused by the page the crawler followed.
+        // THE SHELVES FIRST (#180). Category pages are now real URLs, and a
+        // sitemap that lists only products gives a crawler no way to understand
+        // how the shop is organised — just a flat list of things.
+        String base = baseUrl(request);
+        for (String shelf : SHELVES) {
+            sb.append("  <url><loc>").append(esc(base + "/shop/category/" + shelf))
+                    .append("</loc></url>\n");
+        }
         for (PublicOffering view : shelf(request)) {
             sb.append("  <url><loc>").append(esc(view.canonicalUrl())).append("</loc>");
             if (view.lastUpdate() != null) {
@@ -284,6 +292,17 @@ public class GeoController {
         String scheme = "https".equalsIgnoreCase(first) ? "https" : "http";
         return scheme + "://" + host;
     }
+
+    /**
+     * The storefront's lines of business, as the shop groups them. Duplicated
+     * from apps/storefront/src/pages/lines.jsx, because a sitemap is generated
+     * by the catalog and the shop is a separate deployable — there is no shared
+     * module between them today. The honest cost of that is this list; the fix
+     * is the storefront generating its own sitemap once it renders server-side,
+     * which is the rest of #180.
+     */
+    private static final List<String> SHELVES = List.of(
+            "bundles", "mobile", "internet", "tv", "devices", "security", "top-ups");
 
     /** host or host:port — letters, digits, dots, hyphens; nothing that could carry a scheme. */
     private static final java.util.regex.Pattern SAFE_HOST =
