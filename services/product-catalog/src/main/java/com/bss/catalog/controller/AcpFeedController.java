@@ -1,14 +1,11 @@
 package com.bss.catalog.controller;
 
 import com.bss.catalog.dto.AcpProductFeed;
-import com.bss.catalog.dto.Money;
-import com.bss.catalog.dto.ProductOfferingDto;
-import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
-import com.bss.catalog.service.ProductOfferingPriceService;
-import com.bss.catalog.service.ProductOfferingService;
+import com.bss.catalog.seo.PublicCatalog;
+import com.bss.catalog.seo.PublicOffering;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,126 +13,85 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
-import static com.bss.catalog.mapper.Wire.idOf;
 
 /**
- * The Agentic Commerce Protocol product feed: the tenant's active catalog
- * projected into the structured shape shopping agents (ChatGPT, Perplexity,
- * any ACP consumer) ingest to discover and compare offerings. It is a
- * PROJECTION of TMF620 — no new data, no new authority: everything here is
- * already public on the catalog API. Pricing mirrors the storefront's honest
- * rule: the one-time charge is what an agent pays now; a recurring price is
- * shown as recurring — the first invoice bills the cycle, telecom-style.
+ * The Agentic Commerce Protocol product feed: the tenant's sellable shelf in
+ * the shape shopping agents (ChatGPT, Perplexity, any ACP consumer) ingest to
+ * discover and compare offerings.
  *
- * The gateway's AgentCommerceGateFilter is the authoritative per-tenant
- * switch (off|discovery|full); the check here is defense in depth.
+ * <p>An <b>adapter over {@link PublicCatalog}</b>, like every other public
+ * face. It used to assemble TMF620 for itself, and the arithmetic drifted: the
+ * feed led with the first one-time price, so a triple-play bundle was sold to
+ * shopping agents at <b>49.00</b> — its fibre installation fee — while its own
+ * crawlable page correctly said <b>64.98 a month</b>. Same catalog rows, two
+ * answers, and the wrong one was the one an AI agent quoted.</p>
+ *
+ * <p>The wire contract is unchanged: the same fields, the same names, the same
+ * order. What changed is that the numbers in them are now the same numbers
+ * every other surface publishes.</p>
+ *
+ * <p>The gateway's AgentCommerceGateFilter is the authoritative per-tenant
+ * switch (off|discovery|full); the check here is defense in depth.</p>
  */
 @RestController
 @RequestMapping("/acp")
 public class AcpFeedController {
 
-    private final com.bss.catalog.service.LifecyclePolicy lifecycle;
+    /** The channel this surface speaks for: an offer may be sold on the web and withheld here. */
+    private static final String CHANNEL = "agent-acp";
 
-    private final ProductOfferingService offerings;
-    private final ProductOfferingPriceService prices;
+    private final PublicCatalog catalog;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
 
-    public AcpFeedController(ProductOfferingService offerings, ProductOfferingPriceService prices,
-            TenantRegistry tenants, TenantScope tenantScope,
-            com.bss.catalog.service.LifecyclePolicy lifecycle) {
-        this.lifecycle = lifecycle;
-        this.offerings = offerings;
-        this.prices = prices;
+    public AcpFeedController(PublicCatalog catalog, TenantRegistry tenants, TenantScope tenantScope) {
+        this.catalog = catalog;
         this.tenants = tenants;
         this.tenantScope = tenantScope;
     }
 
     @GetMapping("/product_feed")
     public AcpProductFeed productFeed(@RequestParam(name = "id", required = false) String onlyId) {
-        requireExposed();
-        Map<String, ProductOfferingPriceDto> priceIndex = prices.findAll(0, 500, Map.of()).items()
-                .stream().collect(Collectors.toMap(ProductOfferingPriceDto::getId, Function.identity(),
-                        (a, b) -> a));
+        TenantRegistry.TenantEntry tenant = requireExposed();
         List<AcpProductFeed.Item> products = new ArrayList<>();
-        for (ProductOfferingDto offering : offerings.findAll(0, 500,
-                Map.of("lifecycleStatus", "Active")).items()) {
-            if (onlyId != null && !onlyId.equals(offering.getId())) {
+        for (PublicOffering view : catalog.sellable(CHANNEL, currency(tenant), "")) {
+            if (onlyId != null && !onlyId.equals(view.id())) {
                 continue;
             }
-            if (!lifecycle.sellableDtoIn(offering, "agent-acp")) {
-                continue; // held back from AI shopping agents by the offer's channel list
+            // a feed row an agent cannot price is noise, not reach — the one
+            // place this surface deliberately shows less than the sitemap
+            if (!view.priced()) {
+                continue;
             }
-            AcpProductFeed.Item product = toFeedItem(offering, priceIndex);
-            if (product != null) {
-                products.add(product);
-            }
+            products.add(item(view));
         }
         return new AcpProductFeed(products);
     }
 
-    private void requireExposed() {
+    /** Package-private so the one-projection test can hold this face beside the others. */
+    static AcpProductFeed.Item item(PublicOffering view) {
+        PublicOffering.Charge headline = view.headline();
+        return new AcpProductFeed.Item(
+                view.id(), view.name(), view.description(), view.category(), view.canonicalUrl(),
+                view.availability().acp(),
+                new AcpProductFeed.Price(headline.plain(), headline.currency()),
+                headline.type(), headline.period(),
+                view.bundle() ? Boolean.TRUE : null);
+    }
+
+    private TenantRegistry.TenantEntry requireExposed() {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantScope.currentTenantId());
         String mode = tenant == null || tenant.getAgentCommerce() == null
                 ? "off" : tenant.getAgentCommerce();
         if ("off".equals(mode)) {
             throw new NotFoundException("no agentic commerce surface here");
         }
+        return tenant;
     }
 
-    /**
-     * One feed row. The price is the first UNCONDITIONED price (a
-     * characteristic-conditioned price depends on picks an agent has not
-     * made), one-time preferred; an unpriced offering is skipped — a feed
-     * row an agent cannot price is noise, not reach.
-     */
-    private AcpProductFeed.Item toFeedItem(ProductOfferingDto offering,
-            Map<String, ProductOfferingPriceDto> priceIndex) {
-        ProductOfferingPriceDto price = pickPrice(offering, priceIndex);
-        if (price == null || price.getPrice() == null || price.getPrice().value() == null) {
-            return null;
-        }
-        List<Map<String, Object>> categories = offering.getCategory();
-        String category = categories != null && !categories.isEmpty() && categories.get(0).get("name") != null
-                ? String.valueOf(categories.get(0).get("name")) : null;
-        String recurringPeriod = "recurring".equals(price.getPriceType()) ? price.getRecurringChargePeriodType() : null;
-        return new AcpProductFeed.Item(offering.getId(), offering.getName(), offering.getDescription(), category,
-                "/shop/offering/" + offering.getId(), "in_stock",
-                new AcpProductFeed.Price(String.valueOf(price.getPrice().value()), price.getPrice().unitOr("EUR")),
-                price.getPriceType(), recurringPeriod, Boolean.TRUE.equals(offering.getIsBundle()) ? Boolean.TRUE : null);
-    }
-
-    private ProductOfferingPriceDto pickPrice(ProductOfferingDto offering,
-            Map<String, ProductOfferingPriceDto> priceIndex) {
-        List<Map<String, Object>> refs = offering.getProductOfferingPrice();
-        if (refs == null) {
-            return null;
-        }
-        List<ProductOfferingPriceDto> resolved = refs.stream()
-                .map(ref -> {
-                    String priceId = idOf(ref);
-                    ProductOfferingPriceDto indexed = priceIndex.get(priceId);
-                    if (indexed != null) {
-                        return indexed;
-                    }
-                    // overlay: federated legacy offerings embed their price on
-                    // the ref itself — build a DTO from it
-                    if (ref.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
-                        ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
-                        dto.setId(priceId);
-                        dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
-                        dto.setPrice(Money.of(p));
-                        return dto;
-                    }
-                    return null;
-                })
-                .filter(p -> p != null)
-                .filter(p -> p.getProdSpecCharValueUse() == null || p.getProdSpecCharValueUse().isEmpty())
-                .toList();
-        return resolved.stream().filter(p -> "oneTime".equals(p.getPriceType())).findFirst()
-                .orElseGet(() -> resolved.stream().findFirst().orElse(null));
+    /** The money the operator prices in, used only where a price names no unit. */
+    private static String currency(TenantRegistry.TenantEntry tenant) {
+        return tenant == null || tenant.getCurrency() == null || tenant.getCurrency().isBlank()
+                ? "EUR" : tenant.getCurrency();
     }
 }

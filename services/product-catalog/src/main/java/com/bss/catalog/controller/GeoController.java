@@ -7,7 +7,10 @@ import com.bss.catalog.mapper.JsonLd;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
 import com.bss.catalog.seo.CrawlerPolicy;
+import com.bss.catalog.seo.PublicCatalog;
+import com.bss.catalog.seo.PublicOffering;
 import com.bss.catalog.seo.Visibility;
+import com.bss.catalog.service.Channels;
 import com.bss.catalog.service.ProductOfferingService;
 import com.bss.catalog.service.SchemaOrgProjection;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,15 +51,18 @@ import java.util.Map;
 public class GeoController {
 
     private final ProductOfferingService offerings;
+    private final PublicCatalog catalog;
     private final SchemaOrgProjection projection;
     private final JsonLd jsonLd;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final CrawlerPolicy crawlers;
 
-    public GeoController(ProductOfferingService offerings, SchemaOrgProjection projection,
-            JsonLd jsonLd, TenantRegistry tenants, TenantScope tenantScope, CrawlerPolicy crawlers) {
+    public GeoController(ProductOfferingService offerings, PublicCatalog catalog,
+            SchemaOrgProjection projection, JsonLd jsonLd, TenantRegistry tenants,
+            TenantScope tenantScope, CrawlerPolicy crawlers) {
         this.offerings = offerings;
+        this.catalog = catalog;
         this.projection = projection;
         this.jsonLd = jsonLd;
         this.tenants = tenants;
@@ -143,17 +149,24 @@ public class GeoController {
     /* ---------- sitemap / robots / llms.txt ---------- */
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
-    public ResponseEntity<String> sitemap() {
+    public ResponseEntity<String> sitemap(HttpServletRequest request) {
         if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
         StringBuilder sb = new StringBuilder(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                         + "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        for (ProductOfferingDto o : offerings.findAll(0, 500,
-                Map.of("lifecycleStatus", "Active")).items()) {
-            sb.append("  <url><loc>/shop/offering/").append(esc(o.getId()))
-                    .append("</loc></url>\n");
+        // ONE RULE decides membership. This used to list every Active offering,
+        // which is not the same question: an offering past its window, or sold
+        // only through a dealer, was advertised to search engines and then
+        // refused by the page the crawler followed.
+        for (PublicOffering view : shelf(request)) {
+            sb.append("  <url><loc>").append(esc(view.canonicalUrl())).append("</loc>");
+            if (view.lastUpdate() != null) {
+                sb.append("<lastmod>").append(esc(view.lastUpdate().toLocalDate().toString()))
+                        .append("</lastmod>");
+            }
+            sb.append("</url>\n");
         }
         sb.append("</urlset>\n");
         return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML).body(sb.toString());
@@ -174,7 +187,7 @@ public class GeoController {
     }
 
     @GetMapping(value = "/llms.txt", produces = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> llms() {
+    public ResponseEntity<String> llms(HttpServletRequest request) {
         // honest label: speculative courtesy for LLM crawlers — adoption is
         // real (~10% of sites) but bot consumption is negligible today; the
         // load-bearing GEO work is the bot-readable pages and robots.txt
@@ -185,17 +198,46 @@ public class GeoController {
         StringBuilder sb = new StringBuilder("# " + brand() + "\n\n> A telecom operator. "
                 + "Offerings below are live catalog data; each links to a crawlable page "
                 + "with schema.org Product/Offer markup.\n\n## Offerings\n\n");
-        for (ProductOfferingDto o : offerings.findAll(0, 200,
-                Map.of("lifecycleStatus", "Active")).items()) {
-            sb.append("- [").append(o.getName()).append("](/shop/offering/")
-                    .append(o.getId()).append(")");
-            if (o.getDescription() != null) {
-                String d = o.getDescription();
-                sb.append(": ").append(d.length() > 120 ? d.substring(0, 120) : d);
+        for (PublicOffering view : shelf(request)) {
+            sb.append("- [").append(view.name()).append("](").append(view.canonicalUrl()).append(")");
+            // the price an answer engine quotes is the one every other surface
+            // publishes, because it is the same projection that computed it
+            if (view.priced()) {
+                sb.append(" — ").append(view.headline().text());
+                if (view.upfront() != null) {
+                    sb.append(" plus ").append(view.upfront().text()).append(" once");
+                }
+            }
+            if (view.description() != null) {
+                sb.append(": ").append(summarise(view.description()));
             }
             sb.append("\n");
         }
         return ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body(sb.toString());
+    }
+
+    /**
+     * The shelf both list surfaces publish: everything sellable on the web,
+     * from the one projection. They show the same offerings because they answer
+     * the same question; the agentic feed asks it for its own channel and drops
+     * what it cannot price, which is a difference on purpose.
+     */
+    private List<PublicOffering> shelf(HttpServletRequest request) {
+        TenantRegistry.TenantEntry tenant = tenant();
+        return catalog.sellable(Channels.DEFAULT, currency(tenant), baseUrl(request));
+    }
+
+    /**
+     * A description short enough for a list, cut at a word rather than through
+     * one. The old cut landed mid-word ("…one bill, bun"), which reads as a
+     * broken feed to the readers this file exists for.
+     */
+    private static String summarise(String description) {
+        if (description.length() <= 160) {
+            return description;
+        }
+        int cut = description.lastIndexOf(' ', 160);
+        return description.substring(0, cut < 80 ? 160 : cut) + "…";
     }
 
     /* ---------- helpers ---------- */
