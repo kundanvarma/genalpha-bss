@@ -10,7 +10,25 @@ import { ChangePlanButton, ProductActions } from './Upgrades.jsx';
  * More…; the destructive one (Cease) lives in the danger zone of the Services
  * area with its consequences spelled out, never beside Diagnose. */
 
+/* THE DECLARED ANSWER, THEN THE GUESS (#143 step 1). The catalog says what each
+ * service IS — its CFS carries `fulfilmentFamily` — and this desk used to
+ * ignore that and pattern-match the name against four regular expressions,
+ * falling through to the word "Service". So a thing the catalog called
+ * `security` or `compute` appeared as "Service", and a rename could silently
+ * change what the desk thought it was looking at. The guess stays, for a
+ * service whose spec declares nothing; it is the fallback now, not the rule. */
+let FAMILIES = {};
+export function primeFulfilmentFamilies(byId) { FAMILIES = byId || {}; }
+
+const FAMILY_KIND = {
+  mobile: 'mobile', internet: 'broadband', tv: 'tv', voice: 'voice',
+  security: 'security', compute: 'compute', partner: 'partner',
+  'billing-only': 'billing', device: 'device',
+};
+
 export function serviceKind(sv) {
+  const declared = FAMILIES[sv.serviceSpecification?.id];
+  if (declared && FAMILY_KIND[declared]) return FAMILY_KIND[declared];
   const t = String(sv.category || sv.serviceType || sv.serviceSpecification?.name || '').toLowerCase();
   const n = String(sv.name || '').toLowerCase();
   if (/mobile|sim|msisdn/.test(t) || /mobile|sim\b|5g|gb\b/.test(n)) return 'mobile';
@@ -19,7 +37,11 @@ export function serviceKind(sv) {
   if (/voice|fixed/.test(t)) return 'voice';
   return 'other';
 }
-export const KIND_WORDS = { mobile: 'Mobile', broadband: 'Broadband', tv: 'TV', voice: 'Fixed voice', other: 'Service' };
+/* Words an agent would use, one per family the catalog can declare. "Service"
+ * is now only what an undeclared service gets, not the catch-all it was. */
+export const KIND_WORDS = { mobile: 'Mobile', broadband: 'Broadband', tv: 'TV', voice: 'Fixed voice',
+  security: 'Security', compute: 'Edge compute', partner: 'Partner service', billing: 'Billing only',
+  device: 'Device', other: 'Service' };
 export const numberOf = (sv) => (sv.supportingResource || []).map((r) => r.value).find(Boolean) || null;
 export const placeOf = (sv) => {
   const p = (sv.place || [])[0];
