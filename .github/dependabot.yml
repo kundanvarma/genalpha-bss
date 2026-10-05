@@ -5,6 +5,23 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
     groups: { spring: { patterns: ["org.springframework*"] } }
+    # A MAJOR SPRING BUMP IS A MIGRATION, NOT A PULL REQUEST.
+    #
+    # Dependabot opened one: Boot 3.5.7 -> 4.1.1 across all 42 service poms
+    # (#164). Boot 4 brings Framework 7, Security 7 and Jakarta EE 11, and its
+    # build did not even read the POMs — the gateway imports the Spring Cloud
+    # BOM at 2025.0.1, a Boot 3.x release train, which stops managing
+    # spring-cloud-starter-gateway's version under Boot 4. Boot and Cloud move
+    # as a matched pair and the group pattern moves only one of them.
+    #
+    # Without this the same unmergeable PR returns every week, and a red PR
+    # nobody can act on is how a team learns to stop reading CI. Minor and
+    # patch Spring updates still come through. The migration is issue #199.
+    ignore:
+      - dependency-name: "org.springframework.boot:spring-boot-starter-parent"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.springframework.cloud:spring-cloud-dependencies"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directories: ["/apps/storefront", "/apps/csr-console", "/apps/mobile", "/ops/e2e"]
     schedule: { interval: weekly }
