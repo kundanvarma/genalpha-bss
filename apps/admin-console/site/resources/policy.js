@@ -1,6 +1,12 @@
 /* Resources 8/9 — audiences, visitor consent, policy rules, number porting. */
 'use strict';
 
+/* assemble() gives an adjustment to every `price-*` kind, so the form must
+ * offer one for every `price-*` kind. Two were missing from the gate, leaving a
+ * loyalty tier and a characteristic campaign unable to show what they adjust. */
+const PRICING_KINDS = ['price-verified', 'price-when-item', 'price-always', 'price-loyalty-tier',
+  'price-company', 'price-characteristic', 'price-volume', 'price-advanced'];
+
 RESOURCES.push(
   {
     path: 'audience',
@@ -92,6 +98,11 @@ RESOURCES.push(
       { name: 'pinnedOffering', label: 'Offering to pin on top of the shop', kind: 'ref',
         resource: 'productOffering', referredType: 'ProductOffering',
         showWhen: { field: 'ruleKind', in: ['perso-interest', 'perso-segment'] } },
+      { name: 'loyaltyTier', label: 'Loyalty tier the benefit applies to', kind: 'select', options: [
+        { value: 'gold', label: 'Gold' },
+        { value: 'silver', label: 'Silver' },
+        { value: 'bronze', label: 'Bronze' },
+      ], showWhen: { field: 'ruleKind', in: ['price-loyalty-tier'] } },
       { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
         showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
       { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
@@ -102,9 +113,9 @@ RESOURCES.push(
         { value: '', label: '—' },
         { value: 'percent', label: 'Percent of subtotal' },
         { value: 'amount', label: 'Fixed amount' },
-      ], showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-company', 'price-volume', 'price-advanced'] } },
+      ], showWhen: { field: 'ruleKind', in: PRICING_KINDS } },
       { name: 'adjustmentValue', label: 'Adjustment value — negative = discount, positive = surcharge', kind: 'number',
-        showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-company', 'price-volume', 'price-advanced'] } },
+        showWhen: { field: 'ruleKind', in: PRICING_KINDS } },
       { name: 'condition', label: 'JSON-logic condition', kind: 'longtext',
         showWhen: { field: 'ruleKind', in: ['advanced', 'price-advanced'] } },
       { name: 'message', label: 'Message / label shown to the customer', required: true },
@@ -180,6 +191,62 @@ RESOURCES.push(
         adjustmentValue: isPricing ? body.adjustmentValue : undefined,
         experience: isPerso && body.pinnedOffering
           ? { teaserOfferingId: idOf(body.pinnedOffering) } : undefined,
+      };
+    },
+    // THE INVERSE OF assemble (#159). A saved rule keeps only its derived
+    // condition, so the kind came back empty — and every field is gated on the
+    // kind, so reopening showed a name, a message and nothing else. A rule
+    // adding 50% looked identical to one taking 50 off: that is how a surcharge
+    // shipped as a discount. assemble writes a known shape per kind, so the
+    // kind can be read back out; an unrecognised condition falls back to
+    // "advanced", which shows the raw JSON-logic rather than an empty form.
+    disassemble: (item) => {
+      const condition = (() => {
+        if (!item.condition) return null;
+        if (typeof item.condition === 'object') return item.condition;
+        try { return JSON.parse(item.condition); } catch { return null; }
+      })();
+      const pricing = item.domain === 'pricing';
+      const ref = (id) => (id ? { id } : undefined);
+      const c = condition || {};
+      const inVar = c.in && c.in[1] && c.in[1].var;          // { in: [x, {var: …}] }
+      const eq = c['=='] || [];
+      const gte = c['>='] || [];
+      const gt = c['>'] || [];
+      const and = Array.isArray(c.and) ? c.and : null;
+
+      if (inVar === 'interests') return { ruleKind: 'perso-interest', interestCategory: c.in[0], pinnedOffering: ref(item.experience && item.experience.teaserOfferingId) };
+      if (inVar === 'segments') return { ruleKind: 'perso-segment', segmentName: c.in[0], pinnedOffering: ref(item.experience && item.experience.teaserOfferingId) };
+      if (inVar === 'characteristicValues') {
+        const [name, ...rest] = String(c.in[0] || '').split(':');
+        return { ruleKind: 'price-characteristic', characteristicName: name, characteristicValue: rest.join(':') };
+      }
+      if (and && and.length === 2) {
+        const first = and[0] && and[0].in;
+        const notVerified = and[1] && and[1]['!'] && and[1]['!'].var === 'verifiedIdentity';
+        if (first && notVerified) return { ruleKind: 'requires-verified-id', offeringA: ref(first[0]) };
+        const second = and[1] && and[1].in;
+        if (first && second) return { ruleKind: 'incompatibility', offeringA: ref(first[0]), offeringB: ref(second[0]) };
+      }
+      if (gt.length === 2 && gt[0] && typeof gt[0].var === 'string') {
+        const byOffering = gt[0].var.startsWith('quantityByOffering.');
+        return { ruleKind: 'quantity-cap', maxQuantity: gt[1],
+          offeringA: byOffering ? ref(gt[0].var.slice('quantityByOffering.'.length)) : undefined };
+      }
+      if (c.var === 'verifiedIdentity') return { ruleKind: 'price-verified' };
+      if (eq.length === 2 && eq[0] && eq[0].var === 'loyaltyTier') return { ruleKind: 'price-loyalty-tier', loyaltyTier: eq[1] };
+      if (eq.length === 2 && eq[0] && eq[0].var === 'organizationId') return { ruleKind: 'price-company', organization: ref(eq[1]) };
+      if (gte.length === 2 && gte[0] && gte[0].var === 'memberCount') return { ruleKind: 'price-volume', minMembers: gte[1] };
+      if (eq.length === 2 && eq[0] === 1 && eq[1] === 1) return { ruleKind: 'price-always' };
+      if (inVar === 'offeringIds') return { ruleKind: pricing ? 'price-when-item' : 'requires-verified-id', offeringA: ref(c.in[0]) };
+
+      // Not a shape this form wrote: show the condition ITSELF, as readable
+      // JSON. It goes into a textarea, so it has to be text — handing the
+      // parsed object over renders the string "[object Object]", which is a
+      // blank stare with extra steps.
+      return {
+        ruleKind: pricing ? 'price-advanced' : 'advanced',
+        condition: condition ? JSON.stringify(condition, null, 1) : (item.condition || ''),
       };
     },
     columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'adjustmentValue', 'condition', 'lastUpdate'],

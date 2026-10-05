@@ -150,7 +150,10 @@ function renderEditor() {
  * while the controlling select holds one of those values. An empty controlling
  * value (e.g. editing an existing row) shows everything — never hide data.
  */
+let applyVisibility = () => {};
+
 function wireVisibility() {
+  applyVisibility = () => {};
   const dependents = active.fields.filter((f) => f.showWhen);
   if (!dependents.length) return;
   const sources = [...new Set(dependents.map((f) => f.showWhen.field))];
@@ -169,6 +172,7 @@ function wireVisibility() {
     const src = el('fields').querySelector(`[name="${name}"]`);
     if (src) src.addEventListener('change', apply);
   }
+  applyVisibility = apply;
   apply();
 }
 
@@ -225,8 +229,16 @@ function startEditing(item) {
   el('save').textContent = 'Save changes';
   el('editor').hidden = false; // reveal for noCreate tabs
   openDrawer();
+  // A saved row keeps only what the API stores; the choices the operator made
+  // to get there can be implicit in it. A resource that can read them back
+  // says so, and the form fills with them — otherwise every field gated on
+  // one of those choices opens empty and the row looks like it does nothing.
+  const filled = active.disassemble ? { ...item, ...active.disassemble(item) } : item;
   for (const f of active.fields) {
-    controls[f.name].set(item);
+    controls[f.name].set(filled);
   }
+  // visibility was computed when the form was BUILT, before these values
+  // existed — recompute it now that the controlling fields hold something
+  applyVisibility();
   el('editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
