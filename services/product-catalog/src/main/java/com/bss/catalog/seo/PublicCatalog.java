@@ -61,14 +61,25 @@ import static com.bss.catalog.mapper.Wire.idOf;
 @Component
 public class PublicCatalog {
 
+    /** One read's worth. The shelf is paged with this, not capped by it. */
+    private static final int PAGE = 200;
+
     /**
-     * How deep the public surfaces read. The catalog's own list door caps a
-     * caller at 100 per page; these are internal reads, and one number is used
-     * everywhere so a tenant whose shelf outgrows it loses the same rows from
-     * every surface at once rather than a different few from each. A shelf
-     * larger than this needs paging to exhaustion, which is SEO-4's business.
+     * The point at which reading stops and SAYS SO.
+     *
+     * <p>The public surfaces used to read a flat 500 and stop, silently: a
+     * tenant with 600 offerings published 500 of them and nothing anywhere
+     * said which 100 were missing or that any were. Paging to exhaustion fixes
+     * the common case; this ceiling exists because "to exhaustion" against a
+     * catalogue of unknown size is its own hazard — one slow request can hold
+     * a connection open reading a hundred thousand rows.</p>
+     *
+     * <p>Hitting it is not silent. {@link Shelf#truncated()} carries the fact
+     * to whichever surface asked, and the discovery feed publishes it, because
+     * a consumer that cannot tell a complete feed from a cut one will treat a
+     * missing product as a withdrawn one.</p>
      */
-    private static final int SHELF = 500;
+    private static final int CEILING = 10_000;
 
     /**
      * A name written as a CODE rather than for a person: one lowercase token,
@@ -111,16 +122,35 @@ public class PublicCatalog {
      * @param baseUrl scheme and host the visitor came in on, for absolute URLs
      */
     public List<PublicOffering> sellable(String channel, String currencyFallback, String baseUrl) {
+        return shelf(channel, currencyFallback, baseUrl).rows();
+    }
+
+    /**
+     * The whole sellable shelf, read to exhaustion, and whether it was cut
+     * short. Surfaces that can say so should say so.
+     */
+    public Shelf shelf(String channel, String currencyFallback, String baseUrl) {
         Map<String, ProductOfferingPriceDto> index = priceIndex();
         List<PublicOffering> rows = new ArrayList<>();
-        for (ProductOfferingDto offering : offerings.findAll(0, SHELF,
-                Map.of("lifecycleStatus", "Active")).items()) {
-            if (!lifecycle.sellableDtoIn(offering, channel)) {
-                continue;
+        boolean truncated = false;
+        for (int offset = 0; offset < CEILING; offset += PAGE) {
+            List<ProductOfferingDto> page = offerings
+                    .findAll(offset, PAGE, Map.of("lifecycleStatus", "Active")).items();
+            for (ProductOfferingDto offering : page) {
+                if (lifecycle.sellableDtoIn(offering, channel)) {
+                    rows.add(project(offering, index, currencyFallback, baseUrl));
+                }
             }
-            rows.add(project(offering, index, currencyFallback, baseUrl));
+            if (page.size() < PAGE) {
+                return new Shelf(List.copyOf(rows), false);
+            }
+            truncated = offset + PAGE >= CEILING;
         }
-        return List.copyOf(rows);
+        return new Shelf(List.copyOf(rows), truncated);
+    }
+
+    /** What was published, and whether that is all of it. */
+    public record Shelf(List<PublicOffering> rows, boolean truncated) {
     }
 
     /** One offering, projected — for the page that was asked for by id. */
@@ -246,10 +276,23 @@ public class PublicCatalog {
                 .toList();
     }
 
+    /**
+     * Every price the tenant holds, read to exhaustion. A price the index
+     * misses makes its offering look unpriced, which removes it from the
+     * agentic feed entirely — so a cut here is not a cosmetic loss.
+     */
     private Map<String, ProductOfferingPriceDto> priceIndex() {
-        return prices.findAll(0, SHELF, Map.of()).items().stream()
-                .collect(Collectors.toMap(ProductOfferingPriceDto::getId, Function.identity(),
-                        (a, b) -> a, LinkedHashMap::new));
+        Map<String, ProductOfferingPriceDto> index = new LinkedHashMap<>();
+        for (int offset = 0; offset < CEILING; offset += PAGE) {
+            List<ProductOfferingPriceDto> page = prices.findAll(offset, PAGE, Map.of()).items();
+            for (ProductOfferingPriceDto price : page) {
+                index.putIfAbsent(price.getId(), price);
+            }
+            if (page.size() < PAGE) {
+                break;
+            }
+        }
+        return index;
     }
 
     /* ---------- availability: evidence, not a constant ---------- */

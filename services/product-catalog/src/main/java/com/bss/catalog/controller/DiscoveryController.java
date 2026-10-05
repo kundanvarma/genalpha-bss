@@ -66,11 +66,9 @@ public class DiscoveryController {
     @GetMapping("/products")
     public DiscoveryFeed products(HttpServletRequest request) {
         TenantRegistry.TenantEntry tenant = requireVisible();
-        List<DiscoveryFeed.Product> rows = catalog
-                .sellable(CHANNEL, currency(tenant), baseUrl(request)).stream()
-                .map(DiscoveryController::product)
-                .toList();
-        return feed(rows);
+        PublicCatalog.Shelf shelf = catalog.shelf(CHANNEL, currency(tenant), baseUrl(request));
+        return feed(shelf.rows().stream().map(DiscoveryController::product).toList(),
+                shelf.truncated());
     }
 
     @GetMapping("/products/{id}")
@@ -78,12 +76,18 @@ public class DiscoveryController {
         TenantRegistry.TenantEntry tenant = requireVisible();
         ProductOfferingDto offering = offerings.findById(id);
         PublicOffering view = catalog.of(offering, currency(tenant), baseUrl(request));
-        return feed(List.of(product(view)));
+        return feed(List.of(product(view)), false);
     }
 
-    private DiscoveryFeed feed(List<DiscoveryFeed.Product> rows) {
+    /**
+     * {@code truncated} is published only when it is true: a consumer that
+     * cannot tell a complete feed from a cut one will read a missing product as
+     * a withdrawn one, which is a worse error than a slow response.
+     */
+    private DiscoveryFeed feed(List<DiscoveryFeed.Product> rows, boolean truncated) {
         return new DiscoveryFeed(DiscoveryFeed.VERSION, tenantScope.currentTenantId(),
-                OffsetDateTime.now().toString(), rows.size(), rows);
+                OffsetDateTime.now().toString(), rows.size(),
+                truncated ? Boolean.TRUE : null, rows);
     }
 
     /* ---------- the projection, dressed for a machine reader ---------- */
