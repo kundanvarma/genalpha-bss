@@ -23,6 +23,7 @@ async function loadList() {
   document.getElementById('home-panel')?.setAttribute('hidden', '');
   document.querySelector('.table-wrap')?.removeAttribute('hidden');   // generic tabs show the table again
   document.querySelector('.pager')?.removeAttribute('hidden');
+  clearCreatedIfElsewhere();
   if (renderCustomPane()) return;
   renderEditor();
   const q = active.serverSearch && listFilter ? `&q=${encodeURIComponent(listFilter)}` : '';
@@ -117,6 +118,10 @@ async function loadList() {
 
 async function save(event) {
   event.preventDefault();
+  // the last creation is answered the moment you save again: a notice saying
+  // "X created" above a form you have just EDITED is stale, and stale is how
+  // this family of bug starts
+  document.getElementById('created-note')?.remove();
   let body = {};
   try {
     for (const f of active.fields) {
@@ -151,9 +156,59 @@ async function save(event) {
     el('editor-error').hidden = false;
     return;
   }
+  const created = editingId ? null : await res.json().catch(() => null);
   stopEditing();
   loadList();
+  if (created) announceCreated(created);
   if (active.afterSave) active.afterSave();
+}
+
+/**
+ * SAY IT HAPPENED, AND GIVE A WAY BACK (#161).
+ *
+ * The drawer closed and the new row was nowhere on screen: the list is not
+ * newest-first, so it lands wherever it sorts — possibly pages away. With the
+ * search box only filtering the loaded page, both of the operator's natural
+ * next moves returned nothing, and `samsung x` was reported lost when it had
+ * saved correctly.
+ *
+ * This is the third instance of the same shape — the system did the right
+ * thing and failed to show it — after a diagnosis rendered at the foot of a
+ * list (#142) and a rules panel 830px below where anyone looks (#158). So it
+ * lives in the shared save path: every drawer that creates a row into a paged
+ * list gets it, not just offerings.
+ */
+function announceCreated(item) {
+  const head = document.querySelector('.panel-head');
+  if (!head) return;
+  let note = document.getElementById('created-note');
+  if (!note) {
+    note = document.createElement('p');
+    note.id = 'created-note';
+    note.dataset.testid = 'created-note';
+    note.style.cssText = 'margin:.4rem 0 .6rem;display:flex;gap:.6rem;align-items:center;'
+      + 'font-size:.9rem;color:#1b5e20;background:#eaf5ec;border:1px solid #c6e3cc;'
+      + 'border-radius:4px;padding:.4rem .6rem';
+    head.after(note);
+  }
+  const name = item.name || item.id || 'It';
+  note.dataset.path = active.path;
+  note.replaceChildren(document.createTextNode(`${name} created.`));
+  // the way back: the row may be pages away, so do not make them find it
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'link';
+  open.dataset.testid = 'open-created';
+  open.textContent = 'Open it';
+  open.addEventListener('click', () => startEditing(item));
+  note.append(open);
+  note.hidden = false;
+}
+
+/** A different page is a different question: what was created here is not news there. */
+function clearCreatedIfElsewhere() {
+  const note = document.getElementById('created-note');
+  if (note && note.dataset.path !== (active && active.path)) note.remove();
 }
 
 // the submit hook: the form's VALUES SHAPE (short fields kept, free text as presence),
