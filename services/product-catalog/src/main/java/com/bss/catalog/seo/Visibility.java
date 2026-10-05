@@ -62,6 +62,21 @@ public enum Visibility {
     }
 
     /** llms.txt is published where AI answer engines are welcome. */
+    /**
+     * Does this operator publish a rich, machine-readable catalogue (#181)?
+     *
+     * <p>Same answer as llms.txt today, and deliberately its own method rather
+     * than a reuse: the two can diverge, and a reader should not have to infer
+     * that a discovery feed is governed by an llms.txt rule. A tenant on
+     * {@link #SEARCH_ONLY} has said "classic search yes, AI no" — serving a
+     * machine-readable catalogue to AI agents anyway would make that posture
+     * meaningless, and this surface is also the easiest price-scraping target
+     * an operator can expose.</p>
+     */
+    public boolean servesDiscoveryFeed() {
+        return this == OPEN || this == SEARCH_AI;
+    }
+
     public boolean publishesLlmsTxt() {
         return this == OPEN || this == SEARCH_AI;
     }

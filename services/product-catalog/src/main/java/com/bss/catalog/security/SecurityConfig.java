@@ -52,6 +52,11 @@ public class SecurityConfig {
                         // GEO: the crawler-facing pages are as public as the
                         // shop they mirror; robots.txt is the real gate
                         .requestMatchers(HttpMethod.GET, "/seo/**").permitAll()
+                        // The factual discovery surface (#181): public like the
+                        // catalog it projects — agents and partners read it
+                        // anonymously, and the tenant's own ai-visibility
+                        // decides whether it answers at all rather than a role
+                        .requestMatchers(HttpMethod.GET, "/discovery/v1/**").permitAll()
                         // TMF760: the configurator's task resources are POSTs,
                         // but configuring IS browsing — as anonymous as the
                         // catalog rows they compute from
