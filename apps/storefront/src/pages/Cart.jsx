@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { availabilityFor, checkQualification, deliveryOptions, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots, updateMyParty, verifyDeliveryAddress } from '../api.js';
@@ -12,7 +13,6 @@ import { monthlyTotal, oneTimeTotal, pricesOf, fmtAmount } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 import { freshDevicePlan, FinancingChooser, TradeInPanel } from './cart/DevicePanels.jsx';
-
 // How a payment method reads to the shopper (the API gives the machine name).
 const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal', mmg: 'MMG mobile money', vipps: 'Vipps' };
 
@@ -23,7 +23,7 @@ const PORTING_HINTS = {
   GY: { placeholder: '+592 6xx xxxx or 7xx xxxx', registry: 'the Porting XS clearinghouse under PUC rules',
     note: 'Porting is free, takes up to one business day, needs a government photo ID, and any prepaid credit on the old SIM does not carry over.' },
 };
-const PORTING_HINT = PORTING_HINTS[(window.BSS_STOREFRONT_CONFIG || {}).country] || { placeholder: '+…', registry: "your country's number registry" };
+const portingHint = () => PORTING_HINTS[config().country] || { placeholder: '+…', registry: "your country's number registry" };
 const payLabel = (m) => PAY_LABEL[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : 'Card');
 
 export default function Cart() {
@@ -59,7 +59,7 @@ export default function Cart() {
   const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '', portDate: '' });
   // SIM registration: where the licence records a government photo ID at every SIM sale
   // (Guyana), the ID rides the mobile line as characteristics — never stored loose.
-  const simRegistrationRequired = (window.BSS_STOREFRONT_CONFIG || {}).simRegistration === 'required';
+  const simRegistrationRequired = config().simRegistration === 'required';
   const [simId, setSimId] = useState({ idType: 'National ID card', idNumber: '' });
   // Choose-your-number: a shortlist from the pool; '' = auto-assign (unchanged).
   const [numberWish, setNumberWish] = useState('');
@@ -622,8 +622,8 @@ export default function Cart() {
             <strong className="linetotal">{fmtAmount(grand.value, grand.unit)}</strong>
           </div>
         )}
-        {grand && (window.BSS_STOREFRONT_CONFIG || {}).priceNote && (
-          <p className="dim small" data-testid="price-note" style={{ margin: '2px 0 0' }}>{(window.BSS_STOREFRONT_CONFIG || {}).priceNote}</p>
+        {grand && config().priceNote && (
+          <p className="dim small" data-testid="price-note" style={{ margin: '2px 0 0' }}>{config().priceNote}</p>
         )}
         {promo && promoDiscount() && (
           <div className="row promo" data-testid="promo-row">
@@ -778,7 +778,7 @@ export default function Cart() {
                 // the operator's clock, not the visitor's: a Georgetown 09:00 must read 09:00
                 const label = new Date(start).toLocaleString(undefined,
                   { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                    ...(window.BSS_STOREFRONT_CONFIG?.timezone ? { timeZone: window.BSS_STOREFRONT_CONFIG.timezone } : {}) });
+                    ...(config()?.timezone ? { timeZone: config().timezone } : {}) });
                 const on = slot?.startDateTime === start;
                 return (
                   <label key={start} className={on ? 'option on' : 'option'}>
@@ -827,7 +827,7 @@ export default function Cart() {
                         onClick={() => { setDeliverySel(key); if (!pickup) setPickupId(''); }}>
                   <span className="simopt-t">{pickup ? `📍 ${t('Pickup point')}` : `🏠 ${t('Home delivery')}`} · {o.carrierName}</span>
                   <span className="simopt-d">{pickup
-                    ? (o.carrierName === (window.BSS_STOREFRONT_CONFIG || {}).brandName
+                    ? (o.carrierName === config().brandName
                       ? t('Collect at one of our stores near you') : `Collect at a ${o.carrierName} point near you`)
                     : (shipAddress
                       ? `Delivered to ${shipAddress} by ${o.carrierName}`
@@ -838,7 +838,7 @@ export default function Cart() {
           </div>
           {selectedOpt && isPickupMethod(selectedOpt.method) && (
             <select className="pickup-select" value={pickupId} onChange={(e) => setPickupId(e.target.value)}>
-              <option value="">{selectedOpt.carrierName === (window.BSS_STOREFRONT_CONFIG || {}).brandName ? t('Choose a store…') : `Choose a ${selectedOpt.carrierName} pickup point…`}</option>
+              <option value="">{selectedOpt.carrierName === config().brandName ? t('Choose a store…') : `Choose a ${selectedOpt.carrierName} pickup point…`}</option>
               {(selectedOpt.points || []).map((p) => (
                 <option key={p.id} value={p.id}>{p.name} — {p.address}</option>
               ))}
@@ -909,7 +909,7 @@ export default function Cart() {
           {keepNumber.on && (
             <div className="addressgrid" style={{ marginTop: '0.5rem' }}>
               <label className="charfield"><span>{t('Your number')}</span>
-                <input name="portNumber" value={keepNumber.number} placeholder={PORTING_HINT.placeholder}
+                <input name="portNumber" value={keepNumber.number} placeholder={portingHint().placeholder}
                        onChange={(e) => setKeepNumber({ ...keepNumber, number: e.target.value })} /></label>
               <label className="charfield"><span>Current provider</span>
                 <input name="portProvider" value={keepNumber.currentProvider} placeholder="e.g. OtherTelco"
@@ -920,8 +920,8 @@ export default function Cart() {
                        onChange={(e) => setKeepNumber({ ...keepNumber, portDate: e.target.value })} /></label>
             </div>
           )}
-          {keepNumber.on && <p className="dim small">We'll port it in through {PORTING_HINT.registry} and
-            activate your plan on it.{PORTING_HINT.note ? ` ${PORTING_HINT.note}` : ''}
+          {keepNumber.on && <p className="dim small">We'll port it in through {portingHint().registry} and
+            activate your plan on it.{portingHint().note ? ` ${portingHint().note}` : ''}
             {keepNumber.portDate
               ? ` Your number moves on ${keepNumber.portDate} — your old plan keeps working until then.`
               : ' No date picked = as soon as possible.'}</p>}

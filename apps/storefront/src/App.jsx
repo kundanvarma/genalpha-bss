@@ -1,3 +1,4 @@
+import { config } from './config.js';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ChatWidget from './ChatWidget.jsx';
@@ -11,6 +12,7 @@ import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Home from './pages/Home.jsx';
 import Offering from './pages/Offering.jsx';
+import Category from './pages/Category.jsx';
 import FamilyMember from './pages/FamilyMember.jsx';
 import Family from './pages/Family.jsx';
 import Cart from './pages/Cart.jsx';
@@ -23,7 +25,21 @@ import Account from './pages/Account.jsx';
 import Devices from './pages/Devices.jsx';
 
 export default function App() {
-  const [state, setState] = useState('boot'); // boot | guest | ready | error
+  // boot | guest | ready | error.
+  //
+  // The gate exists so a returning customer never sees a signed-out shop for a
+  // frame while the session resolves. On a SERVER there is no session to
+  // resolve and no frame to protect — the request is anonymous by definition —
+  // so starting at 'boot' there renders "Loading…" for every public page and
+  // nothing else. That is what a crawler would have received (#180).
+  // On a server the session state is GUEST, not `ready`. Effects do not run
+  // during renderToString, so starting in `boot` served every crawler a
+  // "Loading…" spinner — but `ready` was the wrong cure: it means "signed in
+  // and resolved", so `!isCustomer()` made every server render show the
+  // staff-session-leaked-into-the-shop banner and a Switch account prompt to
+  // crawlers. A request with no session is a guest, which is exactly what a
+  // crawler is, and what the browser's own effect concludes for one.
+  const [state, setState] = useState(typeof window === 'undefined' ? 'guest' : 'boot');
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);
@@ -115,7 +131,7 @@ export default function App() {
     <>
       <header className="top">
         <div className="brand">
-          <img className="brandlogo" src={window.BSS_STOREFRONT_CONFIG?.logoUrl || '/tmf-api/documentManagement/v4/document/brand-logo'} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img className="brandlogo" src={config()?.logoUrl || '/tmf-api/documentManagement/v4/document/brand-logo'} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="area">shop</span>
         </div>
         {/* five recurring customer jobs; session mechanics (cart, inbox, profile) live in the header utilities */}
@@ -173,6 +189,7 @@ export default function App() {
           <Route path="/" element={customer ? <Home /> : <Shop />} />
           <Route path="/shop" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
+          <Route path="/category/:slug" element={<Category />} />
           <Route path="/family" element={<Family />} />
           <Route path="/family/:id" element={<FamilyMember />} />
           <Route path="/cart" element={<Cart />} />
@@ -194,7 +211,7 @@ export default function App() {
 /** Every operator site ends the same way — how to reach us, where the app is,
  * the legal pages. All of it comes from the tenant manifest, none from code. */
 function SiteFooter() {
-  const cfg = window.BSS_STOREFRONT_CONFIG || {};
+  const cfg = config();
   const wa = cfg.supportWhatsapp ? `https://wa.me/${cfg.supportWhatsapp.replace(/[^0-9]/g, '')}` : null;
   const tel = cfg.supportPhone ? `tel:${cfg.supportPhone.replace(/[^0-9+]/g, '')}` : null;
   const any = wa || tel || cfg.supportEmail || cfg.appStoreUrl || cfg.playStoreUrl || cfg.privacyUrl || cfg.termsUrl;

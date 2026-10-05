@@ -1,3 +1,4 @@
+import { config } from '../../config.js';
 import { diagnoseMyService, mySim, replaceMySim, resetSimPin } from '../../api.js';
 import { t } from '../../i18n.js';
 import { useEffect, useState } from 'react';
@@ -133,7 +134,7 @@ export function LineDoctor({ serviceId }) {
 export function SliceBadge({ service }) {
   const chars = Object.fromEntries((service.serviceCharacteristic || []).map((c) => [c.name, c.value]));
   if (!chars.sliceProfile || chars.sliceProfile === 'default') return null;
-  const tz = (window.BSS_STOREFRONT_CONFIG || {}).timezone;
+  const tz = config().timezone;
   const until = chars.sliceUntil ? new Date(chars.sliceUntil).toLocaleString(undefined,
     { weekday: 'short', hour: '2-digit', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) }) : null;
   return (

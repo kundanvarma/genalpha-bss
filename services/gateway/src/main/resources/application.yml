@@ -63,6 +63,48 @@ spring:
             - Header=User-Agent, .*(GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|Google-Extended|Googlebot|bingbot|CCBot|Bytespider).*
           filters:
             - RewritePath=/shop/offering/(?<id>.*), /seo/offering/$\{id}
+        # SERVER-RENDERED SHOP PAGES for crawlers (#180). The shop root and the
+        # category shelves had no crawler document at all: a bot asked for
+        # /shop/ or /shop/category/mobile and received the SPA shell — a 200
+        # with no products in it. This route sends those two page kinds to the
+        # storefront's own React app rendered on a server, so a bot and a
+        # browser receive the same document from the same renderer.
+        #
+        # It is ABOVE the storefront route (first match wins) and narrower than
+        # it on purpose: /shop/assets/**, /shop/offering/** and every signed-in
+        # page keep the paths they have. The offering page stays on the Java
+        # route above because that one works in production today; the renderer
+        # handles offering pages already, so retiring that route is a predicate
+        # change here rather than a build.
+        #
+        # THE BREAKER IS THE POINT. A render that fails, times out or answers
+        # 5xx falls back to the shell a bot received before this existed —
+        # including when the service is simply not running, as it is not in a
+        # fleet started without it. Without the breaker this route would turn
+        # one unhealthy container into 503s for Googlebot on the shop's most
+        # linked URL.
+        - id: geo-ssr-public
+          uri: ${STOREFRONT_SSR_URL:http://localhost:8092}
+          predicates:
+            - Path=/shop,/shop/,/shop/category/**
+            - Header=User-Agent, .*(GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|Google-Extended|Googlebot|bingbot|CCBot|Bytespider).*
+          filters:
+            - StripPrefix=1
+            - name: CircuitBreaker
+              args:
+                name: storefrontSsr
+                fallbackUri: forward:/internal/ssr-unavailable
+                statusCodes: 500,502,503,504
+        # The fallback target, reachable only by that forward: a crawler gets the
+        # app shell, which is exactly what it received before SSR existed. Its
+        # own path rather than the original one, so a fallback cannot re-enter
+        # the route that produced it.
+        - id: geo-ssr-fallback
+          uri: ${STOREFRONT_URL:http://localhost:8091}
+          predicates:
+            - Path=/internal/ssr-unavailable
+          filters:
+            - SetPath=/index.html
         - id: geo-well-known
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
@@ -427,6 +469,32 @@ spring:
             - Path=/pim/**
           filters:
             - StripPrefix=1
+
+# The server-rendering route's breaker (#180).
+#
+# THE TIME LIMIT IS NOT A DETAIL. Spring Cloud CircuitBreaker's TimeLimiter
+# defaults to ONE SECOND, and a server render reads the catalogue first — so
+# with the default every render on a non-trivial shelf would exceed it, every
+# crawler would be served the fallback shell, and the route would look wired
+# while rendering nothing. The limit here is deliberately longer than the
+# renderer's own upstream timeout (SSR_FETCH_TIMEOUT_MS, 4s) so the renderer
+# gets to make its own decision — serve the frame and let the client fetch —
+# instead of being cut off mid-render and losing the page entirely.
+resilience4j:
+  timelimiter:
+    instances:
+      storefrontSsr:
+        timeoutDuration: ${SSR_BREAKER_TIMEOUT:9s}
+        cancelRunningFuture: true
+  circuitbreaker:
+    instances:
+      storefrontSsr:
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
 
 server:
   port: 8080

@@ -4,9 +4,11 @@
  * a TMF622 place (GeographicAddress, role "shipping"). A guest's typed
  * address survives the login redirect in localStorage.
  */
+import { config } from './config.js';
 
 const DRAFT_KEY = 'bss.shop.shippingAddress';
-const CFG = window.BSS_STOREFRONT_CONFIG || {};
+// read when used, not when imported — see src/config.js (#180)
+const CFG = () => config();
 
 /** The address form is the COUNTRY's, not the platform's. Each entry: how people
  * actually write an address there, which parts are required, and what the
@@ -37,7 +39,7 @@ const GENERIC_FORM = {
   ],
 };
 
-export const ADDRESS_FIELDS = (COUNTRY_FORMS[CFG.country] || GENERIC_FORM).fields;
+export const ADDRESS_FIELDS = (COUNTRY_FORMS[CFG().country] || GENERIC_FORM).fields;
 /** What must be filled before an address counts as complete (a region is a courtesy, not a gate). */
 const REQUIRED = ['street1', 'postCode', 'city', 'country'];
 
@@ -47,7 +49,7 @@ export function isComplete(address) {
 
 /** A fresh address starts in the operator's own country. */
 export function defaultAddress() {
-  return CFG.country ? { country: CFG.country } : {};
+  return CFG().country ? { country: CFG().country } : {};
 }
 
 export function saveDraft(address) {

@@ -40,6 +40,15 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway</artifactId>
         </dependency>
+        <!-- the server-rendering route's fallback (#180): a CircuitBreaker
+             filter needs an implementation on the classpath, and without one
+             the filter is simply not registered — the route would work and the
+             fallback would silently not exist. Version from the Spring Cloud
+             BOM imported above. -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
         <!-- browse-path edge cache: LocalResponseCache needs BOTH Caffeine and
              the cache starter (versions from the Boot BOM) — absorbs the
              campaign-day catalog surge -->

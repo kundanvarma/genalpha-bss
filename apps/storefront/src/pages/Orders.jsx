@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { useEffect, useState } from 'react';
 import { cancelOrder, myAppointments, myOrderJourney, myOrders, myShipments } from '../api.js';
 import { takeCheckoutNotice } from '../checkout.js';
@@ -14,8 +15,7 @@ const ORDER_LABEL = {
   held: 'Awaiting approval',
 };
 
-// The product families an order decomposes into, in dependency order — the base
-// connection first, then what rides on it, then mobile, then anything else.
+// Families in dependency order: the base connection, then what rides on it, then mobile, then the rest.
 const FAMILIES = [
   { type: 'internet', icon: '🌐', label: 'Internet' },
   { type: 'tv', icon: '📺', label: 'TV & Entertainment' },
@@ -33,8 +33,8 @@ function leafItems(items, into = []) {
   return into;
 }
 
-// Coarse family for a leaf — the decomposition axis. The ordering service stamps
-// componentType; fall back to the offering name so older orders still group.
+// Coarse family for a leaf: the ordering service stamps componentType; fall back
+// to the offering name so older orders still group.
 function familyOf(item) {
   if (item.componentType) return item.componentType;
   const n = (item.productOffering?.name || '').toLowerCase();
@@ -264,7 +264,7 @@ export default function Orders() {
                   <div className="small installnote">
                     🔧 Install: {new Date(visit.validFor.startDateTime).toLocaleString(undefined,
                       { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                        ...(window.BSS_STOREFRONT_CONFIG?.timezone ? { timeZone: window.BSS_STOREFRONT_CONFIG.timezone } : {}) })}
+                        ...(config()?.timezone ? { timeZone: config().timezone } : {}) })}
                   </div>
                 )}
                 {families.length > 0 && (

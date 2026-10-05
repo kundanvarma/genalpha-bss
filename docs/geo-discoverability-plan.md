@@ -511,3 +511,164 @@ starting."* It is right. The remaining work is a genuine arc:
 Items 1 to 3 are the arc. They are sequenced, not parallel, and attempting them
 in one sitting produces a half-migrated storefront — which is worse than the
 current state, because the current state is at least coherent.
+
+### SSR tracer bullet: the shop renders on a server (5 October 2026)
+
+The first item of the arc, taken on its own: *can this React application render a
+real public page to complete HTML on a server at all?* It could not, and the
+three reasons were not visible from the ticket.
+
+1. **Two modules read `window` at import time.** `auth.js` and `address.js`
+   captured the tenant manifest as a module constant, so the graph threw before
+   anything rendered. Thirteen more read it during render. All now go through
+   `src/config.js`, which answers on either side.
+2. **The app gates every route behind a client session bootstrap.** `App.jsx`
+   starts in `boot` and resolves the session in an effect — and effects do not
+   run during `renderToString`. **Every public page rendered the string
+   "Loading…" and nothing else.** This is the one that mattered: without finding
+   it, the arc would have produced a technically-successful SSR deployment
+   serving crawlers a spinner. A server render has no session to wait for, so it
+   starts **`guest`**; the client is untouched.
+
+   It started `ready` for a day, and that was wrong in a way worth recording:
+   `ready` means *signed in and resolved*, so `!isCustomer()` was true and every
+   server-rendered page carried the "a staff session has leaked into the shop"
+   banner and a **Switch account** prompt — addressed to a crawler, about a
+   session that did not exist. A request with no session is a guest, which is
+   exactly what the browser's own effect concludes for one. The suite asserts
+   the absence of both markers now.
+3. **The router's basename.** The gateway strips `/shop` before the storefront
+   sees a request, but the router keeps the basename so its links carry the
+   prefix a browser follows. The server has to put it back.
+
+With those closed, `src/entry-server.jsx` renders the real `App` through
+`StaticRouter`, and `apps/storefront/server/ssr.mjs` fetches the discovery
+projection *before* rendering and seeds it through `src/ssr-data.js`. The Shop
+page reads that seed for its first state and otherwise behaves exactly as
+before. Suite #257 proves it in plain Node: a real page rather than the boot
+gate, the tenant's brand, both server-resolved products, links carrying
+`/shop/`, and two tenants rendered back to back without leaking into each other.
+
+#### Request scope, and the language bug under it
+
+The first cut held the tenant in module state around a synchronous render. That
+is *safe today* — `renderToString` does not await, so in single-threaded Node no
+second request can interleave — but it is safe by accident rather than by
+construction, and the accident ends the moment this moves to a streaming
+renderer, which it should for Suspense and time-to-first-byte. Then one
+operator's prices would appear under another's brand, silently and only under
+load.
+
+So the tenant now lives in `AsyncLocalStorage`, installed by the server entry
+through a resolver seam so that Node's `async_hooks` never enters the browser
+bundle (asserted: zero occurrences in the client assets).
+
+Underneath that was a real bug rather than a hypothetical one. **`i18n.js`
+captured the tenant's language and currency as module constants at import.** In
+a browser that is correct — a browser serves one tenant. On a server it meant
+the first operator rendered decided the language for every operator after it:
+a Norwegian tenant served English, with nothing failing. `locale`, `currency`,
+`country`, `intlLocale`, `priceFormat` and `priceNote` are functions now; `t()`
+and `money()` already were, so the nineteen modules that use only those did not
+change, and the two that read values as constants were updated.
+
+Suite #257 proves both through the rendered document: two requests interleaved
+across an await keep their own tenant, and the Norwegian render says *Butikk*
+while the English one does not. Reverting `i18n.js` to capture once fails it
+with *"the Norwegian tenant was served English"*.
+
+#### Both public routes now render
+
+The offering page is the one the User-Agent branch serves from Java today, so it
+is the one that has to render here before that branch can ever be deleted. It
+does: name, description and **price**, from an offering and a price index the
+server resolved before rendering. A page that renders a product with no price is
+worse than no page, so the suite asserts the number rather than the name alone —
+and removing the price seed fails it with exactly that sentence.
+
+The server fetches **the same endpoints the client calls**, deliberately. The
+acceptance is that a bot and a browser receive the same document, and the
+cheapest way to guarantee that is for both to read the same shapes through the
+same doors, with no mapping layer between them to drift.
+
+That leaves one real question open, and it should be answered deliberately
+rather than discovered: the crawler page renders from the shared projection
+(#179), which decides which price leads; the React app has its own price logic
+in `money.js`. **They agree today.** When the crawler route is finally deleted,
+somebody has to decide which of the two is the authority for a headline price.
+
+#### Wired to the gateway — and what the wiring found
+
+The renderer is now a service in the fleet (`storefront-ssr`, built from
+`Dockerfile.ssr` out of the same sources) and the gateway sends it the shop root
+and the category shelves **when the caller is a named crawler**. Those are
+exactly the pages that had no crawler document at all: a bot asking for `/shop/`
+or `/shop/category/mobile` received the SPA shell — a 200 with no products in it
+— while the shelves were being advertised on the sitemap in the same breath as
+they became pages. So this route is additive. Humans keep the nginx-served
+bundle byte for byte, `/shop/assets/**` is untouched, and `/shop/offering/{id}`
+still answers from Java, because that page works in production today and
+"deployed" is not "proven".
+
+**The circuit breaker is the point, not a detail.** A render that fails, times
+out or answers 5xx — including the renderer simply not running — falls back to
+the shell a bot received before any of this existed. Without it, this route
+turns one unhealthy container into 502s for Googlebot on the shop's most linked
+URL. The breaker is proved by *stopping the container* in suite #258 rather than
+by reading the configuration. One trap worth knowing: Spring Cloud
+CircuitBreaker's `TimeLimiter` defaults to **one second**, and a server render
+reads the catalogue first — left at the default, every crawler would be served
+the fallback and the route would look wired while rendering nothing.
+
+Three defects were invisible from the renderer alone, and all three are the same
+shape — *a gate that could not fail*:
+
+1. **`npm run build:ssr` had never run.** It exited 1 (Vite 8 dropped
+   `--ssrEmitAssets` from the CLI). The Dockerfile used it; suite #257 had its
+   own hand-rolled `vite` line, so the broken script passed every gate from the
+   day it was written. The suite now builds through the npm script.
+2. **The renderer answered 500 on every page in the image while passing on the
+   laptop.** `tokenClaims()` reads `sessionStorage` on every render; Node 22 —
+   what the image runs — has no Web Storage, Node 24 and later expose it, and
+   the laptop runs Node 26. The suite's headline claim that no browser API is
+   touched was simply untrue, and nothing could have told us. It now deletes
+   `sessionStorage`, `localStorage`, `window` and `document` from the global
+   scope before importing anything, so the laptop reproduces the image. The fix
+   in `auth.js` is a no-op session store rather than a memory one: one process
+   serves every request, so a module-scoped store would hand one visitor's token
+   to the next.
+3. **The staff banner**, above.
+
+Two of the three only appeared because the renderer was asked to serve a *real*
+tenant manifest instead of the three fields a test author reaches for. That is
+now part of #257: all three public pages render under the full manifest the
+gateway emits.
+
+**Three copies of the shelf list.** nginx keeps one (to answer 404 for a slug
+that is not a shelf), the catalog's sitemap keeps another, and the renderer
+exports a third — from `LINES`, the list the router actually routes, so the
+server cannot disagree with the app it serves. Three copies is two too many, and
+until there is one, suite #258 pins them together: every slug on the sitemap
+answers 200 to a bot **and** to a human, and a slug on neither answers 404 to
+both.
+
+**What is still deliberately not done.** The crawler User-Agent branch for
+`/shop/offering/{id}` is untouched; retiring it is a predicate change here
+rather than a build, since the renderer already handles offering pages. Humans
+are still served by nginx, so a crawler and a human get documents from different
+renderers — the same React sources now, which is the point of the arc, but one
+build serving both is the step after this. Help pages are still not covered, and
+not for a rendering reason: knowledge articles require `knowledge:read`, so
+there is no anonymous door, and making them crawlable publishes content that
+sits behind sign-in today — an operator's decision, not a renderer's. The
+account pages still fetch in effects and render their loading state, which is
+correct rather than pending: they are behind sign-in and `noindex`. Streaming
+has not been attempted; request scope is in place so that move is a performance
+decision rather than a correctness one. And the hydration seed is the whole
+shelf, so a crawler is sent ~130 KB of JSON it has no use for — it stays because
+it is what keeps a human's server-rendered page from flashing, and trimming it
+per page would end the one data contract the pages share.
+
+Every file touched here was already at or over the 300-line limit, so each
+`import { config }` had to be paid for out of the same file. That is the third
+time this week; it is a real tax on the storefront now, not a theoretical one.
