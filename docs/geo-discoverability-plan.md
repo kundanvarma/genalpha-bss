@@ -437,3 +437,77 @@ an agent reading the public feed cannot be told different prices.
 - The surface is proven, its consumption is not. No crawler is obliged to read
   it, and an agent caching it for a week will still quote a stale price — no
   feed design prevents that.
+
+## The whole shelf, and honest HTTP (SEO-4 part, #180)
+
+*Built 5 October 2026. Two defects out of #180 that do not need server-side
+rendering and should not wait for it. **The SSR arc itself is not done** — see
+below for what remains and why it was not attempted in one sitting.*
+
+### The silent ceiling
+
+Every public surface read a flat 500 offerings and stopped. No signal, no
+marker, no log. A tenant with 600 offerings published 500 of them and nothing
+anywhere said which hundred were missing, or that any were. `llms.txt` was
+worse at 200.
+
+The same ceiling applied to the **price index**, and that one is not cosmetic: a
+price beyond it made its offering look unpriced, and an unpriced offering is
+dropped from the agentic feed entirely. An agent reads a missing product as a
+withdrawn one.
+
+Both now page to exhaustion. A ceiling still exists at 10,000, because reading
+"to exhaustion" against a catalogue of unknown size is its own hazard — one
+request can otherwise hold a connection open across a hundred thousand rows —
+but hitting it is **published** (`truncated: true` on the discovery feed) rather
+than silent, so a consumer can tell a complete feed from a cut one.
+
+Proven on a shelf of 506: sitemap, llms.txt and discovery all publish the same
+506, and the offering past the old ceiling still carries its price and is still
+sold by the agentic feed.
+
+### A 200 on a URL that does not exist
+
+`try_files $uri /index.html` answered **200 with the app shell for any path**.
+`/shop/nonsense` looked exactly like a real page to a crawler, a link checker
+and a monitor — because it *was* a real page: the shell, which then rendered
+nothing. A 200 on a URL that does not exist is the most expensive kind of wrong,
+because nothing downstream can detect it.
+
+The storefront's nginx now enumerates the app's routes, including the ones that
+**require an identifier** — `/shop/offering` with no id is not a page and now
+says so. Real routes still answer 200; the suite asserts both directions,
+because an over-tight enumeration would lock out a working page.
+
+**This duplicates the router in `App.jsx`, deliberately and temporarily.** The
+alternative is a config file claiming every URL is valid. When SSR lands the
+router answers for real and those two location blocks are deleted, not
+maintained.
+
+### What remains of #180, and why it was not done here
+
+The ticket says plainly: *"This is the arc, not a ticket — scope it before
+starting."* It is right. The remaining work is a genuine arc:
+
+1. **A server-rendering runtime.** A Vite SSR build and a Node process, which
+   replaces nginx's role and puts the storefront on the request path for every
+   public page — needing the timeout, failure and observability treatment any
+   other service gets.
+2. **Removing browser globals from module scope.** `auth.js` and `App.jsx` read
+   `window.BSS_STOREFRONT_CONFIG` at import time. Nothing renders on a server
+   until that is unpicked.
+3. **Server-resolvable data loading.** Public pages fetch in `useEffect` today;
+   SSR needs a loader per public route, plus a hydration payload that does not
+   re-fetch and does not flash.
+4. **Category and help pages as first-class routes.** They do not exist as
+   routes at all today, so there is no crawl graph to render.
+5. **The canonical slug contract** — slug plus immutable id tail, with a 301
+   from the legacy `/shop/offering/<id>`.
+6. **Then, and only then, deleting the crawler User-Agent route** — the ticket's
+   own honest limit says keep it until SSR is proven in production, because
+   removing it first makes a bad deploy invisible to crawlers and visible to
+   Google.
+
+Items 1 to 3 are the arc. They are sequenced, not parallel, and attempting them
+in one sitting produces a half-migrated storefront — which is worse than the
+current state, because the current state is at least coherent.

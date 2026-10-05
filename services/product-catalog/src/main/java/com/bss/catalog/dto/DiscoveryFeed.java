@@ -28,9 +28,10 @@ import java.util.List;
  * agent that cannot tell how old a price is will quote a withdrawn one with
  * confidence.</p>
  */
-@JsonPropertyOrder({"version", "tenant", "generatedAt", "productCount", "products"})
+@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+@JsonPropertyOrder({"version", "tenant", "generatedAt", "productCount", "truncated", "products"})
 public record DiscoveryFeed(String version, String tenant, String generatedAt,
-        int productCount, List<Product> products) {
+        int productCount, Boolean truncated, List<Product> products) {
 
     /** The wire version. Bumped when the shape changes in a way a reader would notice. */
     public static final String VERSION = "1.0";
