@@ -35,10 +35,21 @@ READY_TIMEOUT="${CI_FLEET_TIMEOUT:-600}"
 SMOKE_SERVICES="postgres kafka redis keycloak gateway
   product-catalog product-ordering product-inventory party-account
   shopping-cart payment payment-method promotion qualification policy
-  document user-roles storefront csr-console mobile-app console partner-console"
+  document user-roles storefront storefront-ssr csr-console mobile-app console partner-console"
 # csr-console, mobile-app and console were already in the closure through the
 # gateway; naming them keeps the list honest about what the tier proves. The
 # partner portal is the one channel that was not (an nginx container, no JVM).
+#
+# storefront-ssr added 5 Oct 2026, and the cost was checked against the rule
+# above rather than assumed: it declares no depends_on, the two services it
+# reads (product-catalog, gateway) were already in the slice, so the closure
+# grows by exactly one container — a Node process with no JVM, unaffected by
+# the heap cap below. It is here because nothing else in CI builds it: the
+# images job iterates `services/*/`, so no apps/* Dockerfile is built there at
+# all, and this slice is the only place a channel image is built and run.
+# Without it the gateway's crawler route in CI points at a host that does not
+# exist, the circuit breaker quietly serves the shell, and the route looks
+# fine while being entirely unexercised.
 
 case "$TIER" in
   smoke|build-list) SERVICES="$SMOKE_SERVICES" ;;
