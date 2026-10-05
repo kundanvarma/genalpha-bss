@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr --ssrEmitAssets false",
+    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr",
     "preview": "vite preview"
   },
   "dependencies": {

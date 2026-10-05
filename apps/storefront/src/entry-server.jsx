@@ -23,8 +23,21 @@ import { StaticRouter } from 'react-router';
 import App from './App.jsx';
 import { setConfigResolver } from './config.js';
 import { setDataResolver } from './ssr-data.js';
+import { LINES } from './pages/lines.jsx';
 
 const request = new AsyncLocalStorage();
+
+/**
+ * WHICH CATEGORY URLS EXIST, exported from the same list the pages render from.
+ *
+ * The runtime has to answer 404 for a shelf that is not a shelf, and it must not
+ * do that from a second copy of the list: nginx keeps one and the catalog's
+ * sitemap keeps another, and three copies of a closed list is three chances for
+ * a URL to be a page on one surface and a 404 on the next. This is the list the
+ * router actually routes, so the server cannot disagree with the app it serves.
+ * The suite pins all three together.
+ */
+export const SHELVES = LINES.map((l) => l.slug);
 
 setConfigResolver(() => request.getStore()?.config ?? null);
 setDataResolver(() => request.getStore()?.data ?? null);

@@ -32,7 +32,14 @@ export default function App() {
   // resolve and no frame to protect — the request is anonymous by definition —
   // so starting at 'boot' there renders "Loading…" for every public page and
   // nothing else. That is what a crawler would have received (#180).
-  const [state, setState] = useState(typeof window === 'undefined' ? 'ready' : 'boot');
+  // On a server the session state is GUEST, not `ready`. Effects do not run
+  // during renderToString, so starting in `boot` served every crawler a
+  // "Loading…" spinner — but `ready` was the wrong cure: it means "signed in
+  // and resolved", so `!isCustomer()` made every server render show the
+  // staff-session-leaked-into-the-shop banner and a Switch account prompt to
+  // crawlers. A request with no session is a guest, which is exactly what a
+  // crawler is, and what the browser's own effect concludes for one.
+  const [state, setState] = useState(typeof window === 'undefined' ? 'guest' : 'boot');
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);

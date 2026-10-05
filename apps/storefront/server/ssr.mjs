@@ -1,48 +1,71 @@
 /*
- * THE SERVER-RENDERING RUNTIME (#180, tracer bullet).
+ * THE SERVER-RENDERING RUNTIME (#180).
  *
- * The public routes, rendered by React on a server, to prove the path end to end:
- * the SSR build loads, the app renders to a string with the tenant's own
- * config, the data it needs is fetched BEFORE the render rather than in an
- * effect that never runs, and the document a crawler receives is complete with
- * no JavaScript executed.
+ * The public routes, rendered by React on a server: the SSR build loads, the app
+ * renders to a string with the tenant's own config, the data it needs is fetched
+ * BEFORE the render rather than in an effect that never runs, and the document a
+ * crawler receives is complete with no JavaScript executed.
  *
- * WHAT THIS IS NOT, and the reasons are in docs/geo-discoverability-plan.md:
- *  - not the storefront's runtime. nginx still serves the app; this sits beside
- *    it on its own path, so nothing existing changes and a bad render is
- *    reversible by deleting a gateway route.
- *  - not streaming. `renderToString` is synchronous, so Suspense and partial
- *    flushing are unexercised. The tenant is request-scoped, so that move is a
- *    performance decision rather than a correctness one.
- *  - not the crawler route's replacement. That is deleted only once SSR is
- *    proven in production, because removing it first makes a bad deploy
- *    invisible to crawlers and visible to Google.
+ * WIRED, AND DELIBERATELY NARROW. The gateway sends this service the two page
+ * kinds that had NO crawler document at all — the shop root and the category
+ * shelves, where a bot got the empty SPA shell — and only when the caller is a
+ * named crawler. Everything else is untouched:
+ *
+ *  - humans still get the nginx-served bundle, byte for byte as before;
+ *  - /shop/offering/** still gets the Java-rendered page, because that one
+ *    works in production today and the ticket's own limit says keep it until
+ *    this is proven there. This renders offering pages too — the suite asserts
+ *    it — so the swap is a route change, not a build.
+ *
+ * AN UPSTREAM THAT IS DOWN IS NOT A PAGE THAT IS MISSING, and conflating the
+ * two is how a slow catalogue becomes a deindexed shop. So:
+ *
+ *  - a page that does not exist answers 404 (an unknown shelf slug, an offering
+ *    id the catalogue does not have) — with a real rendered document, because a
+ *    crawler reads a 404 body too;
+ *  - a catalogue that times out answers 200 with the page frame and no seed, so
+ *    the client fetches exactly as it always did. A thin page for one request is
+ *    recoverable; a 404 teaches a crawler the URL is gone.
+ *
+ * WHAT IS STILL NOT HERE: streaming. `renderToString` is synchronous, so nothing
+ * exercises Suspense or partial flushing; the tenant is request-scoped so that
+ * move stays a performance decision rather than a correctness one.
+ *
+ * A DARK TENANT. The gateway's CrawlerVisibilityFilter stamps `X-Robots-Tag:
+ * noindex, nofollow` on every response for a dark tenant's host, so a rendered
+ * page carries the directive. That is deliberately not the same as the Java
+ * page's 404 for a dark tenant, and it is the stronger of the two: Google
+ * documents that keeping a URL out of an index requires letting the crawler in
+ * and telling it noindex — a blocked fetch still indexes the bare URL.
  */
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
-import { render } from '../dist-ssr/entry-server.js';
+import { render, SHELVES } from '../dist-ssr/entry-server.js';
 
 const PORT = Number(process.env.PORT || 8080);
 const CATALOG = process.env.CATALOG_URL || 'http://product-catalog:8080';
 const GATEWAY = process.env.GATEWAY_URL || 'http://gateway:8080';
 const TIMEOUT = Number(process.env.SSR_FETCH_TIMEOUT_MS || 4000);
+const CAT = '/tmf-api/productCatalogManagement/v4';
+const SHELF = new Set(SHELVES);
 
 /** The built client bundle's tags, lifted from the client build's index.html. */
 const TEMPLATE = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
 
 /**
- * A slow catalogue must not become a slow page. The ticket's honest limit says
- * SSR needs the same timeout treatment as any other service on the request
- * path; this is that treatment, and it fails to an empty seed rather than a
- * 500, so the page still renders and the client fetches as it always did.
+ * A slow catalogue must not become a slow page, and must not become a missing
+ * one either: `null` here means "no answer", which is a different fact from an
+ * answer of nothing, and the caller is required to tell them apart.
  */
 async function fetchJson(url, headers) {
-  const stop = AbortSignal.timeout(TIMEOUT);
   try {
-    const res = await fetch(url, { headers, signal: stop });
-    return res.ok ? await res.json() : null;
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+    if (res.status === 404) {
+      return { status: 404, json: null };
+    }
+    return { status: res.status, json: res.ok ? await res.json() : null };
   } catch {
-    return null;
+    return { status: 0, json: null };
   }
 }
 
@@ -64,28 +87,52 @@ async function tenantConfig(host) {
 
 /**
  * Page through a list endpoint the way the client's own api.js does — the API
- * caps a page at 100 and the shelf outgrew that.
+ * caps a page at 100 and the shelf outgrew that. `null` when the catalogue did
+ * not answer at all, which is not the same as an empty shelf.
  */
-async function page(pathAndQuery, host) {
+async function listAll(pathAndQuery, host) {
   const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
   const all = [];
   for (let offset = 0; ; offset += 100) {
     const sep = pathAndQuery.includes('?') ? '&' : '?';
     const got = await fetchJson(`${CATALOG}${pathAndQuery}${sep}limit=100&offset=${offset}`, headers);
-    if (!Array.isArray(got)) break;
-    all.push(...got);
-    if (got.length < 100) break;
+    if (!Array.isArray(got.json)) {
+      return offset === 0 ? null : all;
+    }
+    all.push(...got.json);
+    if (got.json.length < 100) break;
   }
   return all;
 }
 
+const index = (rows) => {
+  const by = {};
+  for (const p of rows || []) by[p.id] = p;
+  return by;
+};
+
 /**
- * What this path needs resolved before it can render.
+ * What kind of page is this path, if any?
  *
- * THE SAME ENDPOINTS THE CLIENT CALLS, deliberately. The acceptance for this
- * arc is that a bot and a browser receive the same document, and the cheapest
- * way to guarantee that is for both to read the same shapes from the same
- * doors — no mapping layer in between to drift.
+ * One classification, used for both the status code and the data to resolve, so
+ * the server cannot answer 200 for a shape it then has nothing to render.
+ */
+function classify(route) {
+  if (route === '/' || route === '/shop' || route === '/shop/') return { kind: 'home' };
+  const shelf = route.match(/^\/(?:shop\/)?category\/([^/]+)\/?$/);
+  if (shelf) return { kind: 'shelf', slug: decodeURIComponent(shelf[1]) };
+  const offering = route.match(/^\/(?:shop\/)?offering\/([^/]+)\/?$/);
+  if (offering) return { kind: 'offering', id: decodeURIComponent(offering[1]) };
+  return { kind: 'unknown' };
+}
+
+/**
+ * What this path needs resolved before it can render, and what status it earns.
+ *
+ * THE SAME ENDPOINTS THE CLIENT CALLS, deliberately. The acceptance for this arc
+ * is that a bot and a browser receive the same document, and the cheapest way to
+ * guarantee that is for both to read the same shapes from the same doors — no
+ * mapping layer in between to drift.
  *
  * That leaves one question open, and it is a real one: the crawler page renders
  * from the shared projection (#179), which decides which price leads, while the
@@ -94,35 +141,27 @@ async function page(pathAndQuery, host) {
  * the authority for a headline price — this file is not the place to decide it
  * quietly.
  */
-async function resolve(path, host) {
+async function resolve(page, host) {
+  if (page.kind === 'unknown') return { status: 404, data: null };
+  if (page.kind === 'shelf' && !SHELF.has(page.slug)) return { status: 404, data: null };
+
+  if (page.kind === 'home' || page.kind === 'shelf') {
+    const [offerings, prices] = await Promise.all([
+      listAll(`${CAT}/productOffering?lifecycleStatus=Active`, host),
+      listAll(`${CAT}/productOfferingPrice`, host),
+    ]);
+    // no answer from the catalogue: render the frame and let the client fetch,
+    // rather than teach a crawler that the shop is gone
+    if (offerings === null) return { status: 200, data: null };
+    return { status: 200, data: { offerings, prices: index(prices) } };
+  }
+
   const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
-  const route = path.split('?')[0];
-
-  // the shop root and every shelf need the same two reads
-  if (route === '/' || route === '/shop' || /^\/category\/[^/]+\/?$/.test(route)) {
-    const [offerings, priceRows] = await Promise.all([
-      page('/tmf-api/productCatalogManagement/v4/productOffering?lifecycleStatus=Active', host),
-      page('/tmf-api/productCatalogManagement/v4/productOfferingPrice', host),
-    ]);
-    if (!offerings.length) return null;
-    const prices = {};
-    for (const p of priceRows) prices[p.id] = p;
-    return { offerings, prices };
-  }
-
-  const offeringMatch = route.match(/^\/offering\/([^/]+)\/?$/);
-  if (offeringMatch) {
-    const [offering, priceRows] = await Promise.all([
-      fetchJson(`${CATALOG}/tmf-api/productCatalogManagement/v4/productOffering/${encodeURIComponent(offeringMatch[1])}`, headers),
-      page('/tmf-api/productCatalogManagement/v4/productOfferingPrice', host),
-    ]);
-    if (!offering || !offering.id) return null;
-    const prices = {};
-    for (const p of priceRows) prices[p.id] = p;
-    return { offering, prices };
-  }
-
-  return null;
+  const got = await fetchJson(`${CATALOG}${CAT}/productOffering/${encodeURIComponent(page.id)}`, headers);
+  if (got.status === 404) return { status: 404, data: null };
+  if (!got.json || !got.json.id) return { status: 200, data: null };
+  const prices = await listAll(`${CAT}/productOfferingPrice`, host);
+  return { status: 200, data: { offering: got.json, prices: index(prices) } };
 }
 
 function document(appHtml, config, data) {
@@ -142,15 +181,24 @@ createServer(async (req, res) => {
   }
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   try {
+    const page = classify(url.pathname);
+    if (page.kind === 'unknown') {
+      // the shape is not a page at all — say so the way nginx does, with no
+      // document, because there is no page here to render
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('not found');
+      return;
+    }
     const config = await tenantConfig(host);
-    const data = await resolve(url.pathname + url.search, host);
+    const { status, data } = await resolve(page, host);
     const html = render(url.pathname + url.search, config, data);
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+    res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(document(html, config, data));
   } catch (e) {
     // A render that throws must not serve a half-written page: say so plainly
-    // and let the gateway decide. Silence here would look like a thin page to
-    // a crawler, which is worse than an error.
+    // and let the gateway's circuit breaker fall back to the shell. Silence
+    // here would look like a thin page to a crawler, which is worse than an
+    // error the gateway can act on.
     res.writeHead(500, { 'Content-Type': 'text/plain' });
     res.end(`server render failed: ${e.message}`);
   }

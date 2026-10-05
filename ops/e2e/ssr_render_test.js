@@ -32,9 +32,15 @@
  *  - THE DATA THE SERVER ALREADY HAD. Products appear because the renderer
  *    seeded them, not because an effect fetched them — that is the difference
  *    between a complete page and valid HTML that says nothing.
- *  - NO BROWSER IS TOUCHED. The render runs in plain Node. If any module
- *    reaches for `window`, `document` or `localStorage` at import or during
- *    render of a public page, this throws.
+ *  - NO BROWSER IS TOUCHED. The render runs in plain Node with Web Storage,
+ *    `window` and `document` deleted from the global scope first — see the
+ *    block below, and the reason it exists: this suite passed for a fortnight
+ *    while the runtime image answered 500 on every page, because the laptop's
+ *    Node supplied a `sessionStorage` the image's Node does not.
+ *  - THE TENANT MANIFEST THE GATEWAY ACTUALLY SENDS. Rendering with the three
+ *    fields a test author thinks of exercises fewer code paths than a real
+ *    config does; the full manifest shape is rendered here too, because the
+ *    fields nobody thinks about are the ones that reach for a browser.
  *  - REQUEST SCOPE, NOT MODULE SCOPE. Two requests interleaved across an await
  *    keep their own tenant, and the Norwegian one is served Norwegian while the
  *    English one is not. Module state cannot survive that test, which is why it
@@ -52,10 +58,11 @@
  *  - Streaming is not used. `renderToString` is synchronous, so nothing here
  *    exercises Suspense or partial flushing; request scope is in place so that
  *    move does not become a correctness problem, but it has not been made.
- *  - Nothing is deployed. The runtime in `apps/storefront/server/ssr.mjs` is
- *    not wired to the gateway and the crawler User-Agent route is untouched,
- *    deliberately: the ticket's own limit says keep it until SSR is proven in
- *    production.
+ *  - THIS SUITE DEPLOYS NOTHING AND SERVES NOTHING. It renders in-process, so
+ *    it cannot tell you what a crawler asking the gateway receives — and that
+ *    gap is not academic: everything here passed while the deployed renderer
+ *    answered 500 on every page. Suite #258 covers the wiring, and found three
+ *    defects this one structurally could not.
  */
 const { execFileSync } = require('child_process');
 const path = require('path');
@@ -64,12 +71,39 @@ const APP = path.resolve(__dirname, '../../apps/storefront');
 const fail = (m) => { throw new Error(m); };
 const ok = (m) => console.log('OK ' + m);
 
+/*
+ * THE LAPTOP MUST REPRODUCE THE IMAGE.
+ *
+ * This suite claimed "no browser is touched" and was wrong about it for a
+ * fortnight. Node 22 — what the runtime image runs — has no Web Storage; Node
+ * 24 and later expose `sessionStorage`, and this laptop runs Node 26. So
+ * `tokenClaims()` reading `sessionStorage` on every render passed here and
+ * threw in the container, and the first thing the deployed renderer did was
+ * answer 500 on every page.
+ *
+ * A gate that depends on which Node happens to be installed is not a gate, so
+ * the globals go before anything is imported. Deleted rather than asserted
+ * absent: asserting would make the suite fail on a newer Node instead of
+ * proving the thing it is here to prove.
+ */
+for (const api of ['sessionStorage', 'localStorage', 'window', 'document']) {
+  if (api in globalThis) {
+    delete globalThis[api];
+    console.log(`-- removed globalThis.${api}: this Node provides it, the runtime image does not`);
+  }
+}
+
 (async () => {
   /* ---------- the server bundle builds from the same sources ---------- */
-  execFileSync('npx', ['--yes', 'vite', 'build', '--ssr', 'src/entry-server.jsx',
-    '--outDir', 'dist-ssr', '--logLevel', 'error'],
-  { cwd: APP, stdio: ['ignore', 'ignore', 'inherit'] });
-  ok('the server bundle builds from the same sources as the client');
+  // THROUGH THE NPM SCRIPT, not a hand-rolled vite line. This suite used to
+  // spell the build out itself, which meant `npm run build:ssr` — the command
+  // the Dockerfile runs — was never executed by anything and had been broken
+  // since the day it was written (Vite 8 dropped `--ssrEmitAssets` from the
+  // CLI, so it exited 1). A build command that only CI and a Dockerfile run is
+  // a build command nobody tests; this is now one command with one prover.
+  execFileSync('npm', ['run', 'build:ssr'],
+    { cwd: APP, stdio: ['ignore', 'ignore', 'inherit'] });
+  ok('the server bundle builds from the same sources as the client, through the npm script the image uses');
 
   const { render, withRequest } = await import(path.join(APP, 'dist-ssr/entry-server.js'));
 
@@ -94,6 +128,21 @@ const ok = (m) => console.log('OK ' + m);
 
   if (!html.includes(config.brandName)) fail('the tenant brand is absent — the server config never reached the render');
   ok(`the tenant's own brand is in the document ("${config.brandName}")`);
+
+  /* ---------- a request with no session is a GUEST, not a resolved one ---------- */
+  // The first SSR unblock started the server render in `ready`, which means
+  // "signed in and resolved" — so `!isCustomer()` was true and every crawler
+  // was served the staff-session-leaked-into-the-shop banner with a Switch
+  // account prompt. A page whose first words to an answer engine are about
+  // somebody else's session is worse than no page.
+  for (const marker of ['staff-in-shop', 'switch-account']) {
+    if (html.includes(marker)) {
+      fail(`the server render shows "${marker}" — it is rendering a signed-in-but-not-a-customer`
+        + ' session for a request that has no session at all');
+    }
+  }
+  if (!html.includes('data-testid="shop-tabs"')) fail('the guest shop is missing its own shelves');
+  ok('a request with no session renders the guest shop — no staff banner, no account prompt');
 
   /* ---------- the data the server already had ---------- */
   for (const o of data.offerings) {
@@ -204,6 +253,29 @@ const ok = (m) => console.log('OK ' + m);
     fail('the English tenant was served Norwegian — the other request\'s language leaked into it');
   }
   ok('the language follows the request: the Norwegian render says "Butikk", the English one does not');
+
+  /* ---------- the manifest the gateway actually sends ---------- */
+  // Every field /shop/tenant-config.js emits, not the three a test author
+  // reaches for. The 500 in the container came from a path the short config
+  // never rendered, so the full shape is now part of the proof.
+  const REAL = {
+    issuer: 'http://localhost:8085/realms/bss',
+    logoUrl: '/tmf-api/documentManagement/v4/document/brand-logo',
+    brandName: 'MyGenAlpha', brandColor: '#0E7C7B', locale: 'en', currency: 'EUR',
+    timezone: 'Europe/Oslo', country: '', priceDecimals: null, currencyDisplay: 'symbol',
+    priceNote: '', simRegistration: 'off', shopWindow: 'static', supportPhone: '',
+    supportWhatsapp: '', supportEmail: '', appStoreUrl: '', playStoreUrl: '',
+    privacyUrl: '', termsUrl: '', tagline: '', priceParity: 'uniform',
+    businessSales: true, seamVendors: { ocs: 'mock' },
+  };
+  for (const [label, path, seed] of [['the shop root', '/', data],
+    ['a shelf', '/category/mobile', shelfData],
+    ['an offering', '/offering/off-1', offeringData]]) {
+    const full = render(path, REAL, seed);
+    if (/gatepost|Loading…/.test(full)) fail(`${label} rendered the boot gate under the real tenant manifest`);
+    if (full.length < 500) fail(`${label} produced ${full.length} bytes under the real tenant manifest`);
+  }
+  ok('all three public pages render under the full tenant manifest the gateway emits, not a three-field stand-in');
 
   console.log('\nPASS ssr_render_test — the shop renders on a server, with no browser and no JavaScript');
 })().catch((e) => { console.error('\nFAIL ' + e.message); process.exit(1); });

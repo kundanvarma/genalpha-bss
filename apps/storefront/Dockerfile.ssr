@@ -1,0 +1,32 @@
+# The server-rendering runtime (#180) — the SAME SOURCES as the storefront
+# image, built twice: once for the browser, once for Node.
+#
+# Two builds rather than one because they are two different targets of one app,
+# and the runtime needs both: `dist-ssr` is what renders, and `dist/index.html`
+# is the template whose script and style tags the rendered markup is wrapped in,
+# so the document a crawler receives carries the same bundle a browser hydrates
+# from. A drift between them is a page that renders and then re-renders
+# differently, which is why they are never built separately.
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+RUN npm run build && npm run build:ssr
+
+# Vite externalises dependencies in an SSR build — the server bundle imports
+# react and react-dom rather than inlining them — so the runtime image needs the
+# production tree. `--omit=dev` leaves vite and the plugin behind.
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist-ssr ./dist-ssr
+COPY server ./server
+USER node
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+CMD ["node", "server/ssr.mjs"]

@@ -528,7 +528,15 @@ three reasons were not visible from the ticket.
    "Loading…" and nothing else.** This is the one that mattered: without finding
    it, the arc would have produced a technically-successful SSR deployment
    serving crawlers a spinner. A server render has no session to wait for, so it
-   starts `ready`; the client is untouched.
+   starts **`guest`**; the client is untouched.
+
+   It started `ready` for a day, and that was wrong in a way worth recording:
+   `ready` means *signed in and resolved*, so `!isCustomer()` was true and every
+   server-rendered page carried the "a staff session has leaked into the shop"
+   banner and a **Switch account** prompt — addressed to a crawler, about a
+   session that did not exist. A request with no session is a guest, which is
+   exactly what the browser's own effect concludes for one. The suite asserts
+   the absence of both markers now.
 3. **The router's basename.** The gateway strips `/shop` before the storefront
    sees a request, but the router keeps the basename so its links carry the
    prefix a browser follows. The server has to put it back.
@@ -537,9 +545,9 @@ With those closed, `src/entry-server.jsx` renders the real `App` through
 `StaticRouter`, and `apps/storefront/server/ssr.mjs` fetches the discovery
 projection *before* rendering and seeds it through `src/ssr-data.js`. The Shop
 page reads that seed for its first state and otherwise behaves exactly as
-before. Suite #257 proves it in plain Node: 3,121 bytes of real page, the
-tenant's brand, both server-resolved products, links carrying `/shop/`, and two
-tenants rendered back to back without leaking into each other.
+before. Suite #257 proves it in plain Node: a real page rather than the boot
+gate, the tenant's brand, both server-resolved products, links carrying
+`/shop/`, and two tenants rendered back to back without leaking into each other.
 
 #### Request scope, and the language bug under it
 
@@ -589,14 +597,77 @@ rather than discovered: the crawler page renders from the shared projection
 in `money.js`. **They agree today.** When the crawler route is finally deleted,
 somebody has to decide which of the two is the authority for a headline price.
 
-**What is still deliberately not done.** The runtime is not wired to the gateway
-and the crawler User-Agent route is untouched — the ticket's own limit says keep
-it until SSR is proven in production. Category and help pages are not covered
-because *they are not routes at all yet*; making them first-class is its own
-piece of the arc. The account pages still fetch in effects and render their
-loading state, which is correct rather than pending — they are behind sign-in
-and `noindex`. And streaming has not been attempted; request scope is in place
-so that move is a performance decision rather than a correctness one.
+#### Wired to the gateway — and what the wiring found
+
+The renderer is now a service in the fleet (`storefront-ssr`, built from
+`Dockerfile.ssr` out of the same sources) and the gateway sends it the shop root
+and the category shelves **when the caller is a named crawler**. Those are
+exactly the pages that had no crawler document at all: a bot asking for `/shop/`
+or `/shop/category/mobile` received the SPA shell — a 200 with no products in it
+— while the shelves were being advertised on the sitemap in the same breath as
+they became pages. So this route is additive. Humans keep the nginx-served
+bundle byte for byte, `/shop/assets/**` is untouched, and `/shop/offering/{id}`
+still answers from Java, because that page works in production today and
+"deployed" is not "proven".
+
+**The circuit breaker is the point, not a detail.** A render that fails, times
+out or answers 5xx — including the renderer simply not running — falls back to
+the shell a bot received before any of this existed. Without it, this route
+turns one unhealthy container into 502s for Googlebot on the shop's most linked
+URL. The breaker is proved by *stopping the container* in suite #258 rather than
+by reading the configuration. One trap worth knowing: Spring Cloud
+CircuitBreaker's `TimeLimiter` defaults to **one second**, and a server render
+reads the catalogue first — left at the default, every crawler would be served
+the fallback and the route would look wired while rendering nothing.
+
+Three defects were invisible from the renderer alone, and all three are the same
+shape — *a gate that could not fail*:
+
+1. **`npm run build:ssr` had never run.** It exited 1 (Vite 8 dropped
+   `--ssrEmitAssets` from the CLI). The Dockerfile used it; suite #257 had its
+   own hand-rolled `vite` line, so the broken script passed every gate from the
+   day it was written. The suite now builds through the npm script.
+2. **The renderer answered 500 on every page in the image while passing on the
+   laptop.** `tokenClaims()` reads `sessionStorage` on every render; Node 22 —
+   what the image runs — has no Web Storage, Node 24 and later expose it, and
+   the laptop runs Node 26. The suite's headline claim that no browser API is
+   touched was simply untrue, and nothing could have told us. It now deletes
+   `sessionStorage`, `localStorage`, `window` and `document` from the global
+   scope before importing anything, so the laptop reproduces the image. The fix
+   in `auth.js` is a no-op session store rather than a memory one: one process
+   serves every request, so a module-scoped store would hand one visitor's token
+   to the next.
+3. **The staff banner**, above.
+
+Two of the three only appeared because the renderer was asked to serve a *real*
+tenant manifest instead of the three fields a test author reaches for. That is
+now part of #257: all three public pages render under the full manifest the
+gateway emits.
+
+**Three copies of the shelf list.** nginx keeps one (to answer 404 for a slug
+that is not a shelf), the catalog's sitemap keeps another, and the renderer
+exports a third — from `LINES`, the list the router actually routes, so the
+server cannot disagree with the app it serves. Three copies is two too many, and
+until there is one, suite #258 pins them together: every slug on the sitemap
+answers 200 to a bot **and** to a human, and a slug on neither answers 404 to
+both.
+
+**What is still deliberately not done.** The crawler User-Agent branch for
+`/shop/offering/{id}` is untouched; retiring it is a predicate change here
+rather than a build, since the renderer already handles offering pages. Humans
+are still served by nginx, so a crawler and a human get documents from different
+renderers — the same React sources now, which is the point of the arc, but one
+build serving both is the step after this. Help pages are still not covered, and
+not for a rendering reason: knowledge articles require `knowledge:read`, so
+there is no anonymous door, and making them crawlable publishes content that
+sits behind sign-in today — an operator's decision, not a renderer's. The
+account pages still fetch in effects and render their loading state, which is
+correct rather than pending: they are behind sign-in and `noindex`. Streaming
+has not been attempted; request scope is in place so that move is a performance
+decision rather than a correctness one. And the hydration seed is the whole
+shelf, so a crawler is sent ~130 KB of JSON it has no use for — it stays because
+it is what keeps a human's server-rendered page from flashing, and trimming it
+per page would end the one data contract the pages share.
 
 Every file touched here was already at or over the 300-line limit, so each
 `import { config }` had to be paid for out of the same file. That is the third

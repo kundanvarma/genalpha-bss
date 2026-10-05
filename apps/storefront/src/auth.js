@@ -14,6 +14,33 @@ const authConfig = () => Object.assign({
   scope: 'openid profile email',
 }, config());
 
+/*
+ * THE SESSION STORE, OR NOTHING AT ALL (#180).
+ *
+ * A server render has no sessionStorage and no session, and those are the same
+ * fact: a crawler is a guest, and the guest view is the correct document to
+ * render for one. Reading the session through here rather than touching the
+ * global directly is what makes that true instead of a crash — `tokenClaims()`
+ * runs on every render of every page, so a bare `sessionStorage.getItem` in it
+ * takes down the whole server-rendered shop.
+ *
+ * NOT a memory fallback. One process serves every request, so a module-scoped
+ * store would hand one visitor's token to the next — this reads as empty and
+ * discards writes, which is exactly what a server with no browser should do.
+ * The browser path is untouched: there, `sessionStorage` exists and is used.
+ *
+ * This was a real outage, caught by a deployment rather than by the suite that
+ * claimed to cover it: Node 22 has no Web Storage, Node 24 and later expose
+ * `sessionStorage`, and the laptop was running the later one. The suite now
+ * removes the globals before it renders so the laptop reproduces the image.
+ */
+const NO_SESSION = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
+const session = () => (typeof sessionStorage === 'undefined' ? NO_SESSION : sessionStorage);
+
 const TOKEN_KEY = 'bss.shop.token';
 const REFRESH_KEY = 'bss.shop.refresh';
 const EXP_KEY = 'bss.shop.tokenExp';
@@ -46,12 +73,12 @@ export async function beginLogin() {
   // provider bounce — remember it here, restore it after the token exchange.
   const here = location.pathname.replace(/^\/shop\/?/, '/') + location.search + location.hash;
   if (here !== '/') {
-    sessionStorage.setItem(RETURN_KEY, here);
+    session().setItem(RETURN_KEY, here);
   }
   const verifier = randomString();
   const state = randomString();
-  sessionStorage.setItem(VERIFIER_KEY, verifier);
-  sessionStorage.setItem(STATE_KEY, state);
+  session().setItem(VERIFIER_KEY, verifier);
+  session().setItem(STATE_KEY, state);
   const challenge = b64url(await sha256(verifier));
   const q = new URLSearchParams({
     client_id: authConfig().clientId,
@@ -64,8 +91,8 @@ export async function beginLogin() {
   });
   // "Switch account" asks for credentials instead of silently reusing an
   // active single-sign-on session (e.g. a staff console session).
-  if (sessionStorage.getItem('bss.shop.forceLogin')) {
-    sessionStorage.removeItem('bss.shop.forceLogin');
+  if (session().getItem('bss.shop.forceLogin')) {
+    session().removeItem('bss.shop.forceLogin');
     q.set('prompt', 'login');
   }
   location.assign(authConfig().issuer + '/protocol/openid-connect/auth?' + q);
@@ -77,7 +104,7 @@ async function completeLogin(code) {
     client_id: authConfig().clientId,
     redirect_uri: redirectUri(),
     code: code,
-    code_verifier: sessionStorage.getItem(VERIFIER_KEY) || '',
+    code_verifier: session().getItem(VERIFIER_KEY) || '',
   });
   const res = await fetch(authConfig().issuer + '/protocol/openid-connect/token', {
     method: 'POST',
@@ -89,16 +116,16 @@ async function completeLogin(code) {
   }
   const tokens = await res.json();
   storeTokens(tokens);
-  sessionStorage.removeItem(VERIFIER_KEY);
-  sessionStorage.removeItem(STATE_KEY);
+  session().removeItem(VERIFIER_KEY);
+  session().removeItem(STATE_KEY);
   history.replaceState(null, '', redirectUri());
 }
 
 function storeTokens(tokens) {
-  sessionStorage.setItem(TOKEN_KEY, tokens.access_token);
-  sessionStorage.setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
+  session().setItem(TOKEN_KEY, tokens.access_token);
+  session().setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
   if (tokens.refresh_token) {
-    sessionStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+    session().setItem(REFRESH_KEY, tokens.refresh_token);
   }
 }
 
@@ -111,7 +138,7 @@ function storeTokens(tokens) {
 let refreshing = null;
 async function tryRefresh() {
   if (refreshing) return refreshing;
-  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  const refreshToken = session().getItem(REFRESH_KEY);
   if (!refreshToken) return false;
   refreshing = (async () => {
     try {
@@ -125,7 +152,7 @@ async function tryRefresh() {
         }),
       });
       if (!res.ok) {
-        sessionStorage.removeItem(REFRESH_KEY);
+        session().removeItem(REFRESH_KEY);
         return false;
       }
       storeTokens(await res.json());
@@ -140,11 +167,11 @@ async function tryRefresh() {
 }
 
 function currentToken() {
-  const exp = Number(sessionStorage.getItem(EXP_KEY) || 0);
+  const exp = Number(session().getItem(EXP_KEY) || 0);
   if (Date.now() >= exp) {
     return null;
   }
-  return sessionStorage.getItem(TOKEN_KEY);
+  return session().getItem(TOKEN_KEY);
 }
 
 export function tokenClaims() {
@@ -171,14 +198,14 @@ export function isCustomer() {
 /** Sign out and re-authenticate WITH a prompt — the "switch account" escape for
  * a staff session that leaked into the shop. */
 export function switchAccount() {
-  sessionStorage.setItem('bss.shop.forceLogin', '1');
+  session().setItem('bss.shop.forceLogin', '1');
   signOut();
 }
 
 export function signOut() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_KEY);
-  sessionStorage.removeItem(EXP_KEY);
+  session().removeItem(TOKEN_KEY);
+  session().removeItem(REFRESH_KEY);
+  session().removeItem(EXP_KEY);
   location.assign(authConfig().issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({
     client_id: authConfig().clientId,
     post_logout_redirect_uri: redirectUri(),
@@ -198,7 +225,7 @@ export async function authFetch(url, options) {
   let token = currentToken();
   if (!token) {
     if (await tryRefresh()) {
-      token = sessionStorage.getItem(TOKEN_KEY);
+      token = session().getItem(TOKEN_KEY);
     } else {
       await beginLogin();
       return new Promise(() => {}); // navigation takes over
@@ -212,10 +239,10 @@ export async function authFetch(url, options) {
   let res = await call(token);
   if (res.status === 401) {
     if (await tryRefresh()) {
-      res = await call(sessionStorage.getItem(TOKEN_KEY));
+      res = await call(session().getItem(TOKEN_KEY));
       if (res.status !== 401) return res;
     }
-    sessionStorage.removeItem(TOKEN_KEY);
+    session().removeItem(TOKEN_KEY);
     await beginLogin();
     return new Promise(() => {});
   }
@@ -246,11 +273,11 @@ export async function handleCallback() {
   if (!params.has('code')) {
     return false;
   }
-  if (params.get('state') !== sessionStorage.getItem(STATE_KEY)) {
+  if (params.get('state') !== session().getItem(STATE_KEY)) {
     throw new Error('OIDC state mismatch');
   }
   await completeLogin(params.get('code'));
-  const returnTo = sessionStorage.getItem(RETURN_KEY);
-  sessionStorage.removeItem(RETURN_KEY);
+  const returnTo = session().getItem(RETURN_KEY);
+  session().removeItem(RETURN_KEY);
   return returnTo || true;
 }
