@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { initialData } from '../ssr-data.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { alsoBought, availabilityFor, beacon, checkConfiguration, getOffering, getSpec, myProducts, priceIndex, queryConfiguration, recommendationOutcome } from '../api.js';
@@ -22,8 +23,8 @@ export default function Offering() {
   const [oracleVerdict, setOracleVerdict] = useState(null); // checkProductConfiguration for the current picks + quantity
   const [quantity, setQuantity] = useState(1);
   const [verdict, setVerdict] = useState(null); // deferred | rejected, once told
-  const [offering, setOffering] = useState(null);
-  const [prices, setPrices] = useState({});
+  const [offering, setOffering] = useState(() => initialData()?.offering ?? null); // server-seeded (#180)
+  const [prices, setPrices] = useState(() => initialData()?.prices ?? {});
   const [optionOfferings, setOptionOfferings] = useState({}); // option id -> full offering
   const [chosen, setChosen] = useState({});                   // choice name -> [option ids]
   const [specs, setSpecs] = useState({});                     // spec id -> spec
@@ -46,7 +47,6 @@ export default function Offering() {
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
-
   // TMF620 cardinality: a bundled component with lower limit 0 is optional
   // (an add-on the customer may include); otherwise it is a fixed inclusion.
   const lowerLimit = (e) => e.bundledProductOfferingOption?.numberRelOfferLowerLimit;

@@ -41,9 +41,12 @@
  *    is here rather than a comment promising it would be fine.
  *
  * HONEST LIMITS, and they are the reason this is a tracer rather than the arc:
- *  - It renders ONE route, the shop root, and only the Shop page reads seeded
- *    data. Every other page still fetches in an effect and would render its
- *    loading state.
+ *  - It renders the two PUBLIC routes — the shop root and an offering. The
+ *    account pages still fetch in effects and would render their loading
+ *    state; they are behind sign-in and `noindex`, so that is correct rather
+ *    than pending.
+ *  - Category and help pages are not covered because they are not routes at
+ *    all yet. Making them first-class is its own piece of #180.
  *  - Streaming is not used. `renderToString` is synchronous, so nothing here
  *    exercises Suspense or partial flushing; request scope is in place so that
  *    move does not become a correctness problem, but it has not been made.
@@ -121,6 +124,35 @@ const ok = (m) => console.log('OK ' + m);
   if (!a.includes('MyGenAlpha') || a.includes('Nova')) fail('the slower request came back wearing the other tenant\'s brand');
   if (!b.includes('Nova') || b.includes('MyGenAlpha')) fail('the faster request came back wearing the other tenant\'s brand');
   ok('two requests interleaved across an await keep their own tenant — module state could not survive this');
+
+  /* ---------- the offering page: what a crawler is actually sent today ---------- */
+  // This is the route the User-Agent branch currently serves from Java. It is
+  // the one that has to render here before that branch can ever be deleted.
+  const offeringData = {
+    offering: {
+      id: 'off-1', name: 'GenAlpha Fiber 1000', description: '1 Gbps fibre to the home',
+      category: [{ name: 'Broadband' }], isBundle: false, lifecycleStatus: 'Active',
+      productOfferingPrice: [{ id: 'p1' }],
+    },
+    prices: {
+      p1: { id: 'p1', name: 'Monthly', priceType: 'recurring', recurringChargePeriodType: 'month',
+        price: { unit: 'EUR', value: 39.99 } },
+    },
+  };
+  const offeringHtml = render('/offering/off-1', A, offeringData);
+  if (/gatepost|Loading…/.test(offeringHtml)) fail('the offering page rendered the boot gate');
+  if (!offeringHtml.includes('GenAlpha Fiber 1000')) fail('the offering name is not in the server-rendered page');
+  if (!offeringHtml.includes('1 Gbps fibre to the home')) fail('the offering description is missing');
+  if (!/39[.,]99/.test(offeringHtml)) {
+    fail('the price is not in the server-rendered page — the price index was not seeded, so a crawler sees a product with no price');
+  }
+  ok(`the offering page renders ${offeringHtml.length} bytes with its name, description and price`);
+
+  /* ---------- an unseeded page still renders, it just says less ---------- */
+  const unseeded = render('/offering/off-1', A, null);
+  if (/gatepost/.test(unseeded)) fail('an unseeded route fell back to the boot gate rather than the page');
+  if (unseeded.includes('GenAlpha Fiber 1000')) fail('an unseeded render produced data from somewhere');
+  ok('an unseeded route still renders the page frame — the client path is unchanged');
 
   /* ---------- the language follows the request, not the process ---------- */
   // Asserted through the rendered document rather than by importing i18n: the

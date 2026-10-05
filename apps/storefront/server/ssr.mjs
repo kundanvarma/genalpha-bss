@@ -1,7 +1,7 @@
 /*
  * THE SERVER-RENDERING RUNTIME (#180, tracer bullet).
  *
- * One route, rendered by React on a server, to prove the path end to end:
+ * The public routes, rendered by React on a server, to prove the path end to end:
  * the SSR build loads, the app renders to a string with the tenant's own
  * config, the data it needs is fetched BEFORE the render rather than in an
  * effect that never runs, and the document a crawler receives is complete with
@@ -11,10 +11,9 @@
  *  - not the storefront's runtime. nginx still serves the app; this sits beside
  *    it on its own path, so nothing existing changes and a bad render is
  *    reversible by deleting a gateway route.
- *  - not multi-tenant-safe under concurrency. `setConfig`/`setInitialData` are
- *    module state around a synchronous render; concurrent tenants need
- *    request-scoped storage. One process, one render at a time is true today
- *    and must stop being relied on before this serves real traffic.
+ *  - not streaming. `renderToString` is synchronous, so Suspense and partial
+ *    flushing are unexercised. The tenant is request-scoped, so that move is a
+ *    performance decision rather than a correctness one.
  *  - not the crawler route's replacement. That is deleted only once SSR is
  *    proven in production, because removing it first makes a bad deploy
  *    invisible to crawlers and visible to Google.
@@ -63,21 +62,59 @@ async function tenantConfig(host) {
   }
 }
 
-/** What this path needs resolved before it can render. */
-async function resolve(path, host) {
-  if (path === '/' || path === '/shop' || path.startsWith('/?') || path.startsWith('/shop?')) {
-    const feed = await fetchJson(`${CATALOG}/discovery/v1/products`,
-      host ? { 'X-Forwarded-Host': host, Host: host } : {});
-    if (!feed || !Array.isArray(feed.products)) return null;
-    // the shape the Shop page expects of listOfferings()
-    return {
-      offerings: feed.products.map((p) => ({
-        id: p.id, name: p.name, description: p.description,
-        category: p.category ? [{ name: p.category }] : [],
-        isBundle: Boolean(p.bundle), lifecycleStatus: 'Active',
-      })),
-    };
+/**
+ * Page through a list endpoint the way the client's own api.js does — the API
+ * caps a page at 100 and the shelf outgrew that.
+ */
+async function page(pathAndQuery, host) {
+  const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
+  const all = [];
+  for (let offset = 0; ; offset += 100) {
+    const sep = pathAndQuery.includes('?') ? '&' : '?';
+    const got = await fetchJson(`${CATALOG}${pathAndQuery}${sep}limit=100&offset=${offset}`, headers);
+    if (!Array.isArray(got)) break;
+    all.push(...got);
+    if (got.length < 100) break;
   }
+  return all;
+}
+
+/**
+ * What this path needs resolved before it can render.
+ *
+ * THE SAME ENDPOINTS THE CLIENT CALLS, deliberately. The acceptance for this
+ * arc is that a bot and a browser receive the same document, and the cheapest
+ * way to guarantee that is for both to read the same shapes from the same
+ * doors — no mapping layer in between to drift.
+ *
+ * That leaves one question open, and it is a real one: the crawler page renders
+ * from the shared projection (#179), which decides which price leads, while the
+ * React app has its own price logic in money.js. They agree today. When the
+ * crawler route is finally deleted, somebody has to decide which of the two is
+ * the authority for a headline price — this file is not the place to decide it
+ * quietly.
+ */
+async function resolve(path, host) {
+  const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
+  const route = path.split('?')[0];
+
+  if (route === '/' || route === '/shop') {
+    const offerings = await page('/tmf-api/productCatalogManagement/v4/productOffering?lifecycleStatus=Active', host);
+    return offerings.length ? { offerings } : null;
+  }
+
+  const offeringMatch = route.match(/^\/offering\/([^/]+)\/?$/);
+  if (offeringMatch) {
+    const [offering, priceRows] = await Promise.all([
+      fetchJson(`${CATALOG}/tmf-api/productCatalogManagement/v4/productOffering/${encodeURIComponent(offeringMatch[1])}`, headers),
+      page('/tmf-api/productCatalogManagement/v4/productOfferingPrice', host),
+    ]);
+    if (!offering || !offering.id) return null;
+    const prices = {};
+    for (const p of priceRows) prices[p.id] = p;
+    return { offering, prices };
+  }
+
   return null;
 }
 

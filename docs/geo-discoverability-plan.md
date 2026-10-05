@@ -569,12 +569,34 @@ across an await keep their own tenant, and the Norwegian render says *Butikk*
 while the English one does not. Reverting `i18n.js` to capture once fails it
 with *"the Norwegian tenant was served English"*.
 
+#### Both public routes now render
+
+The offering page is the one the User-Agent branch serves from Java today, so it
+is the one that has to render here before that branch can ever be deleted. It
+does: name, description and **price**, from an offering and a price index the
+server resolved before rendering. A page that renders a product with no price is
+worse than no page, so the suite asserts the number rather than the name alone —
+and removing the price seed fails it with exactly that sentence.
+
+The server fetches **the same endpoints the client calls**, deliberately. The
+acceptance is that a bot and a browser receive the same document, and the
+cheapest way to guarantee that is for both to read the same shapes through the
+same doors, with no mapping layer between them to drift.
+
+That leaves one real question open, and it should be answered deliberately
+rather than discovered: the crawler page renders from the shared projection
+(#179), which decides which price leads; the React app has its own price logic
+in `money.js`. **They agree today.** When the crawler route is finally deleted,
+somebody has to decide which of the two is the authority for a headline price.
+
 **What is still deliberately not done.** The runtime is not wired to the gateway
 and the crawler User-Agent route is untouched — the ticket's own limit says keep
-it until SSR is proven in production. Only the Shop route reads seeded data;
-every other page would still render its loading state. And streaming has not
-been attempted; request scope is in place so that it can be, without the move
-becoming a correctness problem.
+it until SSR is proven in production. Category and help pages are not covered
+because *they are not routes at all yet*; making them first-class is its own
+piece of the arc. The account pages still fetch in effects and render their
+loading state, which is correct rather than pending — they are behind sign-in
+and `noindex`. And streaming has not been attempted; request scope is in place
+so that move is a performance decision rather than a correctness one.
 
 Every file touched here was already at or over the 300-line limit, so each
 `import { config }` had to be paid for out of the same file. That is the third
