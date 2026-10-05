@@ -511,3 +511,45 @@ starting."* It is right. The remaining work is a genuine arc:
 Items 1 to 3 are the arc. They are sequenced, not parallel, and attempting them
 in one sitting produces a half-migrated storefront — which is worse than the
 current state, because the current state is at least coherent.
+
+### SSR tracer bullet: the shop renders on a server (5 October 2026)
+
+The first item of the arc, taken on its own: *can this React application render a
+real public page to complete HTML on a server at all?* It could not, and the
+three reasons were not visible from the ticket.
+
+1. **Two modules read `window` at import time.** `auth.js` and `address.js`
+   captured the tenant manifest as a module constant, so the graph threw before
+   anything rendered. Thirteen more read it during render. All now go through
+   `src/config.js`, which answers on either side.
+2. **The app gates every route behind a client session bootstrap.** `App.jsx`
+   starts in `boot` and resolves the session in an effect — and effects do not
+   run during `renderToString`. **Every public page rendered the string
+   "Loading…" and nothing else.** This is the one that mattered: without finding
+   it, the arc would have produced a technically-successful SSR deployment
+   serving crawlers a spinner. A server render has no session to wait for, so it
+   starts `ready`; the client is untouched.
+3. **The router's basename.** The gateway strips `/shop` before the storefront
+   sees a request, but the router keeps the basename so its links carry the
+   prefix a browser follows. The server has to put it back.
+
+With those closed, `src/entry-server.jsx` renders the real `App` through
+`StaticRouter`, and `apps/storefront/server/ssr.mjs` fetches the discovery
+projection *before* rendering and seeds it through `src/ssr-data.js`. The Shop
+page reads that seed for its first state and otherwise behaves exactly as
+before. Suite #257 proves it in plain Node: 3,121 bytes of real page, the
+tenant's brand, both server-resolved products, links carrying `/shop/`, and two
+tenants rendered back to back without leaking into each other.
+
+**What is deliberately not done.** The runtime is not wired to the gateway and
+the crawler User-Agent route is untouched — the ticket's own limit says keep it
+until SSR is proven in production. Only the Shop route reads seeded data; every
+other page would still render its loading state. `setConfig`/`setInitialData`
+are module state around a synchronous render, which is correct for one render at
+a time and must move to request-scoped storage before serving traffic. And
+`i18n.js` still captures the tenant at import, making locale per-process rather
+than per-request — right for one tenant, wrong for concurrent ones.
+
+Every file touched here was already at or over the 300-line limit, so each
+`import { config }` had to be paid for out of the same file. That is the third
+time this week; it is a real tax on the storefront now, not a theoretical one.

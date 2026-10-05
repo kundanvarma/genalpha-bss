@@ -51,3 +51,4 @@ ops/cloud/aws-demo/box.env
 apps/admin-console/site/island/
 apps/admin-console/island/node_modules/
 .service-kind-bundle.cjs
+apps/storefront/dist-ssr/

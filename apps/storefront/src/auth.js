@@ -4,11 +4,15 @@
  * login page carries the self-registration link (registrationAllowed).
  */
 
-const AUTH_CONFIG = Object.assign({
+import { config } from './config.js';
+
+// Read when used, not when imported: this module is in the server bundle's
+// graph, and `window` does not exist there (#180).
+const authConfig = () => Object.assign({
   issuer: 'http://localhost:8085/realms/bss',
   clientId: 'bss-storefront',
   scope: 'openid profile email',
-}, window.BSS_STOREFRONT_CONFIG || {});
+}, config());
 
 const TOKEN_KEY = 'bss.shop.token';
 const REFRESH_KEY = 'bss.shop.refresh';
@@ -50,10 +54,10 @@ export async function beginLogin() {
   sessionStorage.setItem(STATE_KEY, state);
   const challenge = b64url(await sha256(verifier));
   const q = new URLSearchParams({
-    client_id: AUTH_CONFIG.clientId,
+    client_id: authConfig().clientId,
     redirect_uri: redirectUri(),
     response_type: 'code',
-    scope: AUTH_CONFIG.scope,
+    scope: authConfig().scope,
     state: state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
@@ -64,18 +68,18 @@ export async function beginLogin() {
     sessionStorage.removeItem('bss.shop.forceLogin');
     q.set('prompt', 'login');
   }
-  location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/auth?' + q);
+  location.assign(authConfig().issuer + '/protocol/openid-connect/auth?' + q);
 }
 
 async function completeLogin(code) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
-    client_id: AUTH_CONFIG.clientId,
+    client_id: authConfig().clientId,
     redirect_uri: redirectUri(),
     code: code,
     code_verifier: sessionStorage.getItem(VERIFIER_KEY) || '',
   });
-  const res = await fetch(AUTH_CONFIG.issuer + '/protocol/openid-connect/token', {
+  const res = await fetch(authConfig().issuer + '/protocol/openid-connect/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body,
@@ -111,12 +115,12 @@ async function tryRefresh() {
   if (!refreshToken) return false;
   refreshing = (async () => {
     try {
-      const res = await fetch(AUTH_CONFIG.issuer + '/protocol/openid-connect/token', {
+      const res = await fetch(authConfig().issuer + '/protocol/openid-connect/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
-          client_id: AUTH_CONFIG.clientId,
+          client_id: authConfig().clientId,
           refresh_token: refreshToken,
         }),
       });
@@ -175,8 +179,8 @@ export function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(REFRESH_KEY);
   sessionStorage.removeItem(EXP_KEY);
-  location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({
-    client_id: AUTH_CONFIG.clientId,
+  location.assign(authConfig().issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({
+    client_id: authConfig().clientId,
     post_logout_redirect_uri: redirectUri(),
   }));
 }

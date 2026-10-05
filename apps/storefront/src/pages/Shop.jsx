@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { beacon, checkQualification, consentChoice, forYou, getOffering, getSpec, listBanners, listOfferings, myExperience, myRecommendations, priceIndex, queryServiceQualification, saveConsent, submitSalesLead } from '../api.js';
@@ -6,9 +7,10 @@ import { isSignedIn } from '../auth.js';
 import { myActiveServices } from '../api.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
+import { initialData } from '../ssr-data.js';
 
 export default function Shop() {
-  const [offerings, setOfferings] = useState(null);
+  const [offerings, setOfferings] = useState(() => initialData()?.offerings ?? null); // server-seeded (#180)
   const [prices, setPrices] = useState({});
   const [recommended, setRecommended] = useState([]);
   const [personal, setPersonal] = useState(null);
@@ -24,7 +26,6 @@ export default function Shop() {
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
   const [planSpecs, setPlanSpecs] = useState({}); // offeringId -> {charName: value}
   const [inCart, setInCart] = useState(new Set()); // ids already in the cart
-
   // "Recommended for you" must not recommend what's already in the cart —
   // track the cart's offering ids (lines + selections), live across changes.
   useEffect(() => {
@@ -37,7 +38,6 @@ export default function Shop() {
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
-
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
       .then(([o, p]) => { setOfferings(o); setPrices(p); })
@@ -111,7 +111,7 @@ export default function Shop() {
   const recent = (experience?.recentOfferings || [])
     .map((id) => offerings.find((o) => o.id === id)).filter(Boolean);
 
-  const brand = window.BSS_STOREFRONT_CONFIG || {};
+  const brand = config();
   return (
     <>
       {banners.length > 0 && <BannerStrip banners={banners} />}
@@ -522,7 +522,7 @@ function BannerStrip({ banners }) {
   // Carousel: built to the same research — arrows and dots, auto-rotate on
   // desktop only (6 s), paused on hover and after any interaction, never on
   // mobile, at most five slides, keyboard-reachable, never a scrollbar.
-  const mode = (window.BSS_STOREFRONT_CONFIG || {}).shopWindow === 'carousel' ? 'carousel' : 'static';
+  const mode = config().shopWindow === 'carousel' ? 'carousel' : 'static';
   if (mode === 'carousel') return <BannerCarousel banners={banners.slice(0, 5)} go={go} />;
   const [lead, ...rest] = banners.slice(0, 4);
   const tile = (b, cls) => (
@@ -589,7 +589,7 @@ function BannerCarousel({ banners, go }) {
  * checkout gates on (TMF679 against the broadband offerings' footprint), plus
  * the TMF645 technical footprint when the network publishes one. Not a static map. */
 function CoverageCheck({ offerings, onSeePlans }) {
-  const cfg = window.BSS_STOREFRONT_CONFIG || {};
+  const cfg = config();
   const [postCode, setPostCode] = useState('');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);

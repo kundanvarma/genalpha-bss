@@ -1,4 +1,5 @@
 // numbers: part of the storefront's TMF client (split from api.js; the barrel re-exports).
+import { config } from '../config.js';
 import { PORTING, SERVICE_INV, authFetch, json, publicFetch } from './_http.js';
 
 function countryOf(number) {
@@ -11,7 +12,7 @@ function countryOf(number) {
   if (n.startsWith('+44')) return 'GB';
   if (n.startsWith('+1')) return 'US';
   // no prefix given: the shopper is porting within the operator's own country
-  return (window.BSS_STOREFRONT_CONFIG || {}).country || 'NO';
+  return config().country || 'NO';
 }
 
 /** Choose-your-number: a shortlist of available numbers from the pool —

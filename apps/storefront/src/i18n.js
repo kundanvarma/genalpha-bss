@@ -4,7 +4,16 @@
  * build, every language. English strings ARE the keys, so an untranslated
  * string falls back to itself and the English tenant pays zero cost.
  */
-const CFG = window.BSS_STOREFRONT_CONFIG || {};
+import { config } from './config.js';
+
+// SERVER-SAFE, NOT YET SERVER-CORRECT. These are exported as constants and
+// imported by a dozen modules, so making them per-request means changing every
+// consumer — that is the i18n half of the SSR arc (#180), not this tracer. Here
+// it stops `window` throwing during the server build; on a server it captures
+// whatever config was set when the module was first imported, which is right
+// for a single-tenant render and wrong for concurrent tenants. Said out loud so
+// nobody reads a passing tracer as a finished migration.
+const CFG = config();
 
 export const locale = CFG.locale || 'en';
 export const currency = CFG.currency || 'EUR';

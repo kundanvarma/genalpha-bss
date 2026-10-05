@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { alsoBought, availabilityFor, beacon, checkConfiguration, getOffering, getSpec, myProducts, priceIndex, queryConfiguration, recommendationOutcome } from '../api.js';
@@ -34,7 +35,6 @@ export default function Offering() {
   const [alsoBoughtItems, setAlsoBoughtItems] = useState([]); // market-basket affinity
   const [inCart, setInCart] = useState(new Set());            // offering ids already in the cart
   const [error, setError] = useState(null);
-
   // The rail must not suggest what the shopper already has in hand — track the
   // cart's offering ids (lines + their selections), live across cart changes.
   useEffect(() => {
@@ -537,8 +537,8 @@ export default function Offering() {
               )}
             </tbody>
           </table>
-          {(window.BSS_STOREFRONT_CONFIG || {}).priceNote && (
-            <p className="dim small" data-testid="price-note">{(window.BSS_STOREFRONT_CONFIG || {}).priceNote}</p>
+          {config().priceNote && (
+            <p className="dim small" data-testid="price-note">{config().priceNote}</p>
           )}
         </>
       )}
