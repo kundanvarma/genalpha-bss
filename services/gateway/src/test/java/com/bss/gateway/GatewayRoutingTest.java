@@ -55,7 +55,7 @@ class GatewayRoutingTest {
     void everyComponentAndChannelHasARoute() {
         List<String> ids = routeLocator.getRoutes().map(Route::getId).collectList().block();
         assertThat(ids).containsExactlyInAnyOrder(
-                "geo-bot-offering", "geo-well-known", "acp-product-feed", "acp-checkout", "legacy-estate",
+                "geo-bot-offering", "geo-well-known", "discovery-feed", "acp-product-feed", "acp-checkout", "legacy-estate",
                 "workforce-runtime", "product-catalog", "service-catalog", "resource-catalog", "product-configurator",
                 "som-house", "som-service-activation", "product-ordering", "product-inventory", "party-account", "product-stock", "payment",
                 "billing", "bank-remittance", "distribution-response", "qualification", "appointment",
