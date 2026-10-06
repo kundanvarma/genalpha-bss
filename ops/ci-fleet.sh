@@ -45,8 +45,10 @@ SMOKE_SERVICES="postgres kafka redis keycloak gateway
 # reads (product-catalog, gateway) were already in the slice, so the closure
 # grows by exactly one container — a Node process with no JVM, unaffected by
 # the heap cap below. It is here because nothing else in CI builds it: the
-# images job iterates `services/*/`, so no apps/* Dockerfile is built there at
-# all, and this slice is the only place a channel image is built and run.
+# images job used to iterate `services/*/`, so no apps/* Dockerfile was built
+# there at all and this slice was the only place a channel image was built.
+# That hole closed on 5 Oct 2026 — ops/ci-images.sh derives all 50 images from
+# compose — but the slice is still the only place a channel image is RUN.
 # Without it the gateway's crawler route in CI points at a host that does not
 # exist, the circuit breaker quietly serves the shell, and the route looks
 # fine while being entirely unexercised.
