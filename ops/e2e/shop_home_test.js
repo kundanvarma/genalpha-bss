@@ -51,7 +51,13 @@ async function register(page, email, first, last) {
   await page.fill('input[name="password"]', 'Passw0rd!');
   await page.fill('input[name="password-confirm"]', 'Passw0rd!');
   await page.click('input[type="submit"], button[type="submit"]');
+  // Wait for the TOKEN, not for `.nav`. The public shop is server-rendered now
+  // (#180), so the header paints as a guest the moment the document arrives and
+  // `.nav` no longer means "the session has resolved" — it used to, because the
+  // app sat behind a "Loading…" gate until the code exchange finished.
   await page.waitForSelector('.nav', { timeout: 20000 });
+  await page.waitForFunction(() => !!sessionStorage.getItem('bss.shop.token'),
+    null, { timeout: 20000 });
   return page.evaluate(() => sessionStorage.getItem('bss.shop.token'));
 }
 

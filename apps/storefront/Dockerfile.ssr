@@ -12,7 +12,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm run build && npm run build:ssr
+# Only the SERVER bundle. The client build used to be here too, for a baked
+# copy of index.html — and that copy was the bug: built apart from the nginx
+# image it referenced a different Vite hash, so the rendered document loaded no
+# JavaScript. The shell is fetched from nginx at run time now, so there is no
+# second copy of it to go stale.
+RUN npm run build:ssr
 
 # Vite externalises dependencies in an SSR build — the server bundle imports
 # react and react-dom rather than inlining them — so the runtime image needs the
@@ -22,7 +27,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-ssr ./dist-ssr
 COPY server ./server
 USER node
