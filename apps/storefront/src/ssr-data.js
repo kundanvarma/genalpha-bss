@@ -16,6 +16,8 @@
  * and flashing.
  */
 
+import { imageUrl } from './media.js';
+
 let resolver = null;
 
 /** Server only — installed by the server entry, backed by request-scoped storage. */
@@ -42,6 +44,31 @@ export function initialData() {
  * forbids inline script — see the note in server/ssr.mjs. A data block is not
  * executed, so the policy does not apply and nothing had to be loosened.
  */
+/*
+ * THE SEED IS READ OUT OF THE DOCUMENT, so its image URLs are checked on the way
+ * in — the same guarantee api/catalog.js gives the fetched path, at the other
+ * boundary. CodeQL named this one first ("DOM text reinterpreted as HTML"), and
+ * it is right that a URL which has passed through the DOM should not reach an
+ * attribute unexamined, even though our own renderer wrote it.
+ */
+function sanitise(seed) {
+  if (!seed || typeof seed !== 'object') {
+    return null;
+  }
+  const one = (o) => {
+    if (!o || !Array.isArray(o.attachment)) {
+      return o;
+    }
+    o.attachment = o.attachment
+      .map((a) => (a && a.url ? { ...a, url: imageUrl(a.url) } : a))
+      .filter((a) => !a || !('url' in a) || a.url);
+    return o;
+  };
+  if (Array.isArray(seed.offerings)) seed.offerings = seed.offerings.map(one);
+  if (seed.offering) seed.offering = one(seed.offering);
+  return seed;
+}
+
 let parsed;
 function fromDocument() {
   if (typeof document === 'undefined') {
@@ -50,7 +77,7 @@ function fromDocument() {
   if (parsed === undefined) {
     const el = document.getElementById('ssr-data');
     try {
-      parsed = el ? JSON.parse(el.textContent) : null;
+      parsed = el ? sanitise(JSON.parse(el.textContent)) : null;
     } catch {
       parsed = null;              // a corrupt seed is no seed; the client fetches
     }
