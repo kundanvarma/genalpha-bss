@@ -13,25 +13,31 @@
  * been reviewed green went red with no code change — on a page none of them
  * touched. The version now comes from a committed lockfile via `npm ci`, here
  * and in run-all-suites.sh, so a laptop and a runner hold the same code to the
- * same standard.
+ * same standard, and moving the bar is an edit somebody makes on purpose.
  *
- * WHAT 4.14.0 FOUND, recorded so the pin is a decision and not a hiding place.
- * On the CSR agent desk, under that newly-promoted rule (WCAG 2.5.3, Label in
- * Name), with the demo seed loaded it is 51 nodes:
+ * 4.14.0 IS NOW ADOPTED (#196), and the three things it found are fixed rather
+ * than waived. It promoted `label-content-name-mismatch` (WCAG 2.5.3, Label in
+ * Name) out of experimental, and the full sweep came back 56 violating nodes
+ * across 6 of these 11 channels:
  *
- *  - THE BRAND LINK is a genuine failure. Its accessible name is
- *    "<tenant> CSR home" while its visible text reads "csr console" plus the
- *    org badge, so a speech-input user saying what they can see does not
- *    activate it. apps/csr-console/src/Brand.jsx.
- *  - THE SEARCH RESULT ROWS are the stricter reading. Each row's name is
- *    "Customer: <name>" while the row also shows a phone number and state
- *    chips; saying the customer's name does work, and axe wants the whole
- *    visible row inside the name. Fixing it means deciding what a composite
- *    row's accessible name should be, which is a design question on the desk,
- *    not a one-line change. apps/csr-console/src/pages/search/Results.jsx.
- *
- * Adopting 4.14.0 means answering the second one; it has its own issue. Until
- * then the bar stays exactly where it was last reviewed.
+ *  - THE CSR BRAND LINK, 1 node. Its name was "<tenant> CSR home" over visible
+ *    text reading "csr console": a speech-input user says what they can see and
+ *    the control does not answer. The name is now built from the link's
+ *    CONTENT, with the tenant's brand and "home" clipped from the screen but
+ *    present in the name — which satisfies the rule by construction and keeps
+ *    working at the narrow viewport where the wordmark is display:none.
+ *  - THE 50 SEARCH RESULT ROWS, and the lint was the smaller half. Each row
+ *    carried `aria-label="Customer: <name>"`, which REPLACED its content — so a
+ *    sighted agent read the name, the number and the status while an agent on a
+ *    screen reader heard only the name, fifty times down the list. Dropping the
+ *    label restores parity and fixes 2.5.3 at the same time, because the row
+ *    already shows its type as visible text.
+ *  - A CONTRAST FAILURE ON FIVE FINANCE DESKS, 1 node each, and this one is not
+ *    axe's fault at all: `.primary-tab.on` used the raw brand teal on the soft
+ *    tint for 4.25:1 where AA needs 4.5:1, while every other `.on` state in
+ *    that sheet already used the darker brand-derived token. It had never been
+ *    seen because A11Y_TARGETS on pull requests leaves the finance desks out —
+ *    see the note on that filter below, which is now printed on every run.
  *
  * Run:  node a11y_test.js
  */
@@ -146,6 +152,29 @@ const SELECTED = WANTED.length
   let total = 0;
 
   if (!SELECTED.length) fail(`A11Y_TARGETS="${process.env.A11Y_TARGETS}" matched no channel`);
+
+  // A FILTER MUST ANNOUNCE WHAT IT HIDES. A11Y_TARGETS on pull requests is
+  // storefront,console,csr,partner,app — and the five finance desk labels begin
+  // "bills:" and "accounting:", so they matched nothing and were skipped in
+  // silence. A contrast failure sat on all five of them for as long as that
+  // list has existed. Those targets still cannot run in the PR tier — they
+  // click into a bill and a journal entry, and that tier seeds no finance data
+  // — so the nightly full proof, which sets no filter and therefore runs all
+  // eleven, is their home. What changes here is that the gap is printed on
+  // every run instead of being inferred from a list nobody re-read.
+  const skipped = TARGETS.filter((t) => !SELECTED.includes(t));
+  if (skipped.length) {
+    console.log(`-- A11Y_TARGETS="${process.env.A11Y_TARGETS}" scans ${SELECTED.length}`
+      + ` of ${TARGETS.length} channels; NOT scanned here: ${skipped.map((t) => t.label).join(', ')}`);
+  }
+
+  // EVERY TARGET IS SCANNED BEFORE ANYTHING FAILS. This used to exit on the
+  // first bad channel, which meant a ruleset change — axe-core promoting a rule
+  // out of experimental, say — showed you one page, you fixed it, and the next
+  // run showed you the next. Eleven targets is eleven round trips to learn the
+  // size of what you are adopting. Now the whole sweep runs and the verdict
+  // comes once, at the end, with every channel's findings in it.
+  const broken = [];
   for (const t of SELECTED) {
     // bypassCSP is for the SCANNER, not the app: the gateway's content policy
     // refuses inline script (SecurityHeadersFilter), and axe is injected as
@@ -175,17 +204,23 @@ const SELECTED = WANTED.length
             console.error(`      … and ${r.detail.length - 8} more node(s)`);
           }
         }
-        await ctx.close();
-        await browser.close();
-        fail(`${t.label} has ${n} violating node(s) — accessibility regressed`);
+        broken.push(`${t.label}: ${n} node(s) — ${summarize(axe).map((r) => `${r.id} x${r.nodes}`).join(', ')}`);
+      } else {
+        console.log(`OK ${t.label} — 0 WCAG 2.2 AA violations`);
       }
-      console.log(`OK ${t.label} — 0 WCAG 2.2 AA violations`);
     } catch (e) {
-      await ctx.close();
-      await browser.close();
-      fail(`${t.label} could not be scanned: ${e.message.split('\n')[0]}`);
+      // a target that cannot even be opened is still a failure, but it must not
+      // hide the channels after it
+      console.error(`\nFAILED TO SCAN ${t.label}: ${e.message.split('\n')[0]}`);
+      broken.push(`${t.label}: could not be scanned`);
     }
     await ctx.close();
+  }
+  if (broken.length) {
+    await browser.close();
+    console.error(`\n${broken.length} of ${SELECTED.length} channel(s) failed:`);
+    for (const b of broken) console.error(`  - ${b}`);
+    fail(`${total} violating node(s) across ${broken.length} channel(s) — accessibility regressed`);
   }
 
   await browser.close();

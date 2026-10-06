@@ -57,20 +57,38 @@ function Row({ result, onKeyDown }) {
       </span>
     </>
   );
+  /*
+   * NO aria-label ON A ROW — and the reason is bigger than the lint that found
+   * it.
+   *
+   * These rows carried `aria-label="Customer: <name>"`, which axe-core 4.14
+   * flags under WCAG 2.5.3 because the row visibly shows a phone number and
+   * state chips that the name does not contain. Fair, but the smaller problem:
+   * an aria-label REPLACES the content for a screen reader, so a sighted agent
+   * read the name, the number and the status while an agent using a screen
+   * reader heard only the name — fifty times, arrowing down the list. The label
+   * was hiding the data it sat on top of.
+   *
+   * The row already renders its type as visible text in `.typebadge`, so
+   * dropping the label loses nothing and the accessible name becomes the row:
+   * "Customer  Alice Anders  mobile +46…  active". Information parity, and
+   * Label in Name holds by construction because the name IS the content.
+   */
   // A result whose owner is unknown has nowhere honest to go: it still shows,
   // as a row that says so, rather than a link that lands on a guess.
   if (!result.to) {
     return (
       <div className="row result noplace" data-result-row data-testid={`result-${result.type}`}
-           tabIndex={0} onKeyDown={onKeyDown} aria-label={`${typeLabel(result.type)} ${result.title} — no customer on record`}>
+           tabIndex={0} onKeyDown={onKeyDown}>
         {body}
+        {/* the reason it is not a link, said in the row rather than only in a label */}
+        <span className="vh"> — no customer on record</span>
       </div>
     );
   }
   return (
     <Link className="row rowlink result" to={result.to} data-result-row data-result-id={result.id}
-          data-testid={`result-${result.type}`} onKeyDown={onKeyDown}
-          aria-label={`${typeLabel(result.type)}: ${result.title}`}>
+          data-testid={`result-${result.type}`} onKeyDown={onKeyDown}>
       {body}
     </Link>
   );

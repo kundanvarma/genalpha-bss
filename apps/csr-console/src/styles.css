@@ -569,3 +569,16 @@ kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11
 .rowend:has(.prod-detail) { flex-wrap: wrap; justify-content: flex-end; }
 .prod-detail { flex-basis: 100%; margin-top: 6px; text-align: right; }
 .prod-detail p { margin: 2px 0; }
+
+/* Text for assistive technology only — present in the accessible name, absent
+   from the screen. This exists so a control's name can be built FROM ITS
+   CONTENT rather than replaced by an aria-label: a name built from content
+   always contains the visible text, which is what WCAG 2.5.3 (Label in Name)
+   asks for, and it cannot drift away from what the control says on screen.
+   Clip rather than display:none or visibility:hidden — those remove the text
+   from the accessible name too, which would defeat the point. */
+.vh {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
