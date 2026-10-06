@@ -78,19 +78,31 @@ jobs:
       # Tests already ran in the job above; this one proves the Dockerfiles.
       - name: Package the jars
         run: mvn -B -T 1C package -DskipTests
+      # THE LIST IS DERIVED, by ops/ci-images.sh, from the same compose file the
+      # fleet boots from. It used to be `for dir in services/*/`, which meant no
+      # CHANNEL image was ever built here: the storefront, the four consoles,
+      # the CSR desk and the mobile app got no build, no SBOM, no scan, no
+      # signature and no provenance, while all 42 services got the lot. A glob
+      # could not have fixed it — `console` is built from apps/admin-console,
+      # apps/storefront is the context for two images, and storefront-ssr's
+      # Dockerfile is named Dockerfile.ssr.
+      - name: Work out which images this repository ships
+        run: |
+          set -euo pipefail
+          bash ops/ci-images.sh > images.tsv
+          echo "building $(wc -l < images.tsv) images:"
+          cut -f1 images.tsv | paste -sd' ' -
       - name: Build each image
         run: |
           set -euo pipefail
           failed=""
-          for dir in services/*/; do
-            svc="$(basename "$dir")"
-            [ -f "$dir/Dockerfile" ] || continue
-            echo "::group::$svc"
-            if ! docker build -q -t "bss/$svc:${{ github.sha }}" "$dir"; then
-              failed="$failed $svc"
+          while IFS=$'\t' read -r name ctx dockerfile <&3; do
+            echo "::group::$name"
+            if ! docker build -q -f "$ctx/$dockerfile" -t "bss/${name}:${{ github.sha }}" "$ctx"; then
+              failed="$failed $name"
             fi
             echo "::endgroup::"
-          done
+          done 3< images.tsv
           if [ -n "$failed" ]; then
             echo "images failed to build:$failed"
             exit 1
@@ -117,10 +129,8 @@ jobs:
             echo "| image | SBOM components | CRITICAL | HIGH |"
             echo "|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
-          for dir in services/*/; do
-            svc="$(basename "$dir")"
-            [ -f "$dir/Dockerfile" ] || continue
-            img="bss/$svc:${{ github.sha }}"
+          while IFS=$'\t' read -r svc ctx dockerfile <&3; do
+            img="bss/${svc}:${{ github.sha }}"
             syft "$img" -o cyclonedx-json > "sboms/$svc.cdx.json" 2>/dev/null || echo "{}" > "sboms/$svc.cdx.json"
             n=$(python3 -c "import json; print(len(json.load(open('sboms/$svc.cdx.json')).get('components', [])))")
             trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 \
@@ -128,7 +138,7 @@ jobs:
             c=$(python3 -c "import json; r=json.load(open('scans/$svc.json')); v=[x for res in r.get('Results',[]) for x in (res.get('Vulnerabilities') or [])]; print(sum(1 for x in v if x['Severity']=='CRITICAL'))")
             h=$(python3 -c "import json; r=json.load(open('scans/$svc.json')); v=[x for res in r.get('Results',[]) for x in (res.get('Vulnerabilities') or [])]; print(sum(1 for x in v if x['Severity']=='HIGH'))")
             echo "| $svc | $n | $c | $h |" >> "$GITHUB_STEP_SUMMARY"
-          done
+          done 3< images.tsv
       - name: Upload SBOMs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -180,9 +190,7 @@ jobs:
             echo; echo "## Published images for ${{ github.sha }}"; echo
             echo "| image | digest |"; echo "|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
-          for dir in services/*/; do
-            svc="$(basename "$dir")"
-            [ -f "$dir/Dockerfile" ] || continue
+          while IFS=$'\t' read -r svc ctx dockerfile <&3; do
             ref="ghcr.io/$owner/genalpha-bss/$svc"
             docker tag "bss/$svc:${{ github.sha }}" "$ref:${{ github.sha }}"
             docker push -q "$ref:${{ github.sha }}"
@@ -191,7 +199,7 @@ jobs:
             cosign attest --yes --type cyclonedx --predicate "sboms/$svc.cdx.json" "$ref@$digest"
             echo "${digest#sha256:}  $ref" >> image-digests.txt
             echo "| $ref | $digest |" >> "$GITHUB_STEP_SUMMARY"
-          done
+          done 3< images.tsv
       - name: Attest build provenance for every published image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
