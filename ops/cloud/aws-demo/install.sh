@@ -60,7 +60,36 @@ if ! command -v caddy >/dev/null; then
   curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt > /etc/apt/sources.list.d/caddy-stable.list
   apt-get update -qq && apt-get install -y -qq caddy
 fi
-command -v mvn >/dev/null || { log "jdk + maven"; apt-get install -y -qq openjdk-21-jdk-headless maven git python3 python3-yaml apache2-utils; }
+# THE JDK IS CHECKED, NOT ASSUMED (#141). This line used to read
+#   command -v mvn >/dev/null || { ... openjdk-21-jdk-headless maven ... }
+# which installs a JDK only when MAVEN is absent. On any box provisioned once,
+# Maven is present, so the JDK was never touched again: a box built before the
+# Java 21 move (#67) kept JDK 17 and every one of the 40 modules then failed with
+# "release version 21 not supported" — a message that blames the code for the
+# state of the machine, which is what made it cost an evening.
+#
+# The wanted version is READ FROM THE REPO when the repo is already here (the
+# GIT_URL=local path rsyncs it before this runs), so bumping java.version in the
+# poms is the only place that number lives. A fresh box has no checkout yet and
+# falls back to 21; step 2 clones, and the next run reconciles.
+# `|| true` is load-bearing: this script runs under `set -euo pipefail`, and on a
+# FRESH box the glob matches nothing, grep exits 1, and the assignment takes the
+# pipeline's status — so without it the script dies here, silently, before it has
+# installed anything at all. Caught by running it against a missing APP_DIR.
+NEED_JDK="$(grep -ho '<java.version>[0-9]*' "$APP_DIR"/services/*/pom.xml 2>/dev/null \
+            | grep -o '[0-9]*$' | sort -rn | head -1 || true)"
+NEED_JDK="${NEED_JDK:-21}"
+HAVE_JDK="$(javac -version 2>&1 | grep -oE '[0-9]+' | head -1 || true)"
+if [ -z "$HAVE_JDK" ] || [ "$HAVE_JDK" -lt "$NEED_JDK" ]; then
+  log "jdk $NEED_JDK (have ${HAVE_JDK:-none})"
+  apt-get install -y -qq "openjdk-${NEED_JDK}-jdk-headless"
+  for tool in java javac; do
+    alt="$(update-alternatives --list "$tool" 2>/dev/null | grep "java-${NEED_JDK}-" | head -1 || true)"
+    [ -n "$alt" ] && update-alternatives --quiet --set "$tool" "$alt"
+  done
+  log "jdk now $(javac -version 2>&1)"
+fi
+command -v mvn >/dev/null || { log "maven and build tools"; apt-get install -y -qq maven git python3 python3-yaml apache2-utils; }
 if [ ! -f /swapfile ]; then
   log "8 GB swap (headroom for the Maven build)"
   fallocate -l 8G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
