@@ -26,7 +26,7 @@ import com.bss.quote.dto.SalesRequests.ScoringRuleRequest;
 import com.bss.quote.dto.SnapshotView;
 import com.bss.quote.dto.WonReport;
 import com.bss.quote.service.SalesService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;

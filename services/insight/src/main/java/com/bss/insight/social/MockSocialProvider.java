@@ -2,7 +2,7 @@ package com.bss.insight.social;
 
 import com.bss.insight.dto.PublishedPost;
 import com.bss.insight.dto.SocialMessage;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;

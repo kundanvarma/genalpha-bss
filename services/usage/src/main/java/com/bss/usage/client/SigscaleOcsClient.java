@@ -4,8 +4,8 @@ import com.bss.usage.dto.OcsBucket;
 import com.bss.usage.dto.OcsSubscriber;
 import com.bss.usage.entity.PrepayTask;
 import com.bss.usage.repository.PrepayTaskRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
@@ -217,7 +217,9 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
                     sum += parse(amount.get("amount").asText());
                 }
             }
-        } catch (RuntimeException | java.io.IOException e) {
+        } catch (RuntimeException e) {
+            // Jackson 3 throws unchecked JacksonException, so IOException is no
+            // longer reachable here — and RuntimeException already covers it.
             log.debug("SigScale OCS: top-up log unreadable for {} ({})", productId, e.getMessage());
         }
         return sum;

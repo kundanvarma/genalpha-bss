@@ -8,7 +8,7 @@ import com.bss.devicecommerce.dto.FinancingSettlement;
 import com.bss.devicecommerce.dto.FinancingTerms;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import com.bss.devicecommerce.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

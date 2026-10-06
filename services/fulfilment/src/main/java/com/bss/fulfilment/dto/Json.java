@@ -1,6 +1,6 @@
 package com.bss.fulfilment.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;

@@ -1,10 +1,10 @@
 package com.bss.ontology.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.dataformat.yaml.YAMLMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Registry {
 
     private static final Logger log = LoggerFactory.getLogger(Registry.class);
-    private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
+    private static final ObjectMapper YAML = YAMLMapper.builder().build();
     private static final ObjectMapper JSON = new ObjectMapper();
     /** keys a tenant overlay may replace on a core action; preconditions are appended,
      *  governance merges tighten-only, everything else is core-owned */
@@ -135,7 +135,7 @@ public class Registry {
             // same reason and with more force — an overlay should be able to lower one threshold
             // without restating the block, because restating it is how a guard gets dropped by
             // accident. What each key may be is still checked; whether it is present is not.
-            ObjectNode partial = schema.deepCopy();
+            ObjectNode partial = (ObjectNode) schema.deepCopy();
             partial.putArray("required").add("action");
             JsonNode governance = partial.path("properties").path("governance");
             if (governance.isObject()) {
@@ -159,7 +159,7 @@ public class Registry {
     private JsonNode read(Resource r) throws IOException {
         try (InputStream in = r.getInputStream()) {
             return YAML.readTree(in);
-        } catch (com.fasterxml.jackson.core.JacksonException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new IllegalStateException("ontology file " + r.getFilename() + " does not parse: " + e.getOriginalMessage(), e);
         }
     }
@@ -194,9 +194,9 @@ public class Registry {
                 out.actions().put(en.getKey(), en.getValue());
                 continue;
             }
-            ObjectNode m = coreAction.deepCopy();
+            ObjectNode m = (ObjectNode) coreAction.deepCopy();
             ObjectNode o = (ObjectNode) en.getValue();
-            o.fields().forEachRemaining(f -> {
+            o.properties().forEach(f -> {
                 String k = f.getKey();
                 if ("action".equals(k)) {
                     return;
@@ -243,12 +243,12 @@ public class Registry {
     private static final List<String> AUDIT = List.of("none", "optional", "mandatory");
 
     private JsonNode tightenGovernance(JsonNode core, JsonNode overlay, String tenant, String action) {
-        ObjectNode out = core.isObject() ? core.deepCopy() : JSON.createObjectNode();
+        ObjectNode out = core.isObject() ? (ObjectNode) core.deepCopy() : JSON.createObjectNode();
         if (!overlay.isObject()) {
             problems.add(said(tenant, action, "governance must be a block"));
             return out;
         }
-        overlay.fields().forEachRemaining(f -> {
+        overlay.properties().forEach(f -> {
             String k = f.getKey();
             JsonNode was = core.path(k);
             JsonNode now = f.getValue();
@@ -268,8 +268,8 @@ public class Registry {
                 case "approvalAbove" -> amount(out, k, was.path("amount"), now.path("amount"),
                         now, false, tenant, action, "approvalAbove.amount");
                 case "limits" -> {
-                    ObjectNode limits = was.isObject() ? was.deepCopy() : JSON.createObjectNode();
-                    now.fields().forEachRemaining(l -> amount(limits, l.getKey(),
+                    ObjectNode limits = was.isObject() ? (ObjectNode) was.deepCopy() : JSON.createObjectNode();
+                    now.properties().forEach(l -> amount(limits, l.getKey(),
                             was.path(l.getKey()), l.getValue(), l.getValue(), false,
                             tenant, action, "limits." + l.getKey()));
                     out.set(k, limits);

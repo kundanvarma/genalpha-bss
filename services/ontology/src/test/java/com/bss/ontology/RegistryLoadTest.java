@@ -1,7 +1,7 @@
 package com.bss.ontology;
 
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

@@ -10,7 +10,7 @@ import com.bss.usage.dto.UsageThresholdNotification;
 import com.bss.usage.service.OcsNotificationAuth;
 import com.bss.usage.service.SigscaleNotificationService;
 import com.bss.usage.service.UsageService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;

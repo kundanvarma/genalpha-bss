@@ -4,7 +4,7 @@ import com.bss.paymentmethod.dto.CardDetails;
 import com.bss.paymentmethod.dto.PartyRef;
 import com.bss.paymentmethod.dto.PaymentMethodRequest;
 import com.bss.paymentmethod.dto.PaymentMethodView;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

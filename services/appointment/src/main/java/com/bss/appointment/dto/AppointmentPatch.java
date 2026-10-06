@@ -1,7 +1,7 @@
 package com.bss.appointment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The one legal change to a booking. The map compared the posted value with the

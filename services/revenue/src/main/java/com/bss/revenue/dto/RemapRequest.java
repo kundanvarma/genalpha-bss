@@ -2,7 +2,7 @@ package com.bss.revenue.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Finance renames an account. {@code configValue} distinguishes absent from an

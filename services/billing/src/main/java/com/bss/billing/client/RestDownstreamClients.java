@@ -111,10 +111,10 @@ public class RestDownstreamClients {
                 }
             }
 
-            private com.fasterxml.jackson.databind.JsonNode get(String path, String id) {
+            private tools.jackson.databind.JsonNode get(String path, String id) {
                 try {
                     return rest.get().uri("/tmf-api/productCatalogManagement/v4/" + path + "/" + id)
-                            .retrieve().body(com.fasterxml.jackson.databind.JsonNode.class);
+                            .retrieve().body(tools.jackson.databind.JsonNode.class);
                 } catch (HttpClientErrorException.NotFound e) {
                     return null;
                 } catch (RestClientException e) {
@@ -123,12 +123,12 @@ public class RestDownstreamClients {
             }
 
             @Override
-            public com.fasterxml.jackson.databind.JsonNode offering(String id) {
+            public tools.jackson.databind.JsonNode offering(String id) {
                 return get("productOffering", id);
             }
 
             @Override
-            public com.fasterxml.jackson.databind.JsonNode price(String id) {
+            public tools.jackson.databind.JsonNode price(String id) {
                 return get("productOfferingPrice", id);
             }
 

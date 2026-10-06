@@ -2,7 +2,7 @@ package com.bss.communication.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** The customer's own marketing choice — the answer, and the body that sets it. */
 public final class MarketingPreference {

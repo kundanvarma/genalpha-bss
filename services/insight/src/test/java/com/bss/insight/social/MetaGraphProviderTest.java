@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import com.bss.insight.dto.PublishedPost;
 import com.bss.insight.dto.SocialMessage;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

@@ -11,7 +11,7 @@ import com.bss.basemigration.repository.MigrationPlanRepository;
 import com.bss.basemigration.security.TenantContext;
 import com.bss.basemigration.security.TenantRegistry;
 import com.bss.basemigration.tick.TickGuard;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -145,7 +145,7 @@ public class MigrationEngine {
                         "base migration '" + plan.getName() + "' (" + plan.getId() + ")");
                 // an order without an id is no order reference: store nothing rather than
                 // the literal text "null", which reads like a real reference on the desk
-                com.fasterxml.jackson.databind.JsonNode placedId = order == null ? null : order.get("id");
+                tools.jackson.databind.JsonNode placedId = order == null ? null : order.get("id");
                 customer.setOrderRef(placedId == null || placedId.isNull() ? null : placedId.asText());
                 customer.setState(MigrationCustomer.MIGRATED);
                 customer.setLastUpdate(OffsetDateTime.now(clock));
@@ -202,7 +202,7 @@ public class MigrationEngine {
             if (com.bss.basemigration.dto.MigrationPlanRequest.text(row.get("sourceOfferingId"))
                     .equals(customer.getSourceOfferingId()) && chars != null && chars.isObject()) {
                 Map<String, Object> out = new LinkedHashMap<>();
-                chars.fields().forEachRemaining(e -> out.put(e.getKey(),
+                chars.properties().forEach(e -> out.put(e.getKey(),
                         e.getValue().isTextual() ? e.getValue().textValue() : e.getValue()));
                 return out;
             }

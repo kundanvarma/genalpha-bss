@@ -4,8 +4,8 @@ import com.bss.quote.dto.HandoffBodies.AgreementRequest;
 import com.bss.quote.dto.HandoffBodies.NarrativeContext;
 import com.bss.quote.dto.HandoffBodies.ProductOrderRequest;
 import com.bss.quote.dto.LeadSignal;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -102,12 +102,12 @@ public class DownstreamClients {
      * so an intent's proposed "Stadium 5G Slice" was "not in the catalog".
      */
     public JsonNode offerings() {
-        com.fasterxml.jackson.databind.node.ArrayNode all = objectMapper.createArrayNode();
+        tools.jackson.databind.node.ArrayNode all = objectMapper.createArrayNode();
         for (int offset = 0; offset < 10_000; offset += 100) {
             JsonNode page = parseList(catalog.get()
                     .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset=" + offset)
                     .retrieve().body(String.class));
-            all.addAll((com.fasterxml.jackson.databind.node.ArrayNode) page);
+            all.addAll((tools.jackson.databind.node.ArrayNode) page);
             if (page.size() < 100) {
                 break;
             }

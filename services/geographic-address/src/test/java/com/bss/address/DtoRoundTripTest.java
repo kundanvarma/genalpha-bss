@@ -14,9 +14,11 @@ import com.bss.address.dto.SitePlace;
 import com.bss.address.dto.StandardizedAddress;
 import com.bss.address.entity.GeographicAddress;
 import com.bss.address.entity.RegistryConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -32,9 +34,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);

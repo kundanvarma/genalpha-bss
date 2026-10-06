@@ -8,7 +8,7 @@ import com.bss.assurance.dto.ServiceProblemPatch;
 import com.bss.assurance.dto.ServiceProblemRequest;
 import com.bss.assurance.dto.ServiceProblemView;
 import com.bss.assurance.service.AssuranceService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

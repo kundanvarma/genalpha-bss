@@ -1,9 +1,8 @@
 package com.bss.ontology.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -103,8 +102,7 @@ public final class SchemaCheck {
             JsonNode props = schema.get("properties");
             JsonNode additional = schema.get("additionalProperties");
             boolean closed = additional != null && additional.isBoolean() && !additional.asBoolean();
-            for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext();) {
-                Map.Entry<String, JsonNode> en = it.next();
+            for (Map.Entry<String, JsonNode> en : node.properties()) {
                 JsonNode sub = props == null ? null : props.get(en.getKey());
                 if (sub != null) {
                     check(sub, en.getValue(), path + "." + en.getKey(), errors);

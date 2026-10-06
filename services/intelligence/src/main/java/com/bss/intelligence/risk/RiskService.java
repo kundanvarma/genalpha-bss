@@ -2,9 +2,9 @@ package com.bss.intelligence.risk;
 
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -245,7 +245,7 @@ public class RiskService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -253,7 +253,7 @@ public class RiskService {
     private List<RiskAssessmentView.RiskSignal> readJson(String json) {
         try {
             return json == null ? List.of() : objectMapper.readValue(json, SIGNALS);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored assessment result is unreadable", e);
         }
     }

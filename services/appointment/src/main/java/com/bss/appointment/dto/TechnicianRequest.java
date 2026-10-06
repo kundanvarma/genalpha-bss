@@ -1,7 +1,7 @@
 package com.bss.appointment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A roster row as the back office posts or patches it. Sparse like the

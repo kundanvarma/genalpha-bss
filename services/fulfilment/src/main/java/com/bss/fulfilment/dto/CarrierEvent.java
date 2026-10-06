@@ -1,7 +1,7 @@
 package com.bss.fulfilment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The carrier's delivery callback. Unauthenticated, so this is the one body in

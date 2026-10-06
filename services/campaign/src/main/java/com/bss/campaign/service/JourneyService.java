@@ -24,9 +24,9 @@ import com.bss.campaign.repository.JourneyRepository;
 import com.bss.campaign.security.TenantContext;
 import com.bss.campaign.security.TenantRegistry;
 import com.bss.campaign.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -222,7 +222,7 @@ public class JourneyService {
     private String serializeSteps(List<Map<String, Object>> steps) {
         try {
             return objectMapper.writeValueAsString(steps);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("steps are not serializable JSON");
         }
     }
@@ -721,7 +721,7 @@ public class JourneyService {
         if (enrollment.getContextJson() != null) {
             try {
                 Map<String, Object> saved = objectMapper.readValue(enrollment.getContextJson(),
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                        new tools.jackson.core.type.TypeReference<Map<String, Object>>() { });
                 context.putAll(saved);
             } catch (Exception ignore) { /* best-effort */ }
         }
@@ -863,7 +863,7 @@ public class JourneyService {
     private List<Map<String, Object>> parseSteps(String steps) {
         try {
             return objectMapper.readValue(steps, STEP_LIST);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("steps must be a JSON array of {type, ...}");
         }
     }
@@ -875,7 +875,7 @@ public class JourneyService {
                 return objectMapper.convertValue(steps, STEP_LIST);
             }
             return objectMapper.readValue(steps.isTextual() ? steps.asText() : steps.toString(), STEP_LIST);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | IllegalArgumentException e) {
+        } catch (tools.jackson.core.JacksonException | IllegalArgumentException e) {
             throw new BadRequestException("steps must be a JSON array of {type, ...}");
         }
     }
@@ -899,7 +899,7 @@ public class JourneyService {
         JsonNode steps;
         try {
             steps = objectMapper.readTree(j.getSteps());
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             steps = objectMapper.getNodeFactory().textNode(j.getSteps());
         }
         return new JourneyView(j.getId(), j.getHref(), j.getName(), j.getStatus(), j.getTriggerEventType(),
@@ -1113,7 +1113,7 @@ public class JourneyService {
         if (j.getArmWeights() != null && !j.getArmWeights().isBlank()) {
             try {
                 Map<String, Object> saved = objectMapper.readValue(j.getArmWeights(),
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                        new tools.jackson.core.type.TypeReference<Map<String, Object>>() { });
                 for (Map.Entry<String, Object> en : saved.entrySet()) {
                     if (w.containsKey(en.getKey())) {
                         w.put(en.getKey(), ((Number) en.getValue()).intValue());

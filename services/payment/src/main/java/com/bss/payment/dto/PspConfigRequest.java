@@ -2,7 +2,7 @@ package com.bss.payment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The operator's edit to one PSP binding. {@code methods} and {@code currencies}

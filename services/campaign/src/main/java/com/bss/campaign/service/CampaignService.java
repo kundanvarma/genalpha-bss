@@ -48,8 +48,8 @@ public class CampaignService {
     private static final Set<String> STATUSES = java.util.Collections.unmodifiableSet(
             new java.util.LinkedHashSet<>(List.of("draft", "scheduled", Campaign.ACTIVE, Campaign.PAUSED, ARCHIVED)));
 
-    private static final com.fasterxml.jackson.core.type.TypeReference<List<ArmSpec>>
-            ARM_LIST = new com.fasterxml.jackson.core.type.TypeReference<>() { };
+    private static final tools.jackson.core.type.TypeReference<List<ArmSpec>>
+            ARM_LIST = new tools.jackson.core.type.TypeReference<>() { };
 
     private final CampaignRepository campaigns;
     private final CampaignExecutionRepository executions;
@@ -57,7 +57,7 @@ public class CampaignService {
     private final com.bss.campaign.client.InsightClient insight;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
     private final FrequencyGuard frequency;
     private final com.bss.campaign.client.CatalogClient catalog;
     private final com.bss.campaign.decision.DecisionPoints decisions;
@@ -65,7 +65,7 @@ public class CampaignService {
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.campaign.client.InsightClient insight,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency,
+            tools.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency,
             com.bss.campaign.client.CatalogClient catalog,
             com.bss.campaign.decision.DecisionPoints decisions) {
         this.decisions = decisions;
@@ -120,7 +120,7 @@ public class CampaignService {
         if (arms != null) {
             try {
                 entity.setArms(objectMapper.writeValueAsString(arms));
-            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            } catch (tools.jackson.core.JacksonException e) {
                 throw new BadRequestException("messageVariants could not be stored");
             }
         }
@@ -489,7 +489,7 @@ public class CampaignService {
         }
         try {
             return objectMapper.readValue(campaign.getArms(), ARM_LIST);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             log.warn("campaign '{}' has unreadable arms — falling back to the base message",
                     campaign.getName());
             return null;

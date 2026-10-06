@@ -61,7 +61,7 @@ import com.bss.quote.repository.SalesQuotaRepository;
 import com.bss.quote.security.TenantContext;
 import com.bss.quote.security.TenantRegistry;
 import com.bss.quote.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

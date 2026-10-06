@@ -33,11 +33,11 @@ import com.bss.usage.repository.UsageAllowanceRepository;
 import com.bss.usage.repository.UsageRecordRepository;
 import com.bss.usage.security.PartyScope;
 import com.bss.usage.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -671,7 +671,7 @@ public class UsageService {
                 if (node instanceof ObjectNode object) {
                     return object;
                 }
-            } catch (JsonProcessingException e) {
+            } catch (JacksonException e) {
                 // fall through: an unreadable payload reads as empty, as before
             }
         }
@@ -682,7 +682,7 @@ public class UsageService {
     private static Map<String, Object> extensionsOf(ObjectNode stored, String... declared) {
         java.util.Set<String> known = java.util.Set.of(declared);
         Map<String, Object> extensions = new LinkedHashMap<>();
-        stored.fields().forEachRemaining(f -> {
+        stored.properties().forEach(f -> {
             if (!known.contains(f.getKey())) {
                 extensions.put(f.getKey(), f.getValue());
             }
@@ -1217,7 +1217,7 @@ public class UsageService {
     private JsonNode readJson(String json) {
         try {
             return json == null ? null : objectMapper.readTree(json);
-        } catch (com.fasterxml.jackson.core.JacksonException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new IllegalStateException("unreadable stored JSON", e);
         }
     }
@@ -1225,7 +1225,7 @@ public class UsageService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }

@@ -1,7 +1,7 @@
 package com.bss.ontology.service;
 
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 /**

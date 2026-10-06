@@ -4,9 +4,9 @@ import com.bss.stock.dto.EntityRef;
 import com.bss.stock.dto.ProductStockDto;
 import com.bss.stock.dto.QuantityDto;
 import com.bss.stock.entity.ProductStock;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -92,7 +92,7 @@ public class ProductStockMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON object", e);
         }
     }
@@ -103,7 +103,7 @@ public class ProductStockMapper {
         }
         try {
             return objectMapper.readValue(json, JSON_OBJECT);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }
     }

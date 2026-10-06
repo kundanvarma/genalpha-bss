@@ -27,7 +27,7 @@ import com.bss.devicecommerce.repository.TradeInResidualRepository;
 import com.bss.devicecommerce.repository.TradeInValuationRepository;
 import com.bss.devicecommerce.security.PartyScope;
 import com.bss.devicecommerce.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;

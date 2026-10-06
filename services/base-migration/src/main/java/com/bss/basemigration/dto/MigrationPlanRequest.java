@@ -1,7 +1,7 @@
 package com.bss.basemigration.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The body that creates or edits a wave. A record cannot carry a field it

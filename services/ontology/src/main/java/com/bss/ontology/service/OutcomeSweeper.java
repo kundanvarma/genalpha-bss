@@ -5,7 +5,7 @@ import com.bss.ontology.client.OntologyProperties;
 import com.bss.ontology.registry.Registry;
 import com.bss.ontology.security.TenantContext;
 import com.bss.ontology.security.TenantRegistry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;

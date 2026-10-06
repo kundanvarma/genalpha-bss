@@ -16,7 +16,7 @@ import com.bss.ontology.service.ContextService;
 import com.bss.ontology.service.ExplainService;
 import com.bss.ontology.service.RdfExportService;
 import com.bss.ontology.service.RecommendationService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;

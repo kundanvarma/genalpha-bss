@@ -2,7 +2,7 @@ package com.bss.intelligence.churn;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

@@ -133,7 +133,7 @@ public class SecurityHeadersFilter implements GlobalFilter, Ordered {
 
     /** A component that sets its own policy for a reason keeps it. */
     private static void setIfAbsent(HttpHeaders headers, String name, String value) {
-        if (!headers.containsKey(name)) {
+        if (!headers.containsHeader(name)) {
             headers.set(name, value);
         }
     }

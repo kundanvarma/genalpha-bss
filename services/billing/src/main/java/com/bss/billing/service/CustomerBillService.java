@@ -29,11 +29,11 @@ import com.bss.billing.repository.AppliedBillingRateRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -150,7 +150,7 @@ public class CustomerBillService {
     private String writeJsonValue(Object o) {
         try {
             return objectMapper.writeValueAsString(o);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }
@@ -503,7 +503,7 @@ public class CustomerBillService {
     private String writeJsonArray(List<PaymentRef> value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON array", e);
         }
     }
@@ -511,7 +511,7 @@ public class CustomerBillService {
     private List<PaymentRef> readPaymentRefs(String json) {
         try {
             return json == null ? null : objectMapper.readValue(json, PAYMENT_REFS);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }

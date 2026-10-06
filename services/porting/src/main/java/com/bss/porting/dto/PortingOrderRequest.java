@@ -1,7 +1,7 @@
 package com.bss.porting.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A posted port. The party list stays a tree because only the first entry's

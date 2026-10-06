@@ -89,6 +89,25 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# ------------------------------------------------------------ wire-shape ----
+# Jackson 3 (Spring Boot 4) flipped two defaults that are visible on the wire:
+# SORT_PROPERTIES_ALPHABETICALLY and FAIL_ON_NULL_FOR_PRIMITIVES both became
+# ENABLED. The first re-orders every TM Forum body (@type first, then a-z);
+# the second throws on a payload that leaves a number out, which TM Forum
+# payloads do by design. Spring Boot overrides neither, so every component
+# pins both itself — and a component that forgets answers in a different
+# shape from all the others, which is exactly the drift nobody notices until
+# a consumer does. Hence a gate, not a convention.
+for yml in services/*/src/main/resources/application.yml; do
+  svc=$(echo "$yml" | sed 's|services/||; s|/src/.*||')
+  grep -q '^      sort-properties-alphabetically: false$' "$yml" \
+    || fail "service '$svc' does not pin spring.jackson.mapper.sort-properties-alphabetically: false" \
+            "without it Jackson 3 re-orders that component's TM Forum bodies alphabetically"
+  grep -q '^      fail-on-null-for-primitives: false$' "$yml" \
+    || fail "service '$svc' does not pin spring.jackson.deserialization.fail-on-null-for-primitives: false" \
+            "without it a sparse payload that omits a number throws instead of reading 0"
+done
+
 # ----------------------------------------------------------------- stack ----
 BOOT=$(grep -m1 -A2 'spring-boot-starter-parent' services/product-catalog/pom.xml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 grep -q "Spring Boot $BOOT" README.md \

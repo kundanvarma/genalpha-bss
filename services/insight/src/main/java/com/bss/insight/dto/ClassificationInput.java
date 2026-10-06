@@ -1,7 +1,7 @@
 package com.bss.insight.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** The battery's write-back. Evidence is {field: verbatim quote}; evidenceSpace=twin says the quotes are in twin space. */
 @JsonIgnoreProperties(ignoreUnknown = true)

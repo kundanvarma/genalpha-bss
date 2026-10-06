@@ -16,7 +16,7 @@ import com.bss.entitlement.dto.SubscriberView;
 import com.bss.entitlement.dto.Ts43Block;
 import com.bss.entitlement.dto.Ts43Envelope;
 import com.bss.entitlement.service.Ts43Xml;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;

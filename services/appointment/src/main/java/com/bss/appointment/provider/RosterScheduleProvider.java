@@ -4,7 +4,7 @@ import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.repository.AppointmentRepository;
 import com.bss.appointment.schedule.ScheduleConfig;
 import com.bss.appointment.schedule.ScheduleService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;

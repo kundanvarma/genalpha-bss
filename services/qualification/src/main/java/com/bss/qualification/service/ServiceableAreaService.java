@@ -11,10 +11,10 @@ import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.ServiceableAreaRepository;
 import com.bss.qualification.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -112,7 +112,7 @@ public class ServiceableAreaService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON object", e);
         }
     }
@@ -120,7 +120,7 @@ public class ServiceableAreaService {
     private Map<String, Object> readJson(String json) {
         try {
             return json == null ? null : objectMapper.readValue(json, JSON_OBJECT);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }
     }

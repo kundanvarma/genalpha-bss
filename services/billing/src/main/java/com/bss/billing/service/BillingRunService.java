@@ -15,7 +15,7 @@ import com.bss.billing.repository.BillingRunRecordRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

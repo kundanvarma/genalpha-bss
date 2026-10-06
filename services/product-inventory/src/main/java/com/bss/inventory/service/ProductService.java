@@ -254,8 +254,8 @@ public class ProductService {
         });
     }
 
-    private final com.fasterxml.jackson.databind.ObjectMapper json =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper json =
+            new tools.jackson.databind.ObjectMapper();
 
     private Object readJson(String s) {
         if (s == null || s.isBlank()) {

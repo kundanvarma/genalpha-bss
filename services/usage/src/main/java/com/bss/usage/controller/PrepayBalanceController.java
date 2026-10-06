@@ -13,9 +13,9 @@ import com.bss.usage.exception.NotFoundException;
 import com.bss.usage.repository.PrepayTaskRepository;
 import com.bss.usage.security.PartyScope;
 import com.bss.usage.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -214,7 +214,7 @@ public class PrepayBalanceController {
 
     /** The caller's document with the server's keys laid over it, stored and answered as one. */
     private ObjectNode save(String type, String atType, String status, ObjectNode body, ObjectNode serverFields) {
-        ObjectNode echo = body.deepCopy();
+        ObjectNode echo = (ObjectNode) body.deepCopy();
         echo.setAll(serverFields);
         String taskId = UUID.randomUUID().toString();
         echo.put("id", taskId);

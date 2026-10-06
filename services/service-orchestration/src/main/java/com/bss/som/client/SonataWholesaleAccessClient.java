@@ -2,7 +2,7 @@ package com.bss.som.client;
 
 import com.bss.som.entity.WholesaleAccessOrder;
 import com.bss.som.security.WholesaleDoorAuth;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -117,7 +117,7 @@ public class SonataWholesaleAccessClient implements WholesaleAccessClient {
             String id = idOf(resp); // no id = no external reference, not one called "null"
             log.info("Sonata: {} acknowledged access order {} (buyerRef {})", accessOwner, id, buyerRef);
             return new AccessOrderResult(id, WholesaleAccessOrder.IN_PROGRESS);
-        } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (RestClientException | tools.jackson.core.JacksonException e) {
             log.warn("Sonata order to {} failed: {}", accessOwner, e.getMessage());
             return new AccessOrderResult(null, WholesaleAccessOrder.FAILED);
         }

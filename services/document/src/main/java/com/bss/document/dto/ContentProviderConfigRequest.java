@@ -1,7 +1,7 @@
 package com.bss.document.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A posted CMS binding. Two blocks stay trees because the map path read them

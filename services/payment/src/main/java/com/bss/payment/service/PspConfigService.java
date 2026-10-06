@@ -6,8 +6,8 @@ import com.bss.payment.dto.PspTestResult;
 import com.bss.payment.entity.PspConfig;
 import com.bss.payment.repository.PspConfigRepository;
 import com.bss.payment.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -144,7 +144,7 @@ public class PspConfigService {
         }
         try {
             List<String> codes = mapper.readValue(c.getCurrencies(),
-                    new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+                    new tools.jackson.core.type.TypeReference<List<String>>() { });
             return codes.isEmpty() || codes.stream().anyMatch(x -> x.equalsIgnoreCase(currency));
         } catch (Exception e) {
             return true;   // a malformed filter never blocks a charge
@@ -164,7 +164,7 @@ public class PspConfigService {
             return List.of("card");
         }
         try {
-            return mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+            return mapper.readValue(json, new tools.jackson.core.type.TypeReference<List<String>>() { });
         } catch (Exception e) {
             return List.of("card");
         }

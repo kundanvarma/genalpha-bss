@@ -23,9 +23,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -55,8 +55,8 @@ public class PartyInteractionService {
     private final OrgScope orgScope;
     private final TenantScope tenantScope;
     private final String defaultOrg;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper objectMapper =
+            new tools.jackson.databind.ObjectMapper();
 
     public PartyInteractionService(PartyInteractionRepository repository, DomainEventPublisher events,
             PartyScope partyScope, OrgScope orgScope, TenantScope tenantScope,
@@ -244,11 +244,11 @@ public class PartyInteractionService {
         ObjectNode stored = readJson(entity.getPayloadJson());
 
         JsonNode description = entity.getDescription() != null
-                ? TextNode.valueOf(entity.getDescription()) : stored.get("description");
+                ? StringNode.valueOf(entity.getDescription()) : stored.get("description");
 
         JsonNode channel = stored.get("channel");
         if (entity.getChannel() != null && !Json.present(channel)) {
-            channel = TextNode.valueOf(entity.getChannel());
+            channel = StringNode.valueOf(entity.getChannel());
         }
         // TMF683 channel is an array of channel references; normalise a legacy
         // string value (app-created rows) so it round-trips as an array.
@@ -267,12 +267,12 @@ public class PartyInteractionService {
 
         JsonNode reason = stored.get("reason");
         if (!Json.present(reason)) {
-            reason = TextNode.valueOf(entity.getDescription() != null
+            reason = StringNode.valueOf(entity.getDescription() != null
                     ? entity.getDescription() : "customer interaction");
         }
 
         JsonNode sourceSystem = entity.getSourceSystem() != null
-                ? TextNode.valueOf(entity.getSourceSystem()) : stored.get("sourceSystem");
+                ? StringNode.valueOf(entity.getSourceSystem()) : stored.get("sourceSystem");
 
         // Server-derived relatedParty only when we tracked a customer (app path);
         // CTK-created interactions keep whatever relatedParty they posted.
@@ -305,7 +305,7 @@ public class PartyInteractionService {
     /** The posted keys this view does not declare, in the order they were posted. */
     private Map<String, Object> extensionsOf(ObjectNode stored) {
         Map<String, Object> extras = new LinkedHashMap<>();
-        stored.fields().forEachRemaining(e -> {
+        stored.properties().forEach(e -> {
             if (!DECLARED.contains(e.getKey())) {
                 extras.put(e.getKey(), e.getValue());
             }

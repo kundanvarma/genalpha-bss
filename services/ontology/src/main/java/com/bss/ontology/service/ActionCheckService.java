@@ -6,7 +6,7 @@ import com.bss.ontology.dto.PermissionVerdict;
 import com.bss.ontology.dto.PolicyVerdict;
 import com.bss.ontology.dto.Verdict;
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;

@@ -25,13 +25,13 @@ import com.bss.cart.exception.ConflictException;
 import com.bss.cart.exception.NotFoundException;
 import com.bss.cart.repository.AcpSessionRepository;
 import com.bss.cart.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.NullNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -254,7 +254,7 @@ public class AcpCheckoutService {
      * the agent learns exactly what a human shopper would.
      */
     private LineItem configuredLine(RequestedItem item, String lineId, String tenantId) {
-        ObjectNode config = item.configuration().deepCopy();
+        ObjectNode config = (ObjectNode) item.configuration().deepCopy();
         config.set("productOffering", objectMapper.createObjectNode().put("id", item.id()));
         JsonNode checked;
         try {
@@ -425,7 +425,7 @@ public class AcpCheckoutService {
         try {
             return session.getLineItemJson() == null ? List.of()
                     : objectMapper.readValue(session.getLineItemJson(), LINES);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored line items are unreadable", e);
         }
     }
@@ -433,7 +433,7 @@ public class AcpCheckoutService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -441,8 +441,8 @@ public class AcpCheckoutService {
     private JsonNode readTree(String json) {
         try {
             return objectMapper.readTree(json);
-        } catch (JsonProcessingException e) {
-            return new TextNode(json); // degrade as the map read degraded: the raw text, never a 500
+        } catch (JacksonException e) {
+            return new StringNode(json); // degrade as the map read degraded: the raw text, never a 500
         }
     }
 }

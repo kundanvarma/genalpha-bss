@@ -12,7 +12,7 @@ import com.bss.ontology.service.ActionExecuteService;
 import com.bss.ontology.service.Caller;
 import com.bss.ontology.service.OutcomeSweeper;
 import com.bss.ontology.service.UpgradeService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -92,7 +92,7 @@ public class ActionController {
         }
         JsonNode nested = body.get("inputs");
         JsonNode src = nested != null && nested.isObject() ? nested : body;
-        src.fields().forEachRemaining(f -> {
+        src.properties().forEach(f -> {
             if (!f.getValue().isNull()) {
                 in.put(f.getKey(), f.getValue().asText());
             }

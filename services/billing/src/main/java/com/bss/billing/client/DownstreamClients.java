@@ -1,6 +1,6 @@
 package com.bss.billing.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.util.List;

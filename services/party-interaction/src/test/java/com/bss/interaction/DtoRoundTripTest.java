@@ -8,12 +8,13 @@ import com.bss.interaction.dto.PartyRef;
 import com.bss.interaction.entity.PartyInteraction;
 import com.bss.interaction.privacy.EraseRequest;
 import com.bss.interaction.privacy.PrivacyExport;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.TextNode;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.node.StringNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -34,10 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private static final OffsetDateTime T = OffsetDateTime.parse("2026-09-23T10:00:00Z");
 
@@ -52,10 +55,10 @@ class DtoRoundTripTest {
     @Test
     void aHouseRowCarriesTheMandatoryTrioAndTheDerivedParties() throws Exception {
         InteractionView view = new InteractionView("i-1", "/h",
-                TextNode.valueOf("Message sent: Order complete"),
+                StringNode.valueOf("Message sent: Order complete"),
                 json.valueToTree(List.of(new ChannelRef("inApp"))),
-                TextNode.valueOf("Message sent: Order complete"), "outbound", "completed",
-                TextNode.valueOf("communication"),
+                StringNode.valueOf("Message sent: Order complete"), "outbound", "completed",
+                StringNode.valueOf("communication"),
                 json.valueToTree(List.of(PartyRef.customer("p-1"))),
                 OrgRef.of("genalpha-retail"), T, T, null);
         assertEquals("{\"id\":\"i-1\",\"href\":\"/h\",\"description\":\"Message sent: Order complete\","
@@ -79,7 +82,7 @@ class DtoRoundTripTest {
     void aBlockTheCallerNeverSentIsAbsentAndOneTheySentNullIsNull() throws Exception {
         InteractionView bare = new InteractionView("i-2", "/h", null,
                 json.valueToTree(List.of(new ChannelRef("assisted"))),
-                TextNode.valueOf("customer interaction"), "inbound", "completed", null, null,
+                StringNode.valueOf("customer interaction"), "inbound", "completed", null, null,
                 OrgRef.of("o"), T, T, null);
         String wire = json.writeValueAsString(bare);
         assertFalse(wire.contains("description"));
@@ -88,7 +91,7 @@ class DtoRoundTripTest {
 
         InteractionView nulled = new InteractionView("i-3", "/h", node("null"),
                 json.valueToTree(List.of(new ChannelRef("assisted"))),
-                TextNode.valueOf("customer interaction"), "inbound", "completed", node("null"),
+                StringNode.valueOf("customer interaction"), "inbound", "completed", node("null"),
                 node("null"), OrgRef.of("o"), T, T, null);
         String nulls = json.writeValueAsString(nulled);
         assertTrue(nulls.contains("\"description\":null"));

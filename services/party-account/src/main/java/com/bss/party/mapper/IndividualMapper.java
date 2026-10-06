@@ -2,9 +2,9 @@ package com.bss.party.mapper;
 
 import com.bss.party.dto.IndividualDto;
 import com.bss.party.entity.Individual;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -148,7 +148,7 @@ public class IndividualMapper {
             List<Map<String, Object>> media =
                     STATIC_JSON.readValue(contactMediumJson, JSON_OBJECT_LIST);
             return STATIC_JSON.writeValueAsString(maskStreetData(media));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // unreadable stored JSON may hide street data — drop it entirely
             return null;
         }
@@ -167,7 +167,7 @@ public class IndividualMapper {
             media = contactMediumJson == null ? new java.util.ArrayList<>()
                     : new java.util.ArrayList<>(
                             STATIC_JSON.readValue(contactMediumJson, JSON_OBJECT_LIST));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             media = new java.util.ArrayList<>();
         }
         Map<String, Object> characteristic = new java.util.LinkedHashMap<>(registeredAddress);
@@ -182,7 +182,7 @@ public class IndividualMapper {
         postal.put("characteristic", characteristic);
         try {
             return STATIC_JSON.writeValueAsString(media);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("unserializable contact medium", e);
         }
     }
@@ -206,7 +206,7 @@ public class IndividualMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON array", e);
         }
     }
@@ -217,7 +217,7 @@ public class IndividualMapper {
         }
         try {
             return objectMapper.readValue(json, JSON_OBJECT_LIST);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }

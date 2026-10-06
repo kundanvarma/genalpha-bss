@@ -1,9 +1,12 @@
 package com.bss.gateway;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,8 +21,22 @@ import static org.assertj.core.api.Assertions.assertThat;
         properties = "spring.test.observability.auto-configure=true")
 class ObservabilityTest {
 
-    @Autowired
+    // Boot 4 no longer injects a WebTestClient bound to a RUNNING server: the
+    // context customizer that used to do it is gone, and @AutoConfigureWebTestClient
+    // binds to a mock context instead. A real port carrying real HTTP is the point
+    // of this test, so the client is built against the port the server actually took.
+    @LocalServerPort
+    private int port;
+
     private WebTestClient webTestClient;
+
+    @BeforeEach
+    void bindToTheRunningServer() {
+        webTestClient = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .responseTimeout(Duration.ofSeconds(10))
+                .build();
+    }
 
     @Test
     void prometheusEndpoint_isOpenAndServesMetrics() {

@@ -9,7 +9,7 @@ import com.bss.appointment.exception.BadRequestException;
 import com.bss.appointment.exception.NotFoundException;
 import com.bss.appointment.security.TenantRegistry;
 import com.bss.appointment.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

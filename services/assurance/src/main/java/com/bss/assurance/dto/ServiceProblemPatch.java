@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** The one supported transition. Only a JSON string ever matched "resolved". */
 @JsonIgnoreProperties(ignoreUnknown = true)

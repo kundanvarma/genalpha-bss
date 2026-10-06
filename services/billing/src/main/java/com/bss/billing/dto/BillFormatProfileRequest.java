@@ -1,7 +1,7 @@
 package com.bss.billing.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Create or patch a format profile. {@code customizationId} and

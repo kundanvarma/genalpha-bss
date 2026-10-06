@@ -291,8 +291,8 @@ public class BillDistributionService {
 
     private static String toJson(Object payload) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return new tools.jackson.databind.ObjectMapper().writeValueAsString(payload);
+        } catch (tools.jackson.core.JacksonException e) {
             throw new IllegalStateException("unserializable distribution payload", e);
         }
     }

@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The map's leniency, written out. Every body in this service used to be a

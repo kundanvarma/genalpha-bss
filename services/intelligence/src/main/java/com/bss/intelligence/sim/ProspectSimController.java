@@ -25,10 +25,10 @@ import java.util.List;
 public class ProspectSimController {
 
     private final PriceSimService sims;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
 
     public ProspectSimController(PriceSimService sims,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+            tools.jackson.databind.ObjectMapper objectMapper) {
         this.sims = sims;
         this.objectMapper = objectMapper;
     }

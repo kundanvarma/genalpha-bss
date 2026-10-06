@@ -19,9 +19,9 @@ import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.CoverageMapRepository;
 import com.bss.qualification.repository.ServiceQualificationRepository;
 import com.bss.qualification.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -363,7 +363,7 @@ public class ServiceQualificationService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -371,7 +371,7 @@ public class ServiceQualificationService {
     private List<CheckItemView> readItems(String json) {
         try {
             return json == null ? List.of() : objectMapper.readValue(json, STORED_ITEMS);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored qualification result is unreadable", e);
         }
     }
@@ -379,7 +379,7 @@ public class ServiceQualificationService {
     private Map<String, Object> readPlace(String json) {
         try {
             return json == null ? Map.of() : objectMapper.readValue(json, STORED_PLACE);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored place is unreadable", e);
         }
     }

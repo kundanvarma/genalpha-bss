@@ -18,8 +18,8 @@ import com.bss.ontology.service.ContextService;
 import com.bss.ontology.service.ExplainService;
 import com.bss.ontology.service.RecommendationService;
 import com.bss.ontology.service.UpgradeService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -238,7 +238,7 @@ public class McpController {
                 throw new IllegalArgumentException("unknown tool: " + name);
             }
             Map<String, String> inputs = new LinkedHashMap<>();
-            args.fields().forEachRemaining(f -> inputs.put(f.getKey(), f.getValue().asText()));
+            args.properties().forEach(f -> inputs.put(f.getKey(), f.getValue().asText()));
             if (dry) {
                 Check c = checks.check(action, inputs, caller);
                 result = c;

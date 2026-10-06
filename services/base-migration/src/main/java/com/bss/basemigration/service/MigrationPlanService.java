@@ -21,9 +21,9 @@ import com.bss.basemigration.exception.NotFoundException;
 import com.bss.basemigration.repository.MigrationCustomerRepository;
 import com.bss.basemigration.repository.MigrationPlanRepository;
 import com.bss.basemigration.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -349,7 +349,7 @@ public class MigrationPlanService {
                 if (!DELTA_CLASSES.contains(named)) {
                     throw new BadRequestException("deltaClass must be one of " + DELTA_CLASSES);
                 }
-                row.set("deltaClass", deltaClass == null ? TextNode.valueOf("neutral") : deltaClass);
+                row.set("deltaClass", deltaClass == null ? StringNode.valueOf("neutral") : deltaClass);
             }
             plan.setMatrixJson(json.write(matrix));
         }

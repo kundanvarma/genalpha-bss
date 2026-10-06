@@ -1,7 +1,7 @@
 package com.bss.fulfilment.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A named carrier's pickup point, normalised to the four facts a shopper picks

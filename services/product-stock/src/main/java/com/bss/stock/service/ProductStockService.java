@@ -17,8 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -43,8 +43,8 @@ public class ProductStockService {
         this.tenantScope = tenantScope;
     }
 
-    private final com.fasterxml.jackson.databind.ObjectMapper json =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper json =
+            new tools.jackson.databind.ObjectMapper();
 
     /**
      * Echo the posted body (so spec fields round-trip) overlaid with the
@@ -67,7 +67,7 @@ public class ProductStockService {
         String name = entity.getName() != null ? entity.getName()
                 : stored.hasNonNull("name") ? stored.get("name").asText() : null;
         Map<String, JsonNode> rest = new LinkedHashMap<>();
-        stored.fields().forEachRemaining(f -> {
+        stored.properties().forEach(f -> {
             if (!ProductStockView.DECLARED.contains(f.getKey())) {
                 rest.put(f.getKey(), f.getValue());
             }

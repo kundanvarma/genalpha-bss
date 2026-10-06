@@ -2,7 +2,7 @@ package com.bss.campaign;
 
 import com.bss.campaign.listen.BusinessEventListener;
 import com.bss.campaign.service.CampaignService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 

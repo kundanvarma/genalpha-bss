@@ -15,7 +15,7 @@ import com.bss.quote.dto.QuoteRequests.SignRequest;
 import com.bss.quote.dto.QuoteRequests.ValidateRequest;
 import com.bss.quote.dto.QuoteView;
 import com.bss.quote.service.QuoteService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;

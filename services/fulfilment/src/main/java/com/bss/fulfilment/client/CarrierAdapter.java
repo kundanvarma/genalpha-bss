@@ -1,7 +1,7 @@
 package com.bss.fulfilment.client;
 
 import com.bss.fulfilment.entity.CarrierConfig;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 

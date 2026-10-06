@@ -1,7 +1,7 @@
 package com.bss.knowledge.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * POST/PATCH article. The body is a record so it cannot carry a field the

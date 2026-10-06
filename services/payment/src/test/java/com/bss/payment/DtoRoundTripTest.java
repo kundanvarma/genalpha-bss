@@ -18,8 +18,11 @@ import com.bss.payment.dto.VaultMethodRequest;
 import com.bss.payment.dto.VaultRecurringRequest;
 import com.bss.payment.dto.VaultedRecurringMethod;
 import com.bss.payment.dto.WebhookReceipt;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -35,9 +38,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);

@@ -18,9 +18,9 @@ import com.bss.som.repository.ServiceInstanceRepository;
 import com.bss.som.repository.ServiceMonitorRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -123,7 +123,7 @@ public class ServiceActivationController {
         s.setLastUpdate(now);
         services.save(s);
 
-        ObjectNode document = dto.deepCopy();
+        ObjectNode document = (ObjectNode) dto.deepCopy();
         document.remove("id");
         document.remove("href");
         ServiceActivation a = new ServiceActivation();

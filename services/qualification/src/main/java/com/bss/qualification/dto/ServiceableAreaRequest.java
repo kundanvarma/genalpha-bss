@@ -1,7 +1,7 @@
 package com.bss.qualification.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A posted serviceable area. The offering reference stays a tree: the service

@@ -3,7 +3,7 @@ package com.bss.ontology.controller;
 import com.bss.ontology.api.ApiConstants;
 import com.bss.ontology.dto.ComponentDescriptor;
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;

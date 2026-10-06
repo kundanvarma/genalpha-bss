@@ -4,8 +4,8 @@ import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
 import com.bss.intelligence.service.CopilotRequests.IntentAsk;
 import com.bss.intelligence.service.IntentDraft.IntentExpression;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

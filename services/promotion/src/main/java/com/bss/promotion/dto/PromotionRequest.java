@@ -1,7 +1,7 @@
 package com.bss.promotion.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A posted promotion. The four blocks the map path read leniently stay trees:

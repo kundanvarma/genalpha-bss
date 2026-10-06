@@ -3,8 +3,8 @@ package com.bss.intelligence.service;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
 import com.bss.intelligence.service.CopilotRequests.CopilotChatRequest;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

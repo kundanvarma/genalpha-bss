@@ -6,11 +6,11 @@ import com.bss.ontology.dto.ExecuteReceipt;
 import com.bss.ontology.dto.UpgradeOption;
 import com.bss.ontology.dto.Verdict;
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
@@ -112,7 +112,7 @@ public class ActionExecuteService {
             return out.refused(422, why);
         }
         Map<String, String> pathVars = new LinkedHashMap<>();
-        action.path("executes").path("pathVars").fields().forEachRemaining(f -> {
+        action.path("executes").path("pathVars").properties().forEach(f -> {
             String v = lookup(strip(f.getValue().asText()), inputs, check.resolved());
             if (v == null) {
                 missing.add(f.getValue().asText() + " is not known");
@@ -121,7 +121,7 @@ public class ActionExecuteService {
             }
         });
         Map<String, String> query = new LinkedHashMap<>();
-        action.path("executes").path("query").fields().forEachRemaining(f -> {
+        action.path("executes").path("query").properties().forEach(f -> {
             String v = lookup(strip(f.getValue().asText()), inputs, check.resolved());
             if (v != null) {
                 query.put(f.getKey(), v);
@@ -225,7 +225,7 @@ public class ActionExecuteService {
     /* ------------------------------------------------------------------ the request */
 
     /** A placeholder that names an input the caller left out: the key is dropped, not sent empty. */
-    private static final JsonNode OMIT = TextNode.valueOf("\u0000omit");
+    private static final JsonNode OMIT = StringNode.valueOf("\u0000omit");
 
     private JsonNode fill(JsonNode node, JsonNode action, Map<String, String> inputs, Resolver.Resolved r, List<String> missing) {
         if (node.isTextual()) {
@@ -239,7 +239,7 @@ public class ActionExecuteService {
                         return OMIT;
                     }
                     missing.add(path + " is not known");
-                    return TextNode.valueOf("");
+                    return StringNode.valueOf("");
                 }
                 if (declared != null) {
                     switch (declared.path("type").asText()) {
@@ -248,24 +248,24 @@ public class ActionExecuteService {
                                 return json.getNodeFactory().numberNode(new java.math.BigDecimal(v));
                             } catch (NumberFormatException e) {
                                 missing.add(path + " is not a number");
-                                return TextNode.valueOf(v);
+                                return StringNode.valueOf(v);
                             }
                         }
                         case "boolean" -> {
                             return json.getNodeFactory().booleanNode(Boolean.parseBoolean(v));
                         }
                         default -> {
-                            return TextNode.valueOf(v);
+                            return StringNode.valueOf(v);
                         }
                     }
                 }
-                return TextNode.valueOf(v);
+                return StringNode.valueOf(v);
             }
             return node;
         }
         if (node.isObject()) {
             ObjectNode o = json.createObjectNode();
-            node.fields().forEachRemaining(f -> {
+            node.properties().forEach(f -> {
                 JsonNode v = fill(f.getValue(), action, inputs, r, missing);
                 if (v != OMIT) {
                     o.set(f.getKey(), v);

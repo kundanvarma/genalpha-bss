@@ -2,8 +2,8 @@ package com.bss.insight.listen;
 
 import com.bss.insight.security.TenantContext;
 import com.bss.insight.service.SignalService;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -62,7 +62,7 @@ public class SignalListener {
             String partyId = ticket.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
                     ? idOf(parties.get(0)) : null;
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                com.fasterxml.jackson.databind.node.ObjectNode context = null;
+                tools.jackson.databind.node.ObjectNode context = null;
                 if (ticket.get("severity") != null) {
                     context = objectMapper.createObjectNode().put("severity", String.valueOf(ticket.get("severity")));
                 }

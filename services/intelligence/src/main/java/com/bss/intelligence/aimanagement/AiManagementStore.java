@@ -3,17 +3,16 @@ package com.bss.intelligence.aimanagement;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.exception.NotFoundException;
 import com.bss.intelligence.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +67,7 @@ public class AiManagementStore {
         if (!body.isObject()) {
             throw new BadRequestException("a " + kind + " body must be a JSON object");
         }
-        ObjectNode doc = body.deepCopy();
+        ObjectNode doc = (ObjectNode) body.deepCopy();
         doc.remove("id");
         doc.remove("href");
         if (!doc.hasNonNull("@type")) {
@@ -109,8 +108,7 @@ public class AiManagementStore {
         AiManagementResource row = row(kind, id);
         ObjectNode doc = document(row);
         if (patch != null && patch.isObject()) {
-            for (Iterator<Map.Entry<String, JsonNode>> it = patch.fields(); it.hasNext(); ) {
-                Map.Entry<String, JsonNode> e = it.next();
+            for (Map.Entry<String, JsonNode> e : patch.properties()) {
                 if ("id".equals(e.getKey()) || "href".equals(e.getKey())) {
                     continue;
                 }
@@ -202,7 +200,7 @@ public class AiManagementStore {
         row.setLastUpdate(OffsetDateTime.now());
         try {
             row.setBody(objectMapper.writeValueAsString(doc));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new BadRequestException("body is not serialisable: " + e.getOriginalMessage());
         }
     }
@@ -214,7 +212,7 @@ public class AiManagementStore {
                 throw new IllegalStateException("stored " + row.getKind() + " " + row.getId() + " is not a JSON object");
             }
             return object;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored " + row.getKind() + " " + row.getId() + " is not JSON", e);
         }
     }

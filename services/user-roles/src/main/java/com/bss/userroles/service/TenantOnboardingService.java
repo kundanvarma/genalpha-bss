@@ -20,10 +20,10 @@ import com.bss.userroles.dto.QuarterResult.SimulatedQuarter;
 import com.bss.userroles.dto.SeedTwinRequest;
 import com.bss.userroles.dto.TwinBaseReceipt;
 import com.bss.userroles.dto.UserView;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,7 +34,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Base64;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -488,9 +487,7 @@ public class TenantOnboardingService {
             }
             grantRealmRoles(adminToken, id, userId, u.path("realmRoles"), realmRoles);
             JsonNode clientRoles = u.path("clientRoles");
-            Iterator<String> owners = clientRoles.fieldNames();
-            while (owners.hasNext()) {
-                String owner = owners.next();
+            for (String owner : clientRoles.propertyNames()) {
                 String ownerUuid = clientUuid(adminToken, id, owner);
                 if (ownerUuid == null) {
                     continue;
@@ -623,9 +620,8 @@ public class TenantOnboardingService {
         if (node instanceof ObjectNode obj) {
             obj.remove("id");
             obj.remove("containerId");
-            Iterator<JsonNode> it = obj.elements();
-            while (it.hasNext()) {
-                stripIds(it.next());
+            for (JsonNode child : obj.values()) {
+                stripIds(child);
             }
         } else if (node.isArray()) {
             for (JsonNode child : node) {

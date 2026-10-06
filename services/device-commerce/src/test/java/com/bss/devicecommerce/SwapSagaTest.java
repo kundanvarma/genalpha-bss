@@ -13,7 +13,7 @@ import com.bss.devicecommerce.dto.TradeInValuationView;
 import com.bss.devicecommerce.dto.UpgradeRule;
 import com.bss.devicecommerce.service.DeviceAgreementService;
 import com.bss.devicecommerce.service.TradeInService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
