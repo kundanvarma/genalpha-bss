@@ -226,7 +226,9 @@ async function resolve(page, host) {
 async function offeringMeta(id, host) {
   const got = await fetchJson(`${CATALOG}/seo/offering/${encodeURIComponent(id)}/meta`,
     host ? { 'X-Forwarded-Host': host, Host: host } : {});
-  return got.json && got.json.title ? got.json : null;
+  // a title OR a redirect: a withdrawn offering answers with the latter and no
+  // title at all, and requiring one here swallowed the redirect entirely
+  return got.json && (got.json.title || got.json.redirect) ? got.json : null;
 }
 
 const esc = (s) => String(s)
@@ -304,7 +306,24 @@ createServer(async (req, res) => {
       res.end('not found');
       return;
     }
+    /*
+     * AN OFFERING'S HEAD IS ASKED FOR FIRST, because it is the thing that knows
+     * a withdrawn product from a missing one. The catalogue's public read 404s
+     * for both — a no-oracle rule it keeps on purpose — so resolving the page
+     * before asking would turn every retired URL into a 404 and throw away its
+     * inbound links. It also saves a wasted read when the answer is a redirect.
+     */
     const config = await tenantConfig(host);
+    let meta = null;
+    if (page.kind === 'offering') {
+      meta = await offeringMeta(page.id, host);
+      if (meta && meta.redirect) {
+        // a product that is no longer sold MOVED; 301 keeps what the URL earned
+        res.writeHead(301, { Location: meta.redirect, 'Cache-Control': 'no-cache' });
+        res.end();
+        return;
+      }
+    }
     const { status, data } = await resolve(page, host);
     const html = render(url.pathname + url.search, config, data);
 
@@ -317,7 +336,6 @@ createServer(async (req, res) => {
     const brand = config.brandName || 'the operator';
     let headTags = '';
     if (status === 200 && page.kind === 'offering') {
-      const meta = await offeringMeta(page.id, host);
       headTags = meta
         ? head(meta, meta.canonical, meta.title)
         : head(null, `${base}/shop/offering/${page.id}`, null);

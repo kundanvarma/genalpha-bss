@@ -86,6 +86,22 @@ const markup = (html) => html.split('<script type="application/json" id="ssr-dat
  * pass for any assertion that a name is ABSENT. */
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
+async function staffToken() {
+  const r = await fetch(KC, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' }) });
+  const j = await r.json();
+  if (!j.access_token) fail('the suite could not get a staff token to author fixtures with');
+  return j.access_token;
+}
+async function makeOffering(tok, body) {
+  const r = await fetch(`${API}${CAT}/productOffering`, { method: 'POST',
+    headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body) });
+  if (r.status !== 201 && r.status !== 200) fail(`authoring a fixture answered ${r.status}`);
+  return (await r.json()).id;
+}
+
 async function get(path, agent) {
   const r = await fetch(API + path, { headers: { 'User-Agent': agent, 'Cache-Control': 'no-cache' } });
   return { status: r.status, text: await r.text(), server: r.headers.get('server') || '' };
@@ -231,6 +247,73 @@ async function untilRendered(path, tries = 24) {
       fail('the 404 served to a crawler has no document in it — a crawler reads a 404 body too');
     }
     ok('an unknown shelf is a 404 for both, and the crawler\'s 404 carries a real page');
+
+    /* ---------- 5b. A WITHDRAWN PRODUCT MOVED; AN UNLAUNCHED ONE DOES NOT EXIST ---------- */
+    // Two rules that pull in opposite directions, which is why both are here.
+    //
+    // A retired offering has inbound links and an index entry: 404 throws those
+    // away and 200 invites a dead end, so it is a 301 — to the successor the
+    // operator named if that successor is itself sellable, else the shop.
+    //
+    // But the catalogue's wall is a NO-ORACLE rule on purpose: an unlaunched or
+    // dealer-only offering must be indistinguishable from one that never
+    // existed, because telling a stranger which ids exist leaks an operator's
+    // plans. So the redirect is for `Retired` ALONE. If this ever starts
+    // redirecting an unlaunched id, that is a leak, not a feature.
+    const tok = await staffToken();
+    const lifecycleFixtures = [];
+    try {
+      const successor = await makeOffering(tok, {
+        name: `${'closeout'}-successor-${Date.now()}`, lifecycleStatus: 'Active',
+        version: '1.0', isSellable: true });
+      lifecycleFixtures.push(successor);
+      const withSuccessor = await makeOffering(tok, {
+        name: `closeout-withdrawn-${Date.now()}`, lifecycleStatus: 'Retired',
+        version: '1.0', isSellable: true,
+        productOfferingRelationship: [{ id: successor, relationshipType: 'replacement' }] });
+      const orphan = await makeOffering(tok, {
+        name: `closeout-orphan-${Date.now()}`, lifecycleStatus: 'Retired',
+        version: '1.0', isSellable: true });
+      const unlaunched = await makeOffering(tok, {
+        name: `closeout-unlaunched-${Date.now()}`, lifecycleStatus: 'In study',
+        version: '1.0', isSellable: true });
+      lifecycleFixtures.push(withSuccessor, orphan, unlaunched);
+
+      const hop = async (id) => {
+        const r = await fetch(`${API}/shop/offering/${id}`,
+          { headers: { 'User-Agent': HUMAN }, redirect: 'manual' });
+        return { status: r.status, location: r.headers.get('location') || '' };
+      };
+
+      const moved = await hop(withSuccessor);
+      if (moved.status !== 301) {
+        fail(`a retired offering answered ${moved.status}, not 301 — a 404 throws away`
+          + ' every link that URL earned, and a 200 is a page nobody can buy from');
+      }
+      if (!moved.location.endsWith(`/shop/offering/${successor}`)) {
+        fail(`a retired offering redirected to "${moved.location}" instead of the successor it names`);
+      }
+      const orphaned = await hop(orphan);
+      if (orphaned.status !== 301 || !orphaned.location.endsWith('/shop/')) {
+        fail(`a retired offering naming no successor answered ${orphaned.status} → "${orphaned.location}";`
+          + ' the shop root is the fallback that is always true');
+      }
+      const hidden = await hop(unlaunched);
+      if (hidden.status !== 404) {
+        fail(`an UNLAUNCHED offering answered ${hidden.status} → "${hidden.location}" —`
+          + ' that is an oracle: it tells a stranger the id exists, which is what the'
+          + ' catalogue\'s wall refuses to do');
+      }
+      const absent = await hop('definitely-not-an-offering');
+      if (absent.status !== 404) fail(`an id that never existed answered ${absent.status}`);
+      ok('a withdrawn product 301s to its successor (or the shop); an unlaunched one is'
+        + ' still a 404, so the redirect is not an oracle');
+    } finally {
+      for (const id of lifecycleFixtures) {
+        await fetch(`${API}${CAT}/productOffering/${id}`,
+          { method: 'DELETE', headers: { Authorization: `Bearer ${tok}` } }).catch(() => {});
+      }
+    }
 
     /* ---------- 6b. THE DOCUMENT MUST BE RUNNABLE ---------- */
     // The bug this exists for: the renderer baked its own copy of index.html,

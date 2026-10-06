@@ -169,6 +169,38 @@ async function crawl(path) {
     }
     ok('an offering past the ceiling still carries its price, and the agentic feed still sells it');
 
+    /* ---------- 3b. the sitemap is one file until it cannot be ---------- */
+    // The protocol caps a sitemap at 50,000 urls, and a crawler's answer to a
+    // file over the cap is to ignore the overflow — silently, which is this
+    // arc's recurring failure. Above the cap /sitemap.xml becomes an index of
+    // /sitemap-N.xml shards.
+    //
+    // HONEST LIMIT, the same one the 10,000 ceiling gets: fifty thousand
+    // fixtures to watch a branch flip costs more than the branch is worth. What
+    // is proved here is the shape either side of it — below the cap it is a
+    // plain urlset and NOT an index, the first shard is the same document, and a
+    // shard past the end is a 404 rather than an empty urlset that would read as
+    // "nothing more to crawl".
+    if (sitemap.text.includes('<sitemapindex')) {
+      fail(`the sitemap is an index at ${inSitemap} urls — an index for one shard is`
+        + ' ceremony a crawler has to follow for nothing');
+    }
+    const shardOne = await crawl('/sitemap-1.xml');
+    if (shardOne.status !== 200) fail(`/sitemap-1.xml answered ${shardOne.status}`);
+    const shardUrls = (shardOne.text.match(/<loc>/g) || []).length;
+    const allUrls = (sitemap.text.match(/<loc>/g) || []).length;
+    if (shardUrls !== allUrls) {
+      fail(`shard 1 lists ${shardUrls} urls and the sitemap lists ${allUrls} —`
+        + ' below the cap they are the same document');
+    }
+    const pastEnd = await crawl('/sitemap-9.xml');
+    if (pastEnd.status !== 404) {
+      fail(`a shard past the end answered ${pastEnd.status}; an empty urlset there would`
+        + ' read to a crawler as "nothing more to crawl"');
+    }
+    ok(`the sitemap is one urlset of ${allUrls} urls, shard 1 is the same document,`
+      + ' and a shard past the end is a 404');
+
     /* ---------- 4. a URL that does not exist says so ---------- */
 
     const real = [['/shop/', 200], [`/shop/offering/${beyond.id}`, 200]];

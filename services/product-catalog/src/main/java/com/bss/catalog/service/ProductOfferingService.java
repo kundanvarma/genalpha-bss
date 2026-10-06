@@ -185,6 +185,60 @@ public class ProductOfferingService {
         return bundle == null || Boolean.valueOf(bundle).equals(dto.getIsBundle());
     }
 
+    /**
+     * What a WITHDRAWN offering's URL should become — and nothing else.
+     *
+     * The wall in {@link #findById} is a no-oracle rule on purpose: an
+     * unlaunched, out-of-window or wrong-channel offering must be
+     * indistinguishable from one that never existed, because telling a stranger
+     * which ids exist leaks an operator's plans and its dealer-only shelf.
+     *
+     * A RETIRED offering is the one case where that is not true. It was on sale,
+     * it is in search indexes, and crawlers and bookmarks still point at it — so
+     * answering "this moved" leaks nothing a crawler does not already hold,
+     * while 404 throws away every inbound link and 200 invites a dead end.
+     *
+     * So this answers for `Retired` alone, and it answers with ONE FACT: is it
+     * retired, and does it name a replacement. No DTO escapes, so this cannot
+     * become a way to read withdrawn content. Whether that replacement may be
+     * shown is still decided by the ordinary wall — the caller looks it up
+     * through {@link #findById} like anybody else.
+     */
+    @Transactional(readOnly = true)
+    public Withdrawn withdrawn(String id) {
+        if (id == null || id.startsWith(LegacyFederation.PREFIX)) {
+            return new Withdrawn(false, null);
+        }
+        return repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .filter(e -> "Retired".equalsIgnoreCase(e.getLifecycleStatus()))
+                .map(e -> new Withdrawn(true, replacementIdOf(mapper.toDto(e))))
+                .orElseGet(() -> new Withdrawn(false, null));
+    }
+
+    /** A retired offering, and the offering it names as its successor if it does. */
+    public record Withdrawn(boolean retired, String replacementId) {
+    }
+
+    private String replacementIdOf(ProductOfferingDto dto) {
+        List<Map<String, Object>> related = dto.getProductOfferingRelationship();
+        if (related == null) {
+            return null;
+        }
+        for (Map<String, Object> rel : related) {
+            Object type = rel.get("relationshipType");
+            Object target = rel.get("id");
+            if (type == null || target == null) {
+                continue;
+            }
+            String kind = String.valueOf(type).toLowerCase(java.util.Locale.ROOT);
+            if (kind.contains("replacement") || kind.contains("substitute")
+                    || kind.contains("upgrade") || kind.contains("migration")) {
+                return String.valueOf(target);
+            }
+        }
+        return null;
+    }
+
     @Transactional(readOnly = true)
     public ProductOfferingDto findById(String id) {
         if (id.startsWith(LegacyFederation.PREFIX)) {

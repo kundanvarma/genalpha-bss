@@ -128,7 +128,9 @@ spring:
         - id: geo-well-known
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
-            - Path=/robots.txt,/sitemap.xml,/llms.txt
+            # the shards too: above 50,000 urls /sitemap.xml becomes an index
+            # pointing at /sitemap-1.xml … and a crawler must be able to follow it
+            - Path=/robots.txt,/sitemap.xml,/sitemap-{shard}.xml,/llms.txt
           filters:
             - RewritePath=/(?<f>.*), /seo/$\{f}
         # The factual discovery surface (#181): one projection, read by agents
