@@ -62,7 +62,7 @@ public class CrawlerVisibilityFilter implements GlobalFilter, Ordered {
         // beforeCommit, because a proxied response's headers are written when
         // the downstream answer arrives — after this filter has returned
         exchange.getResponse().beforeCommit(() -> {
-            if (!exchange.getResponse().getHeaders().containsKey(HEADER)) {
+            if (!exchange.getResponse().getHeaders().containsHeader(HEADER)) {
                 exchange.getResponse().getHeaders().set(HEADER, NOINDEX);
             }
             return Mono.empty();

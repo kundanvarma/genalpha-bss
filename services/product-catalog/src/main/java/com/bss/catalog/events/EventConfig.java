@@ -6,7 +6,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -23,7 +23,7 @@ public class EventConfig {
     KafkaTemplate<String, Object> eventKafkaTemplate(KafkaProperties properties, ObjectMapper objectMapper) {
         // Boot's ObjectMapper, so envelopes serialize dates the same way the REST APIs do.
         return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(
-                properties.buildProducerProperties(null),
+                properties.buildProducerProperties(),
                 new StringSerializer(),
                 new JsonSerializer<>(objectMapper)));
     }
