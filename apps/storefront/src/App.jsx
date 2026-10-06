@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { serverRendered } from './ssr-data.js';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ChatWidget from './ChatWidget.jsx';
@@ -28,18 +29,30 @@ export default function App() {
   // boot | guest | ready | error.
   //
   // The gate exists so a returning customer never sees a signed-out shop for a
-  // frame while the session resolves. On a SERVER there is no session to
-  // resolve and no frame to protect — the request is anonymous by definition —
-  // so starting at 'boot' there renders "Loading…" for every public page and
-  // nothing else. That is what a crawler would have received (#180).
-  // On a server the session state is GUEST, not `ready`. Effects do not run
-  // during renderToString, so starting in `boot` served every crawler a
-  // "Loading…" spinner — but `ready` was the wrong cure: it means "signed in
-  // and resolved", so `!isCustomer()` made every server render show the
-  // staff-session-leaked-into-the-shop banner and a Switch account prompt to
-  // crawlers. A request with no session is a guest, which is exactly what a
-  // crawler is, and what the browser's own effect concludes for one.
-  const [state, setState] = useState(typeof window === 'undefined' ? 'guest' : 'boot');
+  // frame while the session resolves.
+  //
+  // ON A SERVER the state is GUEST. Effects do not run during renderToString,
+  // so starting in `boot` served every crawler a "Loading…" spinner — but
+  // `ready` was the wrong cure: it means "signed in and resolved", so
+  // `!isCustomer()` put the staff-session-leaked-into-the-shop banner and a
+  // Switch account prompt in front of crawlers. A request with no session is a
+  // guest, which is what a crawler is and what the effect below concludes for
+  // one anyway.
+  //
+  // AND THE FIRST CLIENT RENDER MUST MATCH IT when hydrating. React compares
+  // the two, and its answer to a mismatch is to throw the server markup away —
+  // the one thing server-rendering exists to avoid. So a document that arrived
+  // with a seed starts where the server left off and the effect moves it on.
+  //
+  // The visible cost, stated because somebody will notice it: a signed-in
+  // customer opening a public page now sees the guest header for the moment
+  // before the session resolves, where they used to see "Loading…". A page
+  // that says something true for a guest beats a spinner that says nothing to
+  // anyone, and the account pages — still served by nginx — keep the gate.
+  const hydrating = serverRendered();
+  const [state, setState] = useState(
+    typeof window === 'undefined' || hydrating ? 'guest' : 'boot',
+  );
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);

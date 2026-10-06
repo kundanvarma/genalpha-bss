@@ -54,40 +54,51 @@ spring:
         # Agentic commerce (ACP): the feed lives with the catalog, the
         # checkout-session lifecycle with the cart. AgentCommerceGateFilter
         # holds the per-tenant off|discovery|full switch in front of both.
-        # GEO dual-serve: crawlers (no-JS readers) get the bot-rendered
-        # page for the SAME shop URL; humans fall through to the SPA route.
-        - id: geo-bot-offering
-          uri: ${CATALOG_URL:http://localhost:8081}
+        # THE SIGN-IN CALLBACK IS NOT A PAGE. The provider sends the browser
+        # back to /shop/?code=… and the app immediately exchanges that code for
+        # a token. Server-rendering it would paint a guest header before the
+        # exchange finishes — the document says "signed out" while the client
+        # is in the middle of signing in — and anything watching for the header
+        # as a sign that the session resolved would race it. So a callback goes
+        # to the nginx shell, which keeps its "Loading…" gate until the
+        # exchange completes, exactly as it did before SSR existed.
+        #
+        # First match wins, so this sits above the renderer's route.
+        - id: storefront-auth-callback
+          uri: ${STOREFRONT_URL:http://localhost:8091}
           predicates:
-            - Path=/shop/offering/**
-            - Header=User-Agent, .*(GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|Google-Extended|Googlebot|bingbot|CCBot|Bytespider).*
+            - Path=/shop,/shop/
+            - Query=code
           filters:
-            - RewritePath=/shop/offering/(?<id>.*), /seo/offering/$\{id}
-        # SERVER-RENDERED SHOP PAGES for crawlers (#180). The shop root and the
-        # category shelves had no crawler document at all: a bot asked for
-        # /shop/ or /shop/category/mobile and received the SPA shell — a 200
-        # with no products in it. This route sends those two page kinds to the
-        # storefront's own React app rendered on a server, so a bot and a
-        # browser receive the same document from the same renderer.
+            - StripPrefix=1
+        # THE PUBLIC SHOP, SERVER-RENDERED FOR EVERYONE (#180). One document
+        # for humans and machines, which is the whole point of the arc: there
+        # is no User-Agent predicate here, and there is no longer a second
+        # renderer behind one. The Java bot page that used to answer
+        # /shop/offering/** for crawlers is deleted — its machine-readable head
+        # (title, description, canonical, JSON-LD) now comes from the same
+        # schema.org projection via /seo/offering/{id}/meta, so what a crawler
+        # is told did not change when the page that told it did.
         #
-        # It is ABOVE the storefront route (first match wins) and narrower than
-        # it on purpose: /shop/assets/**, /shop/offering/** and every signed-in
-        # page keep the paths they have. The offering page stays on the Java
-        # route above because that one works in production today; the renderer
-        # handles offering pages already, so retiring that route is a predicate
-        # change here rather than a build.
+        # Dual-serving by User-Agent was always a liability: two renderers for
+        # one URL is two chances to disagree, and Google reads a disagreement
+        # as cloaking. It existed because React could not render on a server
+        # here. It can now.
         #
-        # THE BREAKER IS THE POINT. A render that fails, times out or answers
-        # 5xx falls back to the shell a bot received before this existed —
-        # including when the service is simply not running, as it is not in a
-        # fleet started without it. Without the breaker this route would turn
-        # one unhealthy container into 503s for Googlebot on the shop's most
-        # linked URL.
+        # It is ABOVE the storefront route (first match wins) and still
+        # narrower than it: /shop/assets/**, /shop/cart, /shop/support and
+        # every signed-in page stay on nginx, because they are either static or
+        # behind a session the renderer has no business holding.
+        #
+        # THE BREAKER IS THE POINT, and it matters more now than it did when
+        # only bots came here. A render that fails, times out or answers 5xx —
+        # including the service simply not running — falls back to the nginx
+        # shell, which is a working client-rendered shop rather than an error
+        # page. Without it, one unhealthy container would be a dead storefront.
         - id: geo-ssr-public
           uri: ${STOREFRONT_SSR_URL:http://localhost:8092}
           predicates:
-            - Path=/shop,/shop/,/shop/category/**
-            - Header=User-Agent, .*(GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|Google-Extended|Googlebot|bingbot|CCBot|Bytespider).*
+            - Path=/shop,/shop/,/shop/category/**,/shop/offering/**
           filters:
             - StripPrefix=1
             - name: CircuitBreaker
@@ -105,6 +116,15 @@ spring:
             - Path=/internal/ssr-unavailable
           filters:
             - SetPath=/index.html
+        # The machine-readable head of an offering page — title, description,
+        # canonical, JSON-LD — read by the RENDERER, through the front door
+        # rather than straight from the service, so the tenant is stamped from
+        # the hostname like every other anonymous read. These are the same
+        # facts the deleted bot page published, so this exposes nothing new.
+        - id: geo-offering-meta
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/seo/offering/*/meta
         - id: geo-well-known
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:

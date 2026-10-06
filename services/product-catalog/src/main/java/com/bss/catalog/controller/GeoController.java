@@ -146,6 +146,43 @@ public class GeoController {
         return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(html.toString());
     }
 
+    /**
+     * THE MACHINE-READABLE HEAD OF AN OFFERING PAGE, as data (#180).
+     *
+     * The server-rendered storefront owns the document's body; this owns the
+     * facts in its head. That split settles a question the renderer could only
+     * flag: the crawler page and the React app each had their own idea of which
+     * price leads, and when the User-Agent branch above is retired one of them
+     * has to be the authority. It is this one — the same
+     * {@link SchemaOrgProjection} the bot page renders from, so retiring that
+     * page cannot quietly change what a crawler is told.
+     *
+     * Returned as JSON rather than HTML because the renderer is assembling a
+     * document, not forwarding one. The JSON-LD is embedded as a STRING: it is
+     * already serialised by Jackson from the record, which is what makes a name
+     * carrying a quote a value rather than a broken document, and re-parsing it
+     * here only to re-serialise it there would be two more chances to break it.
+     */
+    @GetMapping(value = "/offering/{id}/meta", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Map<String, String>> offeringMeta(@PathVariable("id") String id,
+                                                            HttpServletRequest request) {
+        if (!visibility().crawlable()) {
+            throw new NotFoundException("this operator is not visible to crawlers");
+        }
+        ProductOfferingDto offering = offerings.findById(id);
+        TenantRegistry.TenantEntry tenant = tenant();
+        SchemaOrgProjection.OfferingPage page = projection.page(offering, brand(),
+                currency(tenant), baseUrl(request));
+        SchemaOrg.Product product = page.product();
+        Map<String, String> meta = new java.util.LinkedHashMap<>();
+        meta.put("title", product.name() + " — " + brand());
+        meta.put("description", product.description() == null ? "" : product.description());
+        meta.put("canonical", product.url() == null ? "" : product.url());
+        meta.put("language", language(tenant));
+        meta.put("jsonLd", jsonLd.write(product));
+        return ResponseEntity.ok(meta);
+    }
+
     /* ---------- sitemap / robots / llms.txt ---------- */
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)

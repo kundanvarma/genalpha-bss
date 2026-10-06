@@ -39,18 +39,69 @@
  * and telling it noindex — a blocked fetch still indexes the bare URL.
  */
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
 import { render, SHELVES } from '../dist-ssr/entry-server.js';
 
 const PORT = Number(process.env.PORT || 8080);
-const CATALOG = process.env.CATALOG_URL || 'http://product-catalog:8080';
 const GATEWAY = process.env.GATEWAY_URL || 'http://gateway:8080';
+/*
+ * THE CATALOGUE IS READ THROUGH THE GATEWAY, not straight from the service,
+ * and that is a correctness fix rather than a preference.
+ *
+ * A tenant is chosen for anonymous traffic by `X-Tenant-Id`, which the GATEWAY
+ * stamps from the request's hostname — no other component sets it. Reading the
+ * catalogue directly therefore sent no tenant at all and the catalogue fell
+ * back to `registry.defaultTenantId()`: invisible on a one-tenant demo, and on
+ * any second hostname it would have served every visitor the DEFAULT tenant's
+ * products. That was survivable while only crawlers came here. It stops being
+ * survivable the moment humans do.
+ *
+ * So the renderer asks the same door a browser asks, and the tenant is decided
+ * in the one place that owns the decision.
+ */
+const CATALOG = process.env.CATALOG_URL || GATEWAY;
 const TIMEOUT = Number(process.env.SSR_FETCH_TIMEOUT_MS || 4000);
 const CAT = '/tmf-api/productCatalogManagement/v4';
 const SHELF = new Set(SHELVES);
 
-/** The built client bundle's tags, lifted from the client build's index.html. */
-const TEMPLATE = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8');
+const STOREFRONT = process.env.STOREFRONT_URL || 'http://storefront:8080';
+
+/*
+ * THE SHELL COMES FROM THE SERVER THAT SERVES THE ASSETS, at run time.
+ *
+ * This used to be a copy of index.html baked into this image at build time,
+ * and that copy was WRONG the moment the two images were built apart: Vite
+ * hashes the bundle, so this image said `/shop/assets/index-D9yjfnwE.js` while
+ * the nginx image served `index-Y6T0RIJj.js`. The document rendered perfectly
+ * and then loaded NO JAVASCRIPT — no hydration, no client routing, no cart. It
+ * looked right and was dead, and only a human would ever have found out,
+ * because a crawler does not run the script it cannot fetch.
+ *
+ * So the renderer asks nginx for the shell it is currently serving and wraps
+ * its markup in that. One source of truth for the asset hashes, and no build
+ * coupling between the two images at all. Cached briefly, because this is on
+ * the request path and the shell changes only on a deploy.
+ *
+ * If the shell cannot be fetched the render FAILS rather than guessing: the
+ * gateway's circuit breaker then serves nginx's own shell, which is always
+ * self-consistent. A stale copy here would be worse than an error — it is what
+ * produced this bug.
+ */
+const SHELL_TTL = Number(process.env.SSR_SHELL_TTL_MS || 60000);
+let shell = { html: null, at: 0 };
+
+async function template() {
+  if (shell.html && Date.now() - shell.at < SHELL_TTL) {
+    return shell.html;
+  }
+  const res = await fetch(`${STOREFRONT}/index.html`, { signal: AbortSignal.timeout(TIMEOUT) });
+  if (!res.ok) throw new Error(`the storefront shell answered ${res.status}`);
+  const html = await res.text();
+  if (!html.includes('<div id="root">')) {
+    throw new Error('the storefront shell has no root element to render into');
+  }
+  shell = { html, at: Date.now() };
+  return html;
+}
 
 /**
  * A slow catalogue must not become a slow page, and must not become a missing
@@ -164,12 +215,76 @@ async function resolve(page, host) {
   return { status: 200, data: { offering: got.json, prices: index(prices) } };
 }
 
-function document(appHtml, config, data) {
-  const seed = data ? `<script>window.__SSR_DATA__=${JSON.stringify(data).replace(/</g, '\\u003C')}</script>` : '';
-  const cfg = `<script>window.BSS_STOREFRONT_CONFIG=${JSON.stringify(config).replace(/</g, '\\u003C')}</script>`;
-  return TEMPLATE
+/**
+ * The machine-readable head of an offering page, from the catalogue's own
+ * schema.org projection (/seo/offering/{id}/meta) — title, description,
+ * canonical and the JSON-LD. The crawler page used to be the only thing that
+ * emitted these; retiring it without them would have been a straight SEO
+ * regression, and rebuilding them here from the React page's data would have
+ * made a second authority for which price leads.
+ */
+async function offeringMeta(id, host) {
+  const got = await fetchJson(`${CATALOG}/seo/offering/${encodeURIComponent(id)}/meta`,
+    host ? { 'X-Forwarded-Host': host, Host: host } : {});
+  return got.json && got.json.title ? got.json : null;
+}
+
+const esc = (s) => String(s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The head a crawler reads, assembled from facts rather than guessed. */
+function head(meta, canonical, title) {
+  const out = [];
+  if (title) out.push(`<title>${esc(title)}</title>`);
+  if (meta && meta.description) {
+    out.push(`<meta name="description" content="${esc(meta.description)}">`);
+  }
+  if (canonical) out.push(`<link rel="canonical" href="${esc(canonical)}">`);
+  // the JSON-LD arrives already serialised by Jackson; only the closing-tag
+  // sequence needs neutralising, and escaping anything else would corrupt it
+  if (meta && meta.jsonLd) {
+    out.push('<script type="application/ld+json">'
+      + String(meta.jsonLd).replace(/<\/script/gi, '<\\/script') + '</script>');
+  }
+  return out.join('\n  ');
+}
+
+function document(shellHtml, appHtml, config, data, headTags) {
+  /*
+   * THE SEED IS A JSON DATA BLOCK, NOT AN INLINE SCRIPT, and that is not a
+   * style choice — the gateway's content policy is `script-src 'self'` with no
+   * `unsafe-inline` (SecurityHeadersFilter), so an inline `window.__SSR_DATA__
+   * = …` is BLOCKED in a browser. Crawlers neither execute nor enforce CSP, so
+   * while only bots were served this looked fine; the first human would have
+   * got the server's markup, no seed, and React rebuilding the page from
+   * scratch — every byte of the render wasted.
+   *
+   * A `type="application/json"` block is data, never executed, so the policy
+   * does not apply and nothing has to be loosened. The client reads it in
+   * ssr-data.js.
+   *
+   * The config is simply gone: index.html already loads /shop/tenant-config.js
+   * from the gateway, which is same-origin and allowed, and that is where the
+   * browser has always got it. The inline copy was belt-and-braces that the
+   * policy forbade anyway.
+   */
+  const seed = data
+    ? `<script type="application/json" id="ssr-data">${JSON.stringify(data).replace(/</g, '\\u003C')}</script>`
+    : '';
+  const cfg = '';
+  let out = shellHtml
     .replace('<div id="root"></div>', `<div id="root">${appHtml}</div>${cfg}${seed}`)
     .replace('<html>', `<html lang="${(config.locale || 'und').replace(/"/g, '')}">`);
+  if (headTags) {
+    // the template carries a generic <title>; the page's own wins when it has
+    // one, and the template's stays when it does not — stripping it either way
+    // left pages with no title at all, which is worse than a generic one
+    if (/<title>/.test(headTags)) {
+      out = out.replace(/<title>[^<]*<\/title>/, '');
+    }
+    out = out.replace('</head>', `  ${headTags}\n</head>`);
+  }
+  return out;
 }
 
 createServer(async (req, res) => {
@@ -192,8 +307,29 @@ createServer(async (req, res) => {
     const config = await tenantConfig(host);
     const { status, data } = await resolve(page, host);
     const html = render(url.pathname + url.search, config, data);
+
+    // The head is assembled from facts, never from the rendered body. An
+    // offering's come from the catalogue's projection; a shelf and the root get
+    // a title and a canonical, and deliberately no product JSON-LD — claiming
+    // a single Product for a page that lists many would be a lie a crawler
+    // acts on.
+    const base = `http${req.headers['x-forwarded-proto'] === 'https' || !host ? 's' : ''}://${host || 'localhost'}`;
+    const brand = config.brandName || 'the operator';
+    let headTags = '';
+    if (status === 200 && page.kind === 'offering') {
+      const meta = await offeringMeta(page.id, host);
+      headTags = meta
+        ? head(meta, meta.canonical, meta.title)
+        : head(null, `${base}/shop/offering/${page.id}`, null);
+    } else if (status === 200 && page.kind === 'shelf') {
+      const label = page.slug.replace(/-/g, ' ');
+      headTags = head(null, `${base}/shop/category/${page.slug}`, `${label} — ${brand}`);
+    } else if (status === 200 && page.kind === 'home') {
+      headTags = head(null, `${base}/shop/`, `${brand} · shop`);
+    }
+
     res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-    res.end(document(html, config, data));
+    res.end(document(await template(), html, config, data, headTags));
   } catch (e) {
     // A render that throws must not serve a half-written page: say so plainly
     // and let the gateway's circuit breaker fall back to the shell. Silence

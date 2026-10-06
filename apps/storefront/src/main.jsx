@@ -1,7 +1,8 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
+import { serverRendered } from './ssr-data.js';
 import './styles.css';
 
 // White-labeling is more than a logo: the host tenant's brand color themes
@@ -32,12 +33,37 @@ if (brand.brandColor) {
   const dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   document.documentElement.style.setProperty('--teal-text', readableText(brand.brandColor, dark ? '#0E181C' : '#FAFBFA'));
 }
-if (brand.brandName) document.title = `${brand.brandName} · shop`;
+// The TITLE IS THE SERVER'S when the server set one. It writes a real
+// per-page title (the product's name, the shelf's) into the document head from
+// the catalogue's own projection; overwriting it here with a generic one undoes
+// that for the browser tab and for anything that reads the rendered DOM.
+// A client-rendered shell has no such title, so there it still gets one.
+if (brand.brandName && !serverRendered()) document.title = `${brand.brandName} · shop`;
 
-createRoot(document.getElementById('root')).render(
+/*
+ * HYDRATE WHAT THE SERVER SENT, when it sent anything (#180).
+ *
+ * `createRoot().render()` on a server-rendered document THROWS THE MARKUP AWAY
+ * and rebuilds it — the visitor sees the page, then sees it replaced, and every
+ * byte the renderer produced is wasted. That was harmless while only crawlers
+ * were served (they never run this file). It is the whole point once humans
+ * are, so a document that arrived with content is hydrated instead.
+ *
+ * The seed is the signal, not the markup: the `ssr-data` JSON block is written
+ * only by the renderer, so an nginx-served shell — the circuit breaker's
+ * fallback, and every signed-in page — still takes the createRoot path it
+ * always took.
+ */
+const root = document.getElementById('root');
+const tree = (
   <React.StrictMode>
     <BrowserRouter basename="/shop">
       <App />
     </BrowserRouter>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+if (serverRendered() && root.hasChildNodes()) {
+  hydrateRoot(root, tree);
+} else {
+  createRoot(root).render(tree);
+}

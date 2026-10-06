@@ -652,12 +652,83 @@ until there is one, suite #258 pins them together: every slug on the sitemap
 answers 200 to a bot **and** to a human, and a slug on neither answers 404 to
 both.
 
-**What is still deliberately not done.** The crawler User-Agent branch for
-`/shop/offering/{id}` is untouched; retiring it is a predicate change here
-rather than a build, since the renderer already handles offering pages. Humans
-are still served by nginx, so a crawler and a human get documents from different
-renderers — the same React sources now, which is the point of the arc, but one
-build serving both is the step after this. Help pages are still not covered, and
+#### The switch-over: humans too, and the dual-serve is gone
+
+Both halves are done. There is no User-Agent predicate on the route any more and
+no second renderer behind one: `/shop`, `/shop/category/**` and
+`/shop/offering/**` are server-rendered for **everyone**, and the Java bot page
+is deleted. A human and a crawler now receive byte-identical HTML for the same
+URL — the arc's actual acceptance, and the thing dual-serving could never
+promise, since two renderers for one URL is two chances to disagree and Google
+reads a disagreement as cloaking.
+
+**What had to survive the deletion.** The bot page was the only thing emitting a
+per-page `<title>`, a meta description, a canonical link and schema.org Product
+JSON-LD. Those now come from the same `SchemaOrgProjection` through a new
+`/seo/offering/{id}/meta`, which also settles the question the renderer could
+only flag: **the catalogue is the authority for which price leads**, not the
+React page. Shelf and root pages get a title and a canonical and deliberately no
+Product JSON-LD — claiming a single Product for a page that lists many is a lie
+a crawler acts on.
+
+**Four defects came out of serving humans, and every one of them was invisible
+to a crawler.** That is the lesson worth keeping: a crawler does not execute
+JavaScript, does not enforce a content policy and does not hold a session, so
+proving the renderer against bots proved remarkably little.
+
+1. **The document was not runnable.** The renderer baked its own copy of
+   `index.html`, so once the two images were built apart it referenced a Vite
+   hash nginx did not serve: the page rendered perfectly and loaded **no
+   JavaScript at all**. No hydration, no routing, no cart — right-looking and
+   dead. The shell is now fetched from nginx at run time, so the asset hashes
+   cannot diverge, and the suite fetches every asset the document names.
+2. **The seed was blocked by the content policy.** The gateway sets
+   `script-src 'self'` with no `unsafe-inline`, so the inline
+   `window.__SSR_DATA__ = …` never ran in a browser and React threw the server
+   markup away and rebuilt it. It rides in a `type="application/json"` block
+   now — data, not script, so nothing had to be loosened.
+3. **React would not have hydrated anyway.** `createRoot().render()` *replaces*
+   server markup; `hydrateRoot` adopts it. And the client's first render has to
+   match the server's, so a document that arrives with a seed starts in the
+   same `guest` state the server used.
+4. **The tenant was wrong by construction.** The renderer read the catalogue
+   straight from the service, and `X-Tenant-Id` — which decides which tenant an
+   anonymous visitor sees — is stamped from the hostname by the **gateway** and
+   by nothing else. Every render therefore got `defaultTenantId()`. Invisible on
+   a one-tenant demo; on any second hostname every visitor would have been
+   served the default tenant's products. The renderer reads through the gateway
+   now, so the tenant is decided where that decision lives.
+
+**And one that was not ours at all.** `honest_shelf_test` went red on the
+switch-over branch for a reason unrelated to it: `PublicCatalog` paged by the
+size of the page it got back, but `findAll` fetches `PAGE` rows and *then* drops
+the ones that are not sellable in the channel, so a full page routinely comes
+back short. With 288 offerings in the catalogue the first page of 200 yielded
+199, the loop concluded it had everything, and **89 products were missing from
+the discovery feed, the sitemap and llms.txt** — the same shape as the 500-row
+ceiling this arc removed, with a different cause and just as quiet. Both loops
+now page by `totalCount`, the repository's own count taken before that filter.
+
+**The sign-in callback is not server-rendered**, deliberately. The provider
+returns the browser to `/shop/?code=…` and the app exchanges the code
+immediately; rendering that would paint a guest header while the client is
+mid-sign-in, and anything watching for the header as a sign the session resolved
+would race it. A callback goes to the nginx shell and keeps its gate, exactly as
+before.
+
+**The visible trade.** A signed-in customer opening a public page sees the guest
+header for the moment before the session resolves, where they used to see
+"Loading…". A page that says something true for a guest beats a spinner that
+says nothing to anyone — and the account pages, still nginx-served, keep the
+gate.
+
+**What is still not done.** Streaming: `renderToString` is synchronous, so
+Suspense and partial flushing are unexercised; request scope is in place so that
+move stays a performance decision. The cart, support and every signed-in page
+are still nginx-served shells, because they are behind a session the renderer
+has no business holding. And help pages remain blocked on an operator decision,
+not a rendering one: knowledge articles require `knowledge:read`, so making them
+crawlable publishes content that sits behind sign-in today. Help pages are still not covered, and
 not for a rendering reason: knowledge articles require `knowledge:read`, so
 there is no anonymous door, and making them crawlable publishes content that
 sits behind sign-in today — an operator's decision, not a renderer's. The

@@ -1,77 +1,73 @@
-/* The server-rendered shop is wired to the gateway, and falls back when it is not. Suite #258.
+/* One document for humans and machines, and it runs. Suite #258.
  *
- * SEO-4 (#180), THE WIRING. The tracer bullet (#257) proved React could render a
- * public page to a string in a bare Node process. That is a different claim from
- * "a crawler asking the gateway for the shop receives that page", and the gap
- * between the two is where this arc's real defects were:
+ * SEO-4 (#180), THE SWITCH-OVER. Dual-serving by User-Agent is gone: there is
+ * no crawler predicate on the route any more and no second renderer behind one.
+ * The Java bot page that answered /shop/offering/** for crawlers is deleted,
+ * and everyone — browser or bot — gets the same server-rendered document from
+ * the storefront's own React app.
  *
- *  1. `npm run build:ssr` — the command the Dockerfile runs — had never been
- *     executed by anything and exited 1 (Vite 8 dropped `--ssrEmitAssets` from
- *     the CLI). The suite had its own hand-rolled vite line, so the broken
- *     script passed every gate. #257 now builds through the npm script.
- *  2. The renderer answered 500 ON EVERY PAGE in the image while passing on the
- *     laptop: `tokenClaims()` reads `sessionStorage`, Node 22 has no Web
- *     Storage and Node 24+ does, and the laptop had the later one. A gate that
- *     depends on the installed Node is not a gate.
- *  3. The server rendered state `ready` — "signed in and resolved" — so every
- *     crawler was served the staff-session-leaked-into-the-shop banner and a
- *     Switch account prompt. A request with no session is a GUEST.
+ * Two renderers behind one URL was always a liability: two chances to disagree,
+ * and Google reads a disagreement as cloaking. It existed because React could
+ * not render on a server here. It can now.
  *
- * None of the three were visible from the renderer alone. They are the reason
- * this suite exists as well as #257, rather than instead of it.
+ * WHAT HAD TO SURVIVE THE DELETION. The bot page was the only thing emitting a
+ * per-page <title>, a meta description, a canonical link and schema.org
+ * Product JSON-LD. Retiring it without those would have been a straight SEO
+ * regression, so they now come from the SAME projection via
+ * /seo/offering/{id}/meta — which also settles the question the renderer could
+ * only flag: the catalogue is the authority for which price leads, not the
+ * React page.
  *
- * WHAT A CRAWLER USED TO GET on the shop root and on every category shelf: the
- * SPA shell — a 200 with no products in it. Only /shop/offering/{id} had a real
- * document, rendered by Java. The shelves were published to the sitemap in the
- * same breath as they became pages, so the surface a bot was invited to crawl
- * was precisely the surface that answered with an empty div.
+ * THREE BUGS THIS SUITE EXISTS TO CATCH, all of them invisible to a crawler and
+ * fatal to a human, which is why serving only bots proved so little:
  *
- * What this proves, through the gateway, with no browser:
+ *  1. THE DOCUMENT MUST BE RUNNABLE. The renderer baked its own copy of
+ *     index.html, so when the two images were built apart it referenced a Vite
+ *     hash nginx did not serve: the page rendered perfectly and loaded NO
+ *     JAVASCRIPT. No hydration, no routing, no cart. A crawler never notices,
+ *     because it does not run the script it cannot fetch. The shell is fetched
+ *     from nginx at run time now, and every asset the document names is
+ *     fetched here.
+ *  2. THE SEED MUST SURVIVE THE CONTENT POLICY. The gateway sets
+ *     `script-src 'self'` with no unsafe-inline, so the inline
+ *     `window.__SSR_DATA__ = …` was BLOCKED in a browser and the client threw
+ *     the server render away and rebuilt it. It rides in a
+ *     `type="application/json"` block now, which is data and not executed.
+ *  3. REACT MUST ACTUALLY HYDRATE. A mismatch between the server's first render
+ *     and the client's makes React discard the markup — the one thing
+ *     server-rendering exists to avoid. The server renders the GUEST state and
+ *     the client now starts there too when a seed is present.
  *
- *  - A CRAWLER GETS THE PRODUCTS. The shop root and a shelf both answer with a
- *    document containing offering names read from the catalogue — the names are
- *    taken from the API at run time, so this cannot pass against a fixture.
- *  - THE SHELF RULE SURVIVES THE WIRE. A bundle does not appear in the rendered
- *    markup of the mobile shelf. Asserted against the markup only, with the
- *    hydration seed cut off, because the seed legitimately carries every
- *    offering and would make any absence assertion vacuous.
- *  - A HUMAN IS UNTOUCHED. The same URL without a crawler User-Agent still
- *    answers with the nginx-served shell, byte for byte. This arc is additive
- *    until an operator says otherwise.
- *  - THE JAVA PAGE IS UNTOUCHED. /shop/offering/{id} still answers from the
- *    catalog's own renderer, with its JSON-LD. The ticket's limit says keep it
- *    until SSR is proven in production, and "proven" is not "deployed".
- *  - THREE COPIES OF THE SHELF LIST AGREE. nginx keeps one, the catalog's
- *    sitemap keeps another, and the renderer exports a third from the list the
- *    router actually routes. Every slug on the sitemap answers 200 to a bot AND
- *    to a human; a slug on neither answers 404 to both. A closed list that
- *    drifts turns a page into a 404 on one surface and not the next, and this
- *    is the assertion that notices.
- *  - A MISSING PAGE IS A 404, A MISSING SERVICE IS NOT. An unknown shelf answers
- *    404 — with a rendered document, because a crawler reads a 404 body too.
- *  - THE BREAKER FALLS BACK. With the renderer stopped, a crawler still gets a
- *    document rather than a 502: the gateway's circuit breaker forwards to the
- *    shell a bot received before any of this existed. This is the whole reason
- *    the route is safe to deploy, so it is proved by stopping the container
- *    rather than by reading the configuration.
+ * What this proves, through the gateway:
+ *
+ *  - ONE DOCUMENT. A human and a crawler get byte-identical HTML for the same
+ *    offering URL, with the product named in it.
+ *  - THE HEAD IS INTACT. Title, description, canonical and a schema.org
+ *    Product JSON-LD whose name is the product's.
+ *  - THE JAVA ROUTE IS GONE. /seo/offering/{id} no longer answers through the
+ *    gateway.
+ *  - IT RUNS. Every asset resolves, the seed is policy-safe, a real browser
+ *    hydrates it with no console errors, and a nav click routes in the client
+ *    rather than reloading the document.
+ *  - THE CRAWLER SURFACES STILL AGREE. All seven shelves on the sitemap answer
+ *    200 to both, and an unknown shelf is a 404 to both with a real page in it.
+ *  - THE BREAKER STILL FALLS BACK. With the renderer stopped, a visitor gets
+ *    the nginx shell — a working client-rendered shop, not an error page. It
+ *    matters more now than when only bots came here.
  *
  * HONEST LIMITS:
  *  - THE BREAKER CHECK STOPS A CONTAINER. It is last, and the restart is in a
  *    `finally`; a run killed between the two leaves `bss-storefront-ssr`
  *    stopped, and `docker compose up -d storefront-ssr` is the repair.
- *  - The hydration seed is the whole shelf, so a crawler is sent ~130 KB of
- *    JSON it has no use for. It stays because it is what stops a human's
- *    server-rendered page from flashing when it hydrates, and trimming it per
- *    page means the pages no longer share one data contract. Worth revisiting
- *    when humans are served from here.
- *  - A DARK TENANT is not exercised. The gateway stamps `X-Robots-Tag: noindex,
- *    nofollow` for one globally (CrawlerVisibilityFilter, covered by its own
- *    suite), which is deliberately a different posture from the Java page's 404
- *    and the stronger of the two — a blocked fetch still indexes a bare URL.
- *  - Humans are still served by nginx, so the crawler and the human documents
- *    come from different renderers. They come from the SAME React sources now,
- *    which is the point of the arc, but one build serving both is the step
- *    after this one.
+ *  - A signed-in visitor opening a public page now sees the guest header for
+ *    the moment before the session resolves, where they used to see a spinner.
+ *    That is a deliberate trade, not an oversight.
+ *  - Only the three public page kinds are rendered. The cart, support and every
+ *    signed-in page are still nginx-served shells, because they are behind a
+ *    session the renderer has no business holding.
+ *  - Streaming is still not used, and the shelf and root pages carry no
+ *    JSON-LD: claiming a single Product for a page that lists many would be a
+ *    lie a crawler acts on.
  */
 const { execFileSync } = require('child_process');
 
@@ -84,7 +80,7 @@ const fail = (m) => { throw new Error(m); };
 const ok = (m) => console.log('OK ' + m);
 
 /** The markup, without the hydration seed — the seed carries every offering. */
-const markup = (html) => html.split('<script>window.__SSR_DATA__')[0];
+const markup = (html) => html.split('<script type="application/json" id="ssr-data">')[0];
 /* A product called "Home & Mobile" is rendered as "Home &amp; Mobile", so a
  * name compared raw against the markup is a false failure — and, worse, a false
  * pass for any assertion that a name is ABSENT. */
@@ -149,29 +145,55 @@ async function untilRendered(path, tries = 24) {
     }
     ok(`the mobile shelf carries "${mobile.name}" and not the bundle — one shelf rule, app and server`);
 
-    /* ---------- 3. a human is untouched ---------- */
-    const human = await get('/shop/', HUMAN);
-    if (human.status !== 200) fail(`a human asking for /shop/ got ${human.status}`);
-    if (human.text.includes(esc(bundle.name))) {
-      fail('a human was served the server-rendered page — this route is meant to be additive,'
-        + ' and switching humans over is a separate decision');
+    /* ---------- 3. ONE DOCUMENT for humans and machines ---------- */
+    // The acceptance for the whole arc. Not "the human page also works" —
+    // byte-identical, because two renderers behind one URL is what Google reads
+    // as cloaking and what made the old dual-serve a liability.
+    const humanOffering = await get(`/shop/offering/${mobile.id}`, HUMAN);
+    const botOffering = await get(`/shop/offering/${mobile.id}`, BOT);
+    if (humanOffering.status !== 200) fail(`a human asking for an offering got ${humanOffering.status}`);
+    if (humanOffering.text !== botOffering.text) {
+      fail('a human and a crawler received DIFFERENT documents for the same URL'
+        + ` (${humanOffering.text.length} vs ${botOffering.text.length} bytes)`);
     }
-    if (!human.text.includes('<div id="root"></div>')) {
-      fail('a human did not get the app shell — the storefront route changed under them');
+    if (!markup(humanOffering.text).includes(esc(mobile.name))) {
+      fail('the offering document does not name the product it is about');
     }
-    ok(`a human still gets the ${human.text.length}-byte shell from nginx, unchanged`);
+    ok(`a human and a crawler get the same ${humanOffering.text.length}-byte document, products included`);
 
-    /* ---------- 4. the Java crawler page is untouched ---------- */
-    const java = await get(`/shop/offering/${mobile.id}`, BOT);
-    if (java.status !== 200) fail(`the Java crawler page answered ${java.status}`);
-    if (!java.text.includes('application/ld+json')) {
-      fail('the offering page lost its JSON-LD — that route was not supposed to move yet');
+    /* ---------- 4. the machine-readable head survived the Java page ---------- */
+    // The bot page used to be the ONLY source of these. Retiring it without
+    // them would have been a straight SEO regression, so they now come from the
+    // same schema.org projection through /seo/offering/{id}/meta.
+    const headFacts = {
+      title: /<title>([^<]+)<\/title>/.exec(humanOffering.text),
+      description: /<meta name="description" content="([^"]+)"/.exec(humanOffering.text),
+      canonical: /<link rel="canonical" href="([^"]+)"/.exec(humanOffering.text),
+    };
+    for (const [what, m] of Object.entries(headFacts)) {
+      if (!m) fail(`the offering page has no ${what} — the Java bot page emitted one and this must too`);
     }
-    if (java.text.includes('data-testid')) {
-      fail('the offering page is now React-rendered — the ticket says keep the Java page'
-        + ' until SSR is proven in production');
+    if (!headFacts.title[1].includes(mobile.name)) {
+      fail(`the title is "${headFacts.title[1]}" and does not name the product`);
     }
-    ok('/shop/offering/{id} still answers from the catalog renderer, with its JSON-LD');
+    if (!/<script type="application\/ld\+json">/.test(humanOffering.text)) {
+      fail('the offering page carries no JSON-LD — the structured data the bot page published is gone');
+    }
+    const ld = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/
+      .exec(humanOffering.text)[1]);
+    if (ld['@type'] !== 'Product' || ld.name !== mobile.name) {
+      fail(`the JSON-LD describes ${JSON.stringify(ld['@type'])}/${JSON.stringify(ld.name)},`
+        + ` not the Product "${mobile.name}"`);
+    }
+    ok(`the head carries title, description, canonical and schema.org Product JSON-LD for "${ld.name}"`);
+
+    /* ---------- 4b. the Java bot route is GONE ---------- */
+    const seo = await fetch(`${API}/seo/offering/${mobile.id}`, { headers: { 'User-Agent': BOT } });
+    if (seo.status === 200) {
+      fail('/seo/offering/{id} still answers through the gateway — the dual-serve route'
+        + ' was supposed to be deleted, and a second renderer for one URL is the thing this arc removes');
+    }
+    ok(`the Java bot page is no longer routed (/seo/offering/{id} → ${seo.status})`);
 
     /* ---------- 5. three copies of the shelf list agree ---------- */
     const sitemap = await get('/sitemap.xml', BOT);
@@ -210,6 +232,88 @@ async function untilRendered(path, tries = 24) {
     }
     ok('an unknown shelf is a 404 for both, and the crawler\'s 404 carries a real page');
 
+    /* ---------- 6b. THE DOCUMENT MUST BE RUNNABLE ---------- */
+    // The bug this exists for: the renderer baked its own copy of index.html,
+    // so when the two images were built apart it referenced a Vite hash nginx
+    // did not serve. The page rendered perfectly and then loaded NO
+    // JAVASCRIPT — no hydration, no routing, no cart. A crawler never notices,
+    // because it does not run the script it cannot fetch. The shell is fetched
+    // from nginx at run time now; this is what proves it.
+    const assets = [...humanOffering.text.matchAll(/(?:src|href)="(\/shop\/assets\/[^"]+)"/g)]
+      .map((m) => m[1]);
+    if (!assets.some((a) => a.endsWith('.js'))) {
+      fail('the server-rendered document references no javascript bundle at all —'
+        + ' it could never hydrate');
+    }
+    for (const a of assets) {
+      const r = await fetch(API + a, { headers: { 'User-Agent': HUMAN } });
+      if (r.status !== 200) {
+        fail(`the document references ${a} and it answers ${r.status} —`
+          + ' the renderer and nginx disagree about the bundle, so the page is dead on arrival');
+      }
+    }
+    ok(`every asset the document references resolves (${assets.length}: ${assets.join(', ')})`);
+
+    /* ---------- 6c. THE SEED SURVIVES THE CONTENT POLICY ---------- */
+    // The gateway sets `script-src 'self'` with no unsafe-inline, so an inline
+    // `window.__SSR_DATA__ = …` is blocked in a browser and the client silently
+    // re-renders from scratch. A JSON data block is not executed, so the policy
+    // does not apply. Again: invisible to a crawler, fatal for a human.
+    if (/<script>\s*window\.__SSR_DATA__/.test(humanOffering.text)) {
+      fail('the seed is an inline script — the gateway\'s content policy blocks it,'
+        + ' and the browser throws the server render away');
+    }
+    if (!humanOffering.text.includes('<script type="application/json" id="ssr-data">')) {
+      fail('the document carries no seed block, so a browser cannot hydrate from it');
+    }
+    ok('the hydration seed rides in a JSON block, which the content policy permits');
+
+    /* ---------- 6d. a browser hydrates it, with no complaints ---------- */
+    const { chromium } = require('playwright');
+    const browser = await chromium.launch();
+    const page = await browser.newPage();
+    const errors = [];
+    const broken = [];
+    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 140)); });
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message.slice(0, 140)}`));
+    page.on('response', (r) => { if (r.status() >= 400) broken.push(`${r.status()} ${r.url()}`); });
+    try {
+      await page.goto(`${API}/shop/offering/${mobile.id}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1200);
+      const seen = await page.title();
+      if (!seen.includes(mobile.name)) {
+        fail(`the browser's title is "${seen}" — the client overwrote the server's per-page title`);
+      }
+      const hydrationErrors = errors.filter((e) => /hydrat|did not match|Minified React error #(418|423|425)/i.test(e));
+      if (hydrationErrors.length) {
+        fail(`React would not hydrate the server markup: ${hydrationErrors[0]}`);
+      }
+      if (broken.length) fail(`the page requested something that failed: ${broken.slice(0, 2).join(', ')}`);
+      if (errors.length) fail(`the hydrated page logged errors: ${errors.slice(0, 2).join(' | ')}`);
+      // and it is actually alive: a click must route in the client, not reload
+      // the document. A marker on `window` is the honest probe — Playwright's
+      // `framenavigated` fires for pushState too, so counting it proves
+      // nothing, which this suite learned the hard way.
+      await page.evaluate(() => { window.__hydrationWitness = true; });
+      const from = page.url();
+      // the Shop link, deliberately: Support asks a signed-in question and so
+      // starts a real sign-in redirect, which looks exactly like a failed
+      // hydration and is not one
+      await page.click('nav.nav a[href="/shop"]').catch(() => {});
+      await page.waitForTimeout(900);
+      const moved = page.url() !== from;
+      const survived = await page.evaluate(() => window.__hydrationWitness === true);
+      if (!moved) fail('clicking the nav went nowhere — the hydrated app is not handling links');
+      if (!survived) {
+        fail('the click reloaded the document (the window marker is gone) — React is not'
+          + ' routing, so the page never hydrated');
+      }
+      ok(`a browser hydrates it: title "${seen}", no console errors, and a nav click`
+        + ` routes in the client to ${page.url().replace(API, '')}`);
+    } finally {
+      await browser.close();
+    }
+
     /* ---------- 7. the breaker falls back ---------- */
     // LAST, because it stops a container. Without this the route turns one
     // unhealthy container into 502s for Googlebot on the shop's most linked URL.
@@ -231,7 +335,7 @@ async function untilRendered(path, tries = 24) {
     ok(`with the renderer stopped, a crawler still gets a ${served.text.length}-byte document —`
       + ' the shell it received before any of this existed');
 
-    console.log('\nPASS ssr_gateway_test — a crawler is served the rendered shop, and the shell when it cannot be');
+    console.log('\nPASS ssr_gateway_test — one document for humans and machines, and it runs');
   } finally {
     if (stopped) {
       console.log('restarting the renderer…');

@@ -3,6 +3,7 @@ package com.bss.catalog.seo;
 import com.bss.catalog.client.StockReader;
 import com.bss.catalog.dto.Availability;
 import com.bss.catalog.dto.Money;
+import com.bss.catalog.api.PagedResult;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.dto.ProductSpecificationDto;
@@ -133,15 +134,32 @@ public class PublicCatalog {
         Map<String, ProductOfferingPriceDto> index = priceIndex();
         List<PublicOffering> rows = new ArrayList<>();
         boolean truncated = false;
+        /*
+         * PAGE BY THE TOTAL, NEVER BY THE SIZE OF A PAGE.
+         *
+         * `findAll` asks the repository for `PAGE` rows and THEN drops the ones
+         * that are not sellable in this channel, so a full page routinely comes
+         * back short. Reading that as "the end" stopped the shelf early and
+         * silently: with 288 offerings in the catalogue the first page of 200
+         * yielded 199, the loop concluded it had everything, and 89 products
+         * were missing from the discovery feed, the sitemap and llms.txt. The
+         * same shape as the old 500-row ceiling this arc removed, with a
+         * different cause — and just as quiet.
+         *
+         * `totalCount` is the repository's own count of matching rows, taken
+         * before that filter, so it is the honest stopping condition.
+         */
+        long total = Long.MAX_VALUE;
         for (int offset = 0; offset < CEILING; offset += PAGE) {
-            List<ProductOfferingDto> page = offerings
-                    .findAll(offset, PAGE, Map.of("lifecycleStatus", "Active")).items();
-            for (ProductOfferingDto offering : page) {
+            PagedResult<ProductOfferingDto> page = offerings
+                    .findAll(offset, PAGE, Map.of("lifecycleStatus", "Active"));
+            total = page.totalCount();
+            for (ProductOfferingDto offering : page.items()) {
                 if (lifecycle.sellableDtoIn(offering, channel)) {
                     rows.add(project(offering, index, currencyFallback, baseUrl));
                 }
             }
-            if (page.size() < PAGE) {
+            if (offset + PAGE >= total) {
                 return new Shelf(List.copyOf(rows), false);
             }
             truncated = offset + PAGE >= CEILING;
@@ -283,12 +301,14 @@ public class PublicCatalog {
      */
     private Map<String, ProductOfferingPriceDto> priceIndex() {
         Map<String, ProductOfferingPriceDto> index = new LinkedHashMap<>();
+        // the same stopping condition as the shelf, and for the same reason: a
+        // page that comes back short has not necessarily reached the end
         for (int offset = 0; offset < CEILING; offset += PAGE) {
-            List<ProductOfferingPriceDto> page = prices.findAll(offset, PAGE, Map.of()).items();
-            for (ProductOfferingPriceDto price : page) {
+            PagedResult<ProductOfferingPriceDto> page = prices.findAll(offset, PAGE, Map.of());
+            for (ProductOfferingPriceDto price : page.items()) {
                 index.putIfAbsent(price.getId(), price);
             }
-            if (page.size() < PAGE) {
+            if (offset + PAGE >= page.totalCount()) {
                 break;
             }
         }
