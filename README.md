@@ -541,7 +541,7 @@ difference table — are in [architecture.md §5](docs/architecture.md) and
 
 ## Stack
 
-Java 21 source, Java 25 runtime image (the PR smoke boots the real images, so the runtime JDK is what the browser proof runs against) · Spring Boot 3.5.7 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
+Java 21 source, Java 25 runtime image (the PR smoke boots the real images, so the runtime JDK is what the browser proof runs against) · Spring Boot 3.5.16 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
 (+ RLS) · Flyway · Kafka (transactional outbox) · Keycloak 26 (dev IdP) · React + Vite ·
 Playwright · Helm · Terraform · GitHub Actions.
 
