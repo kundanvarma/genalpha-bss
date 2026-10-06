@@ -31,7 +31,7 @@ class OrderScopingTest {
 
     // household/payer lookups postdate this test: empty answers = plain
     // self-orders, which is what scoping scenarios are about
-    @org.springframework.boot.test.mock.mockito.MockBean
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.bss.ordering.client.PartyClient partyClient;
 
     private static final String BASE = "/tmf-api/productOrderingManagement/v4/productOrder";
