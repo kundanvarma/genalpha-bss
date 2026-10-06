@@ -28,8 +28,8 @@
  *    path a suite can walk today. Said here rather than claimed as proven.)
  *  - LANGUAGE AND CURRENCY FROM THE TENANT: the page declares the operator's
  *    own locale (genalpha en, nova no) and prices in the operator's own
- *    currency where a price names none; the shop shell no longer spells a
- *    language at all.
+ *    currency where a price names none; and since #180 server-renders it, the
+ *    shop shell itself declares that tenant's language rather than a literal.
  *
  * Also asserted: specification characteristics reach the page as structured
  * properties (data allowance, speed, network, roaming) while internal facts
@@ -355,9 +355,19 @@ function oldGenerator(name, description) {
     fail(`nova's page declares lang="${langOf(novaPage.html)}", nova sells in ${novaCfg.locale}`);
   }
   if (novaCfg.locale === tenant.locale) fail('the two tenants share a locale — this rung proves nothing');
-  // the shop shell: no language literal left, and the gateway stamps the tenant's
-  const shell = await (await fetch(`${API}/shop/`)).text();
-  if (/<html[^>]*\slang=/.test(shell)) fail('the shop shell still spells a language of its own');
+  // THE SHELL'S LANGUAGE. This used to assert that /shop/ carried NO lang at all,
+  // because it was the static nginx shell and a baked-in language would have been
+  // one tenant's answer served to every tenant. #180 server-renders /shop/, so the
+  // document now DOES declare a language — the renderer takes it from the tenant.
+  // The intent is unchanged and the bar is higher: not "no literal" but "the right
+  // one, per tenant", which is what a baked-in literal could never be.
+  for (const [host, cfg] of [[API, tenant], [NOVA, novaCfg]]) {
+    const shell = await (await fetch(`${host}/shop/`)).text();
+    const declared = (shell.match(/<html[^>]*\slang="([^"]+)"/) || [])[1];
+    if (declared !== cfg.locale) {
+      fail(`${host}/shop/ declares lang="${declared}", that tenant sells in ${cfg.locale}`);
+    }
+  }
   for (const [host, cfg] of [[API, tenant], [NOVA, novaCfg]]) {
     const js = await (await fetch(`${host}/shop/tenant-config.js`)).text();
     if (!js.includes(`document.documentElement.lang = '${cfg.locale}'`)) {
@@ -379,8 +389,8 @@ function oldGenerator(name, description) {
     fail(`a unit-less price published ${probeSchema.offers.priceCurrency}, the tenant prices in ${tenant.currency}`);
   }
   ok(`LANGUAGE AND CURRENCY: genalpha's page declares lang="${tenant.locale}" and nova's`
-    + ` lang="${novaCfg.locale}" from each operator's own configuration; the shop shell spells no`
-    + ` language at all and the gateway stamps it per hostname; and a price naming no unit`
+    + ` lang="${novaCfg.locale}" from each operator's own configuration; the server-rendered shell`
+    + ` declares each tenant's OWN language and the gateway stamps it per hostname; and a price naming no unit`
     + ` publishes ${probeSchema.offers.priceCurrency} because that is what this tenant prices in.`);
 
   /* ---------- 6. characteristics projected, internal facts withheld ---------- */
@@ -431,8 +441,25 @@ function oldGenerator(name, description) {
   for (const id of fixtures.offerings) await call('DELETE', `${CAT}/productOffering/${id}`, staff);
   for (const id of fixtures.prices) await call('DELETE', `${CAT}/productOfferingPrice/${id}`, staff);
   for (const id of fixtures.specs) await call('DELETE', `${CAT}/productSpecification/${id}`, staff);
-  const gone = await page(`${API}/shop/offering/${offering.id}`);
-  if (gone.status !== 404) fail(`the fixture page still answers ${gone.status} after cleanup`);
+  // THE BROWSE CACHE IS IN THIS PATH NOW. Before #180 the public offering page was
+  // rendered by product-catalog on its own route; it is server-rendered now, and
+  // the renderer reads the catalogue through the GATEWAY — which carries
+  // LocalResponseCache=60s on the product-catalog route. So a hard DELETE is not
+  // visible on the page until that entry expires. Measured: 61s.
+  //
+  // That is the cache working, not a leak, and it is bounded: an operator RETIRES
+  // an offering rather than deleting it, and the withdrawn path answers from
+  // /seo/offering/{id}/meta — a different route, uncached — so a withdrawn product
+  // redirects at once. This waits the documented TTL out and still demands the
+  // 404, rather than dropping the assertion.
+  let gone = await page(`${API}/shop/offering/${offering.id}`);
+  for (let waited = 0; gone.status !== 404 && waited < 90; waited += 5) {
+    await new Promise((r) => setTimeout(r, 5000));
+    gone = await page(`${API}/shop/offering/${offering.id}`);
+  }
+  if (gone.status !== 404) {
+    fail(`the fixture page still answers ${gone.status} 90s after cleanup — longer than the 60s browse cache explains`);
+  }
   const left = await call('GET', `${CAT}/productOffering?name=${encodeURIComponent(NAME)}&limit=50`, staff);
   if ((Array.isArray(left.body) ? left.body : []).some((o) => o.name === NAME)) {
     fail('the fixture offering was left behind');
