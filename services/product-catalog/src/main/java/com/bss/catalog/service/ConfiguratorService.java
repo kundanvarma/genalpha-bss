@@ -29,7 +29,7 @@ import com.bss.catalog.dto.Quantity;
 import com.bss.catalog.dto.QueryProductConfiguration;
 import com.bss.catalog.dto.TimePeriod;
 import com.bss.catalog.exception.BadRequestException;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

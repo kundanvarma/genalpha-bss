@@ -5,9 +5,9 @@ import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.dto.Quantity;
 import com.bss.catalog.dto.TimePeriod;
 import com.bss.catalog.entity.ProductOfferingPrice;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -120,7 +120,7 @@ public class ProductOfferingPriceMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -131,7 +131,7 @@ public class ProductOfferingPriceMapper {
         }
         try {
             return objectMapper.readValue(json, JSON_LIST);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON list is unreadable", e);
         }
     }
@@ -142,7 +142,7 @@ public class ProductOfferingPriceMapper {
         }
         try {
             return objectMapper.readValue(json, type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }
     }

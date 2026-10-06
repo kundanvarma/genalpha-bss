@@ -5,8 +5,8 @@ import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.repository.ProductOfferingPriceRepository;
 import com.bss.catalog.repository.ProductSpecificationRepository;
 import com.bss.catalog.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;

@@ -3,9 +3,9 @@ package com.bss.catalog.mapper;
 import com.bss.catalog.api.ApiConstants;
 import com.bss.catalog.dto.ServiceSpecificationDto;
 import com.bss.catalog.entity.ServiceSpecification;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -126,7 +126,7 @@ public class ServiceSpecificationMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON array", e);
         }
     }
@@ -137,7 +137,7 @@ public class ServiceSpecificationMapper {
         }
         try {
             return objectMapper.readValue(json, JSON_OBJECT_LIST);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }

@@ -2,8 +2,8 @@ package com.bss.catalog;
 
 import com.bss.catalog.dto.SchemaOrg;
 import com.bss.catalog.mapper.JsonLd;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -98,7 +98,7 @@ class SchemaOrgSerialisationTest {
         String old = "{\"@context\":\"https://schema.org\",\"@type\":\"Product\","
                 + "\"name\":\"" + NAME + "\",\"description\":\"" + escaped + "\"}";
         assertTrue(org.junit.jupiter.api.Assertions.assertThrows(
-                        com.fasterxml.jackson.core.JacksonException.class,
+                        tools.jackson.core.JacksonException.class,
                         () -> json.readTree(old))
                 .getMessage().length() > 0,
                 "the old generator must be unparsable, or this test proves nothing");

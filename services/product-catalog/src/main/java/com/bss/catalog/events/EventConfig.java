@@ -1,17 +1,18 @@
 package com.bss.catalog.events;
 
 import com.bss.catalog.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
+import org.springframework.boot.kafka.autoconfigure.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.kafka.support.serializer.JacksonJsonSerializer;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
@@ -20,12 +21,14 @@ public class EventConfig {
 
     @Bean
     @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
-    KafkaTemplate<String, Object> eventKafkaTemplate(KafkaProperties properties, ObjectMapper objectMapper) {
-        // Boot's ObjectMapper, so envelopes serialize dates the same way the REST APIs do.
+    KafkaTemplate<String, Object> eventKafkaTemplate(KafkaProperties properties, JsonMapper jsonMapper) {
+        // Boot's mapper, so envelopes serialize dates the same way the REST APIs do.
+        // Jackson 3: the concrete mapper is JsonMapper, and spring-kafka's
+        // Jackson-3 serializer asks for exactly that rather than ObjectMapper.
         return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(
-                properties.buildProducerProperties(null),
+                properties.buildProducerProperties(),
                 new StringSerializer(),
-                new JsonSerializer<>(objectMapper)));
+                new JacksonJsonSerializer<>(jsonMapper)));
     }
 
     @Bean
