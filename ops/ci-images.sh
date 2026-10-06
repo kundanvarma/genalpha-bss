@@ -23,6 +23,22 @@
 #
 #   <name>\t<context>\t<dockerfile>
 #
+# WHAT A CHANNEL'S SBOM ACTUALLY COVERS, measured rather than assumed, because
+# "every image has an SBOM" is the kind of claim that reads as more than it is.
+# For the six nginx-served channels it is the BASE IMAGE ONLY — 70 Alpine/nginx
+# libraries, one OS, and zero npm components. Their JavaScript is compiled into
+# vite bundles, and a bundle carries no package manifest for syft to read, so
+# the dependency tree that produced it is invisible to an image scan.
+#
+# storefront-ssr is the exception and shows what the others are missing: it
+# ships node_modules, so react, react-dom and react-router appear by name.
+#
+# This is still worth having — the base image is where an nginx container's CVEs
+# live, and those are now visible and signed for the internet-facing artifacts.
+# But a real dependency SBOM for a static channel has to come from the SOURCE
+# (`syft dir:apps/<channel>`, or the lockfile) rather than the image, and that
+# is a follow-up, not something this script quietly pretends to do.
+#
 # WHAT IS DELIBERATELY NOT HERE: integrations/* — the vendor stand-ins. They are
 # test doubles, not artifacts anyone deploys, and publishing 38 signed mocks to
 # GHCR would say they are releases. The cost of leaving them out is real and
