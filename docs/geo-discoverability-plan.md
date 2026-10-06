@@ -722,13 +722,58 @@ header for the moment before the session resolves, where they used to see
 says nothing to anyone — and the account pages, still nginx-served, keep the
 gate.
 
+#### A withdrawn product moved; an unlaunched one does not exist
+
+Two rules that pull against each other, which is why they are described
+together.
+
+A **retired** offering has inbound links and an index entry. Answering 404 throws
+those away; answering 200 invites a crawler to keep the URL and a person to
+arrive somewhere nothing can be bought. So it is a **301** — to the successor the
+operator named in a TMF620 relationship if that successor is itself sellable
+(decided by the ordinary wall, not by this surface), otherwise the shop root,
+which is always true. Not the category shelf: a shelf is chosen by mapping a
+category *name* to a slug, and that mapping lives in the front end, so
+reproducing it here would make a fourth copy of a list that already has three.
+
+But the catalogue's wall is a **no-oracle rule on purpose** — an unlaunched,
+out-of-window or dealer-only offering must be indistinguishable from one that
+never existed, because telling a stranger which ids exist leaks an operator's
+plans and its private shelf. A redirect *is* an oracle. So the redirect answers
+for `Retired` **alone**, and `ProductOfferingService.withdrawn(id)` returns one
+fact — retired, and the id it names — rather than a DTO, so this cannot become a
+way to read withdrawn content. The suite asserts both halves: the retired cases
+301, and an unlaunched id still 404s. If that ever flips, it is a leak.
+
+#### One sitemap until it cannot be
+
+The protocol caps a sitemap at 50,000 URLs, and a crawler's response to a file
+over the cap is to ignore the overflow — silently, which is this arc's recurring
+failure mode. `/sitemap.xml` therefore stays a plain `urlset` while everything
+fits, because an index for 500 URLs is ceremony for nothing, and above the cap it
+becomes a `<sitemapindex>` over `/sitemap-1.xml`, `/sitemap-2.xml` … with the
+shelves in the first shard so the shape of the shop is found without reading to
+the end. A shard past the end is a 404, never an empty `urlset`, which would read
+as "nothing more to crawl".
+
+Honest limit, the same one the 10,000 ceiling gets: fifty thousand fixtures to
+watch a branch flip costs more than the branch is worth, so what the suite proves
+is the shape either side of it.
+
 **What is still not done.** Streaming: `renderToString` is synchronous, so
 Suspense and partial flushing are unexercised; request scope is in place so that
-move stays a performance decision. The cart, support and every signed-in page
-are still nginx-served shells, because they are behind a session the renderer
-has no business holding. And help pages remain blocked on an operator decision,
-not a rendering one: knowledge articles require `knowledge:read`, so making them
-crawlable publishes content that sits behind sign-in today. Help pages are still not covered, and
+move stays a performance decision. The cart, support and every signed-in page are
+still nginx-served shells, because they are behind a session the renderer has no
+business holding.
+
+**And help pages are a decision, not a missing feature.** Knowledge articles
+carry an audience (`customer`, `csr`, `productOwner`, `sales`, `all`) and the
+shelf is read with `knowledge:read` — there is no anonymous door and no public
+audience. Making help crawlable therefore publishes content that sits behind
+sign-in today, which is an operator's call about what their support material says
+in the open, not a rendering problem. The renderer would serve it the day a
+public door exists; the design for that door — a tenant flag, default off, and a
+publishable audience — is in its own issue. Help pages are still not covered, and
 not for a rendering reason: knowledge articles require `knowledge:read`, so
 there is no anonymous door, and making them crawlable publishes content that
 sits behind sign-in today — an operator's decision, not a renderer's. The

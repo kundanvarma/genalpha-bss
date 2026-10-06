@@ -29,7 +29,7 @@ class ForwardedHeaderUrlTest {
         if (proto != null) {
             request.addHeader("X-Forwarded-Proto", proto);
         }
-        GeoController controller = new GeoController(null, null, null, null, null, null, null);
+        GeoController controller = new GeoController(null, null, null, null, null, null, null, null);
         return (String) ReflectionTestUtils.invokeMethod(controller, "baseUrl", request);
     }
 

@@ -11,6 +11,7 @@ import com.bss.catalog.seo.PublicCatalog;
 import com.bss.catalog.seo.PublicOffering;
 import com.bss.catalog.seo.Visibility;
 import com.bss.catalog.service.Channels;
+import com.bss.catalog.service.LifecyclePolicy;
 import com.bss.catalog.service.ProductOfferingService;
 import com.bss.catalog.service.SchemaOrgProjection;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,10 +58,11 @@ public class GeoController {
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final CrawlerPolicy crawlers;
+    private final LifecyclePolicy lifecycle;
 
     public GeoController(ProductOfferingService offerings, PublicCatalog catalog,
             SchemaOrgProjection projection, JsonLd jsonLd, TenantRegistry tenants,
-            TenantScope tenantScope, CrawlerPolicy crawlers) {
+            TenantScope tenantScope, CrawlerPolicy crawlers, LifecyclePolicy lifecycle) {
         this.offerings = offerings;
         this.catalog = catalog;
         this.projection = projection;
@@ -68,6 +70,7 @@ public class GeoController {
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.crawlers = crawlers;
+        this.lifecycle = lifecycle;
     }
 
     private TenantRegistry.TenantEntry tenant() {
@@ -169,6 +172,34 @@ public class GeoController {
         if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
+        /*
+         * A PRODUCT THAT IS NO LONGER SOLD IS NOT A 404 AND NOT A PAGE.
+         *
+         * It is a URL with inbound links and an index entry, so answering 200
+         * with a page nobody can buy from invites a crawler to keep it and a
+         * person to arrive at a dead end — and answering 404 throws away every
+         * link pointing at it. A permanent redirect is the honest answer: the
+         * thing moved.
+         *
+         * WHERE TO, in the operator's own words first: TMF620 lets an offering
+         * name a replacement, so if one is named AND is itself still sellable,
+         * that is the canonical destination. Otherwise the shop root, which is
+         * always true.
+         *
+         * NOT the category shelf, tempting as it is: a shelf is chosen by
+         * mapping a category NAME to a slug, and that mapping lives in the
+         * front end (pages/lines.jsx). Reproducing it here would make a fourth
+         * copy of a list that already has three, which is how the shelf list
+         * became a drift risk in the first place.
+         */
+        ProductOfferingService.Withdrawn withdrawn = offerings.withdrawn(id);
+        if (withdrawn.retired()) {
+            Map<String, String> gone = new java.util.LinkedHashMap<>();
+            gone.put("redirect", replacementUrl(withdrawn.replacementId(), request));
+            return ResponseEntity.ok(gone);
+        }
+
+        // not retired: the ordinary wall decides, and a 404 here is a 404 there
         ProductOfferingDto offering = offerings.findById(id);
         TenantRegistry.TenantEntry tenant = tenant();
         SchemaOrgProjection.OfferingPage page = projection.page(offering, brand(),
@@ -183,38 +214,129 @@ public class GeoController {
         return ResponseEntity.ok(meta);
     }
 
+
+    /**
+     * Where a withdrawn offering's URL should point: the successor it named, if
+     * that successor is itself something the shop may show — decided by the
+     * ordinary wall, not by this surface — else the shop root, which is always
+     * true.
+     *
+     * NOT the category shelf, tempting as it is: a shelf is chosen by mapping a
+     * category NAME to a slug, and that mapping lives in the front end
+     * (pages/lines.jsx). Reproducing it here would make a fourth copy of a list
+     * that already has three, which is how the shelf list became a drift risk.
+     */
+    private String replacementUrl(String replacementId, HttpServletRequest request) {
+        String base = baseUrl(request);
+        if (replacementId != null) {
+            try {
+                ProductOfferingDto candidate = offerings.findById(replacementId);
+                return base + "/shop/offering/" + candidate.getId();
+            } catch (RuntimeException e) {
+                // the successor is gone, unlaunched or not for this channel —
+                // not a reason to fail the redirect
+            }
+        }
+        return base + "/shop/";
+    }
+
     /* ---------- sitemap / robots / llms.txt ---------- */
+
+    /**
+     * ONE SITEMAP UNTIL IT IS TOO BIG, THEN AN INDEX OF SHARDS.
+     *
+     * The protocol caps a sitemap at 50,000 URLs (and 50 MB), and a crawler's
+     * answer to a file over the cap is to ignore the overflow — silently, which
+     * is the failure mode this whole arc keeps finding. A shop with more
+     * offerings than that is not hypothetical for a wholesaler.
+     *
+     * So /sitemap.xml stays a plain urlset while everything fits, because an
+     * index for 500 URLs is ceremony a crawler has to follow for nothing. Above
+     * the cap it becomes a <sitemapindex> pointing at /sitemap-1.xml,
+     * /sitemap-2.xml … and each shard is a urlset of at most SHARD urls. The
+     * shelves ride in the first shard, so the structure of the shop is found
+     * without reading to the end.
+     */
+    private static final int SHARD = 50_000;
 
     @GetMapping(value = "/sitemap.xml", produces = MediaType.APPLICATION_XML_VALUE)
     public ResponseEntity<String> sitemap(HttpServletRequest request) {
         if (!visibility().crawlable()) {
             throw new NotFoundException("this operator is not visible to crawlers");
         }
+        List<PublicOffering> rows = shelf(request);
+        int urls = rows.size() + SHELVES.size();
+        if (urls > SHARD) {
+            String base = baseUrl(request);
+            int shards = (urls + SHARD - 1) / SHARD;
+            StringBuilder index = new StringBuilder(
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                            + "<sitemapindex xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
+            for (int i = 1; i <= shards; i++) {
+                index.append("  <sitemap><loc>").append(esc(base + "/sitemap-" + i + ".xml"))
+                        .append("</loc></sitemap>\n");
+            }
+            index.append("</sitemapindex>\n");
+            return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML).body(index.toString());
+        }
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML)
+                .body(urlset(request, rows, 1));
+    }
+
+    /** One shard of a sharded sitemap. 1-based, as the index names them. */
+    @GetMapping(value = "/sitemap-{shard}.xml", produces = MediaType.APPLICATION_XML_VALUE)
+    public ResponseEntity<String> sitemapShard(@PathVariable("shard") int shard,
+                                               HttpServletRequest request) {
+        if (!visibility().crawlable()) {
+            throw new NotFoundException("this operator is not visible to crawlers");
+        }
+        List<PublicOffering> rows = shelf(request);
+        if (shard < 1 || (long) (shard - 1) * SHARD >= rows.size() + SHELVES.size()) {
+            throw new NotFoundException("no such sitemap shard");
+        }
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML)
+                .body(urlset(request, rows, shard));
+    }
+
+    /**
+     * The urls of one shard (shard 1 is the whole thing when nothing is sharded).
+     *
+     * ONE RULE decides membership. This used to list every Active offering,
+     * which is not the same question: an offering past its window, or sold only
+     * through a dealer, was advertised to search engines and then refused by the
+     * page the crawler followed.
+     *
+     * THE SHELVES FIRST (#180). Category pages are real URLs, and a sitemap that
+     * lists only products gives a crawler no way to understand how the shop is
+     * organised — just a flat list of things. They sit at the front so they land
+     * in the first shard.
+     */
+    private String urlset(HttpServletRequest request, List<PublicOffering> rows, int shard) {
+        String base = baseUrl(request);
+        List<String> locs = new java.util.ArrayList<>(rows.size() + SHELVES.size());
+        List<String> mods = new java.util.ArrayList<>(rows.size() + SHELVES.size());
+        for (String shelfSlug : SHELVES) {
+            locs.add(base + "/shop/category/" + shelfSlug);
+            mods.add(null);
+        }
+        for (PublicOffering view : rows) {
+            locs.add(view.canonicalUrl());
+            mods.add(view.lastUpdate() == null ? null : view.lastUpdate().toLocalDate().toString());
+        }
+        int from = (shard - 1) * SHARD;
+        int to = Math.min(locs.size(), from + SHARD);
         StringBuilder sb = new StringBuilder(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                         + "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
-        // ONE RULE decides membership. This used to list every Active offering,
-        // which is not the same question: an offering past its window, or sold
-        // only through a dealer, was advertised to search engines and then
-        // refused by the page the crawler followed.
-        // THE SHELVES FIRST (#180). Category pages are now real URLs, and a
-        // sitemap that lists only products gives a crawler no way to understand
-        // how the shop is organised — just a flat list of things.
-        String base = baseUrl(request);
-        for (String shelf : SHELVES) {
-            sb.append("  <url><loc>").append(esc(base + "/shop/category/" + shelf))
-                    .append("</loc></url>\n");
-        }
-        for (PublicOffering view : shelf(request)) {
-            sb.append("  <url><loc>").append(esc(view.canonicalUrl())).append("</loc>");
-            if (view.lastUpdate() != null) {
-                sb.append("<lastmod>").append(esc(view.lastUpdate().toLocalDate().toString()))
-                        .append("</lastmod>");
+        for (int i = from; i < to; i++) {
+            sb.append("  <url><loc>").append(esc(locs.get(i))).append("</loc>");
+            if (mods.get(i) != null) {
+                sb.append("<lastmod>").append(esc(mods.get(i))).append("</lastmod>");
             }
             sb.append("</url>\n");
         }
         sb.append("</urlset>\n");
-        return ResponseEntity.ok().contentType(MediaType.APPLICATION_XML).body(sb.toString());
+        return sb.toString();
     }
 
     @GetMapping(value = "/robots.txt", produces = MediaType.TEXT_PLAIN_VALUE)
