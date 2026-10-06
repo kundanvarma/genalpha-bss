@@ -38,12 +38,23 @@ const get = async (url, ua) => {
   if (Number(schema.offers.price) !== Number(off.price.amount)) {
     fail(`bot price ${schema.offers.price} != catalog price ${off.price.amount}`);
   }
+  // ONE DOCUMENT, NOT TWO. This used to assert the OPPOSITE — that a human must
+  // not receive the JSON-LD — because the shop dual-served: a Java bot page for
+  // crawlers, the SPA shell for people. #180 deleted that (no User-Agent
+  // predicate on the route any more) precisely because two renderers for one URL
+  // are two chances to disagree. The assertion is now the arc's real acceptance.
   const human = await get(`${API}/shop/offering/${off.id}`, HUMAN);
-  if (human.text.includes('application/ld+json')) fail('a human received the bot page');
-  if (!human.text.includes('viewport')) fail('the human did not get the SPA shell');
-  console.log(`OK DUAL-SERVE: the same URL gave GPTBot complete HTML with Product/Offer JSON-LD`
-    + ` ("${off.title}" @ ${schema.offers.price} ${schema.offers.priceCurrency} — equal to the`
-    + ' catalog, PROVEN not maintained) and gave a human the untouched SPA.');
+  if (!human.text.includes('application/ld+json')) {
+    fail('a human did not receive the server-rendered document');
+  }
+  if (!human.text.includes('viewport')) fail('the human did not get a rendered page');
+  if (human.text !== bot.text) {
+    fail('a human and a crawler received DIFFERENT bytes for the same URL — the dual-serve is back');
+  }
+  console.log(`OK ONE DOCUMENT: the same URL gave GPTBot and a human BYTE-IDENTICAL HTML carrying`
+    + ` Product/Offer JSON-LD ("${off.title}" @ ${schema.offers.price} ${schema.offers.priceCurrency}`
+    + ' — equal to the catalog, PROVEN not maintained). Two renderers for one URL are two chances to'
+    + ' disagree; there is one renderer now, and this is what holds it there.');
 
   /* ---------- 2. the switch: robots.txt per tenant ---------- */
   const ga = (await get(`${API}/robots.txt`)).text;
