@@ -469,7 +469,12 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; font-size: 1
 .primaries { display: flex; flex-wrap: wrap; gap: 2px; }
 .primary-tab { border: none; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--dim); padding: 6px 12px; cursor: pointer; border-radius: 6px; white-space: nowrap; }
 .primary-tab:hover { background: color-mix(in srgb, var(--card) 90%, var(--ink)); color: var(--ink); }
-.primary-tab.on { color: var(--teal); background: var(--teal-soft, #E6F2F0); }
+/* --teal-text, not --teal: the raw brand teal on the soft tint is 4.25:1 at
+   13.5px, which is below AA for normal text. Every other `.on` state in
+   this sheet already uses the darker brand-derived token; this one was the
+   exception, and it had never been scanned because CI's A11Y_TARGETS left
+   the finance desks out. */
+.primary-tab.on { color: var(--teal-text); background: var(--teal-soft, #E6F2F0); }
 .subnav { display: flex; flex-wrap: wrap; gap: 2px; padding-left: 6px; }
 .pagerow.grouped .subnav .pagetab { font-size: 13px; padding: 4px 8px; }
 .ask-copilot { margin-right: 6px; }

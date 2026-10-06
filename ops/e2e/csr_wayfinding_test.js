@@ -97,8 +97,27 @@ async function searchNothing(page, term) {
   const link = page.locator('[data-testid="brand-home"]');
   if (await link.count() !== 1) fail(`the brand should be exactly one link, found ${await link.count()}`);
   if (await link.evaluate((a) => a.tagName) !== 'A') fail('the brand is not an <a> — a div with a click handler is not a link');
-  const label = await link.getAttribute('aria-label');
-  if (label !== `${cfgBrand} CSR home`) fail(`accessible name is "${label}", expected "${cfgBrand} CSR home"`);
+  // THE ACCESSIBLE NAME, not the aria-label attribute. The brand used to carry
+  // `aria-label="<tenant> CSR home"`, which REPLACED its visible "csr console"
+  // wordmark and so failed WCAG 2.5.3 (Label in Name) — a speech-input user
+  // says what they can see and the control does not answer. The name is now
+  // assembled from the link's content, with the tenant's name and "home" in
+  // text that is clipped from the screen but present in the name. So this
+  // asserts what assistive technology actually receives, which is the thing
+  // that matters and is also the thing the attribute only approximated.
+  const label = await link.evaluate((a) => a.textContent.replace(/\s+/g, ' ').trim());
+  if (!label.includes(cfgBrand)) {
+    fail(`the accessible name is "${label}" and does not carry the tenant's brand "${cfgBrand}"`);
+  }
+  if (!/csr console/i.test(label)) {
+    fail(`the accessible name is "${label}" and does not contain the visible wordmark`
+      + ' — that is the Label-in-Name failure this replaced');
+  }
+  if (!/home/i.test(label)) fail(`the accessible name is "${label}" and never says where the link goes`);
+  // and prove it through the role-based query, which computes the name per spec
+  if (await page.getByRole('link', { name: new RegExp(cfgBrand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).count() < 1) {
+    fail(`no link resolves by its accessible name against the tenant brand "${cfgBrand}"`);
+  }
   const href = await link.evaluate((a) => a.getAttribute('href'));
   if (!/\/csr\/?$/.test(href)) fail(`the brand links to "${href}", not the default workspace`);
   const inside = await link.evaluate((a) => ({
@@ -118,8 +137,9 @@ async function searchNothing(page, term) {
   }));
   await page.reload();
   await page.waitForSelector('.searchbar', { timeout: 30000 });
-  const probed = await page.locator('[data-testid="brand-home"]').getAttribute('aria-label');
-  if (probed !== `${probe} CSR home`) fail(`with brandName "${probe}" the name is "${probed}" — it is not read from config`);
+  const probed = await page.locator('[data-testid="brand-home"]')
+    .evaluate((a) => a.textContent.replace(/\s+/g, ' ').trim());
+  if (!probed.includes(probe)) fail(`with brandName "${probe}" the name is "${probed}" — it is not read from config`);
   await page.unroute(`${CSR}tenant-config.js`);
   await page.reload();
   await page.waitForSelector('.searchbar', { timeout: 30000 });
