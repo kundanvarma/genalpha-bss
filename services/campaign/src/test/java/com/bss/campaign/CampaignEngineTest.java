@@ -8,7 +8,7 @@ import com.bss.campaign.service.CampaignService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -27,7 +27,7 @@ class CampaignEngineTest {
     @Autowired
     private CampaignService service;
 
-    @MockBean
+    @MockitoBean
     private CommunicationClient communicationClient;
 
     private static CampaignRequest campaign(String name, String triggerEventType, String triggerState,

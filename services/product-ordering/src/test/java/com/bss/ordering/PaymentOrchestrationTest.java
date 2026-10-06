@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
@@ -45,19 +45,19 @@ class PaymentOrchestrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private PaymentClient paymentClient;
 
-    @MockBean
+    @MockitoBean
     private AgreementClient agreementClient;
 
-    @MockBean
+    @MockitoBean
     private PromotionClient promotionClient;
 
-    @MockBean
+    @MockitoBean
     private CatalogClient catalogClient;
 
-    @MockBean
+    @MockitoBean
     private StockClient stockClient;
 
     /** The order service reserves through the variant-aware overload; a mock stubs default methods too, so
@@ -69,12 +69,12 @@ class PaymentOrchestrationTest {
                 .willReturn(StockClient.ReserveOutcome.reserved());
     }
 
-    @MockBean
+    @MockitoBean
     private InventoryClient inventoryClient;
 
     // household/payer lookups came later than this test; empty answers =
     // a plain self-order, which is what these scenarios are
-    @MockBean
+    @MockitoBean
     private com.bss.ordering.client.PartyClient partyClient;
 
     private static RequestPostProcessor customer(String sub) {

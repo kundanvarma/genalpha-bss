@@ -9,7 +9,7 @@ import com.bss.intelligence.security.TenantContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.time.OffsetDateTime;
@@ -35,10 +35,10 @@ class ChurnScorerTest {
     @Autowired
     private ChurnAlertRepository alerts;
 
-    @MockBean
+    @MockitoBean
     private BssApiClient bss;
 
-    @MockBean
+    @MockitoBean
     private DomainEventPublisher events;
 
     @org.springframework.beans.factory.annotation.Autowired

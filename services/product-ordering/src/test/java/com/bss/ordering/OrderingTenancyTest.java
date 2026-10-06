@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class OrderingTenancyTest {
 
-    @org.springframework.boot.test.mock.mockito.MockBean
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.bss.ordering.client.PartyClient partyClient;
 
     private static final String BASE = "/tmf-api/productOrderingManagement/v4/productOrder";

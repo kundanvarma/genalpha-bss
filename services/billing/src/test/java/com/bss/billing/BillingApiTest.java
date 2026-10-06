@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
@@ -44,25 +44,25 @@ class BillingApiTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.InventoryClient inventoryClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.CatalogClient catalogClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.PaymentClient paymentClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.UsageClient usageClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.PromotionClient promotionClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.PricingClient pricingClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.OrgClient orgClient;
 
     private static RequestPostProcessor customer(String sub) {

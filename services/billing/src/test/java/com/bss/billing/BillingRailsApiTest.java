@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -59,16 +59,16 @@ class BillingRailsApiTest {
     @Autowired
     private com.bss.billing.repository.CustomerBillRepository bills;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.OrgClient orgClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.PaymentClient paymentClient;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.AliasLookupClient aliasLookup;
 
-    @MockBean
+    @MockitoBean
     private DownstreamClients.DirectDebitClient directDebitClient;
 
     private static RequestPostProcessor admin() {

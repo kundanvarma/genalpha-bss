@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -38,13 +38,13 @@ class ProductOrderApiTest {
 
     // Orders in these tests reference offering "po-001"; orchestration validates
     // references against the catalog, which is not running here.
-    @MockBean
+    @MockitoBean
     private CatalogClient catalogClient;
 
-    @MockBean
+    @MockitoBean
     private AgreementClient agreementClient;
 
-    @MockBean
+    @MockitoBean
     private PromotionClient promotionClient;
 
     @BeforeEach
