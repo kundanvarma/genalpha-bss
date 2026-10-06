@@ -89,6 +89,36 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# --------------------------------------------------------- boot4-modules ----
+# Spring Boot 4 split autoconfiguration into one module per technology. A
+# service that uses a technology directly but does not depend on its module
+# COMPILES AND STARTS — the autoconfiguration is simply absent. How that shows
+# up depends on how the bean is reached, and only one of the three is loud:
+#   bss-bridge injected KafkaTemplate       -> context failed, crash loop (seen)
+#   flow declared @KafkaListener            -> SILENT; no listener container,
+#                                              the component consumed nothing
+#   ontology looked it up via ObjectProvider-> SILENT; receipts never published
+# Two of those three would have shipped. Hence a gate: if the main sources
+# reach for a technology, the pom must carry its module.
+for d in services/*/; do
+  svc=$(basename "$d")
+  if grep -rlq 'org.springframework.kafka' "$d/src/main/java" 2>/dev/null; then
+    grep -q 'spring-boot-kafka' "$d/pom.xml" \
+      || fail "service '$svc' uses the Kafka API but its pom has no spring-boot-kafka" \
+              "Boot 4 ships no Kafka autoconfiguration without it — a listener silently never subscribes"
+  fi
+  if grep -rlq 'org.springframework.web.client.RestClient' "$d/src/main/java" 2>/dev/null; then
+    grep -q 'spring-boot-restclient' "$d/pom.xml" \
+      || fail "service '$svc' uses RestClient but its pom has no spring-boot-restclient" \
+              "Boot 4 ships no RestClient.Builder without it"
+  fi
+  if [ -n "$(find "$d/src/main/resources" -path '*db/migration*' -name '*.sql' 2>/dev/null | head -1)" ]; then
+    grep -q 'spring-boot-flyway' "$d/pom.xml" \
+      || fail "service '$svc' ships Flyway migrations but its pom has no spring-boot-flyway" \
+              "Boot 4 runs no migrations without it — the schema is simply never created"
+  fi
+done
+
 # ------------------------------------------------------------ wire-shape ----
 # Jackson 3 (Spring Boot 4) flipped two defaults that are visible on the wire:
 # SORT_PROPERTIES_ALPHABETICALLY and FAIL_ON_NULL_FOR_PRIMITIVES both became
