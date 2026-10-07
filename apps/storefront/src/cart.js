@@ -5,6 +5,7 @@
  * after which it follows the customer across devices and channels. Lines with
  * the same offering and configuration merge into one line's quantity.
  */
+import { clearDraft } from './address.js';
 import { publicFetch } from './auth.js';
 
 const CART_ID_KEY = 'bss.shop.cartId';
@@ -149,5 +150,7 @@ export async function markCartCheckedOut(orderId) {
     }).catch(() => {});
     localStorage.removeItem(CART_ID_KEY);
   }
+  // The order carries the address now, so the typing draft has served its purpose.
+  clearDraft();
   window.dispatchEvent(new Event(CART_EVENT));
 }
