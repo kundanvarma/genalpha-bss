@@ -42,11 +42,29 @@ public record ServiceProblemRequest(JsonNode originatorParty, JsonNode name, Jso
         return Json.set(reason) ? Json.valueOf(reason) : fallback;
     }
 
-    /** A JSON number was taken as-is; anything else was parsed, and an absent key meant 2. */
+    /**
+     * A JSON number is taken as-is, a numeric string is parsed, and anything
+     * else -- absent, null, or a word -- is the fallback.
+     *
+     * The last part used to be only half true: an absent key gave the fallback
+     * but {@code "priority": "urgent"} threw NumberFormatException out of a
+     * request mapper, which is a 500 for a body a caller could send by hand.
+     * TMF656 types priority as an integer, so "urgent" is a malformed request
+     * either way -- but this method's whole contract is to supply a value when
+     * the field is unusable, and it did not honour that for the one case where
+     * a caller controls the content rather than its presence.
+     */
     public int priorityOr(int fallback) {
         if (priority != null && priority.isNumber()) {
             return priority.intValue();
         }
-        return Json.set(priority) ? Integer.parseInt(Json.valueOf(priority)) : fallback;
+        if (!Json.set(priority)) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(Json.valueOf(priority).strip());
+        } catch (NumberFormatException notANumber) {
+            return fallback;
+        }
     }
 }
