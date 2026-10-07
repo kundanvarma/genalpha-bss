@@ -900,7 +900,7 @@ public class JourneyService {
         try {
             steps = objectMapper.readTree(j.getSteps());
         } catch (tools.jackson.core.JacksonException e) {
-            steps = objectMapper.getNodeFactory().textNode(j.getSteps());
+            steps = objectMapper.getNodeFactory().stringNode(j.getSteps());
         }
         return new JourneyView(j.getId(), j.getHref(), j.getName(), j.getStatus(), j.getTriggerEventType(),
                 j.getTriggerState(), j.getSegmentName(), j.getConversionEvent(), j.getHoldoutPercent(),

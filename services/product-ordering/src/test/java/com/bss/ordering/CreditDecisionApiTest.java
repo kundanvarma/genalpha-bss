@@ -77,7 +77,7 @@ class CreditDecisionApiTest {
         mockMvc.perform(post(ORDERS).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(orderBody("frozen-test-identity")))
-                .andExpect(status().isUnprocessableEntity())
+                .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.code").value("CREDIT_FROZEN"));
 
         // the rejection still left its audit trail (REQUIRES_NEW commit)
