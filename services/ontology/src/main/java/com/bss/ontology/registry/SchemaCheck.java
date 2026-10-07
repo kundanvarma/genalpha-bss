@@ -1,9 +1,8 @@
 package com.bss.ontology.registry;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -45,11 +44,11 @@ public final class SchemaCheck {
         }
         JsonNode type = schema.get("type");
         if (type != null) {
-            String t = type.asText();
+            String t = type.asString();
             boolean ok = switch (t) {
                 case "object" -> node.isObject();
                 case "array" -> node.isArray();
-                case "string" -> node.isTextual();
+                case "string" -> node.isString();
                 case "integer" -> node.isIntegralNumber();
                 case "number" -> node.isNumber();
                 case "boolean" -> node.isBoolean();
@@ -60,16 +59,16 @@ public final class SchemaCheck {
                 return;
             }
         }
-        if (node.isTextual()) {
+        if (node.isString()) {
             JsonNode pattern = schema.get("pattern");
-            if (pattern != null && !Pattern.compile(pattern.asText()).matcher(node.asText()).find()) {
-                errors.add(path + ": \"" + node.asText() + "\" does not match " + pattern.asText());
+            if (pattern != null && !Pattern.compile(pattern.asString()).matcher(node.asString()).find()) {
+                errors.add(path + ": \"" + node.asString() + "\" does not match " + pattern.asString());
             }
             JsonNode minLength = schema.get("minLength");
-            if (minLength != null && node.asText().length() < minLength.asInt()) {
+            if (minLength != null && node.asString().length() < minLength.asInt()) {
                 errors.add(path + ": shorter than " + minLength.asInt() + " characters");
             }
-            if ("date".equals(text(schema, "format")) && !Pattern.matches("\\d{4}-\\d{2}-\\d{2}", node.asText())) {
+            if ("date".equals(text(schema, "format")) && !Pattern.matches("\\d{4}-\\d{2}-\\d{2}", node.asString())) {
                 errors.add(path + ": not a date (YYYY-MM-DD)");
             }
         }
@@ -95,16 +94,15 @@ public final class SchemaCheck {
             JsonNode required = schema.get("required");
             if (required != null) {
                 for (JsonNode r : required) {
-                    if (!node.has(r.asText())) {
-                        errors.add(path + ": missing required \"" + r.asText() + "\"");
+                    if (!node.has(r.asString())) {
+                        errors.add(path + ": missing required \"" + r.asString() + "\"");
                     }
                 }
             }
             JsonNode props = schema.get("properties");
             JsonNode additional = schema.get("additionalProperties");
             boolean closed = additional != null && additional.isBoolean() && !additional.asBoolean();
-            for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext();) {
-                Map.Entry<String, JsonNode> en = it.next();
+            for (Map.Entry<String, JsonNode> en : node.properties()) {
                 JsonNode sub = props == null ? null : props.get(en.getKey());
                 if (sub != null) {
                     check(sub, en.getValue(), path + "." + en.getKey(), errors);
@@ -119,7 +117,7 @@ public final class SchemaCheck {
 
     private static String text(JsonNode n, String key) {
         JsonNode v = n.get(key);
-        return v == null ? null : v.asText();
+        return v == null ? null : v.asString();
     }
 
     private static String kind(JsonNode n) {

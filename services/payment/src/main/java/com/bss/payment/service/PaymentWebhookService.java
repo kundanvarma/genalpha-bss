@@ -4,8 +4,8 @@ import com.bss.payment.dto.PaymentDto;
 import com.bss.payment.dto.WebhookReceipt;
 import com.bss.payment.entity.PspConfig;
 import com.bss.payment.security.TenantContext;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,7 +53,7 @@ public class PaymentWebhookService {
             }
             verify(rawBody, signatureHeader, secret);
             JsonNode body = readBody(rawBody);
-            String sessionId = firstNonBlank(body.path("sessionId").asText(null), body.path("session_id").asText(null));
+            String sessionId = firstNonBlank(body.path("sessionId").asString(null), body.path("session_id").asString(null));
             if (sessionId == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhook body needs a sessionId");
             }

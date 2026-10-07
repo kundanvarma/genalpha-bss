@@ -5,7 +5,7 @@ import com.bss.recommendation.dto.OfferingRef;
 import com.bss.recommendation.dto.PartyRef;
 import com.bss.recommendation.dto.RecommendationItem;
 import com.bss.recommendation.dto.RecommendationView;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

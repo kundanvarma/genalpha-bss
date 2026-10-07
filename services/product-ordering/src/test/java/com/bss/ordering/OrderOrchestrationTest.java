@@ -6,11 +6,11 @@ import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.exception.DownstreamException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -258,7 +258,7 @@ class OrderOrchestrationTest {
                         .content(body))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor readToken() {

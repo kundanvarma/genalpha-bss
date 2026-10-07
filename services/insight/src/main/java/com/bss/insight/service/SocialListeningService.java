@@ -6,7 +6,7 @@ import com.bss.insight.dto.SocialMessage;
 import com.bss.insight.entity.SocialMention;
 import com.bss.insight.repository.SocialMentionRepository;
 import com.bss.insight.security.TenantScope;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.JsonNodeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

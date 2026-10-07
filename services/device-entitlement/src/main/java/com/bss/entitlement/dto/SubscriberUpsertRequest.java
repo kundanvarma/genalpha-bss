@@ -1,9 +1,9 @@
 package com.bss.entitlement.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.BooleanNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.BooleanNode;
+import tools.jackson.databind.node.StringNode;
 
 /**
  * The activation / SIM-swap / plan-change hook's body. A record cannot carry
@@ -44,7 +44,7 @@ public record SubscriberUpsertRequest(
 
     /** What the service flows post: an IMSI plus one or two flags. */
     public static SubscriberUpsertRequest ofFlow(String imsi, Boolean emergencyAddressConfirmed, boolean termsAccepted) {
-        return new SubscriberUpsertRequest(TextNode.valueOf(imsi), null, null, null, null, null, null, null,
+        return new SubscriberUpsertRequest(StringNode.valueOf(imsi), null, null, null, null, null, null, null,
                 emergencyAddressConfirmed == null ? null : BooleanNode.valueOf(emergencyAddressConfirmed),
                 BooleanNode.valueOf(termsAccepted), null);
     }
@@ -85,7 +85,7 @@ public record SubscriberUpsertRequest(
 
     /** What {@code String.valueOf(map.get(k))} produced, for a value that is present. */
     public static String scalar(JsonNode node) {
-        return node == null || node.isNull() ? null : node.isTextual() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? null : node.isString() ? node.stringValue() : node.toString();
     }
 
     /** What {@code Boolean.parseBoolean(String.valueOf(v))} produced: only "true", in any case. */

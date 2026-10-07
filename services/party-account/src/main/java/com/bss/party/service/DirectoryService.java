@@ -18,9 +18,9 @@ import com.bss.party.repository.DirectorySettingRepository;
 import com.bss.party.repository.IndividualRepository;
 import com.bss.party.security.PartyScope;
 import com.bss.party.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -254,9 +254,9 @@ public class DirectoryService {
         }
         try {
             return objectMapper.readValue(json,
-                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
+                    new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
                     });
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return List.of();
         }
     }
@@ -264,7 +264,7 @@ public class DirectoryService {
     private String writeJson(DirectoryListing payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("unserializable export row", e);
         }
     }
@@ -273,7 +273,7 @@ public class DirectoryService {
     private JsonNode readJson(String payload) {
         try {
             return objectMapper.readTree(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return objectMapper.createObjectNode().put("payload", payload);
         }
     }

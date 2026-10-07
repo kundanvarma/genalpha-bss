@@ -1,11 +1,11 @@
 package com.bss.som;
 
 import com.bss.som.api.ApiConstants;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.ActiveProfiles;
@@ -66,8 +66,8 @@ class ServiceActivationApiTest {
                 .andExpect(jsonPath("$['@type']").value("Service"))
                 .andReturn();
         JsonNode body = json.readTree(created.getResponse().getContentAsString());
-        String id = body.get("id").asText();
-        String serviceDate = body.get("serviceDate").asText();
+        String id = body.get("id").asString();
+        String serviceDate = body.get("serviceDate").asString();
         String monitorId = created.getResponse().getHeader("monitorId");
 
         // the activation face, by id and by filter
@@ -90,7 +90,7 @@ class ServiceActivationApiTest {
                 .andReturn();
         JsonNode row = json.readTree(slim.getResponse().getContentAsString()).get(0);
         assertThat(row.size()).isEqualTo(2);
-        assertThat(row.get("state").asText()).isEqualTo("active");
+        assertThat(row.get("state").asString()).isEqualTo("active");
 
         // the same row through the inventory face, with ITS href
         mockMvc.perform(get(ApiConstants.INVENTORY_BASE + "/service/" + id).with(staff()))

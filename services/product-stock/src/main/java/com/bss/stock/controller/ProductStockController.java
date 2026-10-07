@@ -4,7 +4,7 @@ import com.bss.stock.api.ApiConstants;
 import com.bss.stock.api.FieldSelector;
 import com.bss.stock.api.PagedResult;
 import com.bss.stock.dto.ProductStockView;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.ObjectNode;
 import com.bss.stock.service.ProductStockService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;

@@ -3,6 +3,8 @@ package com.bss.gateway;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
+import java.time.Duration;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -29,8 +32,22 @@ class GatewayRoutingTest {
 
     static MockWebServer downstream;
 
-    @Autowired
+    // Boot 4 no longer injects a WebTestClient bound to a RUNNING server: the
+    // context customizer that used to do it is gone, and @AutoConfigureWebTestClient
+    // binds to a mock context instead. A real port carrying real HTTP is the point
+    // of this test, so the client is built against the port the server actually took.
+    @LocalServerPort
+    private int port;
+
     private WebTestClient webTestClient;
+
+    @BeforeEach
+    void bindToTheRunningServer() {
+        webTestClient = WebTestClient.bindToServer()
+                .baseUrl("http://localhost:" + port)
+                .responseTimeout(Duration.ofSeconds(10))
+                .build();
+    }
 
     @Autowired
     private RouteLocator routeLocator;

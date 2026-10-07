@@ -17,10 +17,10 @@ import com.bss.cart.repository.ShoppingCartRepository;
 import com.bss.cart.security.PartyScope;
 import com.bss.cart.security.TenantContext;
 import com.bss.cart.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -241,7 +241,7 @@ public class ShoppingCartService {
     private String writeJson(Object value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -249,7 +249,7 @@ public class ShoppingCartService {
     private <T> List<T> readList(String json, TypeReference<List<T>> type, List<T> whenAbsent) {
         try {
             return json == null ? whenAbsent : objectMapper.readValue(json, type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON value is unreadable", e);
         }
     }

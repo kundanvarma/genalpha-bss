@@ -2,7 +2,7 @@ package com.bss.ontology.service;
 
 import com.bss.ontology.dto.Explanation;
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -30,44 +30,44 @@ public class ExplainService {
             return null;
         }
         List<String> lines = new ArrayList<>();
-        lines.add(a.path("meaning").asText());
+        lines.add(a.path("meaning").asString());
         if (a.has("intent")) {
-            lines.add("Intent: " + a.path("intent").asText());
+            lines.add("Intent: " + a.path("intent").asString());
         }
-        lines.add("It acts on a " + a.path("concept").asText() + ". Inputs: " + inputs(a) + ".");
+        lines.add("It acts on a " + a.path("concept").asString() + ". Inputs: " + inputs(a) + ".");
         lines.add("Who may: " + who(a) + ".");
         List<String> pcs = new ArrayList<>();
-        a.path("preconditions").forEach(p -> pcs.add(p.path("says").asText()));
+        a.path("preconditions").forEach(p -> pcs.add(p.path("says").asString()));
         lines.add("Before it happens, every one of these must hold: " + String.join("; ", pcs) + ".");
         if (a.has("policy")) {
-            lines.add("Then the business rules of the \"" + a.path("policy").path("domain").asText() + "\" domain are consulted; a matching deny stops it.");
+            lines.add("Then the business rules of the \"" + a.path("policy").path("domain").asString() + "\" domain are consulted; a matching deny stops it.");
         }
-        JsonNode cap = l.capabilities().get(a.path("executes").path("capability").asText());
-        lines.add("It is executed by the " + cap.path("component").asText() + " component"
-                + (cap.has("tmf") ? " through " + cap.path("tmf").asText() : "")
-                + (cap.has("route") ? " (" + cap.path("route").path("method").asText() + " " + cap.path("route").path("path").asText() + ")" : "") + ".");
+        JsonNode cap = l.capabilities().get(a.path("executes").path("capability").asString());
+        lines.add("It is executed by the " + cap.path("component").asString() + " component"
+                + (cap.has("tmf") ? " through " + cap.path("tmf").asString() : "")
+                + (cap.has("route") ? " (" + cap.path("route").path("method").asString() + " " + cap.path("route").path("path").asString() + ")" : "") + ".");
         List<String> effects = new ArrayList<>();
         for (JsonNode e : a.path("effects")) {
-            JsonNode c = l.capabilities().get(e.path("capability").asText());
-            effects.add(c.path("meaning").asText() + (e.has("when") ? " (when: " + e.path("when").asText() + ")" : ""));
+            JsonNode c = l.capabilities().get(e.path("capability").asString());
+            effects.add(c.path("meaning").asString() + (e.has("when") ? " (when: " + e.path("when").asString() + ")" : ""));
         }
         if (!effects.isEmpty()) {
             lines.add("What follows: " + String.join(" ", effects));
         }
         List<String> emits = new ArrayList<>();
-        a.path("emits").forEach(e -> emits.add(e.path("event").asText() + " from " + e.path("component").asText()
-                + (e.has("meaning") ? " (" + e.path("meaning").asText() + ")" : "")));
+        a.path("emits").forEach(e -> emits.add(e.path("event").asString() + " from " + e.path("component").asString()
+                + (e.has("meaning") ? " (" + e.path("meaning").asString() + ")" : "")));
         lines.add("It emits: " + String.join("; ", emits) + ".");
         JsonNode g = a.path("governance");
-        lines.add("Governance: autonomy " + g.path("autonomy").asText() + ", approval " + g.path("approval").asText()
-                + ", audit " + g.path("audit").asText() + (g.has("limits") ? ", limits " + g.path("limits").toString() : "") + ".");
+        lines.add("Governance: autonomy " + g.path("autonomy").asString() + ", approval " + g.path("approval").asString()
+                + ", audit " + g.path("audit").asString() + (g.has("limits") ? ", limits " + g.path("limits").toString() : "") + ".");
         if (a.has("outcome")) {
-            lines.add("It is complete when " + a.path("outcome").path("settles").asText()
-                    + (a.path("outcome").has("measured") ? "; what learning may measure: " + a.path("outcome").path("measured").asText() : "") + ".");
+            lines.add("It is complete when " + a.path("outcome").path("settles").asString()
+                    + (a.path("outcome").has("measured") ? "; what learning may measure: " + a.path("outcome").path("measured").asString() : "") + ".");
         }
-        lines.add("Version " + a.path("version").asInt() + ", introduced " + a.path("introduced").asText()
-                + ("deprecated".equals(a.path("status").asText()) ? ", deprecated " + a.path("deprecated").asText()
-                + (a.has("supersededBy") ? " — use " + a.path("supersededBy").asText() : "") : "")
+        lines.add("Version " + a.path("version").asInt() + ", introduced " + a.path("introduced").asString()
+                + ("deprecated".equals(a.path("status").asString()) ? ", deprecated " + a.path("deprecated").asString()
+                + (a.has("supersededBy") ? " — use " + a.path("supersededBy").asString() : "") : "")
                 + (a.path("tenantExtended").asBoolean(false) ? ". This tenant has extended it with guardrails of its own" : "") + ".");
         return Explanation.of("action", name, title(name), lines, "\n");
     }
@@ -80,39 +80,39 @@ public class ExplainService {
             return null;
         }
         List<String> lines = new ArrayList<>();
-        lines.add(a.path("meaning").asText());
-        String runs = a.path("runsAs").asText();
+        lines.add(a.path("meaning").asString());
+        String runs = a.path("runsAs").asString();
         lines.add("Runs as " + ("caller".equals(runs) ? "the signed-in person, with their own rights and nothing more" : "the machine account " + runs.replace("machine:", ""))
-                + "; autonomy: " + a.path("autonomy").asText() + " (" + switch (a.path("autonomy").asText()) {
+                + "; autonomy: " + a.path("autonomy").asString() + " (" + switch (a.path("autonomy").asString()) {
                     case "advisory" -> "it only proposes";
                     case "supervised" -> "a person confirms before anything changes";
                     default -> "it acts within its contract without asking";
                 } + ").");
         List<String> reads = new ArrayList<>();
         for (JsonNode r : a.path("reads")) {
-            reads.add(r.asText());
+            reads.add(r.asString());
         }
         lines.add(reads.isEmpty() ? "Reads nothing from the registry's capabilities." : "May read: " + String.join(", ", reads) + ".");
         List<String> checks = new ArrayList<>();
         for (JsonNode x : a.path("actions").path("check")) {
-            checks.add(title(x.asText()));
+            checks.add(title(x.asString()));
         }
         List<String> execs = new ArrayList<>();
         for (JsonNode x : a.path("actions").path("execute")) {
-            execs.add(title(x.asText()));
+            execs.add(title(x.asString()));
         }
         lines.add(execs.isEmpty() ? (checks.isEmpty() ? "Performs no governed action." : "May check but never execute: " + String.join(", ", checks) + ".")
                 : "May execute: " + String.join(", ", execs) + (checks.size() > execs.size() ? "; may also check: " + String.join(", ", checks) : "") + ".");
         List<String> uses = new ArrayList<>();
         for (JsonNode u : a.path("uses")) {
-            uses.add(u.asText());
+            uses.add(u.asString());
         }
         lines.add(uses.isEmpty() ? "Makes no model call of its own." : "Model calls it makes (each governed, metered, audited): " + String.join(", ", uses) + ".");
         if (a.has("contract")) {
-            lines.add("Bounded by: " + a.path("contract").asText());
+            lines.add("Bounded by: " + a.path("contract").asString());
         }
         if (a.has("memory")) {
-            lines.add("Remembers: " + a.path("memory").asText() + ".");
+            lines.add("Remembers: " + a.path("memory").asString() + ".");
         }
         return Explanation.of("agent", name, title(name.replace('-', ' ')), lines, " ");
     }
@@ -124,34 +124,34 @@ public class ExplainService {
             return null;
         }
         List<String> lines = new ArrayList<>();
-        lines.add(c.path("meaning").asText());
-        lines.add("Lineage: SID " + c.path("lineage").path("sid").asText() + "; TM Forum " + join(c.path("lineage").path("tmf"))
-                + (c.path("lineage").has("oda") ? "; ODA " + c.path("lineage").path("oda").asText() : "")
+        lines.add(c.path("meaning").asString());
+        lines.add("Lineage: SID " + c.path("lineage").path("sid").asString() + "; TM Forum " + join(c.path("lineage").path("tmf"))
+                + (c.path("lineage").has("oda") ? "; ODA " + c.path("lineage").path("oda").asString() : "")
                 + (c.path("canonical").asBoolean(false) ? ". A canonical concept: it spans several resources" : "") + ".");
-        JsonNode cap = l.capabilities().get(c.path("backedBy").path("capability").asText());
-        lines.add("Held by the " + cap.path("component").asText() + " component as \"" + c.path("backedBy").path("resource").asText() + "\".");
+        JsonNode cap = l.capabilities().get(c.path("backedBy").path("capability").asString());
+        lines.add("Held by the " + cap.path("component").asString() + " component as \"" + c.path("backedBy").path("resource").asString() + "\".");
         List<String> states = new ArrayList<>();
         for (JsonNode s : c.path("states").path("values")) {
-            String m = c.path("states").path("meaning").path(s.asText()).asText("");
-            states.add(s.asText() + (m.isEmpty() ? "" : " (" + m + ")"));
+            String m = c.path("states").path("meaning").path(s.asString()).asString("");
+            states.add(s.asString() + (m.isEmpty() ? "" : " (" + m + ")"));
         }
-        lines.add("States (" + c.path("states").path("field").asText() + "): " + String.join(", ", states)
+        lines.add("States (" + c.path("states").path("field").asString() + "): " + String.join(", ", states)
                 + (c.path("states").has("live") ? ". In service when " + join(c.path("states").path("live")) : "") + ".");
         List<String> links = new ArrayList<>();
-        c.path("links").forEach(k -> links.add(k.path("name").asText() + " → " + k.path("to").asText()
-                + (k.has("meaning") ? " (" + k.path("meaning").asText() + ")" : "")));
+        c.path("links").forEach(k -> links.add(k.path("name").asString() + " → " + k.path("to").asString()
+                + (k.has("meaning") ? " (" + k.path("meaning").asString() + ")" : "")));
         if (!links.isEmpty()) {
             lines.add("Related: " + String.join("; ", links) + ".");
         }
         List<String> actions = new ArrayList<>();
         for (JsonNode a : l.actions().values()) {
-            if (name.equals(a.path("concept").asText())) {
-                actions.add(a.path("action").asText() + " — " + a.path("meaning").asText());
+            if (name.equals(a.path("concept").asString())) {
+                actions.add(a.path("action").asString() + " — " + a.path("meaning").asString());
             }
         }
         lines.add(actions.isEmpty() ? "No governed action acts on it yet." : "What can be done with it: " + String.join("; ", actions) + ".");
         List<String> events = new ArrayList<>();
-        c.path("events").forEach(e -> events.add(e.path("event").asText() + (e.has("meaning") ? " (" + e.path("meaning").asText() + ")" : "")));
+        c.path("events").forEach(e -> events.add(e.path("event").asString() + (e.has("meaning") ? " (" + e.path("meaning").asString() + ")" : "")));
         if (!events.isEmpty()) {
             lines.add("Events about it: " + String.join("; ", events) + ".");
         }
@@ -168,16 +168,16 @@ public class ExplainService {
         List<String> concepts = new ArrayList<>();
         for (JsonNode c : l.concepts().values()) {
             for (JsonNode p : c.path("pages")) {
-                if (p.asText().equals(path)) {
-                    concepts.add(c.path("concept").asText() + ": " + c.path("meaning").asText());
+                if (p.asString().equals(path)) {
+                    concepts.add(c.path("concept").asString() + ": " + c.path("meaning").asString());
                 }
             }
         }
         List<String> actions = new ArrayList<>();
         for (JsonNode a : l.actions().values()) {
             for (JsonNode p : a.path("pages")) {
-                if (p.asText().equals(path)) {
-                    actions.add(a.path("action").asText() + ": " + a.path("meaning").asText() + " Who may: " + who(a) + ".");
+                if (p.asString().equals(path)) {
+                    actions.add(a.path("action").asString() + ": " + a.path("meaning").asString() + " Who may: " + who(a) + ".");
                 }
             }
         }
@@ -204,22 +204,22 @@ public class ExplainService {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode def = l.actions().get(action);
         List<Explanation.Step> steps = new ArrayList<>();
-        steps.add(step("concept", def.path("concept").asText(), l.concepts().get(def.path("concept").asText()).path("meaning").asText()));
+        steps.add(step("concept", def.path("concept").asString(), l.concepts().get(def.path("concept").asString()).path("meaning").asString()));
         for (JsonNode p : def.path("preconditions")) {
-            steps.add(step("precondition", p.path("id").asText(), p.path("says").asText()));
+            steps.add(step("precondition", p.path("id").asString(), p.path("says").asString()));
         }
         steps.add(step("permission", "anyOf", who(def)));
         if (def.has("policy")) {
-            steps.add(step("policy", def.path("policy").path("domain").asText(), "business rules of the domain, first matching deny wins"));
+            steps.add(step("policy", def.path("policy").path("domain").asString(), "business rules of the domain, first matching deny wins"));
         }
-        JsonNode cap = l.capabilities().get(def.path("executes").path("capability").asText());
-        steps.add(step("execute", cap.path("id").asText(), cap.path("component").asText() + ": " + cap.path("meaning").asText()));
+        JsonNode cap = l.capabilities().get(def.path("executes").path("capability").asString());
+        steps.add(step("execute", cap.path("id").asString(), cap.path("component").asString() + ": " + cap.path("meaning").asString()));
         for (JsonNode e : def.path("effects")) {
-            JsonNode c = l.capabilities().get(e.path("capability").asText());
-            steps.add(step("effect", c.path("id").asText(), c.path("component").asText() + ": " + c.path("meaning").asText()));
+            JsonNode c = l.capabilities().get(e.path("capability").asString());
+            steps.add(step("effect", c.path("id").asString(), c.path("component").asString() + ": " + c.path("meaning").asString()));
         }
         for (JsonNode e : def.path("emits")) {
-            steps.add(step("event", e.path("event").asText(), e.path("component").asText() + (e.has("meaning") ? ": " + e.path("meaning").asText() : "")));
+            steps.add(step("event", e.path("event").asString(), e.path("component").asString() + (e.has("meaning") ? ": " + e.path("meaning").asString() : "")));
         }
         steps.add(step("receipt", "ontology." + action, "a decision receipt in insight's decision log, with every verdict above as evidence"));
         return a.withSteps(steps);
@@ -233,9 +233,9 @@ public class ExplainService {
         List<String> who = new ArrayList<>();
         for (JsonNode c : a.path("permissions").path("anyOf")) {
             if (c.has("self")) {
-                who.add("the " + c.path("self").asText() + " themselves");
+                who.add("the " + c.path("self").asString() + " themselves");
             } else if (c.has("role")) {
-                who.add("anyone holding " + c.path("role").asText());
+                who.add("anyone holding " + c.path("role").asString());
             }
         }
         return String.join(", or ", who);
@@ -243,14 +243,14 @@ public class ExplainService {
 
     private static String inputs(JsonNode a) {
         List<String> in = new ArrayList<>();
-        a.path("inputs").forEach(i -> in.add(i.path("name").asText() + " (" + i.path("type").asText()
-                + (i.has("concept") ? " to a " + i.path("concept").asText() : "") + ")"));
+        a.path("inputs").forEach(i -> in.add(i.path("name").asString() + " (" + i.path("type").asString()
+                + (i.has("concept") ? " to a " + i.path("concept").asString() : "") + ")"));
         return String.join(", ", in);
     }
 
     private static String join(JsonNode arr) {
         List<String> out = new ArrayList<>();
-        arr.forEach(n -> out.add(n.asText()));
+        arr.forEach(n -> out.add(n.asString()));
         return String.join(", ", out);
     }
 

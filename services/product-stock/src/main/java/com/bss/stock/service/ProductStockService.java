@@ -17,8 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -43,8 +43,8 @@ public class ProductStockService {
         this.tenantScope = tenantScope;
     }
 
-    private final com.fasterxml.jackson.databind.ObjectMapper json =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper json =
+            new tools.jackson.databind.ObjectMapper();
 
     /**
      * Echo the posted body (so spec fields round-trip) overlaid with the
@@ -65,9 +65,9 @@ public class ProductStockService {
                 : entity.getProductOfferingId() == null ? json.createObjectNode()
                         : json.createObjectNode().put("id", entity.getProductOfferingId());
         String name = entity.getName() != null ? entity.getName()
-                : stored.hasNonNull("name") ? stored.get("name").asText() : null;
+                : stored.hasNonNull("name") ? stored.get("name").asString() : null;
         Map<String, JsonNode> rest = new LinkedHashMap<>();
-        stored.fields().forEachRemaining(f -> {
+        stored.properties().forEach(f -> {
             if (!ProductStockView.DECLARED.contains(f.getKey())) {
                 rest.put(f.getKey(), f.getValue());
             }
@@ -116,11 +116,11 @@ public class ProductStockService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productStock/" + id);
-        entity.setName(dto.hasNonNull("name") ? dto.get("name").asText() : null);
+        entity.setName(dto.hasNonNull("name") ? dto.get("name").asString() : null);
         entity.setStockedAmount(amountIn(dto));
         entity.setStockedUnits(unitsIn(dto));
         if (dto.path("productOffering").hasNonNull("id")) {
-            entity.setProductOfferingId(dto.path("productOffering").get("id").asText());
+            entity.setProductOfferingId(dto.path("productOffering").get("id").asString());
         }
         entity.setPayloadJson(dto.toString());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -134,7 +134,7 @@ public class ProductStockService {
         ProductStock entity = repository.findForUpdateById(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         if (patch.hasNonNull("name")) {
-            entity.setName(patch.get("name").asText());
+            entity.setName(patch.get("name").asString());
         }
         if (patch.has("productStockLevel") || patch.has("stockedQuantity")) {
             entity.setStockedAmount(amountIn(patch));
@@ -171,7 +171,7 @@ public class ProductStockService {
     private static String unitsIn(JsonNode dto) {
         for (String key : new String[] {"stockedQuantity", "productStockLevel"}) {
             if (dto.path(key).hasNonNull("units")) {
-                return dto.path(key).get("units").asText();
+                return dto.path(key).get("units").asString();
             }
         }
         return "unit";

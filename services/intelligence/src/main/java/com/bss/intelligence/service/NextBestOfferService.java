@@ -80,7 +80,7 @@ public class NextBestOfferService {
     private Map<String, Object> parse(String answer) {
         try {
             String json = answer.substring(answer.indexOf('{'), answer.lastIndexOf('}') + 1);
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Map.class);
+            return new tools.jackson.databind.ObjectMapper().readValue(json, Map.class);
         } catch (Exception e) {
             return null;
         }

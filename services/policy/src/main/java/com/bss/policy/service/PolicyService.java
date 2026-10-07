@@ -19,10 +19,10 @@ import com.bss.policy.exception.BadRequestException;
 import com.bss.policy.exception.NotFoundException;
 import com.bss.policy.repository.PolicyRuleRepository;
 import com.bss.policy.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.StringNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -87,8 +87,8 @@ public class PolicyService {
     private static JsonNode fromJson(String json) {
         try {
             return JSON.readTree(json);
-        } catch (JsonProcessingException e) {
-            return new TextNode(json);
+        } catch (JacksonException e) {
+            return new StringNode(json);
         }
     }
 
@@ -432,7 +432,7 @@ public class PolicyService {
         if (node == null || node.isNull()) {
             return null;
         }
-        return node.isTextual() ? node.asText() : node.toString();
+        return node.isString() ? node.asString() : node.toString();
     }
 
     private static String orDefault(String v, String def) {
@@ -444,7 +444,7 @@ public class PolicyService {
             return node.intValue();
         }
         try {
-            return node.isNull() ? def : Integer.parseInt(node.asText().trim());
+            return node.isNull() ? def : Integer.parseInt(node.asString().trim());
         } catch (NumberFormatException e) {
             return def;
         }
@@ -454,19 +454,19 @@ public class PolicyService {
         if (node.isBoolean()) {
             return node.booleanValue();
         }
-        return "true".equalsIgnoreCase(node.asText());
+        return "true".equalsIgnoreCase(node.asString());
     }
 
     /** Read as the map was: a JSON number through its double ({@code 10} → {@code 10.0}), a string exactly. */
     private static BigDecimal decimal(JsonNode node) {
-        if (node == null || node.isNull() || node.asText().isBlank()) {
+        if (node == null || node.isNull() || node.asString().isBlank()) {
             return null;
         }
         if (node.isNumber()) {
             return BigDecimal.valueOf(node.doubleValue());
         }
         try {
-            return new BigDecimal(node.asText().trim());
+            return new BigDecimal(node.asString().trim());
         } catch (NumberFormatException e) {
             return null;
         }

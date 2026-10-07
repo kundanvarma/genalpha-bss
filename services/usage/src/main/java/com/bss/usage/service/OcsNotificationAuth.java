@@ -3,8 +3,8 @@ package com.bss.usage.service;
 import com.bss.usage.client.OcsSettings;
 import com.bss.usage.security.TenantRegistry;
 import com.bss.usage.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -62,7 +62,7 @@ public class OcsNotificationAuth {
      */
     public <T> T verified(byte[] rawBody, String signatureHeader, Class<T> type) {
         JsonNode body = readBody(rawBody);
-        String named = body.path("tenantId").asText(null);
+        String named = body.path("tenantId").asString(null);
         String tenantId = named == null || named.isBlank() ? scope.currentTenantId() : named;
         verify(tenantId, rawBody, signatureHeader);
         return parse(rawBody, type);

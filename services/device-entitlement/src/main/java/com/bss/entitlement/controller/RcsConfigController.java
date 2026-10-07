@@ -7,7 +7,7 @@ import com.bss.entitlement.service.EcsService;
 import com.bss.entitlement.service.RcsConfigService;
 import com.bss.entitlement.service.SubscriberService;
 import com.bss.entitlement.service.Ts43Xml;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;

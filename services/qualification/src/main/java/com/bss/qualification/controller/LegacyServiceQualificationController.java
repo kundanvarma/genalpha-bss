@@ -10,7 +10,7 @@ import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.LegacyServiceQualificationRepository;
 import com.bss.qualification.security.TenantScope;
 import com.bss.qualification.service.ServiceQualificationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,7 +105,7 @@ public class LegacyServiceQualificationController {
         doc.put("serviceQualificationItem", outItems);
         try {
             task.setDocumentJson(objectMapper.writeValueAsString(doc));
-        } catch (com.fasterxml.jackson.core.JacksonException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("unserializable qualification document");
         }
         task.setCreatedAt(OffsetDateTime.now());
@@ -154,7 +154,7 @@ public class LegacyServiceQualificationController {
             if (task.getDocumentJson() != null) {
                 map.putAll(objectMapper.readValue(task.getDocumentJson(), Map.class));
             }
-        } catch (com.fasterxml.jackson.core.JacksonException ignored) {
+        } catch (tools.jackson.core.JacksonException ignored) {
             // the stored document is what we wrote; unreadable means empty
         }
         map.put("id", task.getId());

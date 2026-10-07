@@ -2,9 +2,9 @@ package com.bss.insight.social;
 
 import com.bss.insight.dto.PublishedPost;
 import com.bss.insight.dto.SocialMessage;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,7 +84,7 @@ public class MetaGraphProvider implements SocialProvider {
 
     private static String str(JsonNode node, String key) {
         JsonNode v = node == null ? null : node.get(key);
-        return v == null || v.isNull() ? null : v.asText();
+        return v == null || v.isNull() ? null : v.asString();
     }
 
     private static JsonNode from(JsonNode m) {
@@ -178,7 +178,7 @@ public class MetaGraphProvider implements SocialProvider {
         JsonNode res = http.post().uri(java.net.URI.create(base(cfg) + "/" + cfg.accountId() + "/feed"))
                 .header("Authorization", "Bearer " + cfg.accessToken())
                 .body(Map.of("message", message)).retrieve().body(JsonNode.class);
-        String id = res == null ? "" : res.path("id").asText();
+        String id = res == null ? "" : res.path("id").asString();
         return new PublishedPost(id, id.isBlank() ? "" : "https://www.facebook.com/" + id);
     }
 

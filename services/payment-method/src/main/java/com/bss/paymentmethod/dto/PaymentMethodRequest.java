@@ -2,7 +2,7 @@ package com.bss.paymentmethod.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A posted method. The vault token, the owner and the status are never taken
@@ -34,7 +34,7 @@ public record PaymentMethodRequest(
         for (JsonNode ref : relatedParty) {
             JsonNode id = ref.isObject() ? ref.get("id") : null;
             if (id != null && !id.isNull()) {
-                return id.asText();
+                return id.asString();
             }
         }
         return null;
@@ -42,6 +42,6 @@ public record PaymentMethodRequest(
 
     public String detail(String field) {
         JsonNode value = details == null ? null : details.get(field);
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString();
     }
 }

@@ -19,10 +19,10 @@ import com.bss.insight.repository.ProspectRepository;
 import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -519,7 +519,7 @@ public class AudienceService {
     /** The tree as the marketer sent it — a JSON string or an object — stored as text after a parse check. */
     private String serialize(JsonNode criteria) {
         try {
-            String json = criteria.isTextual() ? criteria.asText() : objectMapper.writeValueAsString(criteria);
+            String json = criteria.isString() ? criteria.asString() : objectMapper.writeValueAsString(criteria);
             objectMapper.readValue(json, OBJECT); // validate it parses as an object
             return json;
         } catch (Exception e) {
@@ -541,7 +541,7 @@ public class AudienceService {
         try {
             criteria = objectMapper.readTree(a.getCriteria() == null ? "{}" : a.getCriteria());
         } catch (Exception e) {
-            criteria = TextNode.valueOf(a.getCriteria());
+            criteria = StringNode.valueOf(a.getCriteria());
         }
         return new AudienceView(a.getId(), a.getHref(), a.getName(),
                 a.getPopulation() == null ? "customer" : a.getPopulation(),

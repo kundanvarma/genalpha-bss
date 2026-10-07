@@ -27,9 +27,9 @@ import com.bss.catalog.repository.ProductOfferingRepository;
 import com.bss.catalog.repository.ProductSpecificationRepository;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
@@ -462,7 +462,7 @@ public class LaunchGovernanceService {
             List<EntityRef> list = new ArrayList<>();
             for (JsonNode o : body.channel()) {
                 // an object without an id is NO channel (requireKnownId refuses null by name), not the channel "null"
-                String cid = o.isObject() ? (o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asText()) : o.asText();
+                String cid = o.isObject() ? (o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asString()) : o.asString();
                 String name = Channels.REGISTERED.stream().filter(r -> r.get("id").equals(cid)).findFirst()
                         .map(r -> r.get("name")).orElse(null);
                 list.add(EntityRef.of(cid, name));

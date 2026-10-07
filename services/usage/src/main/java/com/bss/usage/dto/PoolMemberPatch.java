@@ -1,7 +1,7 @@
 package com.bss.usage.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 
@@ -10,6 +10,6 @@ import java.math.BigDecimal;
 public record PoolMemberPatch(JsonNode softLimitGB, JsonNode hardLimitGB) {
 
     public static BigDecimal value(JsonNode node) {
-        return node == null || node.isNull() ? null : new BigDecimal(node.asText());
+        return node == null || node.isNull() ? null : new BigDecimal(node.asString());
     }
 }

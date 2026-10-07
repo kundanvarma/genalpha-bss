@@ -1,7 +1,7 @@
 package com.bss.usage.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 
@@ -19,6 +19,6 @@ public record SpendPolicyPatch(JsonNode limit, String currency, Boolean enabled,
     }
 
     public BigDecimal limitValue() {
-        return limit == null || limit.isNull() ? null : new BigDecimal(limit.asText());
+        return limit == null || limit.isNull() ? null : new BigDecimal(limit.asString());
     }
 }

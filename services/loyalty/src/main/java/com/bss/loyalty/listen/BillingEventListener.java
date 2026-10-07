@@ -2,7 +2,7 @@ package com.bss.loyalty.listen;
 
 import com.bss.loyalty.security.TenantContext;
 import com.bss.loyalty.service.LoyaltyService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;

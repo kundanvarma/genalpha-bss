@@ -2,9 +2,11 @@ package com.bss.inventory;
 
 import com.bss.inventory.dto.ComponentDescriptor;
 import com.bss.inventory.dto.ProductDto;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -19,9 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);
@@ -79,12 +83,12 @@ class DtoRoundTripTest {
                 + "\"productOffering\":{\"id\":5,\"name\":\"Fiber 500\"},"
                 + "\"relatedParty\":[{\"id\":\"party-1\",\"role\":\"customer\"}]}",
                 ProductDto.class);
-        assertThat(dto.getProductOffering().get("id").asText()).isEqualTo("5");
+        assertThat(dto.getProductOffering().get("id").asString()).isEqualTo("5");
         assertThat(dto.getBillingAccount()).isNull();
         assertThat(dto.getRelatedParty()).hasSize(1);
         // the map read both ids through String.valueOf, so 5 and "5" were one id
-        assertThat(mapper.readTree("{\"id\":\"5\"}").get("id").asText())
-                .isEqualTo(dto.getProductOffering().get("id").asText());
+        assertThat(mapper.readTree("{\"id\":\"5\"}").get("id").asString())
+                .isEqualTo(dto.getProductOffering().get("id").asString());
     }
 
     @Test

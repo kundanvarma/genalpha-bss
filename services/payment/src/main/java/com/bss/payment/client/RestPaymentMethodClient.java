@@ -1,7 +1,7 @@
 package com.bss.payment.client;
 
 import com.bss.payment.dto.VaultMethodRequest;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;

@@ -1,7 +1,7 @@
 package com.bss.appointment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The one legal change to a booking. The map compared the posted value with the
@@ -12,6 +12,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 public record AppointmentPatch(JsonNode status) {
 
     public boolean cancelling(String cancelled) {
-        return status != null && status.isTextual() && cancelled.equals(status.asText());
+        return status != null && status.isString() && cancelled.equals(status.asString());
     }
 }

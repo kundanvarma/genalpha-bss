@@ -9,8 +9,8 @@ import com.bss.party.exception.NotFoundException;
 import com.bss.party.repository.PartyRoleRepository;
 import com.bss.party.security.PartyScope;
 import com.bss.party.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

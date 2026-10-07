@@ -1,7 +1,7 @@
 package com.bss.appointment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The calendar as an operator edits it: a sparse document where a key that is

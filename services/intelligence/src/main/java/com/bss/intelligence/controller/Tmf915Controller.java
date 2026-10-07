@@ -4,9 +4,9 @@ import com.bss.intelligence.aimanagement.AiManagementStore;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.service.ContractPatch;
 import com.bss.intelligence.service.Tmf915Service;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -158,7 +158,7 @@ public class Tmf915Controller {
     }
 
     private static ResponseEntity<ObjectNode> created(ObjectNode view) {
-        return ResponseEntity.created(URI.create(view.path("href").asText())).body(view);
+        return ResponseEntity.created(URI.create(view.path("href").asString())).body(view);
     }
 
     private static ResponseEntity<List<ObjectNode>> page(List<ObjectNode> rows,

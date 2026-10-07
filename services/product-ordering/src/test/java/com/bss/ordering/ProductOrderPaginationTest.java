@@ -1,14 +1,14 @@
 package com.bss.ordering;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.CatalogClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -94,8 +94,8 @@ class ProductOrderPaginationTest {
         // offset=1&limit=2 is deliberately not offset-aligned: a page-number
         // misreading of offset would return full[2..3], not full[1..2].
         assertEquals(2, slice.size());
-        assertEquals(fullList.get(1).get("id").asText(), slice.get(0).get("id").asText());
-        assertEquals(fullList.get(2).get("id").asText(), slice.get(1).get("id").asText());
+        assertEquals(fullList.get(1).get("id").asString(), slice.get(0).get("id").asString());
+        assertEquals(fullList.get(2).get("id").asString(), slice.get(1).get("id").asString());
         assertEquals(fullResult.getResponse().getHeader("X-Total-Count"),
                 sliceResult.getResponse().getHeader("X-Total-Count"));
         assertTrue(Integer.parseInt(sliceResult.getResponse().getHeader("X-Total-Count")) >= 3);

@@ -1,9 +1,11 @@
 package com.bss.process.api;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -20,9 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String json(Object o) throws Exception {
         return mapper.writeValueAsString(o);

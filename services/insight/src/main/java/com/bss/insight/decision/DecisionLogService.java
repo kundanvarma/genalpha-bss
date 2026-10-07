@@ -7,8 +7,8 @@ import com.bss.insight.dto.DecisionView;
 import com.bss.insight.entity.DecisionLog;
 import com.bss.insight.repository.DecisionLogRepository;
 import com.bss.insight.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
@@ -130,8 +130,7 @@ public class DecisionLogService {
         }
         DecisionView view = view(d);
         List<String> lines = new ArrayList<>();
-        List<String> ctxKeys = new ArrayList<>();
-        view.context().fieldNames().forEachRemaining(ctxKeys::add);
+        List<String> ctxKeys = new ArrayList<>(view.context().propertyNames());
         lines.add("Context used: " + (ctxKeys.isEmpty() ? "none" : String.join(", ", ctxKeys)) + ".");
         JsonNode candidates = view.candidates();
         JsonNode eligible = view.eligibleActions();
@@ -225,7 +224,7 @@ public class DecisionLogService {
         }
         List<String> parts = new ArrayList<>();
         for (JsonNode n : l) {
-            parts.add(n.isTextual() ? n.asText() : n.toString());
+            parts.add(n.isString() ? n.asString() : n.toString());
         }
         return String.join(", ", parts);
     }

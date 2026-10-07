@@ -2,10 +2,10 @@ package com.bss.inventory.mapper;
 
 import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -114,7 +114,7 @@ public class ProductMapper {
             JsonNode oldId = before == null ? null : before.get("id");
             JsonNode newId = patch.getProductOffering().get("id");
             // the map read both ids through String.valueOf: 5 and "5" were one id
-            if (present(oldId) && present(newId) && !oldId.asText().equals(newId.asText())) {
+            if (present(oldId) && present(newId) && !oldId.asString().equals(newId.asString())) {
                 entity.setPreviousOfferingJson(entity.getProductOfferingJson());
                 entity.setOfferingChangedAt(java.time.OffsetDateTime.now());
             }
@@ -144,7 +144,7 @@ public class ProductMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -159,7 +159,7 @@ public class ProductMapper {
         }
         try {
             return objectMapper.readTree(json);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON is unreadable", e);
         }
     }
@@ -174,7 +174,7 @@ public class ProductMapper {
         }
         try {
             return objectMapper.readValue(json, type);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON is unreadable", e);
         }
     }

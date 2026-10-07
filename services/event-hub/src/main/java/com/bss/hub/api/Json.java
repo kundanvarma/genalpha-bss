@@ -1,7 +1,7 @@
 package com.bss.hub.api;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The open edge's leniency, kept honest. A request body used to be a

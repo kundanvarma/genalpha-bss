@@ -6,7 +6,7 @@ import com.bss.usage.dto.OcsBucket;
 import com.bss.usage.dto.OcsSubscriber;
 import com.bss.usage.dto.SigscaleRelayReceipt;
 import com.bss.usage.dto.UsageThresholdNotification;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,7 +90,7 @@ public class SigscaleNotificationService {
             if (!event.isObject()) {
                 continue;
             }
-            String productId = event.hasNonNull("id") ? event.get("id").asText() : null;
+            String productId = event.hasNonNull("id") ? event.get("id").asString() : null;
             if (productId == null) {
                 continue;
             }
@@ -141,7 +141,7 @@ public class SigscaleNotificationService {
 
     static double totalOctets(JsonNode event) {
         for (JsonNode m : event.path("totalBalance")) {
-            if ("octets".equals(m.path("units").asText())) {
+            if ("octets".equals(m.path("units").asString())) {
                 return SigscaleOcsClient.octets(m.get("amount"));
             }
         }

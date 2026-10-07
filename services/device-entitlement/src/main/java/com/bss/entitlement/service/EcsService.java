@@ -7,9 +7,9 @@ import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.bss.entitlement.entity.EntitlementToken;
 import com.bss.entitlement.repository.EntitlementDeviceRepository;
 import com.bss.entitlement.repository.EntitlementSubscriberRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -358,7 +358,7 @@ public class EcsService {
 
     /** What {@code String.valueOf(map.get(k))} said: the value's own text, "null" when there was none. */
     private static String text(JsonNode node) {
-        return node == null || node.isNull() ? "null" : node.isTextual() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? "null" : node.isString() ? node.stringValue() : node.toString();
     }
 
     private static String statusWord(JsonNode status) {

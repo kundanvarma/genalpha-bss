@@ -1,10 +1,10 @@
 package com.bss.ordering;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -101,7 +101,7 @@ class OrderQueryConformanceTest {
                 .andReturn();
         JsonNode list = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(list).hasSize(1);
-        assertThat(list.get(0).get("id").asText()).isEqualTo(id);
+        assertThat(list.get(0).get("id").asString()).isEqualTo(id);
         assertThat(result.getResponse().getHeader("X-Total-Count")).isEqualTo("1");
     }
 
@@ -110,7 +110,7 @@ class OrderQueryConformanceTest {
         String id = createOrder();
         String orderDate = objectMapper.readTree(mockMvc.perform(get(BASE + "/" + id).with(readToken()))
                         .andReturn().getResponse().getContentAsString())
-                .get("orderDate").asText();
+                .get("orderDate").asString();
 
         MvcResult result = mockMvc.perform(get(BASE).with(readToken())
                         .queryParam("orderDate", orderDate)
@@ -119,7 +119,7 @@ class OrderQueryConformanceTest {
                 .andReturn();
         JsonNode list = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(list).isNotEmpty();
-        List<String> ids = list.findValuesAsText("id");
+        List<String> ids = list.findValuesAsString("id");
         assertThat(ids).contains(id);
     }
 
@@ -159,7 +159,7 @@ class OrderQueryConformanceTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor readToken() {

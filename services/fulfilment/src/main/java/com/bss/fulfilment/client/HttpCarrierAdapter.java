@@ -1,8 +1,8 @@
 package com.bss.fulfilment.client;
 
 import com.bss.fulfilment.entity.CarrierConfig;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -142,12 +142,12 @@ public class HttpCarrierAdapter implements CarrierAdapter {
 
     private static String text(JsonNode c, String key, String dflt) {
         JsonNode n = c.get(key);
-        return n == null || n.isNull() || n.asText().isBlank() ? dflt : n.asText();
+        return n == null || n.isNull() || n.asString().isBlank() ? dflt : n.asString();
     }
 
     private static String at(JsonNode root, String pointer) {
         JsonNode n = root.at(pointer);
-        return n.isMissingNode() || n.isNull() ? null : n.asText();
+        return n.isMissingNode() || n.isNull() ? null : n.asString();
     }
 
     private static String nz(String v) {

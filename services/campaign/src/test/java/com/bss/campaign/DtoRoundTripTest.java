@@ -35,10 +35,11 @@ import com.bss.campaign.dto.ReferralReport;
 import com.bss.campaign.dto.SegmentEnrollmentReceipt;
 import com.bss.campaign.dto.TuneEntry;
 import com.bss.campaign.dto.TuneResult;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -61,10 +62,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private static final OffsetDateTime T = OffsetDateTime.parse("2026-09-22T10:00:00Z");
 
@@ -117,7 +120,7 @@ class DtoRoundTripTest {
         assertNull(edit.triggerState(), "absent is not");
         assertNull(JourneyRequest.text(edit.triggerEventType()));
         assertEquals("s", JourneyRequest.text(edit.segmentName()));
-        assertTrue(edit.steps().isTextual());
+        assertTrue(edit.steps().isString());
         assertEquals(5, edit.holdoutPercent());
         assertEquals(1, edit.priority());
         assertEquals(true, edit.autoTune());
@@ -214,7 +217,7 @@ class DtoRoundTripTest {
         EnrollmentRequest req = json.readValue("{\"partyIds\":[\"p1\",7],\"context\":{\"order\":{\"id\":\"o-1\"}}}",
                 EnrollmentRequest.class);
         assertEquals(List.of("p1", "7"), req.partyIds());
-        assertEquals("o-1", req.context().path("order").path("id").asText());
+        assertEquals("o-1", req.context().path("order").path("id").asString());
     }
 
     /* ---------------------------------------------------------------- campaigns */
@@ -335,10 +338,10 @@ class DtoRoundTripTest {
                 write(stored));
         LearningContractRequest req = json.readValue("{\"secondaryMetrics\":\"revenue, reach\",\"guardrails\":[\"a\",\" \"],"
                 + "\"explorationMaxPercent\":\"15\",\"enabled\":\"false\",\"allowedActions\":null}", LearningContractRequest.class);
-        assertTrue(req.secondaryMetrics().isTextual());
+        assertTrue(req.secondaryMetrics().isString());
         assertTrue(req.guardrails().isArray());
-        assertEquals("15", req.explorationMaxPercent().asText());
-        assertEquals("false", req.enabled().asText());
+        assertEquals("15", req.explorationMaxPercent().asString());
+        assertEquals("false", req.enabled().asString());
         assertTrue(req.allowedActions().isNull());
         DryRunRequest dry = json.readValue("{\"context\":{\"partyId\":\"p1\"},\"candidates\":[\"a\",\"b\"]}", DryRunRequest.class);
         assertEquals(List.of("a", "b"), dry.candidates());

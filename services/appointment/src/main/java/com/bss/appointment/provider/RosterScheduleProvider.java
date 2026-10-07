@@ -4,7 +4,7 @@ import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.repository.AppointmentRepository;
 import com.bss.appointment.schedule.ScheduleConfig;
 import com.bss.appointment.schedule.ScheduleService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
@@ -85,8 +85,8 @@ public class RosterScheduleProvider implements ScheduleProvider {
             }
             JsonNode vf = slot.path("validFor");
             if (vf.isObject() && vf.hasNonNull("startDateTime") && vf.hasNonNull("endDateTime")) {
-                OffsetDateTime from = OffsetDateTime.parse(vf.get("startDateTime").asText());
-                OffsetDateTime to = OffsetDateTime.parse(vf.get("endDateTime").asText());
+                OffsetDateTime from = OffsetDateTime.parse(vf.get("startDateTime").asString());
+                OffsetDateTime to = OffsetDateTime.parse(vf.get("endDateTime").asString());
                 if (!start.isBefore(from) && start.isBefore(to)) {
                     return true;
                 }

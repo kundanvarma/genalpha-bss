@@ -11,9 +11,9 @@ import com.bss.communication.exception.BadRequestException;
 import com.bss.communication.exception.NotFoundException;
 import com.bss.communication.repository.MessageTemplateRepository;
 import com.bss.communication.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,7 +65,7 @@ public class MessageTemplateService {
         entity.setChannel(channel);
         entity.setLocales(locales);
         if (dto.promotionRef() != null && !dto.promotionRef().isNull()) {
-            entity.setPromotionRef(dto.promotionRef().asText());
+            entity.setPromotionRef(dto.promotionRef().asString());
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -97,7 +97,7 @@ public class MessageTemplateService {
         }
         // absent leaves the row alone; an explicit JSON null clears it
         if (patch.promotionRef() != null) {
-            entity.setPromotionRef(patch.promotionRef().isNull() ? null : patch.promotionRef().asText());
+            entity.setPromotionRef(patch.promotionRef().isNull() ? null : patch.promotionRef().asString());
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toView(repository.save(entity));
@@ -164,7 +164,7 @@ public class MessageTemplateService {
     private String serializeLocales(JsonNode locales) {
         if (locales == null || locales.isNull()) throw new BadRequestException("locales are required, e.g. {\"en\": {\"subject\": ..., \"body\": ...}}");
         try {
-            String json = locales.isTextual() ? locales.textValue() : locales.toString();
+            String json = locales.isString() ? locales.stringValue() : locales.toString();
             objectMapper.readValue(json, new TypeReference<Map<String, Map<String, String>>>() { });
             return json;
         } catch (Exception e) {

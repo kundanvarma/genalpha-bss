@@ -1,7 +1,7 @@
 package com.bss.appointment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A booking as the caller posts it. The window is read as text and parsed here

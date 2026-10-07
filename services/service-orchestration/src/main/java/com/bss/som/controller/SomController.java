@@ -41,9 +41,9 @@ import com.bss.som.repository.ServiceInstanceRepository;
 import com.bss.som.repository.ServiceOrderRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -329,7 +329,7 @@ public class SomController {
         instance.setRestrictionReason(reason);
         try {
             instance.setRestrictionProfileJson(objectMapper.writeValueAsString(profile));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("unserializable restriction profile");
         }
         instance.setLastUpdate(OffsetDateTime.now());
@@ -624,7 +624,7 @@ public class SomController {
         }
         for (JsonNode item : items) {
             JsonNode spec = item.path("service").path("serviceSpecification");
-            if (spec.isObject() && spec.path("id").asText("").isBlank()) {
+            if (spec.isObject() && spec.path("id").asString("").isBlank()) {
                 throw new BadRequestException("serviceSpecification needs an id — a nameless spec specifies nothing");
             }
         }
@@ -642,7 +642,7 @@ public class SomController {
         order.setDescription(text(dto, "description", null));
         try {
             order.setDocumentJson(objectMapper.writeValueAsString(dto));
-        } catch (com.fasterxml.jackson.core.JacksonException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("unserializable order document");
         }
         order.setCreatedAt(OffsetDateTime.now());
@@ -657,7 +657,7 @@ public class SomController {
         if (v == null || v.isNull()) {
             return fallback;
         }
-        return v.isValueNode() ? v.asText() : v.toString();
+        return v.isValueNode() ? v.asString() : v.toString();
     }
 
     @GetMapping({ApiConstants.ORDER_BASE + "/serviceOrder/{id}", "/tmf-api/serviceOrdering/v3/serviceOrder/{id}"})
@@ -801,14 +801,14 @@ public class SomController {
                         if (!it.isObject()) {
                             continue;
                         }
-                        ObjectNode item = it.deepCopy();
+                        ObjectNode item = (ObjectNode) it.deepCopy();
                         if (!item.has("id")) item.put("id", String.valueOf(n));
                         if (!item.has("state")) item.put("state", o.getState());
                         if (!item.has("action")) item.put("action", "add");
                         items.add(item);
                     }
                 }
-            } catch (com.fasterxml.jackson.core.JacksonException ignored) {
+            } catch (tools.jackson.core.JacksonException ignored) {
                 // fall through to the derived item
             }
         }

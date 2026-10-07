@@ -7,10 +7,12 @@ import com.bss.agreement.dto.AgreementView;
 import com.bss.agreement.dto.PartnershipTypeRequest;
 import com.bss.agreement.dto.PartnershipTypeView;
 import com.bss.agreement.dto.RoleType;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -21,9 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Pure Jackson: the bytes and the key order of every agreement wire record. */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);

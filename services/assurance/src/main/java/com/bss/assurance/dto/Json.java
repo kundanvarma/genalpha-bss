@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The map's leniency, written out. Every body in this service used to be a
@@ -35,8 +35,8 @@ public final class Json {
         if (node == null || node.isNull()) {
             return "null";
         }
-        if (node.isTextual()) {
-            return node.textValue();
+        if (node.isString()) {
+            return node.stringValue();
         }
         return String.valueOf(PLAIN.convertValue(node, Object.class));
     }

@@ -1,7 +1,7 @@
 package com.bss.ticket.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * PATCH troubleTicket: the two legal changes, and nothing else. A severity,

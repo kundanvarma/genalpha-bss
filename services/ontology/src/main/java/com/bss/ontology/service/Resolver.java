@@ -2,9 +2,9 @@ package com.bss.ontology.service;
 
 import com.bss.ontology.client.ComponentClient;
 import com.bss.ontology.registry.Registry;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -57,7 +57,7 @@ public class Resolver {
         Registry.Layer layer = registry.forTenant(caller.tenant());
         Resolved r = new Resolved();
         for (JsonNode in : action.path("inputs")) {
-            String name = in.path("name").asText();
+            String name = in.path("name").asString();
             String id = inputs.get(name);
             if (id == null || id.isBlank()) {
                 if (in.path("required").asBoolean(false)) {
@@ -65,10 +65,10 @@ public class Resolver {
                 }
                 continue;
             }
-            if (!"ref".equals(in.path("type").asText())) {
+            if (!"ref".equals(in.path("type").asString())) {
                 continue;
             }
-            String conceptName = in.path("concept").asText();
+            String conceptName = in.path("concept").asString();
             JsonNode concept = layer.concepts().get(conceptName);
             String key = keyOf(name);
             if ("ProductOffering".equals(conceptName)) {
@@ -82,7 +82,7 @@ public class Resolver {
             }
             if ("Subscription".equals(conceptName) && r.has(key)) {
                 enrichSubscription(layer, key, caller, r);
-            } else if (conceptName.equals(action.path("concept").asText()) && r.has(key) && !r.has("owner")) {
+            } else if (conceptName.equals(action.path("concept").asString()) && r.has(key) && !r.has("owner")) {
                 // the party behind the acted-on object: relatedParty[role=customer], else the first party
                 ObjectNode owner = json.createObjectNode();
                 owner.put("id", ownerOf(r.get(key)));
@@ -95,12 +95,12 @@ public class Resolver {
     static String ownerOf(JsonNode obj) {
         String id = "";
         for (JsonNode p : obj.path("relatedParty")) {
-            if (id.isEmpty() || "customer".equalsIgnoreCase(p.path("role").asText())) {
-                id = p.path("id").asText();
+            if (id.isEmpty() || "customer".equalsIgnoreCase(p.path("role").asString())) {
+                id = p.path("id").asString();
             }
         }
         if (id.isEmpty()) {
-            id = obj.path("ownerPartyId").asText(obj.path("partyId").asText(""));
+            id = obj.path("ownerPartyId").asString(obj.path("partyId").asString(""));
         }
         return id;
     }
@@ -111,9 +111,9 @@ public class Resolver {
             r.problems.add("unknown concept for " + key);
             return;
         }
-        JsonNode cap = layer.capabilities().get(concept.path("backedBy").path("capability").asText());
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), cap.path("route").path("method").asText(),
-                cap.path("route").path("path").asText(), Map.of("id", id), Map.of(), null, caller.bearer(), headers);
+        JsonNode cap = layer.capabilities().get(concept.path("backedBy").path("capability").asString());
+        ComponentClient.Reply reply = client.call(cap.path("component").asString(), cap.path("route").path("method").asString(),
+                cap.path("route").path("path").asString(), Map.of("id", id), Map.of(), null, caller.bearer(), headers);
         r.replies.put(key, reply);
         if (reply.ok()) {
             r.objects.put(key, reply.body());
@@ -126,28 +126,28 @@ public class Resolver {
         JsonNode sub = r.get(key);
         String ownerId = null;
         for (JsonNode p : sub.path("relatedParty")) {
-            if (ownerId == null || "customer".equalsIgnoreCase(p.path("role").asText())) {
-                ownerId = p.path("id").asText();
+            if (ownerId == null || "customer".equalsIgnoreCase(p.path("role").asString())) {
+                ownerId = p.path("id").asString();
             }
         }
         ObjectNode owner = json.createObjectNode();
         owner.put("id", ownerId == null ? "" : ownerId);
         r.objects.put("owner", owner);
-        String offeringId = sub.path("productOffering").path("id").asText();
+        String offeringId = sub.path("productOffering").path("id").asString();
         if (!offeringId.isEmpty()) {
             load(layer, layer.concepts().get("ProductOffering"), "currentOffering", offeringId, caller, Map.of(), r);
         }
         // the line: TMF638 service of the owner with the product's name (matched by name — the known weak seam)
         JsonNode cap = layer.capabilities().get("serviceInventory.services");
         if (cap != null && ownerId != null) {
-            ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+            ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                     Map.of(), Map.of("relatedPartyId", ownerId, "limit", "100"), null, caller.bearer(), Map.of());
             r.replies.put("services", reply);
             if (reply.ok() && reply.body().isArray()) {
                 JsonNode chosen = null;
                 for (JsonNode s : reply.body()) {
-                    boolean sameName = s.path("name").asText().equals(sub.path("name").asText());
-                    boolean live = "active".equalsIgnoreCase(s.path("state").asText());
+                    boolean sameName = s.path("name").asString().equals(sub.path("name").asString());
+                    boolean live = "active".equalsIgnoreCase(s.path("state").asString());
                     if (sameName && (chosen == null || live)) {
                         chosen = s;
                     }
@@ -159,7 +159,7 @@ public class Resolver {
         }
         JsonNode party = layer.capabilities().get("party.individual");
         if (party != null && ownerId != null) {
-            ComponentClient.Reply reply = client.call(party.path("component").asText(), "GET", party.path("route").path("path").asText(),
+            ComponentClient.Reply reply = client.call(party.path("component").asString(), "GET", party.path("route").path("path").asString(),
                     Map.of("id", ownerId), Map.of(), null, caller.bearer(), Map.of());
             r.replies.put("customer", reply);
             if (reply.ok()) {
@@ -179,16 +179,16 @@ public class Resolver {
             Registry.Layer layer = registry.forTenant(caller.tenant());
             JsonNode cap = layer.capabilities().get("productCatalog.price");
             for (JsonNode ref : offering.path("productOfferingPrice")) {
-                String id = ref.path("id").asText();
+                String id = ref.path("id").asString();
                 if (id.isEmpty()) {
                     continue;
                 }
-                ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                         Map.of("id", id), Map.of(), null, caller.bearer(), Map.of());
-                if (reply.ok() && "recurring".equalsIgnoreCase(reply.body().path("priceType").asText())) {
+                if (reply.ok() && "recurring".equalsIgnoreCase(reply.body().path("priceType").asString())) {
                     JsonNode v = reply.body().path("price").path("value");
-                    if (v.isNumber() || v.isTextual()) {
-                        found = new BigDecimal(v.asText());
+                    if (v.isNumber() || v.isString()) {
+                        found = new BigDecimal(v.asString());
                         break;
                     }
                 }
@@ -204,10 +204,10 @@ public class Resolver {
             return "";
         }
         for (JsonNode cm : customer.path("contactMedium")) {
-            String type = cm.path("mediumType").asText();
+            String type = cm.path("mediumType").asString();
             if (type.toLowerCase().contains("postal") || type.toLowerCase().contains("address")) {
                 JsonNode ch = cm.path("characteristic");
-                String pc = ch.path("postCode").asText(ch.path("postcode").asText(""));
+                String pc = ch.path("postCode").asString(ch.path("postcode").asString(""));
                 if (!pc.isEmpty()) {
                     return pc;
                 }

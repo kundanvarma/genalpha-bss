@@ -148,13 +148,13 @@ public class StockOperationService {
             return java.util.Map.of();
         }
         try {
-            com.fasterxml.jackson.databind.JsonNode body =
-                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(row.getPayloadJson());
-            com.fasterxml.jackson.databind.JsonNode stocked = body.path("stockedProduct");
+            tools.jackson.databind.JsonNode body =
+                    new tools.jackson.databind.ObjectMapper().readTree(row.getPayloadJson());
+            tools.jackson.databind.JsonNode stocked = body.path("stockedProduct");
             if (!stocked.isObject()) {
                 return java.util.Map.of();
             }
-            ProductRef product = new com.fasterxml.jackson.databind.ObjectMapper()
+            ProductRef product = new tools.jackson.databind.ObjectMapper()
                     .treeToValue(stocked, ProductRef.class);
             return product == null ? java.util.Map.of() : product.characteristics();
         } catch (Exception e) {

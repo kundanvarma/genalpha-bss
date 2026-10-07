@@ -1,6 +1,6 @@
 package com.bss.devicecommerce.client;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -49,7 +49,7 @@ public class PaymentClient {
             }
             for (String key : new String[] {"refundRef", "settlementRef", "id"}) {
                 if (result.hasNonNull(key)) {
-                    return result.get(key).asText();
+                    return result.get(key).asString();
                 }
             }
             return null;

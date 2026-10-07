@@ -26,7 +26,7 @@ import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantContext;
 import com.bss.billing.security.TenantRegistry;
 import com.bss.billing.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -711,7 +711,7 @@ public class CollectionService {
     }
 
     private DunningPolicyView policyView(DunningPolicy p) {
-        com.fasterxml.jackson.databind.JsonNode steps;
+        tools.jackson.databind.JsonNode steps;
         try {
             steps = json.readTree(p.getStepsJson());
         } catch (Exception e) {
@@ -755,7 +755,7 @@ public class CollectionService {
     List<Step> parseSteps(String stepsJson) {
         try {
             List<Map<String, Object>> raw = json.readValue(stepsJson,
-                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
+                    new tools.jackson.core.type.TypeReference<List<Map<String, Object>>>() {
                     });
             List<Step> steps = new ArrayList<>();
             for (Map<String, Object> s : raw) {
@@ -831,7 +831,7 @@ public class CollectionService {
         }
         try {
             return json.readValue(c.getEnforcedServicesJson(),
-                    new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {
+                    new tools.jackson.core.type.TypeReference<List<String>>() {
                     });
         } catch (Exception e) {
             return List.of();
@@ -841,7 +841,7 @@ public class CollectionService {
     private String writeJson(Object o) {
         try {
             return json.writeValueAsString(o);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON", e);
         }
     }

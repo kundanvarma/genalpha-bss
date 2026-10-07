@@ -1,7 +1,7 @@
 package com.bss.billing.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Create or patch a format profile. {@code customizationId} and
@@ -20,6 +20,6 @@ public record BillFormatProfileRequest(String code, String name, String syntax, 
 
     /** The value to store: null clears, a text sets, anything else reads as its text. */
     public static String textOf(JsonNode n) {
-        return n == null || n.isNull() ? null : n.asText();
+        return n == null || n.isNull() ? null : n.asString();
     }
 }

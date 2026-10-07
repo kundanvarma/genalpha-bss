@@ -67,8 +67,8 @@ public class CreditNoteService {
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
     private final BillDistributionService distribution;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper objectMapper =
+            new tools.jackson.databind.ObjectMapper();
 
     public CreditNoteService(CreditNoteRepository creditNotes, DocumentSequenceRepository sequences,
             CustomerBillRepository bills, AppliedBillingRateRepository rates,
@@ -287,7 +287,7 @@ public class CreditNoteService {
         }
         try {
             List<CreditedLine> raw = objectMapper.readValue(json,
-                    new com.fasterxml.jackson.core.type.TypeReference<List<CreditedLine>>() {
+                    new tools.jackson.core.type.TypeReference<List<CreditedLine>>() {
                     });
             return raw.stream().map(l -> new CreditedLine(
                     l.id() == null ? "" : l.id(), l.name() == null ? "" : l.name(), l.amount())).toList();

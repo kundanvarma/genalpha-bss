@@ -2,7 +2,7 @@ package com.bss.assurance.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * An SLA in force, projected live from the agreement that carries the terms.

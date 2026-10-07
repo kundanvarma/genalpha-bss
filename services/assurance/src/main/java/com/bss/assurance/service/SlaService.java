@@ -10,8 +10,8 @@ import com.bss.assurance.entity.SlaViolation;
 import com.bss.assurance.events.DomainEventPublisher;
 import com.bss.assurance.repository.SlaViolationRepository;
 import com.bss.assurance.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -174,7 +174,7 @@ public class SlaService {
 
     /** The map compared with a String, so only a JSON string ever matched. */
     private static boolean isText(JsonNode node, String expected) {
-        return node != null && node.isTextual() && expected.equals(node.textValue());
+        return node != null && node.isString() && expected.equals(node.stringValue());
     }
 
     /** {@code getOrDefault(k, "0")}: a key present with a JSON null wins the null. */

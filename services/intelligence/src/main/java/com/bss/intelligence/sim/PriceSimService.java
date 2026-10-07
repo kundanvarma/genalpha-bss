@@ -4,7 +4,7 @@ import com.bss.intelligence.churn.ChurnAlertRepository;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -202,7 +202,7 @@ public class PriceSimService {
     @Transactional(readOnly = true)
     public List<SavedReport> list(String type) {
         return listAll().stream()
-                .filter(m -> m.report() != null && type.equals(m.report().path("@type").asText(null)))
+                .filter(m -> m.report() != null && type.equals(m.report().path("@type").asString(null)))
                 .toList();
     }
 

@@ -1,7 +1,7 @@
 package com.bss.basemigration.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The body that creates or edits a wave. A record cannot carry a field it
@@ -39,7 +39,7 @@ public record MigrationPlanRequest(
 
     /** What {@code String.valueOf(map.get(k))} produced — "null" included, as it always was. */
     public static String text(JsonNode node) {
-        return node == null || node.isNull() ? "null" : node.isTextual() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? "null" : node.isString() ? node.stringValue() : node.toString();
     }
 
     /** Did the substance of the plan change? Then a rehearsal receipt is stale. */

@@ -1,8 +1,7 @@
 package com.bss.entitlement.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
-import java.util.Iterator;
 import java.util.Map;
 
 /**
@@ -32,8 +31,7 @@ public final class Ts43Xml {
             parms(sb, token, "    ");
             sb.append("  </characteristic>\n");
         }
-        for (Iterator<Map.Entry<String, JsonNode>> it = body.fields(); it.hasNext();) {
-            Map.Entry<String, JsonNode> e = it.next();
+        for (Map.Entry<String, JsonNode> e : body.properties()) {
             if (!e.getKey().startsWith("ap") || !e.getValue().isObject()) {
                 continue;
             }
@@ -47,8 +45,7 @@ public final class Ts43Xml {
     }
 
     private static void parms(StringBuilder sb, JsonNode node, String indent) {
-        for (Iterator<Map.Entry<String, JsonNode>> it = node.fields(); it.hasNext();) {
-            Map.Entry<String, JsonNode> e = it.next();
+        for (Map.Entry<String, JsonNode> e : node.properties()) {
             String name = e.getKey();
             JsonNode v = e.getValue();
             if (v.isObject()) {
@@ -58,8 +55,9 @@ public final class Ts43Xml {
                     if (item.isObject()) {
                         // a list of {"X": {...}} wrappers renders as repeated characteristic X;
                         // a list of flat objects as repeated characteristic <name>
-                        if (item.size() == 1 && item.elements().next().isObject()) {
-                            characteristic(sb, item.fieldNames().next(), item.elements().next(), indent);
+                        if (item.size() == 1 && item.values().iterator().next().isObject()) {
+                            characteristic(sb, item.propertyNames().iterator().next(),
+                                    item.values().iterator().next(), indent);
                         } else {
                             characteristic(sb, name, item, indent);
                         }
@@ -82,7 +80,7 @@ public final class Ts43Xml {
     }
 
     private static String text(JsonNode node) {
-        return node.isTextual() ? node.textValue() : node.toString();
+        return node.isString() ? node.stringValue() : node.toString();
     }
 
     private static String esc(String s) {

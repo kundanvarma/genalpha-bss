@@ -17,9 +17,9 @@ import com.bss.assurance.exception.NotFoundException;
 import com.bss.assurance.repository.AlarmRepository;
 import com.bss.assurance.repository.ServiceProblemRepository;
 import com.bss.assurance.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -235,7 +235,7 @@ public class AssuranceService {
         problem.setReason(dto.reasonOr("unknown"));
         try {
             problem.setOriginatorJson(objectMapper.writeValueAsString(originator));
-        } catch (com.fasterxml.jackson.core.JacksonException e) {
+        } catch (tools.jackson.core.JacksonException e) {
             throw new BadRequestException("unserializable originatorParty");
         }
         problem.setAffectedServices(0); // nothing measured yet — an honest zero
@@ -309,7 +309,7 @@ public class AssuranceService {
         if (p.getOriginatorJson() != null) {
             try {
                 return objectMapper.readTree(p.getOriginatorJson());
-            } catch (com.fasterxml.jackson.core.JacksonException ignored) {
+            } catch (tools.jackson.core.JacksonException ignored) {
                 // fall through to the monitoring-system default
             }
         }

@@ -43,9 +43,9 @@ import com.bss.quote.repository.QuoteConfigRuleRepository;
 import com.bss.quote.repository.QuotePricingRuleRepository;
 import com.bss.quote.repository.QuoteRepository;
 import com.bss.quote.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -126,7 +126,7 @@ public class QuoteService {
             // quote time, not survive to be refused at order accept
             String lifecycle = text(offering.path("lifecycleStatus"));
             if (!"Active".equals(lifecycle) && !"Launched".equals(lifecycle)) continue;
-            catalog.put(offering.path("name").asText(), offering);
+            catalog.put(offering.path("name").asString(), offering);
         }
         JsonNode allowances = downstream.allowances();
 
@@ -134,20 +134,20 @@ public class QuoteService {
         BigDecimal monthly = BigDecimal.ZERO;
         String currency = "EUR";
         for (JsonNode proposed : report.path("proposedItems")) {
-            String offeringName = proposed.path("offeringName").asText();
+            String offeringName = proposed.path("offeringName").asString();
             JsonNode offering = catalog.get(offeringName);
             if (offering == null) {
                 throw new ConflictException("proposed offering '" + offeringName + "' is not in the catalog");
             }
-            String offeringId = offering.path("id").asText();
+            String offeringId = offering.path("id").asString();
             Money unitPrice = null;
             JsonNode priceRefs = offering.path("productOfferingPrice");
             if (priceRefs.isArray() && priceRefs.size() > 0 && priceRefs.get(0).isObject()) {
-                JsonNode price = downstream.offeringPrice(priceRefs.get(0).path("id").asText());
+                JsonNode price = downstream.offeringPrice(priceRefs.get(0).path("id").asString());
                 JsonNode money = price.path("price");
                 if (money.isObject() && money.hasNonNull("value")) {
-                    BigDecimal value = new BigDecimal(money.get("value").asText());
-                    currency = money.path("unit").asText();
+                    BigDecimal value = new BigDecimal(money.get("value").asString());
+                    currency = money.path("unit").asString();
                     String period = text(price.path("recurringChargePeriodType"));
                     unitPrice = new Money(value, currency, period);
                     if ("month".equals(period)) {
@@ -159,12 +159,12 @@ public class QuoteService {
             QuoteItem.Allowance allowance = null;
             for (JsonNode a : allowances) {
                 JsonNode ref = a.path("productOffering");
-                if (ref.isObject() && offeringId.equals(ref.path("id").asText())) {
+                if (ref.isObject() && offeringId.equals(ref.path("id").asString())) {
                     allowance = new QuoteItem.Allowance(text(a.path("usageType")),
                             a.get("allowance"), a.get("overagePrice"));
                 }
             }
-            items.add(QuoteItem.proposed(EntityRef.of(offeringId, offering.path("name").asText()),
+            items.add(QuoteItem.proposed(EntityRef.of(offeringId, offering.path("name").asString()),
                     text(proposed.path("reason")), unitPrice, allowance));
         }
 
@@ -172,12 +172,12 @@ public class QuoteService {
         quote.setId(UUID.randomUUID().toString());
         quote.setTenantId(tenantScope.currentTenantId());
         quote.setHref(ApiConstants.BASE_PATH + "/quote/" + quote.getId());
-        quote.setDescription(dto.description() == null ? intent.path("name").asText() : dto.description());
+        quote.setDescription(dto.description() == null ? intent.path("name").asString() : dto.description());
         quote.setState(Quote.IN_PROGRESS);
         quote.setIntentId(dto.intentId());
         JsonNode parties = intent.path("relatedParty");
         if (parties.isArray() && parties.size() > 0 && parties.get(0).isObject()) {
-            quote.setOwnerPartyId(parties.get(0).path("id").asText());
+            quote.setOwnerPartyId(parties.get(0).path("id").asString());
         }
         writeItems(quote, items);
         quote.setMonthlyTotal(monthly);
@@ -418,7 +418,7 @@ public class QuoteService {
         Map<String, String> because = new LinkedHashMap<>();
         for (GuidedRecommendation r : guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
             JsonNode given = answerMap.get(r.getQuestionKey());
-            if (given != null && !given.isNull() && r.getAnswerValue().equalsIgnoreCase(given.asText())) {
+            if (given != null && !given.isNull() && r.getAnswerValue().equalsIgnoreCase(given.asString())) {
                 byOffering.merge(r.getOfferingName(), r.getQuantity(), Integer::sum);
                 because.putIfAbsent(r.getOfferingName(), r.getQuestionKey() + "=" + r.getAnswerValue());
             }
@@ -635,6 +635,6 @@ public class QuoteService {
 
     /** A node's text, or null when it is absent or JSON null. */
     private static String text(JsonNode node) {
-        return node == null || node.isMissingNode() || node.isNull() ? null : node.asText();
+        return node == null || node.isMissingNode() || node.isNull() ? null : node.asString();
     }
 }

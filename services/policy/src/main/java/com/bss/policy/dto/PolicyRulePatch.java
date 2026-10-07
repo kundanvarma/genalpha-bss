@@ -1,7 +1,7 @@
 package com.bss.policy.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * PATCH policyRule: every field is a tree because absent and null mean

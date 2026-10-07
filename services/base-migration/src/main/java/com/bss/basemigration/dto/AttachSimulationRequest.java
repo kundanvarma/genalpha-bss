@@ -1,7 +1,7 @@
 package com.bss.basemigration.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The rehearsal receipt a wave must show before it may arm: the id of a

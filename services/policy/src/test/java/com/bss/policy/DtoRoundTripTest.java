@@ -10,10 +10,11 @@ import com.bss.policy.dto.PriceResult;
 import com.bss.policy.dto.ReferencingRule;
 import com.bss.policy.dto.Teaser;
 import com.bss.policy.entity.PolicyRule;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -33,10 +34,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private static final OffsetDateTime T = OffsetDateTime.parse("2026-09-22T10:00:00Z");
 
@@ -77,7 +80,7 @@ class DtoRoundTripTest {
     void ruleRequest_readsTheAuthoredDocuments_asTrees() throws Exception {
         PolicyRuleRequest r = json.readValue("{\"name\":\"Snap\",\"condition\":\"{\\\"var\\\":\\\"x\\\"}\",\"priority\":\"7\","
                 + "\"enabled\":\"true\",\"adjustmentValue\":-10,\"experience\":{\"a\":1},\"stranger\":1}", PolicyRuleRequest.class);
-        assertTrue(r.condition().isTextual());
+        assertTrue(r.condition().isString());
         assertEquals(7, r.priority());
         assertEquals(Boolean.TRUE, r.enabled());
         assertTrue(r.adjustmentValue().isNumber());
@@ -92,7 +95,7 @@ class DtoRoundTripTest {
         PolicyRulePatch p = json.readValue("{\"description\":null,\"priority\":\"9\",\"foo\":1}", PolicyRulePatch.class);
         assertNull(p.name());
         assertTrue(p.description().isNull());
-        assertEquals("9", p.priority().asText());
+        assertEquals("9", p.priority().asString());
     }
 
     @Test
@@ -105,7 +108,7 @@ class DtoRoundTripTest {
         DecisionRequest q = json.readValue("{\"domain\":\"launch\",\"context\":{\"snap\":\"1\"},\"x\":2}", DecisionRequest.class);
         assertEquals("launch", q.domain());
         assertTrue(q.context().isObject());
-        assertTrue(json.readValue("{\"context\":\"x\"}", DecisionRequest.class).context().isTextual());
+        assertTrue(json.readValue("{\"context\":\"x\"}", DecisionRequest.class).context().isString());
     }
 
     @Test

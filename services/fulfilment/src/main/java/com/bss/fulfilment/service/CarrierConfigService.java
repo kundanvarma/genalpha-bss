@@ -7,8 +7,8 @@ import com.bss.fulfilment.dto.Json;
 import com.bss.fulfilment.entity.CarrierConfig;
 import com.bss.fulfilment.repository.CarrierConfigRepository;
 import com.bss.fulfilment.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -150,8 +150,8 @@ public class CarrierConfigService {
         if (v == null || v.isNull()) {
             return null;
         }
-        if (v.isTextual()) {
-            return v.textValue();
+        if (v.isString()) {
+            return v.stringValue();
         }
         try {
             return mapper.writeValueAsString(v);

@@ -57,6 +57,11 @@ services:
     environment:
       # the one JVM nobody capped: under the proof run's token load the
       # kernel OOM-killer took it (wrapper exits 0 — Docker never sees it)
+    # Metaspace was 96-128m under Boot 3. Boot 4 loads more classes: billing
+    # idles at 121 MiB and reaches 131 MiB after one billing run, so the old
+    # ceiling turned every /billingRun into a 500 with OutOfMemoryError:
+    # Metaspace in the log. Measured 6 Oct 2026, not guessed. A ceiling is
+    # committed lazily, so raising it costs nothing until it is used.
       JAVA_OPTS_APPEND: "-Xmx640m -XX:MaxMetaspaceSize=256m"
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -125,7 +130,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -166,7 +171,7 @@ services:
       # back into ordering) — a parallel order burst saturates a 5-pool
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "12"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -231,7 +236,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -270,7 +275,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -309,7 +314,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -354,7 +359,7 @@ services:
       BSS_DOWNSTREAM_PAYMENT_BASE_URL: http://payment:8080
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -405,7 +410,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -441,7 +446,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -482,7 +487,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -525,7 +530,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -561,7 +566,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -605,7 +610,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -641,7 +646,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -677,7 +682,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -724,7 +729,7 @@ services:
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -813,7 +818,7 @@ services:
       AI_MODEL_SMART: ${AI_MODEL_SMART:-}
       AI_API_KEY: ${AI_API_KEY:-}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -863,7 +868,7 @@ services:
       INSIGHT_BASE_URL: http://insight:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -901,7 +906,7 @@ services:
       PORTING_AUTO_COMPLETE_SECONDS: ${PORTING_AUTO_COMPLETE_SECONDS:-5}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -955,7 +960,7 @@ services:
       ENTITLEMENT_SMDP_ADDRESS: rsp.mock-smdp.example
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1008,7 +1013,7 @@ services:
       ONTOLOGY_OUTCOME_AFTER_DAYS: "0"
       INTELLIGENCE_BASE_URL: http://intelligence:8080
       ASSURANCE_BASE_URL: http://assurance:8080
-      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=96m"
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1077,7 +1082,7 @@ services:
       PAYMENT_BASE_URL: http://payment:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1122,7 +1127,7 @@ services:
       MIGRATION_COMPRESS_CLOCKS: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1156,7 +1161,7 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1190,7 +1195,7 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1213,7 +1218,7 @@ services:
     mem_limit: 1g
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=112m"
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=256m"
     ports:
       - "8111:8080"
     depends_on:
@@ -1273,7 +1278,7 @@ services:
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config
       # DIRECTORY mount — a single-file bind pins the inode, so an edit on
@@ -1311,7 +1316,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1348,7 +1353,7 @@ services:
       # dev clock: the "also bought" basket cache refreshes fast so a
       # suite (and a demo) sees fresh co-ownership quickly (prod: 60s)
       BSS_RECOMMENDATION_AFFINITY_TTL_SECONDS: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1384,7 +1389,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1452,7 +1457,7 @@ services:
       ASSURANCE_BASE_URL: http://assurance:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1496,7 +1501,7 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1540,7 +1545,7 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1604,7 +1609,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1640,7 +1645,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1676,7 +1681,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1752,7 +1757,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
       INVENTORY_BASE_URL: http://product-inventory:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
@@ -1812,7 +1817,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1848,7 +1853,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -1896,7 +1901,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
-      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
@@ -2696,7 +2701,7 @@ services:
     mem_limit: 1g
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=96m"
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=256m"
     depends_on:
       kafka:
         condition: service_started

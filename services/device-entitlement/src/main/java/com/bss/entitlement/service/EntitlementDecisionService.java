@@ -5,7 +5,7 @@ import com.bss.entitlement.dto.EntitlementBlocks;
 import com.bss.entitlement.dto.EntitlementExplanation;
 import com.bss.entitlement.dto.Ts43Block;
 import com.bss.entitlement.entity.EntitlementSubscriber;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 

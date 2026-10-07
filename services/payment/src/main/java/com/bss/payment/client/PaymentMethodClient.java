@@ -1,7 +1,7 @@
 package com.bss.payment.client;
 
 import com.bss.payment.dto.VaultMethodRequest;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Vault view (TMF670): resolve a saved method to its token + presentation.

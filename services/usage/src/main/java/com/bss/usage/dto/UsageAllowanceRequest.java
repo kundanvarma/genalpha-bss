@@ -1,7 +1,7 @@
 package com.bss.usage.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.List;
 
@@ -11,6 +11,6 @@ public record UsageAllowanceRequest(JsonNode productOffering, String usageType, 
         Money overagePrice, Boolean boost, List<Tier> overageTier) {
 
     public String offeringId() {
-        return productOffering != null && productOffering.hasNonNull("id") ? productOffering.get("id").asText() : null;
+        return productOffering != null && productOffering.hasNonNull("id") ? productOffering.get("id").asString() : null;
     }
 }

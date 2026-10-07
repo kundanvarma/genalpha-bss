@@ -27,7 +27,7 @@ import com.bss.entitlement.repository.EcsRequestRepository;
 import com.bss.entitlement.repository.EntitlementDeviceRepository;
 import com.bss.entitlement.repository.EntitlementSubscriberRepository;
 import com.bss.entitlement.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -419,7 +419,7 @@ public class SubscriberService {
         return s;
     }
 
-    private static String requireStatus(com.fasterxml.jackson.databind.JsonNode v) {
+    private static String requireStatus(tools.jackson.databind.JsonNode v) {
         String s = SubscriberUpsertRequest.scalar(v).trim().toLowerCase();
         if (!List.of(EntitlementSubscriber.ACTIVE, EntitlementSubscriber.SUSPENDED, EntitlementSubscriber.TERMINATED).contains(s)) {
             throw new BadRequestException("status must be active, suspended or terminated");
@@ -428,10 +428,10 @@ public class SubscriberService {
     }
 
     /** Stored as the caller wrote it: a string verbatim, anything else re-serialised. */
-    private static String json(com.fasterxml.jackson.databind.JsonNode v) {
+    private static String json(tools.jackson.databind.JsonNode v) {
         if (v == null || v.isNull()) {
             return null;
         }
-        return v.isTextual() ? v.textValue() : v.toString();
+        return v.isString() ? v.stringValue() : v.toString();
     }
 }

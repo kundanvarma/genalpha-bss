@@ -1,7 +1,7 @@
 package com.bss.campaign.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The intent an operator writes for one point. The list fields accept what

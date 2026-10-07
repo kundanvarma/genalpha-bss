@@ -1,7 +1,7 @@
 package com.bss.party.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * TMF669 create/patch body. {@code roleType} is a {@link JsonNode} so a PATCH

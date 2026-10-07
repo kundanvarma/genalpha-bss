@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * An alarm as the network raises it. The alarmed object is a TMF642 entity
