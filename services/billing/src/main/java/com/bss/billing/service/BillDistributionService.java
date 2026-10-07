@@ -300,7 +300,14 @@ public class BillDistributionService {
     /** The RELAY: drains pending ledger rows per tenant, exponential
      * backoff between tries, FAILED after the last one — never lost,
      * never blocking a billing run, always accountable. */
-    @Scheduled(fixedDelayString = "${bss.billing.distribution-tick-ms:30000}")
+    // The initial delay is a TEST SEAM, zero by default so production behaviour is
+    // exactly what it was. A fixedDelay schedule fires once immediately at context
+    // start, and in a @SpringBootTest that tick lands on the same @MockBean clock the
+    // test is stubbing — Mockito stubbing is not thread-safe, the stub is lost, and the
+    // next call returns null (#140). Tests set bss.billing.sweep-initial-delay-ms high;
+    // they drive the sweeps by calling them directly, never by waiting for a tick.
+    @Scheduled(fixedDelayString = "${bss.billing.distribution-tick-ms:30000}",
+            initialDelayString = "${bss.billing.sweep-initial-delay-ms:0}")
     public void deliverTick() {
         if (!tickGuard.claim("bill-distribution", java.time.Duration.ofSeconds(60))) {
             return; // another replica is delivering — one paper bill, never two

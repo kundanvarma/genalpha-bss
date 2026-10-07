@@ -17,6 +17,16 @@ spring:
 
 
 bss:
+  billing:
+    # The periodic sweeps do not run under test. They fire once at context start
+    # otherwise, and that tick calls the same @MockBean TenantClock the tests are
+    # stubbing — which is how clock.today() came back null in the reactor-wide run
+    # and nowhere else (#140). Tests invoke sweepTenant() directly.
+    sweep-initial-delay-ms: 86400000
+    collections-tick-ms: 86400000
+    dunning-tick-ms: 86400000
+    distribution-tick-ms: 86400000
+    shadow-tick-ms: 86400000
   events:
     enabled: false
   tenants:
