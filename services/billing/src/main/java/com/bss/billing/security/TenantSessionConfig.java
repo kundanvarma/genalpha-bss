@@ -10,6 +10,7 @@ import javax.sql.DataSource;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -69,9 +70,20 @@ public class TenantSessionConfig {
             if (tenant == null) {
                 return connection;
             }
-            try (Statement statement = connection.createStatement()) {
-                // Tenant ids come from our own registry/config, never user input.
-                statement.execute("SET app.tenant_id = '" + tenant.replace("'", "''") + "'");
+            // BOUND, NOT BUILT. This used to concatenate the tenant id into a SET
+            // statement and escape quotes by doubling them. That was almost certainly
+            // safe — ids come from our own registry — but "almost certainly safe,
+            // argued in a comment" is the wrong standard for the one statement the
+            // whole row-level-security wall stands on, and CodeQL flagged it as
+            // java/sql-injection in all 36 services that carry this file.
+            //
+            // set_config() is the parameterised form of SET, so the value is bound by
+            // the driver and can no longer be read as SQL whatever it contains. The
+            // third argument is false, meaning session scope — identical to SET.
+            try (PreparedStatement statement =
+                         connection.prepareStatement("SELECT set_config('app.tenant_id', ?, false)")) {
+                statement.setString(1, tenant);
+                statement.execute();
             }
             return resettingProxy(connection);
         }
