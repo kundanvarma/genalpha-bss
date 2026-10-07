@@ -231,7 +231,7 @@ class DtoRoundTripTest {
                 "{\"relatedService\":{\"id\":\"s1\",\"href\":\"/h\",\"extra\":true},\"testSpecification\":{\"id\":\"diagnose\"},\"foo\":1}",
                 StandardFaceViews.ServiceTestRequest.class);
         assertEquals("s1", req.serviceId());
-        assertEquals("diagnose", req.testSpecification().get("id").asText());
+        assertEquals("diagnose", req.testSpecification().get("id").asString());
     }
 
     @Test

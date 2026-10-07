@@ -21,7 +21,7 @@ public final class MarketingPreference {
             if (optOut == null || optOut.isNull()) {
                 return false;
             }
-            return optOut.isBoolean() ? optOut.booleanValue() : "true".equalsIgnoreCase(optOut.asText());
+            return optOut.isBoolean() ? optOut.booleanValue() : "true".equalsIgnoreCase(optOut.asString());
         }
     }
 }

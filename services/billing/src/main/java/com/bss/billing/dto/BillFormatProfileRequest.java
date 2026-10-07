@@ -20,6 +20,6 @@ public record BillFormatProfileRequest(String code, String name, String syntax, 
 
     /** The value to store: null clears, a text sets, anything else reads as its text. */
     public static String textOf(JsonNode n) {
-        return n == null || n.isNull() ? null : n.asText();
+        return n == null || n.isNull() ? null : n.asString();
     }
 }

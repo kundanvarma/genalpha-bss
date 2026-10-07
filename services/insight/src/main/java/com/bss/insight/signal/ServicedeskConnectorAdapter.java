@@ -53,16 +53,16 @@ public class ServicedeskConnectorAdapter implements SignalConnectorAdapter {
                 if (!t.hasNonNull("id")) {
                     continue;
                 }
-                String subject = t.path("subject").asText("");
-                String description = t.path("description").asText("");
+                String subject = t.path("subject").asString("");
+                String description = t.path("description").asString("");
                 String text = (subject + (description.isBlank() ? "" : " — " + description)).trim();
                 if (text.isBlank()) {
                     continue;
                 }
                 ObjectNode context = JsonNodeFactory.instance.objectNode();
-                if (t.hasNonNull("status")) context.put("status", t.get("status").asText());
-                if (t.hasNonNull("priority")) context.put("priority", t.get("priority").asText());
-                out.add(new SignalInput(null, text, "desk:" + t.get("id").asText(), null, null, null,
+                if (t.hasNonNull("status")) context.put("status", t.get("status").asString());
+                if (t.hasNonNull("priority")) context.put("priority", t.get("priority").asString());
+                out.add(new SignalInput(null, text, "desk:" + t.get("id").asString(), null, null, null,
                         context.isEmpty() ? null : context));
             }
         } catch (Exception e) {

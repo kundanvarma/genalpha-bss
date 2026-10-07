@@ -25,6 +25,6 @@ public record PortingOrderRequest(
         }
         JsonNode first = relatedParty.get(0);
         JsonNode id = first.isObject() ? first.get("id") : null;
-        return id == null || id.isNull() ? null : id.asText();
+        return id == null || id.isNull() ? null : id.asString();
     }
 }

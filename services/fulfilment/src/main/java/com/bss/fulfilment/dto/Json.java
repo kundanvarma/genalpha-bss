@@ -54,6 +54,6 @@ public final class Json {
     }
 
     private static String plain(JsonNode node) {
-        return node.isValueNode() ? node.asText() : node.toString();
+        return node.isValueNode() ? node.asString() : node.toString();
     }
 }

@@ -78,8 +78,8 @@ public class Tmf646ScheduleProvider implements ScheduleProvider {
                 JsonNode vf = s.path("validFor");
                 if (vf.hasNonNull("startDateTime") && vf.hasNonNull("endDateTime")) {
                     long remaining = s.hasNonNull("remaining") ? s.get("remaining").asLong() : 1;
-                    out.add(new Window(OffsetDateTime.parse(vf.get("startDateTime").asText()),
-                            OffsetDateTime.parse(vf.get("endDateTime").asText()), remaining));
+                    out.add(new Window(OffsetDateTime.parse(vf.get("startDateTime").asString()),
+                            OffsetDateTime.parse(vf.get("endDateTime").asString()), remaining));
                 }
             }
         }
@@ -110,7 +110,7 @@ public class Tmf646ScheduleProvider implements ScheduleProvider {
         JsonNode root = call(cfg, () -> client(cfg).post().uri("/appointment")
                 .header("Content-Type", "application/json").body(body)
                 .retrieve().body(String.class), "appointment");
-        String id = root.path("id").asText(null);
+        String id = root.path("id").asString(null);
         if (id == null || id.isBlank()) {
             throw new ProviderUnavailableException("scheduling provider booked without returning an appointment id");
         }

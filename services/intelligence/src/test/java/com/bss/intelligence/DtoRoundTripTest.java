@@ -180,7 +180,7 @@ class DtoRoundTripTest {
                 "\"lastDecision\":{\"decidedAt\":\"2026-09-22T10:00:00Z\"},\"servedBy\":[{\"id\":\"stub/s\",\"@referredType\":\"AIModel\"}],\"guardrail\""));
         // the projection as a tree filters and selects like a stored document
         JsonNode tree = json.valueToTree(c);
-        assertEquals("campaign-copy", tree.get("id").asText());
+        assertEquals("campaign-copy", tree.get("id").asString());
         assertEquals("suspended", json.readValue("{\"state\":\"suspended\",\"@type\":\"AIModelContract\"}", ContractPatch.class).state());
     }
 

@@ -217,7 +217,7 @@ class DtoRoundTripTest {
         EnrollmentRequest req = json.readValue("{\"partyIds\":[\"p1\",7],\"context\":{\"order\":{\"id\":\"o-1\"}}}",
                 EnrollmentRequest.class);
         assertEquals(List.of("p1", "7"), req.partyIds());
-        assertEquals("o-1", req.context().path("order").path("id").asText());
+        assertEquals("o-1", req.context().path("order").path("id").asString());
     }
 
     /* ---------------------------------------------------------------- campaigns */
@@ -340,8 +340,8 @@ class DtoRoundTripTest {
                 + "\"explorationMaxPercent\":\"15\",\"enabled\":\"false\",\"allowedActions\":null}", LearningContractRequest.class);
         assertTrue(req.secondaryMetrics().isTextual());
         assertTrue(req.guardrails().isArray());
-        assertEquals("15", req.explorationMaxPercent().asText());
-        assertEquals("false", req.enabled().asText());
+        assertEquals("15", req.explorationMaxPercent().asString());
+        assertEquals("false", req.enabled().asString());
         assertTrue(req.allowedActions().isNull());
         DryRunRequest dry = json.readValue("{\"context\":{\"partyId\":\"p1\"},\"candidates\":[\"a\",\"b\"]}", DryRunRequest.class);
         assertEquals(List.of("a", "b"), dry.candidates());

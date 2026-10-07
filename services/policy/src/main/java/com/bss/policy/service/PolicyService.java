@@ -432,7 +432,7 @@ public class PolicyService {
         if (node == null || node.isNull()) {
             return null;
         }
-        return node.isTextual() ? node.asText() : node.toString();
+        return node.isTextual() ? node.asString() : node.toString();
     }
 
     private static String orDefault(String v, String def) {
@@ -444,7 +444,7 @@ public class PolicyService {
             return node.intValue();
         }
         try {
-            return node.isNull() ? def : Integer.parseInt(node.asText().trim());
+            return node.isNull() ? def : Integer.parseInt(node.asString().trim());
         } catch (NumberFormatException e) {
             return def;
         }
@@ -454,19 +454,19 @@ public class PolicyService {
         if (node.isBoolean()) {
             return node.booleanValue();
         }
-        return "true".equalsIgnoreCase(node.asText());
+        return "true".equalsIgnoreCase(node.asString());
     }
 
     /** Read as the map was: a JSON number through its double ({@code 10} → {@code 10.0}), a string exactly. */
     private static BigDecimal decimal(JsonNode node) {
-        if (node == null || node.isNull() || node.asText().isBlank()) {
+        if (node == null || node.isNull() || node.asString().isBlank()) {
             return null;
         }
         if (node.isNumber()) {
             return BigDecimal.valueOf(node.doubleValue());
         }
         try {
-            return new BigDecimal(node.asText().trim());
+            return new BigDecimal(node.asString().trim());
         } catch (NumberFormatException e) {
             return null;
         }

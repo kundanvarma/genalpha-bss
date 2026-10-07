@@ -165,7 +165,7 @@ public class FulfilmentService {
         }
         for (JsonNode item : items) {
             if (item.isObject() && item.hasNonNull("id")) {
-                ordering.updateItemState(so.getProductOrderId(), item.get("id").asText(), "completed");
+                ordering.updateItemState(so.getProductOrderId(), item.get("id").asString(), "completed");
             }
         }
     }

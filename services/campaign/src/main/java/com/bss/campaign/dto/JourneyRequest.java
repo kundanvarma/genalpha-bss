@@ -41,6 +41,6 @@ public record JourneyRequest(
         if (node == null || node.isNull()) {
             return null;
         }
-        return node.isValueNode() ? node.asText() : node.toString();
+        return node.isValueNode() ? node.asString() : node.toString();
     }
 }

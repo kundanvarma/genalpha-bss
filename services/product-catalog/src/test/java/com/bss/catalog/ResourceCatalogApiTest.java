@@ -58,8 +58,8 @@ class ResourceCatalogApiTest {
                 .andExpect(jsonPath("$.resourceSpecCharacteristic[0].name").value("seam"))
                 .andReturn().getResponse().getContentAsString();
         JsonNode spec = objectMapper.readTree(created);
-        String id = spec.get("id").asText();
-        assertThat(spec.get("href").asText()).isEqualTo(V4 + "/resourceSpecification/" + id);
+        String id = spec.get("id").asString();
+        assertThat(spec.get("href").asString()).isEqualTo(V4 + "/resourceSpecification/" + id);
 
         // browse is public: no token on the reads
         mockMvc.perform(get(V4 + "/resourceSpecification/" + id))
@@ -102,8 +102,8 @@ class ResourceCatalogApiTest {
         assertThat(dto.getResourceSpecCharacteristic()).hasSize(1);
         assertThat(dto.getResourceSpecRelationship().get(0).get("relationshipType")).isEqualTo("dependency");
         JsonNode back = objectMapper.readTree(objectMapper.writeValueAsString(dto));
-        assertThat(back.get("@type").asText()).isEqualTo("PhysicalResourceSpecification");
-        assertThat(back.get("resourceSpecCharacteristic").get(0).get("resourceSpecCharacteristicValue").get(0).get("value").asText()).isEqualTo("cpe");
+        assertThat(back.get("@type").asString()).isEqualTo("PhysicalResourceSpecification");
+        assertThat(back.get("resourceSpecCharacteristic").get(0).get("resourceSpecCharacteristicValue").get(0).get("value").asString()).isEqualTo("cpe");
         assertThat(back.has("id")).isFalse(); // NON_NULL: nothing invented on the way back
     }
 

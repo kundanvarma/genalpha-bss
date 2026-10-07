@@ -90,11 +90,11 @@ class DtoRoundTripTest {
     @Test
     void aPercentageKeepsTheCallersOwnText() throws Exception {
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":10}", PromotionRequest.class)
-                .percentage().asText())).isEqualTo(new BigDecimal("10"));
+                .percentage().asString())).isEqualTo(new BigDecimal("10"));
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":12.5}", PromotionRequest.class)
-                .percentage().asText())).isEqualTo(new BigDecimal("12.5"));
+                .percentage().asString())).isEqualTo(new BigDecimal("12.5"));
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":\"12.50\"}",
-                PromotionRequest.class).percentage().asText())).isEqualTo(new BigDecimal("12.50"));
+                PromotionRequest.class).percentage().asString())).isEqualTo(new BigDecimal("12.50"));
     }
 
     @Test
@@ -130,7 +130,7 @@ class DtoRoundTripTest {
                         + "\"validFor\":{\"startDateTime\":\"2026-01-01T00:00:00Z\"},"
                         + "\"unknown\":1}", PromotionRequest.class);
         assertThat(write(req.appliesTo())).isEqualTo("[\"off-1\"]");
-        assertThat(req.validFor().get("startDateTime").asText()).isEqualTo("2026-01-01T00:00:00Z");
+        assertThat(req.validFor().get("startDateTime").asString()).isEqualTo("2026-01-01T00:00:00Z");
         assertThat(req.appliesTo().isArray()).isTrue();
         assertThat(mapper.readValue("{\"appliesTo\":[]}", PromotionRequest.class)
                 .appliesTo().isEmpty()).isTrue();

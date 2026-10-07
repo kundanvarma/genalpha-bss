@@ -462,7 +462,7 @@ public class LaunchGovernanceService {
             List<EntityRef> list = new ArrayList<>();
             for (JsonNode o : body.channel()) {
                 // an object without an id is NO channel (requireKnownId refuses null by name), not the channel "null"
-                String cid = o.isObject() ? (o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asText()) : o.asText();
+                String cid = o.isObject() ? (o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asString()) : o.asString();
                 String name = Channels.REGISTERED.stream().filter(r -> r.get("id").equals(cid)).findFirst()
                         .map(r -> r.get("name")).orElse(null);
                 list.add(EntityRef.of(cid, name));

@@ -224,7 +224,7 @@ public class DecisionLogService {
         }
         List<String> parts = new ArrayList<>();
         for (JsonNode n : l) {
-            parts.add(n.isTextual() ? n.asText() : n.toString());
+            parts.add(n.isTextual() ? n.asString() : n.toString());
         }
         return String.join(", ", parts);
     }

@@ -40,9 +40,9 @@ public class RestCpeClient implements CpeClient {
             if (n == null || n.path("state").isMissingNode()) {
                 return Optional.empty();
             }
-            return Optional.of(new CpeState(n.path("state").asText("unknown"), n.path("uptimeSeconds").asLong(0),
-                    n.path("firmware").asText(""), n.path("firmwareOutdated").asBoolean(false), n.path("wifiClients").asInt(0),
-                    n.path("model").asText(""), n.path("serial").asText(""), n.path("lastSeen").asText("")));
+            return Optional.of(new CpeState(n.path("state").asString("unknown"), n.path("uptimeSeconds").asLong(0),
+                    n.path("firmware").asString(""), n.path("firmwareOutdated").asBoolean(false), n.path("wifiClients").asInt(0),
+                    n.path("model").asString(""), n.path("serial").asString(""), n.path("lastSeen").asString("")));
         } catch (RuntimeException e) {
             log.warn("ACS did not answer for service {}: {}", serviceId, e.getMessage());
             return Optional.empty();

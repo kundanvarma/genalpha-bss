@@ -431,14 +431,14 @@ public class TenantOnboardingService {
         java.util.Set<String> templateSecrets = new java.util.HashSet<>();
         for (JsonNode c : template.withArray("clients")) {
             if (c.hasNonNull("secret")) {
-                templateSecrets.add(c.get("secret").asText());
+                templateSecrets.add(c.get("secret").asString());
             }
         }
         for (JsonNode c : realm.withArray("clients")) {
-            String secret = c.path("secret").asText(null);
+            String secret = c.path("secret").asString(null);
             if (secret != null && !secret.equals(machineSecret)) {
                 throw new IllegalStateException("clone kept a template secret on client "
-                        + c.path("clientId").asText());
+                        + c.path("clientId").asString());
             }
             if (secret != null && templateSecrets.contains(secret)) {
                 throw new IllegalStateException("generated secret collides with the template's");
@@ -460,7 +460,7 @@ public class TenantOnboardingService {
         Map<String, JsonNode> realmRoles = rolesByName(adminToken, id, "/roles");
         int bound = 0;
         for (JsonNode u : template.withArray("users")) {
-            String clientId = u.path("serviceAccountClientId").asText(null);
+            String clientId = u.path("serviceAccountClientId").asString(null);
             if (clientId == null) {
                 continue;
             }
@@ -470,10 +470,10 @@ public class TenantOnboardingService {
             }
             JsonNode account = adminGet(adminToken,
                     "/admin/realms/" + id + "/clients/" + clientUuid + "/service-account-user");
-            if (account == null || account.path("id").asText(null) == null) {
+            if (account == null || account.path("id").asString(null) == null) {
                 continue;
             }
-            String userId = account.get("id").asText();
+            String userId = account.get("id").asString();
             // THE DEFAULT-ROLES TRAP: a realm IMPORT gives a service account
             // exactly the roles its user entry lists; an account Keycloak
             // creates itself also carries default-roles-<realm>, whose
@@ -496,7 +496,7 @@ public class TenantOnboardingService {
                         "/clients/" + ownerUuid + "/roles");
                 ArrayNode wanted = JSON.createArrayNode();
                 for (JsonNode role : clientRoles.get(owner)) {
-                    JsonNode rep = ownerRoles.get(role.asText());
+                    JsonNode rep = ownerRoles.get(role.asString());
                     if (rep != null) {
                         wanted.add(rep);
                     }
@@ -522,9 +522,9 @@ public class TenantOnboardingService {
         ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
         ArrayNode roles = JSON.createArrayNode();
         for (JsonNode u : template.withArray("users")) {
-            if (STAFF_USERNAME.equals(u.path("username").asText())) {
+            if (STAFF_USERNAME.equals(u.path("username").asString())) {
                 for (JsonNode role : u.path("realmRoles")) {
-                    roles.add(role.asText());
+                    roles.add(role.asString());
                 }
             }
         }
@@ -556,9 +556,9 @@ public class TenantOnboardingService {
         if (roles != null) {
             for (JsonNode r : roles) {
                 ObjectNode rep = JSON.createObjectNode();
-                rep.put("id", r.path("id").asText());
-                rep.put("name", r.path("name").asText());
-                byName.put(r.path("name").asText(), rep);
+                rep.put("id", r.path("id").asString());
+                rep.put("name", r.path("name").asString());
+                byName.put(r.path("name").asString(), rep);
             }
         }
         return byName;
@@ -568,7 +568,7 @@ public class TenantOnboardingService {
             Map<String, JsonNode> realmRoles) {
         ArrayNode wanted = JSON.createArrayNode();
         for (JsonNode role : wantedNames) {
-            JsonNode rep = realmRoles.get(role.asText());
+            JsonNode rep = realmRoles.get(role.asString());
             if (rep != null) {
                 wanted.add(rep);
             }
@@ -580,7 +580,7 @@ public class TenantOnboardingService {
 
     private String clientUuid(String adminToken, String id, String clientId) {
         JsonNode found = adminGet(adminToken, "/admin/realms/" + id + "/clients?clientId=" + clientId);
-        return found != null && !found.isEmpty() ? found.get(0).path("id").asText(null) : null;
+        return found != null && !found.isEmpty() ? found.get(0).path("id").asString(null) : null;
     }
 
     private JsonNode adminGet(String adminToken, String path) {

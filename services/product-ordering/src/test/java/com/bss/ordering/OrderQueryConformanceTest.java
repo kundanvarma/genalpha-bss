@@ -101,7 +101,7 @@ class OrderQueryConformanceTest {
                 .andReturn();
         JsonNode list = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(list).hasSize(1);
-        assertThat(list.get(0).get("id").asText()).isEqualTo(id);
+        assertThat(list.get(0).get("id").asString()).isEqualTo(id);
         assertThat(result.getResponse().getHeader("X-Total-Count")).isEqualTo("1");
     }
 
@@ -110,7 +110,7 @@ class OrderQueryConformanceTest {
         String id = createOrder();
         String orderDate = objectMapper.readTree(mockMvc.perform(get(BASE + "/" + id).with(readToken()))
                         .andReturn().getResponse().getContentAsString())
-                .get("orderDate").asText();
+                .get("orderDate").asString();
 
         MvcResult result = mockMvc.perform(get(BASE).with(readToken())
                         .queryParam("orderDate", orderDate)
@@ -159,7 +159,7 @@ class OrderQueryConformanceTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor readToken() {

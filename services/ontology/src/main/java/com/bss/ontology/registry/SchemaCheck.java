@@ -44,7 +44,7 @@ public final class SchemaCheck {
         }
         JsonNode type = schema.get("type");
         if (type != null) {
-            String t = type.asText();
+            String t = type.asString();
             boolean ok = switch (t) {
                 case "object" -> node.isObject();
                 case "array" -> node.isArray();
@@ -61,14 +61,14 @@ public final class SchemaCheck {
         }
         if (node.isTextual()) {
             JsonNode pattern = schema.get("pattern");
-            if (pattern != null && !Pattern.compile(pattern.asText()).matcher(node.asText()).find()) {
-                errors.add(path + ": \"" + node.asText() + "\" does not match " + pattern.asText());
+            if (pattern != null && !Pattern.compile(pattern.asString()).matcher(node.asString()).find()) {
+                errors.add(path + ": \"" + node.asString() + "\" does not match " + pattern.asString());
             }
             JsonNode minLength = schema.get("minLength");
-            if (minLength != null && node.asText().length() < minLength.asInt()) {
+            if (minLength != null && node.asString().length() < minLength.asInt()) {
                 errors.add(path + ": shorter than " + minLength.asInt() + " characters");
             }
-            if ("date".equals(text(schema, "format")) && !Pattern.matches("\\d{4}-\\d{2}-\\d{2}", node.asText())) {
+            if ("date".equals(text(schema, "format")) && !Pattern.matches("\\d{4}-\\d{2}-\\d{2}", node.asString())) {
                 errors.add(path + ": not a date (YYYY-MM-DD)");
             }
         }
@@ -94,8 +94,8 @@ public final class SchemaCheck {
             JsonNode required = schema.get("required");
             if (required != null) {
                 for (JsonNode r : required) {
-                    if (!node.has(r.asText())) {
-                        errors.add(path + ": missing required \"" + r.asText() + "\"");
+                    if (!node.has(r.asString())) {
+                        errors.add(path + ": missing required \"" + r.asString() + "\"");
                     }
                 }
             }
@@ -117,7 +117,7 @@ public final class SchemaCheck {
 
     private static String text(JsonNode n, String key) {
         JsonNode v = n.get(key);
-        return v == null ? null : v.asText();
+        return v == null ? null : v.asString();
     }
 
     private static String kind(JsonNode n) {

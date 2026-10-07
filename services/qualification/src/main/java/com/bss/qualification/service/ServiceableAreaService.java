@@ -85,7 +85,7 @@ public class ServiceableAreaService {
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/serviceableArea/" + id);
         entity.setProductOfferingJson(writeJson(offering));
-        entity.setProductOfferingId(offering.get("id").asText());
+        entity.setProductOfferingId(offering.get("id").asString());
         entity.setPostcodePrefix(prefix);
         entity.setName(dto.name());
         entity.setLastUpdate(OffsetDateTime.now());

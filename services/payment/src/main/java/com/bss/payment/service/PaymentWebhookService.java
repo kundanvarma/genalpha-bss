@@ -53,7 +53,7 @@ public class PaymentWebhookService {
             }
             verify(rawBody, signatureHeader, secret);
             JsonNode body = readBody(rawBody);
-            String sessionId = firstNonBlank(body.path("sessionId").asText(null), body.path("session_id").asText(null));
+            String sessionId = firstNonBlank(body.path("sessionId").asString(null), body.path("session_id").asString(null));
             if (sessionId == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhook body needs a sessionId");
             }

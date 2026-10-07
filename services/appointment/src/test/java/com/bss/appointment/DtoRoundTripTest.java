@@ -166,7 +166,7 @@ class DtoRoundTripTest {
         // a non-object place was never handed to the seam, but was still stored verbatim
         AppointmentRequest text = mapper.readValue("{\"place\":\"Storgata 1\"}", AppointmentRequest.class);
         assertThat(text.placeObject()).isNull();
-        assertThat(text.placeDocument().asText()).isEqualTo("Storgata 1");
+        assertThat(text.placeDocument().asString()).isEqualTo("Storgata 1");
         assertThat(AppointmentRequest.EMPTY.window()).isNull();
     }
 

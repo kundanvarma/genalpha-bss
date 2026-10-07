@@ -62,7 +62,7 @@ public class OcsNotificationAuth {
      */
     public <T> T verified(byte[] rawBody, String signatureHeader, Class<T> type) {
         JsonNode body = readBody(rawBody);
-        String named = body.path("tenantId").asText(null);
+        String named = body.path("tenantId").asString(null);
         String tenantId = named == null || named.isBlank() ? scope.currentTenantId() : named;
         verify(tenantId, rawBody, signatureHeader);
         return parse(rawBody, type);

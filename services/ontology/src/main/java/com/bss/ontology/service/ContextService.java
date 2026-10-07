@@ -38,9 +38,9 @@ public class ContextService {
         CustomerContext.Customer customer = null;
         JsonNode person = read(l, "party.individual", Map.of("id", customerId), Map.of(), caller, unanswered, "customer");
         if (person != null) {
-            customer = new CustomerContext.Customer(person.path("id").asText(customerId),
-                    (person.path("givenName").asText("") + " " + person.path("familyName").asText("")).trim(),
-                    person.path("status").asText(""));
+            customer = new CustomerContext.Customer(person.path("id").asString(customerId),
+                    (person.path("givenName").asString("") + " " + person.path("familyName").asString("")).trim(),
+                    person.path("status").asString(""));
         }
         List<CustomerContext.Subscription> subs = new ArrayList<>();
         JsonNode products = read(l, "productInventory.products", Map.of(), Map.of("relatedPartyId", customerId, "limit", "100"), caller, unanswered, "subscriptions");
@@ -49,19 +49,19 @@ public class ContextService {
                 String previousOffering = null;
                 String offeringChangedAt = null;
                 if (pr.has("previousOffering")) {
-                    previousOffering = pr.path("previousOffering").path("name").asText(pr.path("previousOffering").path("id").asText());
-                    offeringChangedAt = pr.path("offeringChangedAt").asText("");
+                    previousOffering = pr.path("previousOffering").path("name").asString(pr.path("previousOffering").path("id").asString());
+                    offeringChangedAt = pr.path("offeringChangedAt").asString("");
                 }
                 List<UpgradeOption> availableUpgrades = null;
-                if ("active".equalsIgnoreCase(pr.path("status").asText())) {
+                if ("active".equalsIgnoreCase(pr.path("status").asString())) {
                     try {
-                        availableUpgrades = upgrades.availableUpgrades(pr.path("id").asText(), caller);
+                        availableUpgrades = upgrades.availableUpgrades(pr.path("id").asString(), caller);
                     } catch (RuntimeException e) {
-                        unanswered.add("availableUpgrades of " + pr.path("id").asText());
+                        unanswered.add("availableUpgrades of " + pr.path("id").asString());
                     }
                 }
-                subs.add(new CustomerContext.Subscription(pr.path("id").asText(), pr.path("name").asText(), pr.path("status").asText(),
-                        pr.path("productOffering").path("id").asText(), pr.path("startDate").asText(""), previousOffering, offeringChangedAt,
+                subs.add(new CustomerContext.Subscription(pr.path("id").asString(), pr.path("name").asString(), pr.path("status").asString(),
+                        pr.path("productOffering").path("id").asString(), pr.path("startDate").asString(""), previousOffering, offeringChangedAt,
                         availableUpgrades));
             }
         }
@@ -71,19 +71,19 @@ public class ContextService {
             for (JsonNode sv : services) {
                 String number = "";
                 for (JsonNode r : sv.path("supportingResource")) {
-                    if (!r.path("value").asText("").isEmpty()) {
-                        number = r.path("value").asText();
+                    if (!r.path("value").asString("").isEmpty()) {
+                        number = r.path("value").asString();
                     }
                 }
-                lines.add(new CustomerContext.ServiceLine(sv.path("id").asText(), sv.path("name").asText(), sv.path("state").asText(), number));
+                lines.add(new CustomerContext.ServiceLine(sv.path("id").asString(), sv.path("name").asString(), sv.path("state").asString(), number));
             }
         }
         List<CustomerContext.Bill> bills = new ArrayList<>();
         JsonNode billRows = read(l, "billing.bills", Map.of(), Map.of("relatedPartyId", customerId, "limit", "12"), caller, unanswered, "bills");
         if (billRows != null && billRows.isArray()) {
             for (JsonNode b : billRows) {
-                bills.add(new CustomerContext.Bill(b.path("id").asText(), b.path("state").asText(), b.path("billDate").asText(""),
-                        b.path("amountDue").path("value").asText(b.path("amountDue").asText(""))));
+                bills.add(new CustomerContext.Bill(b.path("id").asString(), b.path("state").asString(), b.path("billDate").asString(""),
+                        b.path("amountDue").path("value").asString(b.path("amountDue").asString(""))));
             }
         }
         List<CustomerContext.Receipt> receipts = new ArrayList<>();
@@ -91,15 +91,15 @@ public class ContextService {
             JsonNode rows = read(l, "decisionLog.read", Map.of(), Map.of("subjectId", s.id(), "limit", "10"), caller, unanswered, "receipts");
             if (rows != null && rows.isArray()) {
                 for (JsonNode d : rows) {
-                    receipts.add(new CustomerContext.Receipt(d.path("decisionId").asText(), d.path("decisionPoint").asText(),
-                            d.path("action").asText(), d.path("reason").asText(), d.path("decidedAt").asText(), d.path("outcome").asText("")));
+                    receipts.add(new CustomerContext.Receipt(d.path("decisionId").asString(), d.path("decisionPoint").asString(),
+                            d.path("action").asString(), d.path("reason").asString(), d.path("decidedAt").asString(), d.path("outcome").asString("")));
                 }
             }
         }
         List<String> actions = new ArrayList<>();
         for (JsonNode a : l.actions().values()) {
-            if (!"deprecated".equals(a.path("status").asText())) {
-                actions.add(a.path("action").asText() + " — " + a.path("meaning").asText());
+            if (!"deprecated".equals(a.path("status").asString())) {
+                actions.add(a.path("action").asString() + " — " + a.path("meaning").asString());
             }
         }
         return new CustomerContext(customerId, customer, subs, lines, bills, receipts, actions,
@@ -113,8 +113,8 @@ public class ContextService {
             unanswered.add(edge + " (no capability)");
             return null;
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), cap.path("route").path("method").asText(),
-                cap.path("route").path("path").asText(), pathVars, query, null, caller.bearer(), Map.of());
+        ComponentClient.Reply reply = client.call(cap.path("component").asString(), cap.path("route").path("method").asString(),
+                cap.path("route").path("path").asString(), pathVars, query, null, caller.bearer(), Map.of());
         if (!reply.ok()) {
             unanswered.add(edge + " (" + Resolver.statusWords(reply) + ")");
             return null;

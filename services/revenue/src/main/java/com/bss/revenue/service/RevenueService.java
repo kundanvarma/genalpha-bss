@@ -1183,7 +1183,7 @@ public class RevenueService {
         // absent leaves the setting alone; an explicit JSON null clears it
         BigDecimal value = m.getConfigValue();
         if (dto.configValue() != null) {
-            value = dto.configValue().isNull() ? null : new BigDecimal(dto.configValue().asText());
+            value = dto.configValue().isNull() ? null : new BigDecimal(dto.configValue().asString());
         }
         // The SAME checks the Configuration ladder runs. This door is the one a
         // seed and a machine caller use, and a rule only the screen enforced

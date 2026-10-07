@@ -135,8 +135,8 @@ public class UsageService {
     public UsageView ingest(ObjectNode dto) {
         String owner = null;
         for (JsonNode ref : dto.path("relatedParty")) {
-            if ("customer".equalsIgnoreCase(ref.path("role").asText())) {
-                owner = ref.path("id").asText();
+            if ("customer".equalsIgnoreCase(ref.path("role").asString())) {
+                owner = ref.path("id").asString();
             }
         }
         // TMF635: only usageSpecification is meaningful on intake; usageType,
@@ -152,21 +152,21 @@ public class UsageService {
         entity.setHref(ApiConstants.BASE_PATH + "/usage/" + id);
         entity.setPayloadJson(writeJson(dto));
         entity.setUsageSpecName(text(dto.get("usageType")));
-        entity.setUsageDate(dto.hasNonNull("usageDate") ? OffsetDateTime.parse(dto.get("usageDate").asText())
+        entity.setUsageDate(dto.hasNonNull("usageDate") ? OffsetDateTime.parse(dto.get("usageDate").asString())
                 : OffsetDateTime.now());
         if (characteristic != null && characteristic.hasNonNull("value")) {
-            entity.setValue(new BigDecimal(characteristic.get("value").asText()));
-            entity.setUnits(characteristic.hasNonNull("units") ? characteristic.get("units").asText() : "unit");
+            entity.setValue(new BigDecimal(characteristic.get("value").asString()));
+            entity.setUnits(characteristic.hasNonNull("units") ? characteristic.get("units").asString() : "unit");
         } else {
             entity.setValue(BigDecimal.ZERO);
             entity.setUnits("unit");
         }
         entity.setOwnerPartyId(owner);
         if (dto.path("productOffering").hasNonNull("id")) {
-            entity.setProductOfferingId(dto.path("productOffering").get("id").asText());
+            entity.setProductOfferingId(dto.path("productOffering").get("id").asString());
         }
         // the roaming zone hint rides the record (top level or characteristic)
-        String zone = dto.hasNonNull("zone") ? dto.get("zone").asText()
+        String zone = dto.hasNonNull("zone") ? dto.get("zone").asString()
                 : (characteristic == null ? null : text(characteristic.get("zone")));
         if (zone != null && !zone.isBlank()) {
             entity.setZone(zone);
@@ -615,7 +615,7 @@ public class UsageService {
         e.setTenantId(tenantScope.currentTenantId());
         e.setHref(ApiConstants.BASE_PATH + "/usageSpecification/" + id);
         e.setName(text(dto.get("name")));
-        e.setUnits(dto.hasNonNull("units") ? dto.get("units").asText() : "unit");
+        e.setUnits(dto.hasNonNull("units") ? dto.get("units").asString() : "unit");
         e.setPayloadJson(writeJson(dto));
         e.setLastUpdate(OffsetDateTime.now());
         return toSpecView(specs.save(e));
@@ -641,7 +641,7 @@ public class UsageService {
         UsageSpecification e = specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found"));
         if (dto.has("name")) {
-            e.setName(dto.get("name").asText());
+            e.setName(dto.get("name").asString());
         }
         ObjectNode merged = storedObject(e.getPayloadJson());
         merged.setAll(dto);
@@ -691,7 +691,7 @@ public class UsageService {
     }
 
     private static String text(JsonNode node) {
-        return node == null || node.isNull() ? null : node.asText();
+        return node == null || node.isNull() ? null : node.asString();
     }
 
     private RatedChargeView chargeView(RatedCharge c) {

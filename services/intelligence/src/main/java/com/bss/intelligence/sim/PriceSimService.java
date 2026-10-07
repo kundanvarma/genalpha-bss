@@ -202,7 +202,7 @@ public class PriceSimService {
     @Transactional(readOnly = true)
     public List<SavedReport> list(String type) {
         return listAll().stream()
-                .filter(m -> m.report() != null && type.equals(m.report().path("@type").asText(null)))
+                .filter(m -> m.report() != null && type.equals(m.report().path("@type").asString(null)))
                 .toList();
     }
 

@@ -114,7 +114,7 @@ public class ProductMapper {
             JsonNode oldId = before == null ? null : before.get("id");
             JsonNode newId = patch.getProductOffering().get("id");
             // the map read both ids through String.valueOf: 5 and "5" were one id
-            if (present(oldId) && present(newId) && !oldId.asText().equals(newId.asText())) {
+            if (present(oldId) && present(newId) && !oldId.asString().equals(newId.asString())) {
                 entity.setPreviousOfferingJson(entity.getProductOfferingJson());
                 entity.setOfferingChangedAt(java.time.OffsetDateTime.now());
             }

@@ -11,6 +11,6 @@ public record UsageAllowanceRequest(JsonNode productOffering, String usageType, 
         Money overagePrice, Boolean boost, List<Tier> overageTier) {
 
     public String offeringId() {
-        return productOffering != null && productOffering.hasNonNull("id") ? productOffering.get("id").asText() : null;
+        return productOffering != null && productOffering.hasNonNull("id") ? productOffering.get("id").asString() : null;
     }
 }

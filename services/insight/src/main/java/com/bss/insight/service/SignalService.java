@@ -157,7 +157,7 @@ public class SignalService {
         if (dto.evidence() != null && dto.evidence().isObject()) {
             for (Map.Entry<String, JsonNode> e : dto.evidence().properties()) {
                 JsonNode v = e.getValue();
-                evidence.put(e.getKey(), v.isNull() ? null : v.isValueNode() ? v.asText() : v.toString());
+                evidence.put(e.getKey(), v.isNull() ? null : v.isValueNode() ? v.asString() : v.toString());
             }
         }
         if (evidence.isEmpty()) {
@@ -305,7 +305,7 @@ public class SignalService {
                 ObjectNode twinEv = objectMapper.createObjectNode();
                 boolean ok = true;
                 for (Map.Entry<String, JsonNode> q : evidence.properties()) {
-                    String mapped = toTwinSpace(q.getValue().isValueNode() ? q.getValue().asText() : q.getValue().toString(),
+                    String mapped = toTwinSpace(q.getValue().isValueNode() ? q.getValue().asString() : q.getValue().toString(),
                             s.getText(), s.getTwinText(), spans);
                     if (mapped == null) {
                         ok = false;

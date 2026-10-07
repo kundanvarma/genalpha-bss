@@ -130,7 +130,7 @@ class MetaGraphProviderTest {
     void leads_comeBackInMetaFieldDataShape() {
         List<JsonNode> rows = new MetaGraphProvider(RestClient.builder()).leads(cfg(null), "form3");
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).path("id").asText()).isEqualTo("l1");
+        assertThat(rows.get(0).path("id").asString()).isEqualTo("l1");
         assertThat(rows.get(0).has("field_data")).isTrue();
     }
 }

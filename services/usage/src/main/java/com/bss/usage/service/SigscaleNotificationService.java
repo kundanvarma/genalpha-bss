@@ -90,7 +90,7 @@ public class SigscaleNotificationService {
             if (!event.isObject()) {
                 continue;
             }
-            String productId = event.hasNonNull("id") ? event.get("id").asText() : null;
+            String productId = event.hasNonNull("id") ? event.get("id").asString() : null;
             if (productId == null) {
                 continue;
             }
@@ -141,7 +141,7 @@ public class SigscaleNotificationService {
 
     static double totalOctets(JsonNode event) {
         for (JsonNode m : event.path("totalBalance")) {
-            if ("octets".equals(m.path("units").asText())) {
+            if ("octets".equals(m.path("units").asString())) {
                 return SigscaleOcsClient.octets(m.get("amount"));
             }
         }

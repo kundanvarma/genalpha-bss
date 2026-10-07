@@ -43,8 +43,8 @@ public class UpgradeService {
         List<String> out = new ArrayList<>();
         if (action != null) {
             for (JsonNode pc : action.path("preconditions")) {
-                if ("plan-family".equals(pc.path("id").asText())) {
-                    for (String f : pc.path("args").path(1).asText("").split(",")) {
+                if ("plan-family".equals(pc.path("id").asString())) {
+                    for (String f : pc.path("args").path(1).asString("").split(",")) {
                         out.add(f.trim());
                     }
                 }
@@ -59,7 +59,7 @@ public class UpgradeService {
         if (current == null) {
             return out;
         }
-        String family = current.path("category").path(0).path("name").asText();
+        String family = current.path("category").path(0).path("name").asString();
         if (!planFamilies(caller).stream().anyMatch(f -> f.equalsIgnoreCase(family))) {
             return out; // a device, a pass, a top-up: bought, not upgraded in place
         }
@@ -69,7 +69,7 @@ public class UpgradeService {
         // the shelf pages at 100 (a larger limit is a 400): walk it
         List<JsonNode> shelf = new ArrayList<>();
         for (int offset = 0; offset < 1000; offset += 100) {
-            ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+            ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                     Map.of(), Map.of("limit", "100", "offset", String.valueOf(offset)), null, caller.bearer(),
                     Map.of(Caller.CHANNEL_HEADER, caller.channel()));
             if (!reply.ok() || !reply.body().isArray()) {
@@ -82,38 +82,38 @@ public class UpgradeService {
         }
         JsonNode concept = layer.concepts().get("ProductOffering");
         List<String> live = new ArrayList<>();
-        concept.path("states").path("live").forEach(s -> live.add(s.asText().toLowerCase()));
+        concept.path("states").path("live").forEach(s -> live.add(s.asString().toLowerCase()));
         // the catalog's own word: exchangableTo names the offerings this one may become; the family rule is the fallback
         List<String> exchangeable = new ArrayList<>();
         for (JsonNode rel : current.path("productOfferingRelationship")) {
-            if ("exchangableto".equalsIgnoreCase(rel.path("relationshipType").asText(""))) {
-                exchangeable.add(rel.path("id").asText());
+            if ("exchangableto".equalsIgnoreCase(rel.path("relationshipType").asString(""))) {
+                exchangeable.add(rel.path("id").asString());
             }
         }
         for (JsonNode o : shelf) {
-            if (o.path("id").asText().equals(current.path("id").asText()) || o.path("isBundle").asBoolean(false)) {
+            if (o.path("id").asString().equals(current.path("id").asString()) || o.path("isBundle").asBoolean(false)) {
                 continue;
             }
-            if (!exchangeable.isEmpty() && !exchangeable.contains(o.path("id").asText())) {
+            if (!exchangeable.isEmpty() && !exchangeable.contains(o.path("id").asString())) {
                 continue;
             }
             if (o.path("requiresVerifiedIdentity").asBoolean(false) || o.path("productOfferingTerm").size() > 0) {
                 // a step-up identity or a commitment term is a new contract, not an in-place upgrade
                 continue;
             }
-            if (!live.contains(o.path("lifecycleStatus").asText("").toLowerCase())) {
+            if (!live.contains(o.path("lifecycleStatus").asString("").toLowerCase())) {
                 continue;
             }
-            if (exchangeable.isEmpty() && !family.equalsIgnoreCase(o.path("category").path(0).path("name").asText())) {
+            if (exchangeable.isEmpty() && !family.equalsIgnoreCase(o.path("category").path(0).path("name").asString())) {
                 continue;
             }
-            String key = "candidate:" + o.path("id").asText();
+            String key = "candidate:" + o.path("id").asString();
             r.objects.put(key, o);
             BigDecimal monthly = resolver.monthlyOf(key, r, caller);
             if (monthly == null || (currentMonthly != null && monthly.compareTo(currentMonthly) <= 0)) {
                 continue;
             }
-            out.add(new UpgradeOption(o.path("id").asText(), o.path("name").asText(), monthly, family));
+            out.add(new UpgradeOption(o.path("id").asString(), o.path("name").asString(), monthly, family));
         }
         out.sort((a, b) -> a.monthly().compareTo(b.monthly()));
         return out;

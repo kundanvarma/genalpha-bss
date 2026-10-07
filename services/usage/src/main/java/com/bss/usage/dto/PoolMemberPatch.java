@@ -10,6 +10,6 @@ import java.math.BigDecimal;
 public record PoolMemberPatch(JsonNode softLimitGB, JsonNode hardLimitGB) {
 
     public static BigDecimal value(JsonNode node) {
-        return node == null || node.isNull() ? null : new BigDecimal(node.asText());
+        return node == null || node.isNull() ? null : new BigDecimal(node.asString());
     }
 }

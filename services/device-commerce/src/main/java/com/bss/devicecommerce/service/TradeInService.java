@@ -399,7 +399,7 @@ public class TradeInService {
             return new Estimate(BigDecimal.ZERO, "EUR",
                     "no residual row for '" + deviceRef + "' — staff curate the table");
         }
-        int age = answers.hasNonNull("ageMonths") ? Integer.parseInt(answers.get("ageMonths").asText()) : 0;
+        int age = answers.hasNonNull("ageMonths") ? Integer.parseInt(answers.get("ageMonths").asString()) : 0;
         TradeInResidual match = rows.get(0);
         for (TradeInResidual row : rows) {
             if (row.getAgeMonths() <= age) {
@@ -410,7 +410,7 @@ public class TradeInService {
         StringBuilder note = new StringBuilder("base " + match.getBaseValue()
                 + " at age " + match.getAgeMonths() + "m");
         for (Map.Entry<String, BigDecimal> defect : DEFECT_HAIRCUTS.entrySet()) {
-            if (Boolean.parseBoolean(answers.path(defect.getKey()).asText())) {
+            if (Boolean.parseBoolean(answers.path(defect.getKey()).asString())) {
                 haircut = haircut.add(defect.getValue());
                 note.append(", ").append(defect.getKey()).append(" −")
                         .append(defect.getValue().movePointRight(2).stripTrailingZeros().toPlainString())

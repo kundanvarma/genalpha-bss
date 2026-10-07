@@ -70,7 +70,7 @@ class EventPublishingTest {
         String id = create();
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOrderCreateEvent"), eq("productOrder"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asText()).isEqualTo(id);
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asString()).isEqualTo(id);
     }
 
     @Test
@@ -96,7 +96,7 @@ class EventPublishingTest {
                 .andExpect(status().isOk());
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOrderStateChangeEvent"), eq("productOrder"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("state").asText()).isEqualTo("completed");
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("state").asString()).isEqualTo("completed");
     }
 
     @Test
@@ -115,7 +115,7 @@ class EventPublishingTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor writeToken() {

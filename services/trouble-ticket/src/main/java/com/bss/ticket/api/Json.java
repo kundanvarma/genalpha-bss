@@ -33,7 +33,7 @@ public final class Json {
             return "null";
         }
         if (node.isValueNode()) {
-            return node.asText();
+            return node.asString();
         }
         return String.valueOf(PLAIN.convertValue(node, Object.class));
     }

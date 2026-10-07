@@ -55,9 +55,9 @@ public class BnplFinancingProvider implements FinancingProvider {
                     + "' does not resolve to a payment — BNPL origination refused");
         }
         agreement.setFinancierRef(payment.hasNonNull("pspProvider")
-                ? payment.get("pspProvider").asText() : "bnpl-provider");
+                ? payment.get("pspProvider").asString() : "bnpl-provider");
         agreement.setExternalAgreementNo(payment.hasNonNull("correlatorId")
-                ? payment.get("correlatorId").asText() : paymentRef);
+                ? payment.get("correlatorId").asString() : paymentRef);
         agreement.setTitleHolder("provider");
         // provider paid at checkout: the payout IS the capture
         agreement.setPayoutReceivedAt(java.time.OffsetDateTime.now());

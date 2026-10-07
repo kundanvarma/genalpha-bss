@@ -233,7 +233,7 @@ public class AiManagementStore {
 
     /** A value node as the plain text the old map-based store compared and stored. */
     private static String plain(JsonNode node) {
-        return node.isValueNode() ? node.asText() : node.toString();
+        return node.isValueNode() ? node.asString() : node.toString();
     }
 
     private static String truncate(String s, int max) {

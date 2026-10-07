@@ -34,7 +34,7 @@ public record PaymentMethodRequest(
         for (JsonNode ref : relatedParty) {
             JsonNode id = ref.isObject() ? ref.get("id") : null;
             if (id != null && !id.isNull()) {
-                return id.asText();
+                return id.asString();
             }
         }
         return null;
@@ -42,6 +42,6 @@ public record PaymentMethodRequest(
 
     public String detail(String field) {
         JsonNode value = details == null ? null : details.get(field);
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString();
     }
 }

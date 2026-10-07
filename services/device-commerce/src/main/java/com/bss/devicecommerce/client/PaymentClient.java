@@ -49,7 +49,7 @@ public class PaymentClient {
             }
             for (String key : new String[] {"refundRef", "settlementRef", "id"}) {
                 if (result.hasNonNull(key)) {
-                    return result.get(key).asText();
+                    return result.get(key).asString();
                 }
             }
             return null;

@@ -97,10 +97,10 @@ public class PromotionService {
         JsonNode valid = dto.validFor();
         if (valid != null && valid.isObject()) {
             if (!PromotionRequest.absent(valid.get("startDateTime"))) {
-                entity.setValidFrom(OffsetDateTime.parse(valid.get("startDateTime").asText()));
+                entity.setValidFrom(OffsetDateTime.parse(valid.get("startDateTime").asString()));
             }
             if (!PromotionRequest.absent(valid.get("endDateTime"))) {
-                entity.setValidUntil(OffsetDateTime.parse(valid.get("endDateTime").asText()));
+                entity.setValidUntil(OffsetDateTime.parse(valid.get("endDateTime").asString()));
             }
         }
         entity.setCreatedAt(OffsetDateTime.now());
@@ -112,7 +112,7 @@ public class PromotionService {
 
     /** The caller's own scale, exactly as {@code String.valueOf} handed it over. */
     private static BigDecimal decimalOf(JsonNode node) {
-        return new BigDecimal(node.asText());
+        return new BigDecimal(node.asString());
     }
 
     @Transactional(readOnly = true)

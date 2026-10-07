@@ -40,7 +40,7 @@ public class ReserveProductStockService {
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/reserveProductStock/" + id);
         entity.setTenantId(tenantScope.currentTenantId());
-        entity.setState(body.hasNonNull("state") ? body.get("state").asText() : "reserved");
+        entity.setState(body.hasNonNull("state") ? body.get("state").asString() : "reserved");
         entity.setPayloadJson(body.toString());
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());

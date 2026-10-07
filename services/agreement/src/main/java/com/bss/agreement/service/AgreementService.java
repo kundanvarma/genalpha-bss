@@ -85,9 +85,9 @@ public class AgreementService {
         if (parties != null && parties.isArray()) {
             for (JsonNode ref : parties) {
                 JsonNode role = ref.get("role");
-                if (ref.isObject() && role != null && "customer".equalsIgnoreCase(role.asText())
+                if (ref.isObject() && role != null && "customer".equalsIgnoreCase(role.asString())
                         && AgreementRequest.present(ref.get("id"))) {
-                    owner = ref.get("id").asText();
+                    owner = ref.get("id").asString();
                 }
             }
         }
@@ -193,7 +193,7 @@ public class AgreementService {
             for (JsonNode entry : characteristic) {
                 JsonNode name = entry.get("name");
                 if (entry.isObject() && entry.has("value")
-                        && (!AgreementRequest.present(name) || name.asText().isBlank())) {
+                        && (!AgreementRequest.present(name) || name.asString().isBlank())) {
                     throw new BadRequestException(
                             "every characteristic needs a name — a value alone names nothing");
                 }
@@ -222,7 +222,7 @@ public class AgreementService {
     }
 
     private OffsetDateTime parseTime(JsonNode value) {
-        return AgreementRequest.present(value) ? OffsetDateTime.parse(value.asText()) : null;
+        return AgreementRequest.present(value) ? OffsetDateTime.parse(value.asString()) : null;
     }
 
     private AgreementView toView(Agreement a) {
@@ -266,7 +266,7 @@ public class AgreementService {
         String typeId = null;
         if (characteristic != null && characteristic.isObject()
                 && AgreementRequest.present(characteristic.get("partnershipTypeId"))) {
-            typeId = characteristic.get("partnershipTypeId").asText();
+            typeId = characteristic.get("partnershipTypeId").asString();
         }
         if (typeId == null) {
             return; // an untyped partnership is legal — the type is the opt-in
@@ -279,7 +279,7 @@ public class AgreementService {
         if (parties != null && parties.isArray()) {
             for (JsonNode ref : parties) {
                 if (ref.isObject() && AgreementRequest.present(ref.get("role"))) {
-                    String role = ref.get("role").asText();
+                    String role = ref.get("role").asString();
                     if (permitted.stream().noneMatch(r -> r.equalsIgnoreCase(role))) {
                         throw new BadRequestException("role '" + role
                                 + "' is not permitted by this partnership type (permitted: "

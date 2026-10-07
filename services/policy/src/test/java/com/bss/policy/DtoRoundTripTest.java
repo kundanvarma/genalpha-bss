@@ -95,7 +95,7 @@ class DtoRoundTripTest {
         PolicyRulePatch p = json.readValue("{\"description\":null,\"priority\":\"9\",\"foo\":1}", PolicyRulePatch.class);
         assertNull(p.name());
         assertTrue(p.description().isNull());
-        assertEquals("9", p.priority().asText());
+        assertEquals("9", p.priority().asString());
     }
 
     @Test

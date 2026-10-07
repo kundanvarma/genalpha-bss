@@ -800,7 +800,7 @@ public class BillingRunService {
                 }
                 java.util.Set<String> names = new java.util.HashSet<>();
                 for (JsonNode c : offering.path("category")) {
-                    names.add((c.has("name") ? c.get("name").asText() : "").toLowerCase());
+                    names.add((c.has("name") ? c.get("name").asString() : "").toLowerCase());
                 }
                 return names;
             } catch (RuntimeException e) {
@@ -811,7 +811,7 @@ public class BillingRunService {
 
     /** A JSON number as the decimal it was written as (a double reads as its shortest form, as before). */
     private static BigDecimal decimalOf(JsonNode n) {
-        return n.isNumber() ? n.decimalValue() : new BigDecimal(n.asText());
+        return n.isNumber() ? n.decimalValue() : new BigDecimal(n.asString());
     }
 
     /**
@@ -866,8 +866,8 @@ public class BillingRunService {
         }
         BigDecimal total = BigDecimal.ZERO;
         for (JsonNode priceRef : offering.path("productOfferingPrice")) {
-            JsonNode price = catalog.price(priceRef.path("id").asText());
-            if (price == null || !"recurring".equals(price.path("priceType").asText(null))) {
+            JsonNode price = catalog.price(priceRef.path("id").asString());
+            if (price == null || !"recurring".equals(price.path("priceType").asString(null))) {
                 continue;
             }
             JsonNode money = price.path("price");
@@ -879,7 +879,7 @@ public class BillingRunService {
             }
             total = total.add(decimalOf(money.get("value")));
             if (money.hasNonNull("unit")) {
-                unitCache.put(offeringId, money.get("unit").asText());
+                unitCache.put(offeringId, money.get("unit").asString());
             }
         }
         return total;
@@ -900,8 +900,8 @@ public class BillingRunService {
             BigDecimal agreed = null;
             boolean any = false;
             for (JsonNode priceRef : offering.path("productOfferingPrice")) {
-                JsonNode price = catalog.price(priceRef.path("id").asText());
-                if (price == null || !"recurring".equals(price.path("priceType").asText(null))
+                JsonNode price = catalog.price(priceRef.path("id").asString());
+                if (price == null || !"recurring".equals(price.path("priceType").asString(null))
                         || !priceApplies(price, characteristics)) {
                     continue;
                 }
@@ -935,13 +935,13 @@ public class BillingRunService {
         }
         for (JsonNode condition : conditions) {
             String pick = characteristics == null ? null
-                    : characteristics.get(condition.path("name").asText());
+                    : characteristics.get(condition.path("name").asString());
             if (pick == null) {
                 return false;
             }
             boolean allowed = false;
             for (JsonNode v : condition.path("productSpecCharacteristicValue")) {
-                if (pick.equals(v.path("value").asText())) {
+                if (pick.equals(v.path("value").asString())) {
                     allowed = true;
                 }
             }
@@ -1039,8 +1039,8 @@ public class BillingRunService {
         }
         JsonNode penalty = null;
         for (JsonNode ref : offering.path("productOfferingPrice")) {
-            JsonNode price = catalog.price(ref.path("id").asText());
-            if (price != null && "penalty".equals(price.path("priceType").asText(null))) {
+            JsonNode price = catalog.price(ref.path("id").asString());
+            if (price != null && "penalty".equals(price.path("priceType").asString(null))) {
                 penalty = price;
                 break;
             }
@@ -1052,12 +1052,12 @@ public class BillingRunService {
         int termMonths = 0;
         JsonNode uom = penalty.path("unitOfMeasure");
         if (uom.isObject() && uom.hasNonNull("amount")) {
-            termMonths = (int) Double.parseDouble(uom.get("amount").asText());
+            termMonths = (int) Double.parseDouble(uom.get("amount").asString());
         }
         for (JsonNode term : offering.path("productOfferingTerm")) {
             JsonNode d = term.path("duration");
             if (termMonths == 0 && d.isObject() && d.hasNonNull("amount")) {
-                termMonths = (int) Double.parseDouble(d.get("amount").asText());
+                termMonths = (int) Double.parseDouble(d.get("amount").asString());
             }
         }
         if (termMonths <= 0 || product.get("startDate") == null) {
@@ -1078,9 +1078,9 @@ public class BillingRunService {
         BigDecimal owed = full.multiply(BigDecimal.valueOf(remaining))
                 .divide(BigDecimal.valueOf(termMonths), 2, java.math.RoundingMode.HALF_UP);
         AppliedBillingRate rate = rateOf(tenantId, ownerParty, product,
-                (penalty.has("name") ? penalty.get("name").asText() : "Early termination") + " — " + remaining
+                (penalty.has("name") ? penalty.get("name").asString() : "Early termination") + " — " + remaining
                         + " of " + termMonths + " months remaining (" + full + " declining)", owed,
-                money.hasNonNull("unit") ? money.get("unit").asText() : unit);
+                money.hasNonNull("unit") ? money.get("unit").asString() : unit);
         rate.setRateType("oneTimeCharge");
         return rate;
     }

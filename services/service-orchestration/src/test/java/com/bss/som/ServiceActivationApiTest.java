@@ -66,8 +66,8 @@ class ServiceActivationApiTest {
                 .andExpect(jsonPath("$['@type']").value("Service"))
                 .andReturn();
         JsonNode body = json.readTree(created.getResponse().getContentAsString());
-        String id = body.get("id").asText();
-        String serviceDate = body.get("serviceDate").asText();
+        String id = body.get("id").asString();
+        String serviceDate = body.get("serviceDate").asString();
         String monitorId = created.getResponse().getHeader("monitorId");
 
         // the activation face, by id and by filter
@@ -90,7 +90,7 @@ class ServiceActivationApiTest {
                 .andReturn();
         JsonNode row = json.readTree(slim.getResponse().getContentAsString()).get(0);
         assertThat(row.size()).isEqualTo(2);
-        assertThat(row.get("state").asText()).isEqualTo("active");
+        assertThat(row.get("state").asString()).isEqualTo("active");
 
         // the same row through the inventory face, with ITS href
         mockMvc.perform(get(ApiConstants.INVENTORY_BASE + "/service/" + id).with(staff()))

@@ -142,20 +142,20 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
 
     /** The mock-shaped projection every consumer of the seam understands. */
     public OcsSubscriber project(JsonNode p) {
-        String productId = p.path("id").asText();
+        String productId = p.path("id").asString();
         double remaining = remainingGb(p);
         String tenantId = characteristic(p, "bssTenantId");
         double allowance = parse(characteristic(p, "bssAllowanceGB"));
         double granted = allowance + (tenantId == null ? 0 : topupsGb(tenantId, productId));
         double total = granted > 0 ? Math.max(granted, remaining) : remaining;
         JsonNode offering = p.path("productOffering");
-        String ratePlanId = offering.hasNonNull("id") ? offering.get("id").asText() : null;
+        String ratePlanId = offering.hasNonNull("id") ? offering.get("id").asString() : null;
         OcsBucket bucket = new OcsBucket(productId,
-                (offering.hasNonNull("name") ? offering.get("name").asText() : ratePlanId) + " data",
+                (offering.hasNonNull("name") ? offering.get("name").asString() : ratePlanId) + " data",
                 ratePlanId, round(total), round(Math.max(0, total - remaining)), 0, false);
         return new OcsSubscriber(productId, characteristic(p, "bssTenantId"), characteristic(p, "bssPartyId"),
                 characteristic(p, "bssServiceId"), ratePlanId,
-                p.hasNonNull("status") ? p.get("status").asText() : "active",
+                p.hasNonNull("status") ? p.get("status").asString() : "active",
                 List.of(bucket), "sigscale");
     }
 
@@ -213,8 +213,8 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
                 JsonNode payload = mapper.readTree(t.getPayloadJson());
                 JsonNode bucket = payload.path("bucket");
                 JsonNode amount = payload.path("amount");
-                if (productId.equals(bucket.path("id").asText()) && amount.hasNonNull("amount")) {
-                    sum += parse(amount.get("amount").asText());
+                if (productId.equals(bucket.path("id").asString()) && amount.hasNonNull("amount")) {
+                    sum += parse(amount.get("amount").asString());
                 }
             }
         } catch (RuntimeException e) {
@@ -229,7 +229,7 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     public static double remainingGb(JsonNode product) {
         if (product != null) {
             for (JsonNode b : product.path("balance")) {
-                if ("octets".equals(b.path("name").asText()) && b.path("totalBalance").isObject()) {
+                if ("octets".equals(b.path("name").asString()) && b.path("totalBalance").isObject()) {
                     return octets(b.path("totalBalance").get("amount")) / GB;
                 }
             }
@@ -245,7 +245,7 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
         if (amount.isNumber()) {
             return amount.doubleValue();
         }
-        String s = amount.asText().trim().toLowerCase();
+        String s = amount.asString().trim().toLowerCase();
         if (s.endsWith("b")) {
             s = s.substring(0, s.length() - 1);
         }
@@ -259,8 +259,8 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     public static String characteristic(JsonNode product, String name) {
         if (product != null) {
             for (JsonNode m : product.path("characteristic")) {
-                if (name.equals(m.path("name").asText())) {
-                    return m.hasNonNull("value") ? m.get("value").asText() : null;
+                if (name.equals(m.path("name").asString())) {
+                    return m.hasNonNull("value") ? m.get("value").asString() : null;
                 }
             }
         }

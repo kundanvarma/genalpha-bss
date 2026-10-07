@@ -39,7 +39,7 @@ public class OntologyClient {
             }
             return new KnowledgeArticle("ontology:page:" + pagePath,
                     "What this page manages and what can be done here (from the operational ontology)",
-                    n.path("text").asText(), "ontology, pane:" + pagePath, "registry");
+                    n.path("text").asString(), "ontology, pane:" + pagePath, "registry");
         } catch (Exception unavailable) {
             return null;
         }

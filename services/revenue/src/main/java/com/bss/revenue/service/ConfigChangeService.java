@@ -226,7 +226,7 @@ public class ConfigChangeService {
             return null;                        // an explicit null clears it
         }
         try {
-            return new BigDecimal(dto.configValue().asText());
+            return new BigDecimal(dto.configValue().asString());
         } catch (NumberFormatException e) {
             throw new BadRequestException("configValue must be a number");
         }

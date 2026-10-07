@@ -85,8 +85,8 @@ public class RosterScheduleProvider implements ScheduleProvider {
             }
             JsonNode vf = slot.path("validFor");
             if (vf.isObject() && vf.hasNonNull("startDateTime") && vf.hasNonNull("endDateTime")) {
-                OffsetDateTime from = OffsetDateTime.parse(vf.get("startDateTime").asText());
-                OffsetDateTime to = OffsetDateTime.parse(vf.get("endDateTime").asText());
+                OffsetDateTime from = OffsetDateTime.parse(vf.get("startDateTime").asString());
+                OffsetDateTime to = OffsetDateTime.parse(vf.get("endDateTime").asString());
                 if (!start.isBefore(from) && start.isBefore(to)) {
                     return true;
                 }

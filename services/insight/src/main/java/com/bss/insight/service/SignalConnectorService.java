@@ -186,12 +186,12 @@ public class SignalConnectorService {
     }
 
     private static String at(JsonNode body, JsonNode cfg, String key, String fallback) {
-        String pointer = cfg.hasNonNull(key) ? cfg.get(key).asText() : fallback;
+        String pointer = cfg.hasNonNull(key) ? cfg.get(key).asString() : fallback;
         if (pointer == null || pointer.isBlank()) {
             return null;
         }
         JsonNode v = body.at(pointer);
-        return v.isMissingNode() || v.isNull() ? null : v.asText();
+        return v.isMissingNode() || v.isNull() ? null : v.asString();
     }
 
     private SignalConnector required(String name) {
@@ -206,7 +206,7 @@ public class SignalConnectorService {
             return null;
         }
         if (v.isTextual()) {
-            return v.asText();
+            return v.asString();
         }
         try {
             return objectMapper.writeValueAsString(v);

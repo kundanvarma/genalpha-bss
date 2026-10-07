@@ -58,7 +58,7 @@ public class SanityAssetProvider implements AssetProvider {
                 throw new IllegalStateException("Sanity upload HTTP " + resp.statusCode() + ": " + resp.body());
             }
             JsonNode doc = mapper.readTree(resp.body()).path("document");
-            String assetId = doc.path("_id").asText(null);
+            String assetId = doc.path("_id").asString(null);
             if (assetId == null || assetId.isBlank()) {
                 throw new IllegalStateException("Sanity upload returned no document._id");
             }

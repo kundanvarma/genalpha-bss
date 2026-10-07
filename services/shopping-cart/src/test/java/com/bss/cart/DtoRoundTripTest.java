@@ -183,7 +183,7 @@ class DtoRoundTripTest {
         assertNull(r.items().get(0).configuration());
         assertTrue(r.items().get(1).configuration().isObject());
         assertNull(r.items().get(2).id());
-        assertEquals("a@b.c", r.buyer().path("email").asText());
+        assertEquals("a@b.c", r.buyer().path("email").asString());
         assertEquals("spt_1", json.readValue("{\"payment_data\":{\"token\":\"spt_1\",\"provider\":\"x\"}}",
                 CompleteRequest.class).token());
         assertNull(json.readValue("{}", CompleteRequest.class).token());

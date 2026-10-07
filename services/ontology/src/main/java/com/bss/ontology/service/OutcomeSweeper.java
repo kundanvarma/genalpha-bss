@@ -67,22 +67,22 @@ public class OutcomeSweeper {
             if (!action.path("outcome").has("measured")) {
                 continue;
             }
-            String point = "ontology." + action.path("action").asText();
-            ComponentClient.Reply reply = client.callAsMachine(read.path("component").asText(), "GET", read.path("route").path("path").asText(),
+            String point = "ontology." + action.path("action").asString();
+            ComponentClient.Reply reply = client.callAsMachine(read.path("component").asString(), "GET", read.path("route").path("path").asString(),
                     Map.of("decisionPoint", point, "limit", "200"), null, Map.of());
             if (!reply.ok() || !reply.body().isArray()) {
                 continue;
             }
             OffsetDateTime cutoff = OffsetDateTime.now().minusDays(props.getOutcomeAfterDays());
             for (JsonNode d : reply.body()) {
-                String outcome = d.path("outcome").asText("");
+                String outcome = d.path("outcome").asString("");
                 if (!outcome.isEmpty() && !"completed".equals(outcome)) {
                     continue; // already judged
                 }
-                if ("refused".equals(d.path("action").asText()) || d.path("action").asText().isEmpty()) {
+                if ("refused".equals(d.path("action").asString()) || d.path("action").asString().isEmpty()) {
                     continue;
                 }
-                String decidedAt = d.path("decidedAt").asText("");
+                String decidedAt = d.path("decidedAt").asString("");
                 if (decidedAt.isEmpty()) {
                     continue;
                 }
@@ -93,20 +93,20 @@ public class OutcomeSweeper {
                 } catch (Exception badDate) {
                     continue;
                 }
-                String subscriptionId = d.path("subjectId").asText();
-                ComponentClient.Reply sub = client.callAsMachine(product.path("component").asText(), "GET",
-                        product.path("route").path("path").asText().replace("{id}", subscriptionId), Map.of(), null, Map.of());
+                String subscriptionId = d.path("subjectId").asString();
+                ComponentClient.Reply sub = client.callAsMachine(product.path("component").asString(), "GET",
+                        product.path("route").path("path").asString().replace("{id}", subscriptionId), Map.of(), null, Map.of());
                 String verdict;
                 if (!sub.ok()) {
                     verdict = "lost";
-                } else if (!"active".equalsIgnoreCase(sub.body().path("status").asText())) {
+                } else if (!"active".equalsIgnoreCase(sub.body().path("status").asString())) {
                     verdict = "lost";
-                } else if (d.path("action").asText().equals(sub.body().path("productOffering").path("id").asText())) {
+                } else if (d.path("action").asString().equals(sub.body().path("productOffering").path("id").asString())) {
                     verdict = "retained";
                 } else {
                     verdict = "changed";
                 }
-                receipts.outcome(tenant, d.path("decisionId").asText(), verdict, props.getOutcomeAfterDays());
+                receipts.outcome(tenant, d.path("decisionId").asString(), verdict, props.getOutcomeAfterDays());
                 judged++;
             }
         }

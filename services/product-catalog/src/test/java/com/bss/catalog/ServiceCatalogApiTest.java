@@ -56,9 +56,9 @@ class ServiceCatalogApiTest {
                 .andExpect(jsonPath("$.isBundle").value(false))
                 .andReturn().getResponse().getContentAsString();
         JsonNode spec = objectMapper.readTree(created);
-        String id = spec.get("id").asText();
+        String id = spec.get("id").asString();
         // hrefs stay canonical (v4) whichever face created the row
-        assertThat(spec.get("href").asText()).isEqualTo(V4 + "/serviceSpecification/" + id);
+        assertThat(spec.get("href").asString()).isEqualTo(V4 + "/serviceSpecification/" + id);
 
         // the same row on the v4 face
         mockMvc.perform(get(V4 + "/serviceSpecification/" + id))
@@ -127,7 +127,7 @@ class ServiceCatalogApiTest {
                 .andExpect(jsonPath("$.serviceSpecification.id").value("9600"))
                 .andExpect(jsonPath("$.validFor.startDateTime").isString())
                 .andReturn().getResponse().getContentAsString();
-        String id = objectMapper.readTree(created).get("id").asText();
+        String id = objectMapper.readTree(created).get("id").asString();
 
         mockMvc.perform(get(V3 + "/serviceCandidate?name=TVServiceCandidate&fields=name,id"))
                 .andExpect(status().isOk())
@@ -164,7 +164,7 @@ class ServiceCatalogApiTest {
                 .andExpect(jsonPath("$.@type").value("ImportJob"))
                 .andExpect(jsonPath("$.creationDate").isString())
                 .andReturn().getResponse().getContentAsString();
-        String id = objectMapper.readTree(created).get("id").asText();
+        String id = objectMapper.readTree(created).get("id").asString();
 
         mockMvc.perform(get(V3 + "/importJob?url=https://my-platform/daily/job/NHCFD6&fields=url"))
                 .andExpect(status().isOk())
@@ -221,7 +221,7 @@ class ServiceCatalogApiTest {
                 .andExpect(jsonPath("$.resourceSpecification[0].id").value("rs-number"))
                 .andExpect(jsonPath("$.resourceSpecification[0].@referredType").value("ResourceSpecification"))
                 .andReturn().getResponse().getContentAsString();
-        String id = objectMapper.readTree(created).get("id").asText();
+        String id = objectMapper.readTree(created).get("id").asString();
 
         mockMvc.perform(get(V4 + "/serviceSpecification/" + id))
                 .andExpect(status().isOk())

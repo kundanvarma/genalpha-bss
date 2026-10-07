@@ -192,6 +192,6 @@ class DtoRoundTripTest {
         RemapRequest cleared = mapper.readValue("{\"configValue\":null}", RemapRequest.class);
         assertThat(cleared.configValue().isNull()).isTrue();       // clear it
         RemapRequest set = mapper.readValue("{\"configValue\":\"25\"}", RemapRequest.class);
-        assertThat(new BigDecimal(set.configValue().asText())).isEqualByComparingTo("25");
+        assertThat(new BigDecimal(set.configValue().asString())).isEqualByComparingTo("25");
     }
 }

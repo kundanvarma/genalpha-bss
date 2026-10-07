@@ -118,7 +118,7 @@ public class PrepayBalanceController {
     public ResponseEntity<ObjectNode> topup(@RequestBody ObjectNode request) {
         JsonNode firstParty = request.path("relatedParty").path(0);
         String party = partyScope.scopedPartyId().orElse(
-                firstParty.hasNonNull("id") ? firstParty.get("id").asText() : null);
+                firstParty.hasNonNull("id") ? firstParty.get("id").asString() : null);
         if (party == null) {
             // no party named: record the task in the TMF shape (resource face)
             return created(save("topupBalance", "TopupBalance", "done", request, objectMapper.createObjectNode()));
@@ -127,7 +127,7 @@ public class PrepayBalanceController {
         if (amount <= 0) {
             throw new BadRequestException("amount {amount, units} must be positive");
         }
-        String bucketId = request.path("bucket").hasNonNull("id") ? request.path("bucket").get("id").asText() : null;
+        String bucketId = request.path("bucket").hasNonNull("id") ? request.path("bucket").get("id").asString() : null;
         // the party boundary IS the authorization: only own subscribers reachable
         String tenant = tenantScope.currentTenantId();
         for (OcsSubscriber sub : ocs.subscribersOf(tenant, party)) {
@@ -226,7 +226,7 @@ public class PrepayBalanceController {
         task.setTenantId(tenantScope.currentTenantId());
         task.setResourceType(type);
         task.setStatus(status);
-        task.setUsageType(echo.hasNonNull("usageType") ? echo.get("usageType").asText() : null);
+        task.setUsageType(echo.hasNonNull("usageType") ? echo.get("usageType").asString() : null);
         task.setPayloadJson(writeJson(echo));
         task.setCreatedAt(OffsetDateTime.now());
         tasks.save(task);
@@ -284,7 +284,7 @@ public class PrepayBalanceController {
 
     private static double number(JsonNode value) {
         try {
-            return value == null || value.isNull() ? 0 : Double.parseDouble(value.asText());
+            return value == null || value.isNull() ? 0 : Double.parseDouble(value.asString());
         } catch (NumberFormatException e) {
             return 0;
         }

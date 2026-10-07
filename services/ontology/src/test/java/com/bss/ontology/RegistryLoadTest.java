@@ -32,13 +32,13 @@ class RegistryLoadTest {
         assertThat(core.agents()).containsKeys("care-assist", "external-mcp", "hermes-worker");
         for (JsonNode ag : core.agents().values()) {
             for (JsonNode x : ag.path("actions").path("execute")) {
-                assertThat(core.actions()).as("agent " + ag.path("agent").asText() + " executes a known action").containsKey(x.asText());
+                assertThat(core.actions()).as("agent " + ag.path("agent").asString() + " executes a known action").containsKey(x.asString());
             }
         }
         JsonNode a = core.actions().get("upgradeSubscription");
-        assertThat(core.capabilities()).containsKey(a.path("executes").path("capability").asText());
+        assertThat(core.capabilities()).containsKey(a.path("executes").path("capability").asString());
         for (JsonNode e : a.path("emits")) {
-            assertThat(core.components()).containsKey(e.path("component").asText());
+            assertThat(core.components()).containsKey(e.path("component").asString());
         }
     }
 
@@ -105,7 +105,7 @@ class RegistryLoadTest {
         // a proper deprecation loads, and the successor is named
         Files.writeString(tmp.resolve("actions/oldChangePlan.yml"), base.formatted("oldChangePlan", "deprecated: 2026-12-31\nsupersededBy: upgradeSubscription"));
         Registry r = new Registry(tmp.toString());
-        assertThat(r.core().actions().get("oldChangePlan").path("supersededBy").asText()).isEqualTo("upgradeSubscription");
+        assertThat(r.core().actions().get("oldChangePlan").path("supersededBy").asString()).isEqualTo("upgradeSubscription");
     }
 
     /* ---------- an overlay may tighten an action, never loosen it ----------
@@ -175,9 +175,9 @@ class RegistryLoadTest {
 
         assertThat(g.path("approvalAbove").path("amount").asInt()).isEqualTo(10);
         assertThat(g.path("limits").path("maxAmount").asInt()).isEqualTo(30);
-        assertThat(g.path("approverRole").asText()).isEqualTo("billing:admin");
-        assertThat(g.path("approval").asText()).isEqualTo("human");
-        assertThat(g.path("audit").asText()).isEqualTo("mandatory");
+        assertThat(g.path("approverRole").asString()).isEqualTo("billing:admin");
+        assertThat(g.path("approval").asString()).isEqualTo("human");
+        assertThat(g.path("audit").asString()).isEqualTo("mandatory");
     }
 
     @Test
@@ -188,7 +188,7 @@ class RegistryLoadTest {
         JsonNode g = r.forTenant("taranga").actions().get("upgradeSubscription").path("governance");
 
         assertThat(g.path("limits").path("maxMonthlyPriceNok").asInt()).isEqualTo(999);
-        assertThat(g.path("audit").asText()).isEqualTo("mandatory");
+        assertThat(g.path("audit").asString()).isEqualTo("mandatory");
     }
 
     private static void copy(Path from, Path to) throws IOException {

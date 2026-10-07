@@ -158,7 +158,7 @@ public class Tmf915Controller {
     }
 
     private static ResponseEntity<ObjectNode> created(ObjectNode view) {
-        return ResponseEntity.created(URI.create(view.path("href").asText())).body(view);
+        return ResponseEntity.created(URI.create(view.path("href").asString())).body(view);
     }
 
     private static ResponseEntity<List<ObjectNode>> page(List<ObjectNode> rows,

@@ -200,11 +200,11 @@ public class PrivacyService {
                     return false;
                 }
                 for (JsonNode product : page) {
-                    if (!"active".equalsIgnoreCase(product.path("status").asText())) {
+                    if (!"active".equalsIgnoreCase(product.path("status").asString())) {
                         continue;
                     }
                     for (JsonNode related : product.path("relatedParty")) {
-                        if (partyId.equals(related.path("id").asText())) {
+                        if (partyId.equals(related.path("id").asString())) {
                             return true;
                         }
                     }

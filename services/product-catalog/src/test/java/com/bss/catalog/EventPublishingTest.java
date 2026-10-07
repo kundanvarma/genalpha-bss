@@ -50,7 +50,7 @@ class EventPublishingTest {
         String id = create();
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOfferingCreateEvent"), eq("productOffering"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asText()).isEqualTo(id);
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asString()).isEqualTo(id);
     }
 
     @Test
@@ -72,7 +72,7 @@ class EventPublishingTest {
                 .andExpect(status().isNoContent());
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOfferingDeleteEvent"), eq("productOffering"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asText()).isEqualTo(id);
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asString()).isEqualTo(id);
     }
 
     private String create() throws Exception {
@@ -83,7 +83,7 @@ class EventPublishingTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor writeToken() {

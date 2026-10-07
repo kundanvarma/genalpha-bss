@@ -239,7 +239,7 @@ class DtoRoundTripTest {
         ServiceableAreaRequest req = mapper.readValue(
                 "{\"postcodePrefix\":\"111\",\"productOffering\":{\"id\":\"po-1\"},"
                         + "\"unknown\":1}", ServiceableAreaRequest.class);
-        assertThat(req.productOffering().get("id").asText()).isEqualTo("po-1");
+        assertThat(req.productOffering().get("id").asString()).isEqualTo("po-1");
         assertThat(req.name()).isNull();
         assertThat(mapper.readValue("{\"productOffering\":\"not an object\"}",
                 ServiceableAreaRequest.class).productOffering().isObject()).isFalse();

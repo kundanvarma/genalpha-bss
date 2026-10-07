@@ -77,7 +77,7 @@ public class PspConfigService {
         cfg.setMethods(json(dto.methods()));
         cfg.setDefault(Boolean.TRUE.equals(dto.isDefault()));
         if (dto.priority() != null && !dto.priority().isNull()) {
-            cfg.setPriority(Integer.parseInt(dto.priority().asText()));
+            cfg.setPriority(Integer.parseInt(dto.priority().asString()));
         }
         cfg.setCurrencies(json(dto.currencies()));
         cfg.setEnabled(!Boolean.FALSE.equals(dto.enabled()));

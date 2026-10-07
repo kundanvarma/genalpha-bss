@@ -70,8 +70,8 @@ class ProductOfferingPaginationTest {
         // offset=1&limit=2 is deliberately not offset-aligned: a page-number
         // misreading of offset would return full[2..3], not full[1..2].
         assertEquals(2, slice.size());
-        assertEquals(fullList.get(1).get("id").asText(), slice.get(0).get("id").asText());
-        assertEquals(fullList.get(2).get("id").asText(), slice.get(1).get("id").asText());
+        assertEquals(fullList.get(1).get("id").asString(), slice.get(0).get("id").asString());
+        assertEquals(fullList.get(2).get("id").asString(), slice.get(1).get("id").asString());
         assertEquals(fullResult.getResponse().getHeader("X-Total-Count"),
                 sliceResult.getResponse().getHeader("X-Total-Count"));
         assertTrue(Integer.parseInt(sliceResult.getResponse().getHeader("X-Total-Count")) >= 3);

@@ -123,8 +123,8 @@ public class AppointmentService {
         if (validFor == null || !validFor.hasNonNull("startDateTime") || !validFor.hasNonNull("endDateTime")) {
             throw new BadRequestException("validFor.startDateTime and endDateTime are required");
         }
-        OffsetDateTime start = OffsetDateTime.parse(validFor.get("startDateTime").asText());
-        OffsetDateTime end = OffsetDateTime.parse(validFor.get("endDateTime").asText());
+        OffsetDateTime start = OffsetDateTime.parse(validFor.get("startDateTime").asString());
+        OffsetDateTime end = OffsetDateTime.parse(validFor.get("endDateTime").asString());
         if (!start.isBefore(end)) {
             throw new BadRequestException("validFor must start before it ends");
         }

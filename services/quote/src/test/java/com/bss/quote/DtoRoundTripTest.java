@@ -347,8 +347,8 @@ class DtoRoundTripTest {
         JsonNode tree = json.valueToTree(OpportunityView.of(opp, List.of(), List.of()));
         assertEquals(3, tree.get("daysInStage").asLong());
         assertEquals("{\"id\":\"u1\",\"name\":\"Ada\"}", tree.get("owner").toString());
-        assertEquals("2026-10-01", tree.get("expectedCloseDate").asText());
-        assertEquals("signed", tree.get("closeReason").asText());
+        assertEquals("2026-10-01", tree.get("expectedCloseDate").asString());
+        assertEquals("signed", tree.get("closeReason").asString());
         assertFalse(tree.has("items"));
         assertFalse(tree.has("activities"));
         assertFalse(tree.has("description"));

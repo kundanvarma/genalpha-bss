@@ -61,17 +61,17 @@ public class RecommendationService {
         List<String> serviceIds = services.stream().map(CustomerContext.ServiceLine::id).toList();
         for (JsonNode p : openProblems(caller)) {
             // TMF656 as this platform serves it: affectedObject names the service (or area) the problem sits on
-            String affected = p.path("affectedObject").asText("");
+            String affected = p.path("affectedObject").asString("");
             boolean mine = !affected.isEmpty() && serviceIds.stream().anyMatch(id -> affected.equals(id) || affected.contains(id));
             for (JsonNode a : p.path("affectedService")) {
-                if (serviceIds.contains(a.path("id").asText())) {
+                if (serviceIds.contains(a.path("id").asString())) {
                     mine = true;
                 }
             }
             if (mine) {
-                String says = p.path("name").asText(p.path("description").asText("a network incident")) + " affects this customer's line"
-                        + (p.path("reason").asText("").isEmpty() ? "" : " — " + p.path("reason").asText());
-                situation.add(Situation.incident(p.path("id").asText(), says, p.path("createdAt").asText(""))); // the network team's, not the customer's
+                String says = p.path("name").asString(p.path("description").asString("a network incident")) + " affects this customer's line"
+                        + (p.path("reason").asString("").isEmpty() ? "" : " — " + p.path("reason").asString());
+                situation.add(Situation.incident(p.path("id").asString(), says, p.path("createdAt").asString(""))); // the network team's, not the customer's
                 out.add(Recommendation.explain("explainIncident", "Explain the incident before troubleshooting", says + ". Say what is known and when it should be over; do not walk the customer through device checks.", 1));
             }
         }
@@ -112,26 +112,26 @@ public class RecommendationService {
             }
         }
         JsonNode ccase = collectionCase(customerId, caller);
-        String caseState = ccase == null ? "" : ccase.path("state").asText("").toLowerCase();
+        String caseState = ccase == null ? "" : ccase.path("state").asString("").toLowerCase();
         double overdueNow = ccase == null ? 0 : ccase.path("overdueBalance").path("value").asDouble(0);
         // a case is "open" only while money is actually overdue: a cured case stays on file as "current" with a zero balance
         boolean caseOpen = ccase != null && overdueNow > 0 && !List.of("closed", "settled", "cured", "current", "none", "writtenoff", "written-off").contains(caseState);
         JsonNode promise = ccase == null ? null : ccase.path("holds").path("promiseToPay");
-        boolean promised = promise != null && promise.isObject() && !isPast(promise.path("dueAt").asText(""));
-        String currency = ccase == null ? "" : ccase.path("overdueBalance").path("unit").asText("");
+        boolean promised = promise != null && promise.isObject() && !isPast(promise.path("dueAt").asString(""));
+        String currency = ccase == null ? "" : ccase.path("overdueBalance").path("unit").asString("");
         if (caseOpen && promised) {
-            String amount = promise.path("amount").asText(ccase.path("overdueBalance").path("value").asText(""));
-            String by = promise.path("dueAt").asText("").length() >= 10 ? promise.path("dueAt").asText("").substring(0, 10) : "";
-            situation.add(Situation.arranged(ccase.path("id").asText(), amount, currency, promise.path("dueAt").asText(""),
+            String amount = promise.path("amount").asString(ccase.path("overdueBalance").path("value").asString(""));
+            String by = promise.path("dueAt").asString("").length() >= 10 ? promise.path("dueAt").asString("").substring(0, 10) : "";
+            situation.add(Situation.arranged(ccase.path("id").asString(), amount, currency, promise.path("dueAt").asString(""),
                     "a payment plan is agreed — " + amount + (currency.isEmpty() ? "" : " " + currency) + " by " + by + "; nothing else is due until then"));
             out.add(Recommendation.explain("explainBill", "Confirm the payment plan", "The customer promised " + amount + " by " + by + ". Collection is on hold until then; confirm the date, offer to take the payment early, and offer nothing else.", 3));
         } else if (caseOpen && ccase.path("holds").has("dispute")) {
-            situation.add(Situation.disputed(ccase.path("id").asText(), ccase.path("overdueBalance").path("value").asText(""), currency,
+            situation.add(Situation.disputed(ccase.path("id").asString(), ccase.path("overdueBalance").path("value").asString(""), currency,
                     "part of the bill is under dispute — collection waits while it is looked at"));
             out.add(Recommendation.explain("explainBill", "Walk through the disputed bill", "A dispute is open on this customer's bill; collection waits. Explain what is contested and what happens next.", 3));
         } else if (caseOpen) {
-            String amount = ccase.path("overdueBalance").path("value").asText("");
-            situation.add(Situation.overdue(ccase.path("id").asText(), amount, currency, ccase.path("stepIndex").asInt(0),
+            String amount = ccase.path("overdueBalance").path("value").asString("");
+            situation.add(Situation.overdue(ccase.path("id").asString(), amount, currency, ccase.path("stepIndex").asInt(0),
                     "an amount of " + amount + (currency.isEmpty() ? "" : " " + currency) + " is overdue — services are at risk until it is settled or a payment plan is agreed"));
             out.add(Recommendation.explain("explainBill", "Settle the overdue amount", "An amount of " + amount + " is overdue and the collection ladder is running. Take the payment or agree a promise to pay before anything else.", 1));
         } else if (open != null) {
@@ -148,12 +148,12 @@ public class RecommendationService {
             java.util.Set<String> suppressed = suppressedOffers(customerId, caller);
             int shown = 0;
             for (JsonNode item : rankedOffers(customerId, caller)) {
-                String offeringId = item.path("offering").path("id").asText("");
+                String offeringId = item.path("offering").path("id").asString("");
                 if (offeringId.isEmpty() || suppressed.contains(offeringId) || shown >= 3) {
                     continue;
                 }
-                String reason = item.path("reason").asText(item.path("description").asText(""));
-                out.add(Recommendation.offer(item.path("offering").path("name").asText(offeringId), offeringId, 5 + shown,
+                String reason = item.path("reason").asString(item.path("description").asString(""));
+                out.add(Recommendation.offer(item.path("offering").path("name").asString(offeringId), offeringId, 5 + shown,
                         reason.isEmpty() ? "picked from what this customer holds and looked at — nothing they already own" : reason,
                         "an offer to consider; the customer decides, and their verdict is remembered"));
                 shown++;
@@ -270,19 +270,19 @@ public class RecommendationService {
         if (cap == null) {
             return out;
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+        ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                 Map.of(), Map.of("decisionPoint", DECISION_POINT, "limit", "500"), null, caller.bearer(), Map.of());
         if (!reply.ok() || !reply.body().isArray()) {
             return out;
         }
         for (JsonNode d : reply.body()) {
-            String action = d.path("action").asText("");
+            String action = d.path("action").asString("");
             if (action.isEmpty()) {
                 continue;
             }
             int[] h = out.computeIfAbsent(action, k -> new int[3]);
             h[0]++;
-            String o = d.path("outcome").asText("");
+            String o = d.path("outcome").asString("");
             if ("accepted".equals(o) || "helpful".equals(o)) {
                 h[1]++;
             } else if ("dismissed".equals(o) || "unhelpful".equals(o) || "rejected".equals(o)) {
@@ -300,7 +300,7 @@ public class RecommendationService {
         Check c = checks.check(def, inputs, caller);
         return Recommendation.action(name, ExplainService.title(name), inputs, priority, c,
                 because + (c.allowed() ? "; every condition holds for this caller" : "; it cannot happen now: " + c.refusal()),
-                def.path("meaning").asText(), def.path("governance").path("autonomy").asText());
+                def.path("meaning").asString(), def.path("governance").path("autonomy").asString());
     }
 
     private List<JsonNode> openProblems(Caller caller) {
@@ -314,15 +314,15 @@ public class RecommendationService {
         // line: the registry reads with its own account and the caller only ever sees problems matched to
         // their services (the match happens in forCustomer, on the customer's own service ids)
         ComponentClient.Reply reply = caller.isCustomer()
-                ? client.callAsMachine(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                ? client.callAsMachine(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                         Map.of("limit", "100"), null, Map.of())
-                : client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                : client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                         Map.of(), Map.of("limit", "100"), null, caller.bearer(), Map.of());
         if (!reply.ok() || !reply.body().isArray()) {
             return out;
         }
         for (JsonNode p : reply.body()) {
-            String status = p.path("status").asText("").toLowerCase();
+            String status = p.path("status").asString("").toLowerCase();
             if (status.isEmpty() || List.of("submitted", "acknowledged", "inprogress", "in progress", "held", "open").contains(status)) {
                 out.add(p);
             }
@@ -337,13 +337,13 @@ public class RecommendationService {
         if (cap == null) {
             return null;
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+        ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                 Map.of(), Map.of(), null, caller.bearer(), Map.of());
         if (!reply.ok() || !reply.body().isArray()) {
             return null;
         }
         for (JsonNode c : reply.body()) {
-            if (caller.isCustomer() || customerId.equals(c.path("accountId").asText(""))) {
+            if (caller.isCustomer() || customerId.equals(c.path("accountId").asString(""))) {
                 return c;
             }
         }
@@ -358,7 +358,7 @@ public class RecommendationService {
         if (cap == null) {
             return out;
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+        ComponentClient.Reply reply = client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(),
                 Map.of(), caller.isCustomer() ? Map.of() : Map.of("relatedPartyId", customerId), null, caller.bearer(), Map.of());
         if (!reply.ok()) {
             return out;
@@ -387,15 +387,15 @@ public class RecommendationService {
         }
         Map<String, String> query = Map.of("decisionPoint", DECISION_POINT, "subjectId", customerId, "limit", "200");
         ComponentClient.Reply reply = caller.isCustomer()
-                ? client.callAsMachine(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(), query, null, Map.of())
-                : client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(), Map.of(), query, null, caller.bearer(), Map.of());
+                ? client.callAsMachine(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(), query, null, Map.of())
+                : client.call(cap.path("component").asString(), "GET", cap.path("route").path("path").asString(), Map.of(), query, null, caller.bearer(), Map.of());
         if (!reply.ok() || !reply.body().isArray()) {
             return out;
         }
         OffsetDateTime deferHorizon = OffsetDateTime.now().minusDays(DEFER_DAYS);
         for (JsonNode d : reply.body()) {
-            String offeringId = d.path("context").path("offeringId").asText("");
-            String o = d.path("outcome").asText("");
+            String offeringId = d.path("context").path("offeringId").asString("");
+            String o = d.path("outcome").asString("");
             if (offeringId.isEmpty()) {
                 continue;
             }
@@ -403,7 +403,7 @@ public class RecommendationService {
                 out.add(offeringId);
             } else if ("deferred".equals(o)) {
                 try {
-                    String at = d.path("outcomeAt").asText(d.path("decidedAt").asText(""));
+                    String at = d.path("outcomeAt").asString(d.path("decidedAt").asString(""));
                     if (at.isEmpty() || OffsetDateTime.parse(at).isAfter(deferHorizon)) {
                         out.add(offeringId);
                     }

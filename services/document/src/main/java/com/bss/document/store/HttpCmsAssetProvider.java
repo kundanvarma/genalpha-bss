@@ -84,10 +84,10 @@ public class HttpCmsAssetProvider implements AssetProvider {
             }
             String assetIdPath = text(c, "assetIdPath", "/url");
             JsonNode extracted = mapper.readTree(resp.body()).at(assetIdPath);
-            if (extracted.isMissingNode() || extracted.asText("").isBlank()) {
+            if (extracted.isMissingNode() || extracted.asString("").isBlank()) {
                 throw new IllegalStateException("upload response has nothing at assetIdPath " + assetIdPath);
             }
-            return extracted.asText();
+            return extracted.asString();
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
@@ -160,7 +160,7 @@ public class HttpCmsAssetProvider implements AssetProvider {
 
     private static String text(JsonNode node, String field, String fallback) {
         JsonNode v = node.get(field);
-        return v == null || v.isNull() ? fallback : v.asText();
+        return v == null || v.isNull() ? fallback : v.asString();
     }
 
     private static String trimSlash(String s) {

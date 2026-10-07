@@ -37,8 +37,8 @@ public class WellKnownController {
         List<String> caps = new ArrayList<>();
         List<String> events = new ArrayList<>();
         if (me != null) {
-            me.path("capabilities").forEach(c -> caps.add(c.asText()));
-            me.path("events").forEach(e -> events.add(e.asText()));
+            me.path("capabilities").forEach(c -> caps.add(c.asString()));
+            me.path("events").forEach(e -> events.add(e.asString()));
         }
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
@@ -50,8 +50,8 @@ public class WellKnownController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        return new ComponentDescriptor("ontology", me == null ? "" : me.path("meaning").asText(), List.of(), caps, events,
-                me == null ? "" : me.path("topic").asText(), new ArrayList<>(routes),
+        return new ComponentDescriptor("ontology", me == null ? "" : me.path("meaning").asString(), List.of(), caps, events,
+                me == null ? "" : me.path("topic").asString(), new ArrayList<>(routes),
                 new ComponentDescriptor.Invoke(ApiConstants.BASE_PATH, ApiConstants.BASE_PATH + "/mcp",
                         ApiConstants.BASE_PATH + "/actions/{name}/check", ApiConstants.BASE_PATH + "/actions/{name}/execute"),
                 "GenAlphaComponent");

@@ -279,7 +279,7 @@ public class ConfiguratorService {
         }
         if (node.isTextual()) {
             // the ontology's action inputs are strings: "screens=5+, extraProfiles=6"
-            for (String pair : node.asText().split("[,;]")) {
+            for (String pair : node.asString().split("[,;]")) {
                 int eq = pair.indexOf('=');
                 if (eq > 0) {
                     picks.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
@@ -321,7 +321,7 @@ public class ConfiguratorService {
     }
 
     private static String textOf(JsonNode n) {
-        return n.isValueNode() ? n.asText() : n.toString();
+        return n.isValueNode() ? n.asString() : n.toString();
     }
 
     /* ---------- the order-ready echo ---------- */

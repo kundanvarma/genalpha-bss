@@ -79,7 +79,7 @@ public class DownstreamClients {
             JsonNode segs = body.path("segments");
             if (segs.isArray()) {
                 Set<String> out = new LinkedHashSet<>();
-                for (JsonNode s : segs) out.add(s.asText());
+                for (JsonNode s : segs) out.add(s.asString());
                 return out;
             }
         } catch (RestClientException e) {
@@ -151,7 +151,7 @@ public class DownstreamClients {
                     .header("Content-Type", "application/json")
                     .body(context).retrieve().body(String.class));
             JsonNode narrative = reply.path("narrative");
-            return narrative.isMissingNode() || narrative.isNull() ? null : narrative.asText();
+            return narrative.isMissingNode() || narrative.isNull() ? null : narrative.asString();
         } catch (RestClientException e) {
             return null;
         }

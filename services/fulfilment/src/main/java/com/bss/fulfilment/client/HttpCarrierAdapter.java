@@ -142,12 +142,12 @@ public class HttpCarrierAdapter implements CarrierAdapter {
 
     private static String text(JsonNode c, String key, String dflt) {
         JsonNode n = c.get(key);
-        return n == null || n.isNull() || n.asText().isBlank() ? dflt : n.asText();
+        return n == null || n.isNull() || n.asString().isBlank() ? dflt : n.asString();
     }
 
     private static String at(JsonNode root, String pointer) {
         JsonNode n = root.at(pointer);
-        return n.isMissingNode() || n.isNull() ? null : n.asText();
+        return n.isMissingNode() || n.isNull() ? null : n.asString();
     }
 
     private static String nz(String v) {

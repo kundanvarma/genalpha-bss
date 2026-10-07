@@ -191,7 +191,7 @@ public class SalesService {
         for (JsonNode field : entry.path("field_data")) {
             JsonNode values = field.path("values");
             if (field.hasNonNull("name") && values.isArray() && values.size() > 0) {
-                fields.put(field.get("name").asText(), values.get(0).asText());
+                fields.put(field.get("name").asString(), values.get(0).asString());
             }
         }
         SalesLead lead = new SalesLead();
@@ -1026,7 +1026,7 @@ public class SalesService {
 
     /** A node's text, or null when it is absent or JSON null. */
     private static String text(JsonNode node) {
-        return node == null || node.isMissingNode() || node.isNull() ? null : node.asText();
+        return node == null || node.isMissingNode() || node.isNull() ? null : node.asString();
     }
 
     /** The deal's activity log, newest first. */

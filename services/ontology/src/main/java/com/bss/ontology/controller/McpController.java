@@ -97,7 +97,7 @@ public class McpController {
 
     private Object handle(JsonNode req, HttpServletRequest request) {
         JsonNode id = req.get("id");
-        String method = req.path("method").asText();
+        String method = req.path("method").asString();
         JsonNode params = req.path("params");
         if (method.startsWith("notifications/")) {
             return null;
@@ -149,23 +149,23 @@ public class McpController {
         tools.add(tool("customer_context", "One call: a customer's subscriptions (with what each could become), lines, bills and the receipts of what the BSS decided about them — walked with your rights; edges that did not answer are listed.",
                 one("customerId", "the customer (party) id"), List.of("customerId")));
         for (JsonNode a : l.actions().values()) {
-            if ("deprecated".equals(a.path("status").asText())) {
+            if ("deprecated".equals(a.path("status").asString())) {
                 continue;
             }
-            String snake = snake(a.path("action").asText());
+            String snake = snake(a.path("action").asString());
             Map<String, Property> props = new LinkedHashMap<>();
             List<String> required = new ArrayList<>();
             for (JsonNode in : a.path("inputs")) {
-                String type = switch (in.path("type").asText()) { case "number", "money" -> "number"; case "boolean" -> "boolean"; default -> "string"; };
-                props.put(in.path("name").asText(), new Property(type,
-                        in.path("meaning").asText(in.has("concept") ? "id of a " + in.path("concept").asText() : in.path("name").asText()), null));
+                String type = switch (in.path("type").asString()) { case "number", "money" -> "number"; case "boolean" -> "boolean"; default -> "string"; };
+                props.put(in.path("name").asString(), new Property(type,
+                        in.path("meaning").asString(in.has("concept") ? "id of a " + in.path("concept").asString() : in.path("name").asString()), null));
                 if (in.path("required").asBoolean(false)) {
-                    required.add(in.path("name").asText());
+                    required.add(in.path("name").asString());
                 }
             }
-            String description = a.path("meaning").asText() + " Who may: " + ExplainService.who(a) + ".";
+            String description = a.path("meaning").asString() + " Who may: " + ExplainService.who(a) + ".";
             tools.add(tool("check_" + snake, "Dry run of " + snake + ": may it happen for these inputs, and if not, which condition fails? " + description, props, required));
-            tools.add(tool(snake, description + " Executes through " + a.path("executes").path("capability").asText()
+            tools.add(tool(snake, description + " Executes through " + a.path("executes").path("capability").asString()
                     + " with the caller's own rights after preconditions, permission and policy; writes a decision receipt.", props, required));
         }
         return tools;
@@ -186,7 +186,7 @@ public class McpController {
     }
 
     private ToolResult call(JsonNode params, HttpServletRequest request) {
-        String name = params.path("name").asText();
+        String name = params.path("name").asString();
         JsonNode args = params.path("arguments");
         String tenant = tenantScope.currentTenantId();
         Caller caller = Caller.current(request, tenant);
@@ -199,13 +199,13 @@ public class McpController {
         if ("list_actions".equals(name)) {
             List<ActionRow> rows = new ArrayList<>();
             for (JsonNode a : l.actions().values()) {
-                rows.add(new ActionRow(a.path("action").asText(), snake(a.path("action").asText()), a.path("concept").asText(),
-                        a.path("meaning").asText(), ExplainService.who(a), a.path("version").asInt(), a.path("status").asText()));
+                rows.add(new ActionRow(a.path("action").asString(), snake(a.path("action").asString()), a.path("concept").asString(),
+                        a.path("meaning").asString(), ExplainService.who(a), a.path("version").asInt(), a.path("status").asString()));
             }
             result = rows;
         } else if ("explain".equals(name)) {
-            String kind = args.path("kind").asText();
-            String what = args.path("name").asText();
+            String kind = args.path("kind").asString();
+            String what = args.path("name").asString();
             result = switch (kind) {
                 case "concept" -> explain.concept(what, tenant);
                 case "action" -> explain.action(what, tenant);
@@ -218,18 +218,18 @@ public class McpController {
                 isError = true;
             }
         } else if ("available_upgrades".equals(name)) {
-            result = upgrades.availableUpgrades(args.path("subscriptionId").asText(), caller);
+            result = upgrades.availableUpgrades(args.path("subscriptionId").asString(), caller);
         } else if ("list_agents".equals(name)) {
             List<AgentRow> rows = new ArrayList<>();
             for (JsonNode a : l.agents().values()) {
-                rows.add(new AgentRow(a.path("agent").asText(), a.path("kind").asText(), a.path("meaning").asText(),
-                        a.path("runsAs").asText(), a.path("autonomy").asText(), a.path("actions").path("execute")));
+                rows.add(new AgentRow(a.path("agent").asString(), a.path("kind").asString(), a.path("meaning").asString(),
+                        a.path("runsAs").asString(), a.path("autonomy").asString(), a.path("actions").path("execute")));
             }
             result = rows;
         } else if ("customer_context".equals(name)) {
-            result = context.customer(args.path("customerId").asText(), caller);
+            result = context.customer(args.path("customerId").asString(), caller);
         } else if ("recommend".equals(name)) {
-            result = recommendations.forCustomer(args.path("customerId").asText(), caller);
+            result = recommendations.forCustomer(args.path("customerId").asString(), caller);
         } else {
             boolean dry = name.startsWith("check_");
             String actionName = camel(dry ? name.substring(6) : name);
@@ -238,7 +238,7 @@ public class McpController {
                 throw new IllegalArgumentException("unknown tool: " + name);
             }
             Map<String, String> inputs = new LinkedHashMap<>();
-            args.properties().forEach(f -> inputs.put(f.getKey(), f.getValue().asText()));
+            args.properties().forEach(f -> inputs.put(f.getKey(), f.getValue().asString()));
             if (dry) {
                 Check c = checks.check(action, inputs, caller);
                 result = c;

@@ -42,7 +42,7 @@ public class MockSocialProvider implements SocialProvider {
 
     private static String text(JsonNode n, String key) {
         JsonNode v = n.get(key);
-        return v == null || v.isNull() ? null : v.asText();
+        return v == null || v.isNull() ? null : v.asString();
     }
 
     private JsonNode get(SocialConfig cfg, String path, String var, String token) {
@@ -67,8 +67,8 @@ public class MockSocialProvider implements SocialProvider {
         JsonNode res = http.post().uri(base(cfg) + "/v1/{acct}/posts", cfg.accountId())
                 .header("Authorization", "Bearer " + cfg.accessToken())
                 .body(Map.of("message", message)).retrieve().body(JsonNode.class);
-        return new PublishedPost(res == null ? "" : res.path("id").asText(),
-                res == null ? "" : res.path("permalink").asText());
+        return new PublishedPost(res == null ? "" : res.path("id").asString(),
+                res == null ? "" : res.path("permalink").asString());
     }
 
     @Override

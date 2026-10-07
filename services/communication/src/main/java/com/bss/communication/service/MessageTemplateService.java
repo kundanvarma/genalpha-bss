@@ -65,7 +65,7 @@ public class MessageTemplateService {
         entity.setChannel(channel);
         entity.setLocales(locales);
         if (dto.promotionRef() != null && !dto.promotionRef().isNull()) {
-            entity.setPromotionRef(dto.promotionRef().asText());
+            entity.setPromotionRef(dto.promotionRef().asString());
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -97,7 +97,7 @@ public class MessageTemplateService {
         }
         // absent leaves the row alone; an explicit JSON null clears it
         if (patch.promotionRef() != null) {
-            entity.setPromotionRef(patch.promotionRef().isNull() ? null : patch.promotionRef().asText());
+            entity.setPromotionRef(patch.promotionRef().isNull() ? null : patch.promotionRef().asString());
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toView(repository.save(entity));

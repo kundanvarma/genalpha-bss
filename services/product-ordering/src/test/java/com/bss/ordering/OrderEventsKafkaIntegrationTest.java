@@ -98,18 +98,18 @@ class OrderEventsKafkaIntegrationTest {
                                     """))
                     .andExpect(status().isCreated())
                     .andReturn().getResponse().getContentAsString();
-            String orderId = objectMapper.readTree(response).get("id").asText();
+            String orderId = objectMapper.readTree(response).get("id").asString();
 
             ConsumerRecord<String, String> record = pollForOrder(consumer, orderId);
             assertThat(record).as("event for order %s on %s", orderId, TOPIC).isNotNull();
 
             JsonNode envelope = objectMapper.readTree(record.value());
-            assertThat(envelope.get("eventType").asText()).isEqualTo("ProductOrderCreateEvent");
-            assertThat(envelope.get("eventId").asText()).isNotBlank();
-            assertThat(envelope.get("eventTime").asText()).isNotBlank();
-            assertThat(envelope.at("/event/productOrder/id").asText()).isEqualTo(orderId);
-            assertThat(envelope.at("/event/productOrder/state").asText()).isEqualTo("acknowledged");
-            assertThat(record.key()).isEqualTo(envelope.get("eventId").asText());
+            assertThat(envelope.get("eventType").asString()).isEqualTo("ProductOrderCreateEvent");
+            assertThat(envelope.get("eventId").asString()).isNotBlank();
+            assertThat(envelope.get("eventTime").asString()).isNotBlank();
+            assertThat(envelope.at("/event/productOrder/id").asString()).isEqualTo(orderId);
+            assertThat(envelope.at("/event/productOrder/state").asString()).isEqualTo("acknowledged");
+            assertThat(record.key()).isEqualTo(envelope.get("eventId").asString());
         }
     }
 

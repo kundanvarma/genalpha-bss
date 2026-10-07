@@ -30,6 +30,6 @@ public record ContentProviderConfigRequest(
         if (config == null || config.isNull()) {
             return null;
         }
-        return config.isTextual() ? config.asText() : config.toString();
+        return config.isTextual() ? config.asString() : config.toString();
     }
 }

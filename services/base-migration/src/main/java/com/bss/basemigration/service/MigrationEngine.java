@@ -146,7 +146,7 @@ public class MigrationEngine {
                 // an order without an id is no order reference: store nothing rather than
                 // the literal text "null", which reads like a real reference on the desk
                 tools.jackson.databind.JsonNode placedId = order == null ? null : order.get("id");
-                customer.setOrderRef(placedId == null || placedId.isNull() ? null : placedId.asText());
+                customer.setOrderRef(placedId == null || placedId.isNull() ? null : placedId.asString());
                 customer.setState(MigrationCustomer.MIGRATED);
                 customer.setLastUpdate(OffsetDateTime.now(clock));
                 customers.save(customer);

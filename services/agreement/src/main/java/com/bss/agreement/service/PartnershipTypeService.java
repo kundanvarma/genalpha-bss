@@ -112,10 +112,10 @@ public class PartnershipTypeService {
         List<RoleType> out = new ArrayList<>();
         for (JsonNode entry : raw) {
             JsonNode name = entry.get("name");
-            if (entry.isObject() && name != null && !name.isNull() && !name.asText().isBlank()) {
+            if (entry.isObject() && name != null && !name.isNull() && !name.asString().isBlank()) {
                 JsonNode description = entry.get("description");
-                out.add(RoleType.of(name.asText(),
-                        description == null || description.isNull() ? null : description.asText()));
+                out.add(RoleType.of(name.asString(),
+                        description == null || description.isNull() ? null : description.asString()));
             }
         }
         return out;

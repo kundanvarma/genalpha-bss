@@ -28,6 +28,6 @@ public record AutoTopupPolicyRequest(Boolean enabled, Boolean consent, String bo
 
     public BigDecimal maxSpendPerCycleValue() {
         return maxSpendPerCycle == null || maxSpendPerCycle.isNull() ? null
-                : new BigDecimal(maxSpendPerCycle.asText());
+                : new BigDecimal(maxSpendPerCycle.asString());
     }
 }

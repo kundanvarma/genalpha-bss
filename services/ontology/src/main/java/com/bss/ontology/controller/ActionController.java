@@ -94,7 +94,7 @@ public class ActionController {
         JsonNode src = nested != null && nested.isObject() ? nested : body;
         src.properties().forEach(f -> {
             if (!f.getValue().isNull()) {
-                in.put(f.getKey(), f.getValue().asText());
+                in.put(f.getKey(), f.getValue().asString());
             }
         });
         return in;

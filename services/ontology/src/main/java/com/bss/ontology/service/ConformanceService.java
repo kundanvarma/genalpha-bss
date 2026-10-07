@@ -45,26 +45,26 @@ public class ConformanceService {
         for (JsonNode ev : declared.path("events")) {
             boolean found = false;
             for (JsonNode r : runtime.path("events")) {
-                if (r.asText().equals(ev.asText())) {
+                if (r.asString().equals(ev.asString())) {
                     found = true;
                 }
             }
             if (!found) {
-                missingEvents.add(ev.asText());
+                missingEvents.add(ev.asString());
             }
         }
         List<String> missingRoutes = new ArrayList<>();
         List<String> servedRoutes = new ArrayList<>();
         for (JsonNode capId : declared.path("capabilities")) {
-            JsonNode cap = l.capabilities().get(capId.asText());
+            JsonNode cap = l.capabilities().get(capId.asString());
             if (cap == null || !cap.has("route")) {
                 continue;
             }
-            String path = cap.path("route").path("path").asText();
-            String method = cap.path("route").path("method").asText();
+            String path = cap.path("route").path("path").asString();
+            String method = cap.path("route").path("method").asString();
             boolean served = false;
             for (JsonNode r : runtime.path("routes")) {
-                String route = r.asText();
+                String route = r.asString();
                 int sp = route.indexOf(' ');
                 String methods = route.substring(0, sp);
                 String pattern = route.substring(sp + 1);
@@ -78,12 +78,12 @@ public class ConformanceService {
         for (JsonNode m : declared.path("manages")) {
             boolean found = false;
             for (JsonNode r : runtime.path("manages")) {
-                if (r.asText().equals(m.asText())) {
+                if (r.asString().equals(m.asString())) {
                     found = true;
                 }
             }
             if (!found) {
-                missingManages.add(m.asText());
+                missingManages.add(m.asString());
             }
         }
         boolean ok = missingEvents.isEmpty() && missingRoutes.isEmpty() && missingManages.isEmpty();

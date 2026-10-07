@@ -220,7 +220,7 @@ public class WorkforceService {
     private void verifyDone(WorkforceTask row) {
         if (KIND_TICKET.equals(row.getKind())) {
             tools.jackson.databind.JsonNode ticket = bss.ticketById(row.getSubjectRef());
-            String status = ticket == null ? null : ticket.path("status").asText(null);
+            String status = ticket == null ? null : ticket.path("status").asString(null);
             if (ticket != null && !"resolved".equals(status) && !"closed".equals(status)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "the ticket is still '" + status

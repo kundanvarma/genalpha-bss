@@ -624,7 +624,7 @@ public class SomController {
         }
         for (JsonNode item : items) {
             JsonNode spec = item.path("service").path("serviceSpecification");
-            if (spec.isObject() && spec.path("id").asText("").isBlank()) {
+            if (spec.isObject() && spec.path("id").asString("").isBlank()) {
                 throw new BadRequestException("serviceSpecification needs an id — a nameless spec specifies nothing");
             }
         }
@@ -657,7 +657,7 @@ public class SomController {
         if (v == null || v.isNull()) {
             return fallback;
         }
-        return v.isValueNode() ? v.asText() : v.toString();
+        return v.isValueNode() ? v.asString() : v.toString();
     }
 
     @GetMapping({ApiConstants.ORDER_BASE + "/serviceOrder/{id}", "/tmf-api/serviceOrdering/v3/serviceOrder/{id}"})

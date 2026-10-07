@@ -90,7 +90,7 @@ class DtoRoundTripTest {
         JsonNode back = json.readTree(json.writeValueAsString(dto));
         assertEquals("{\"unit\":\"EUR\",\"value\":39.99}", back.get("price").toString());
         assertEquals("{\"amount\":12,\"units\":\"month\"}", back.get("unitOfMeasure").toString());
-        assertEquals("ProductOfferingPrice", back.get("@type").asText());
+        assertEquals("ProductOfferingPrice", back.get("@type").asString());
         assertFalse(back.has("tax"));
     }
 
@@ -137,8 +137,8 @@ class DtoRoundTripTest {
         assertEquals("go", r.note());
         assertTrue(r.force());
         assertFalse(r.done());
-        assertEquals("web", r.channel().get(0).asText());
-        assertEquals("app", r.channel().get(1).get("id").asText());
+        assertEquals("web", r.channel().get(0).asString());
+        assertEquals("app", r.channel().get(1).get("id").asString());
         assertEquals(" — go", r.noteSuffix());
     }
 

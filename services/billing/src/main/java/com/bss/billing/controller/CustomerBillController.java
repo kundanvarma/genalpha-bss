@@ -127,7 +127,7 @@ public class CustomerBillController {
     @PostMapping("/customerBillOnDemand")
     public ResponseEntity<ObjectNode> createOnDemand(@RequestBody JsonNode body) {
         ObjectNode created = service.createOnDemand(body);
-        return ResponseEntity.created(URI.create(created.path("href").asText())).body(created);
+        return ResponseEntity.created(URI.create(created.path("href").asString())).body(created);
     }
 
     @GetMapping("/customerBillOnDemand")

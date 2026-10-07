@@ -187,7 +187,7 @@ class DtoRoundTripTest {
                 + "\"roleType\":\"plain\",\"characteristic\":[]}", PartyRoleRequest.class);
         assertEquals("org-77", create.engagedPartyId());
         assertTrue(create.hasRoleType());
-        assertEquals("plain", create.roleType().asText());
+        assertEquals("plain", create.roleType().asString());
         PartyRoleRequest clear = json.readValue("{\"roleType\":null}", PartyRoleRequest.class);
         assertTrue(clear.roleType().isNull(), "explicit null clears");
         assertFalse(clear.hasRoleType());

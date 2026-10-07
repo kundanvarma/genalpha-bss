@@ -19,6 +19,6 @@ public record SpendPolicyPatch(JsonNode limit, String currency, Boolean enabled,
     }
 
     public BigDecimal limitValue() {
-        return limit == null || limit.isNull() ? null : new BigDecimal(limit.asText());
+        return limit == null || limit.isNull() ? null : new BigDecimal(limit.asString());
     }
 }

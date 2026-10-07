@@ -60,11 +60,11 @@ public class ContentWebhookService {
             verify(rawBody, signatureHeader, secret);
 
             JsonNode body = readBody(rawBody);
-            String assetId = firstNonBlank(body.path("assetId").asText(null), body.path("_id").asText(null));
+            String assetId = firstNonBlank(body.path("assetId").asString(null), body.path("_id").asString(null));
             if (assetId == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhook body needs assetId");
             }
-            String operation = body.path("operation").asText("upsert");
+            String operation = body.path("operation").asString("upsert");
             boolean deleted = "delete".equalsIgnoreCase(operation);
 
             String key = "ref:sanity:" + assetId;

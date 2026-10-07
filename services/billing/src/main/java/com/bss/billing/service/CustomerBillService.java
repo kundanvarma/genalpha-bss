@@ -106,7 +106,7 @@ public class CustomerBillService {
         e.setHref(ApiConstants.BASE_PATH + "/customerBillOnDemand/" + id);
         e.setTenantId(tenantScope.currentTenantId());
         JsonNode state = body == null ? null : body.get("state");
-        e.setState(state == null || state.isNull() ? "done" : state.asText());
+        e.setState(state == null || state.isNull() ? "done" : state.asString());
         e.setPayloadJson(writeJsonValue(body));
         e.setCreatedAt(OffsetDateTime.now());
         e.setLastUpdate(OffsetDateTime.now());

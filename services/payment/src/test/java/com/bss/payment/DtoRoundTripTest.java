@@ -155,7 +155,7 @@ class DtoRoundTripTest {
                 + "\"priority\":\"10\",\"isDefault\":true,\"unknown\":1}", PspConfigRequest.class);
         assertThat(cfg.provider()).isEqualTo("klarna");
         assertThat(cfg.methods().toString()).isEqualTo("[\"klarna\"]");
-        assertThat(cfg.priority().asText()).isEqualTo("10");
+        assertThat(cfg.priority().asString()).isEqualTo("10");
         assertThat(cfg.isDefault()).isTrue();
         assertThat(cfg.enabled()).isNull();
 

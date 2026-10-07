@@ -874,7 +874,7 @@ public class JourneyService {
             if (steps.isArray()) {
                 return objectMapper.convertValue(steps, STEP_LIST);
             }
-            return objectMapper.readValue(steps.isTextual() ? steps.asText() : steps.toString(), STEP_LIST);
+            return objectMapper.readValue(steps.isTextual() ? steps.asString() : steps.toString(), STEP_LIST);
         } catch (tools.jackson.core.JacksonException | IllegalArgumentException e) {
             throw new BadRequestException("steps must be a JSON array of {type, ...}");
         }
@@ -1076,7 +1076,7 @@ public class JourneyService {
         }
         try {
             List<Map<String, Object>> list = raw.isTextual()
-                    ? (raw.asText().isBlank() ? List.of() : objectMapper.readValue(raw.asText(), STEP_LIST))
+                    ? (raw.asString().isBlank() ? List.of() : objectMapper.readValue(raw.asString(), STEP_LIST))
                     : objectMapper.convertValue(raw, STEP_LIST);
             java.util.Set<String> names = new java.util.HashSet<>();
             for (Map<String, Object> a : list) {

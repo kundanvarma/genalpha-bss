@@ -83,12 +83,12 @@ class DtoRoundTripTest {
                 + "\"productOffering\":{\"id\":5,\"name\":\"Fiber 500\"},"
                 + "\"relatedParty\":[{\"id\":\"party-1\",\"role\":\"customer\"}]}",
                 ProductDto.class);
-        assertThat(dto.getProductOffering().get("id").asText()).isEqualTo("5");
+        assertThat(dto.getProductOffering().get("id").asString()).isEqualTo("5");
         assertThat(dto.getBillingAccount()).isNull();
         assertThat(dto.getRelatedParty()).hasSize(1);
         // the map read both ids through String.valueOf, so 5 and "5" were one id
-        assertThat(mapper.readTree("{\"id\":\"5\"}").get("id").asText())
-                .isEqualTo(dto.getProductOffering().get("id").asText());
+        assertThat(mapper.readTree("{\"id\":\"5\"}").get("id").asString())
+                .isEqualTo(dto.getProductOffering().get("id").asString());
     }
 
     @Test
