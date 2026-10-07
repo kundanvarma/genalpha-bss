@@ -26,7 +26,10 @@ echo "backup: dumping every database and role from bss-postgres ..."
 docker exec bss-postgres pg_dumpall -U postgres | gzip > "$OUT"
 
 SIZE="$(du -h "$OUT" | cut -f1)"
-DBS="$(gunzip -c "$OUT" | grep -c '^\\\\connect ' || true)"
+# pg_dumpall writes ONE backslash (`\connect agreement`); this counted two and so
+# reported "0 databases" on a perfectly good 56 MB dump — which reads exactly like
+# a backup of nothing, on the one script whose whole job is to be trusted.
+DBS="$(gunzip -c "$OUT" | grep -c '^\\connect ' || true)"
 echo "backup: wrote $OUT ($SIZE, $DBS databases)"
 
 # prune: newest $KEEP stay
