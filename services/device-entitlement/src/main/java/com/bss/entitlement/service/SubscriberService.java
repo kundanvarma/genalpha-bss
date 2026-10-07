@@ -432,6 +432,6 @@ public class SubscriberService {
         if (v == null || v.isNull()) {
             return null;
         }
-        return v.isTextual() ? v.textValue() : v.toString();
+        return v.isString() ? v.textValue() : v.toString();
     }
 }

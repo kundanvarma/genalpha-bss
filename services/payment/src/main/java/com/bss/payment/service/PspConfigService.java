@@ -207,7 +207,7 @@ public class PspConfigService {
         if (v == null || v.isNull()) {
             return null;
         }
-        return v.isTextual() ? v.textValue() : v.toString();
+        return v.isString() ? v.textValue() : v.toString();
     }
 
     /** The secret is a reference only — the API key is never returned. */

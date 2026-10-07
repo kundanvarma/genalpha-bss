@@ -519,7 +519,7 @@ public class AudienceService {
     /** The tree as the marketer sent it — a JSON string or an object — stored as text after a parse check. */
     private String serialize(JsonNode criteria) {
         try {
-            String json = criteria.isTextual() ? criteria.asString() : objectMapper.writeValueAsString(criteria);
+            String json = criteria.isString() ? criteria.asString() : objectMapper.writeValueAsString(criteria);
             objectMapper.readValue(json, OBJECT); // validate it parses as an object
             return json;
         } catch (Exception e) {

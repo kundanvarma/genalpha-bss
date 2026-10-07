@@ -39,7 +39,7 @@ public record MigrationPlanRequest(
 
     /** What {@code String.valueOf(map.get(k))} produced — "null" included, as it always was. */
     public static String text(JsonNode node) {
-        return node == null || node.isNull() ? "null" : node.isTextual() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? "null" : node.isString() ? node.textValue() : node.toString();
     }
 
     /** Did the substance of the plan change? Then a rehearsal receipt is stale. */

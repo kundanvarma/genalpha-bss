@@ -203,7 +203,7 @@ public class MigrationEngine {
                     .equals(customer.getSourceOfferingId()) && chars != null && chars.isObject()) {
                 Map<String, Object> out = new LinkedHashMap<>();
                 chars.properties().forEach(e -> out.put(e.getKey(),
-                        e.getValue().isTextual() ? e.getValue().textValue() : e.getValue()));
+                        e.getValue().isString() ? e.getValue().textValue() : e.getValue()));
                 return out;
             }
         }

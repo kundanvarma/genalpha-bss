@@ -48,7 +48,7 @@ public final class SchemaCheck {
             boolean ok = switch (t) {
                 case "object" -> node.isObject();
                 case "array" -> node.isArray();
-                case "string" -> node.isTextual();
+                case "string" -> node.isString();
                 case "integer" -> node.isIntegralNumber();
                 case "number" -> node.isNumber();
                 case "boolean" -> node.isBoolean();
@@ -59,7 +59,7 @@ public final class SchemaCheck {
                 return;
             }
         }
-        if (node.isTextual()) {
+        if (node.isString()) {
             JsonNode pattern = schema.get("pattern");
             if (pattern != null && !Pattern.compile(pattern.asString()).matcher(node.asString()).find()) {
                 errors.add(path + ": \"" + node.asString() + "\" does not match " + pattern.asString());

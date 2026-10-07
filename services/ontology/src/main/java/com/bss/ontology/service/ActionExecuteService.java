@@ -228,7 +228,7 @@ public class ActionExecuteService {
     private static final JsonNode OMIT = StringNode.valueOf("\u0000omit");
 
     private JsonNode fill(JsonNode node, JsonNode action, Map<String, String> inputs, Resolver.Resolved r, List<String> missing) {
-        if (node.isTextual()) {
+        if (node.isString()) {
             String s = node.asString();
             if (s.startsWith("${") && s.endsWith("}")) {
                 String path = s.substring(2, s.length() - 1);

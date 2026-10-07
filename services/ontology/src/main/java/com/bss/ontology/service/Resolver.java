@@ -187,7 +187,7 @@ public class Resolver {
                         Map.of("id", id), Map.of(), null, caller.bearer(), Map.of());
                 if (reply.ok() && "recurring".equalsIgnoreCase(reply.body().path("priceType").asString())) {
                     JsonNode v = reply.body().path("price").path("value");
-                    if (v.isNumber() || v.isTextual()) {
+                    if (v.isNumber() || v.isString()) {
                         found = new BigDecimal(v.asString());
                         break;
                     }

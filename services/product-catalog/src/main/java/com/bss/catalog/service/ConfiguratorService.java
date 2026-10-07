@@ -277,7 +277,7 @@ public class ConfiguratorService {
         if (node == null || node.isNull()) {
             return picks;
         }
-        if (node.isTextual()) {
+        if (node.isString()) {
             // the ontology's action inputs are strings: "screens=5+, extraProfiles=6"
             for (String pair : node.asString().split("[,;]")) {
                 int eq = pair.indexOf('=');

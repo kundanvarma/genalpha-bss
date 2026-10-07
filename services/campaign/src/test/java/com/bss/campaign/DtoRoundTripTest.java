@@ -120,7 +120,7 @@ class DtoRoundTripTest {
         assertNull(edit.triggerState(), "absent is not");
         assertNull(JourneyRequest.text(edit.triggerEventType()));
         assertEquals("s", JourneyRequest.text(edit.segmentName()));
-        assertTrue(edit.steps().isTextual());
+        assertTrue(edit.steps().isString());
         assertEquals(5, edit.holdoutPercent());
         assertEquals(1, edit.priority());
         assertEquals(true, edit.autoTune());
@@ -338,7 +338,7 @@ class DtoRoundTripTest {
                 write(stored));
         LearningContractRequest req = json.readValue("{\"secondaryMetrics\":\"revenue, reach\",\"guardrails\":[\"a\",\" \"],"
                 + "\"explorationMaxPercent\":\"15\",\"enabled\":\"false\",\"allowedActions\":null}", LearningContractRequest.class);
-        assertTrue(req.secondaryMetrics().isTextual());
+        assertTrue(req.secondaryMetrics().isString());
         assertTrue(req.guardrails().isArray());
         assertEquals("15", req.explorationMaxPercent().asString());
         assertEquals("false", req.enabled().asString());

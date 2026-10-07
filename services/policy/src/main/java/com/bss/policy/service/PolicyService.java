@@ -432,7 +432,7 @@ public class PolicyService {
         if (node == null || node.isNull()) {
             return null;
         }
-        return node.isTextual() ? node.asString() : node.toString();
+        return node.isString() ? node.asString() : node.toString();
     }
 
     private static String orDefault(String v, String def) {

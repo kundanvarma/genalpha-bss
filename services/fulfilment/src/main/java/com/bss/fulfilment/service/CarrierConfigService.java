@@ -150,7 +150,7 @@ public class CarrierConfigService {
         if (v == null || v.isNull()) {
             return null;
         }
-        if (v.isTextual()) {
+        if (v.isString()) {
             return v.textValue();
         }
         try {

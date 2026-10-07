@@ -35,7 +35,7 @@ public final class Json {
         if (node == null || node.isNull()) {
             return "null";
         }
-        if (node.isTextual()) {
+        if (node.isString()) {
             return node.textValue();
         }
         return String.valueOf(PLAIN.convertValue(node, Object.class));

@@ -303,7 +303,7 @@ public class ServiceActivationController {
     }
 
     private static Optional<OffsetDateTime> parseDate(JsonNode raw) {
-        if (raw == null || !raw.isTextual() || raw.asString().isBlank()) {
+        if (raw == null || !raw.isString() || raw.asString().isBlank()) {
             return Optional.empty();
         }
         try {
@@ -314,7 +314,7 @@ public class ServiceActivationController {
     }
 
     private static String text(JsonNode o) {
-        return o != null && o.isTextual() && !o.asString().isBlank() ? o.asString() : null;
+        return o != null && o.isString() && !o.asString().isBlank() ? o.asString() : null;
     }
 
     private static int intParam(Map<String, String> params, String key, int fallback) {

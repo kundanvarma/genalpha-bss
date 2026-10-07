@@ -194,7 +194,7 @@ public class LearningContractService implements ContractProvider {
             List<String> items = new ArrayList<>();
             o.forEach(n -> items.add(text(n)));
             list = items.stream().map(s -> s == null ? "" : s.trim()).filter(s -> !s.isEmpty()).toList();
-        } else if (o != null && o.isTextual() && !o.asString().isBlank()) {
+        } else if (o != null && o.isString() && !o.asString().isBlank()) {
             list = List.of(o.asString().split("\\s*[\\n,]\\s*"));
         } else {
             list = List.of();

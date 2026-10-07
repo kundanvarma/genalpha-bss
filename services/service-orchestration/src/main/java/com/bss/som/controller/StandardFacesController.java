@@ -246,16 +246,16 @@ public class StandardFacesController {
     @PostMapping("/tmf-api/resourceInventoryManagement/v4/resource")
     public ResponseEntity<JsonNode> createResource(@RequestBody ObjectNode dto) {
         JsonNode name = dto.get("name");
-        if (name == null || !name.isTextual() || name.asString().isBlank()) {
+        if (name == null || !name.isString() || name.asString().isBlank()) {
             throw new BadRequestException("name is required — an inventory record IS a named thing");
         }
         InventoryResource r = new InventoryResource();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
         r.setName(name.asString());
-        r.setCategory(dto.get("category") != null && dto.get("category").isTextual()
+        r.setCategory(dto.get("category") != null && dto.get("category").isString()
                 ? dto.get("category").asString() : null);
-        r.setResourceStatus(dto.get("resourceStatus") != null && dto.get("resourceStatus").isTextual()
+        r.setResourceStatus(dto.get("resourceStatus") != null && dto.get("resourceStatus").isString()
                 ? dto.get("resourceStatus").asString() : "available");
         r.setDocumentJson(writeJson(dto));
         r.setCreatedAt(OffsetDateTime.now());

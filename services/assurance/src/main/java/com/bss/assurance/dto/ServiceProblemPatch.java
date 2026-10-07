@@ -8,6 +8,6 @@ import tools.jackson.databind.JsonNode;
 public record ServiceProblemPatch(JsonNode status) {
 
     public boolean resolving() {
-        return status != null && status.isTextual() && "resolved".equals(status.asString());
+        return status != null && status.isString() && "resolved".equals(status.asString());
     }
 }

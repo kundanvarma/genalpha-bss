@@ -12,6 +12,6 @@ import tools.jackson.databind.JsonNode;
 public record AppointmentPatch(JsonNode status) {
 
     public boolean cancelling(String cancelled) {
-        return status != null && status.isTextual() && cancelled.equals(status.asString());
+        return status != null && status.isString() && cancelled.equals(status.asString());
     }
 }

@@ -133,7 +133,7 @@ class DtoRoundTripTest {
         assertTrue(asObject.hasCriteria());
         assertTrue(asObject.criteria().isObject());
         AudienceRequest asText = json.readValue("{\"name\":\"n\",\"criteria\":\"{\\\"type\\\":\\\"trait\\\"}\"}", AudienceRequest.class);
-        assertTrue(asText.criteria().isTextual());
+        assertTrue(asText.criteria().isString());
         AudienceRequest nulled = json.readValue("{\"name\":\"n\",\"criteria\":null}", AudienceRequest.class);
         assertFalse(nulled.hasCriteria());
     }

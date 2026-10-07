@@ -157,7 +157,7 @@ class DtoRoundTripTest {
         assertEquals("1", item.id());
         assertEquals(3, item.configuration().quantityOr(1));
         assertTrue(item.configuration().isPriceOnly());
-        assertTrue(item.configuration().configurationCharacteristic().isTextual());
+        assertTrue(item.configuration().configurationCharacteristic().isString());
         assertEquals("o1", item.configuration().selectedOption().get(0).id());
         assertEquals(1, json.readValue("{}", ProductConfigurationRequest.Check.Item.class).configuration().quantityOr(1));
     }

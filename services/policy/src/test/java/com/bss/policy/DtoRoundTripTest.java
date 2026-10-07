@@ -80,7 +80,7 @@ class DtoRoundTripTest {
     void ruleRequest_readsTheAuthoredDocuments_asTrees() throws Exception {
         PolicyRuleRequest r = json.readValue("{\"name\":\"Snap\",\"condition\":\"{\\\"var\\\":\\\"x\\\"}\",\"priority\":\"7\","
                 + "\"enabled\":\"true\",\"adjustmentValue\":-10,\"experience\":{\"a\":1},\"stranger\":1}", PolicyRuleRequest.class);
-        assertTrue(r.condition().isTextual());
+        assertTrue(r.condition().isString());
         assertEquals(7, r.priority());
         assertEquals(Boolean.TRUE, r.enabled());
         assertTrue(r.adjustmentValue().isNumber());
@@ -108,7 +108,7 @@ class DtoRoundTripTest {
         DecisionRequest q = json.readValue("{\"domain\":\"launch\",\"context\":{\"snap\":\"1\"},\"x\":2}", DecisionRequest.class);
         assertEquals("launch", q.domain());
         assertTrue(q.context().isObject());
-        assertTrue(json.readValue("{\"context\":\"x\"}", DecisionRequest.class).context().isTextual());
+        assertTrue(json.readValue("{\"context\":\"x\"}", DecisionRequest.class).context().isString());
     }
 
     @Test
