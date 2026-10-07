@@ -48,7 +48,30 @@ public class PukVault {
         return stored != null && stored.startsWith(PREFIX);
     }
 
+    /**
+     * A PUK is eight digits, and an ICCID nineteen or twenty. Neither is long, and
+     * neither is free text — so this refuses anything that is not plausibly one.
+     *
+     * The direct reason is that the buffer below is sized as `iv.length + ct.length`,
+     * which CodeQL flags as an uncontrolled arithmetic expression: with a large enough
+     * plaintext that addition overflows and the array is sized wrong. Reaching that
+     * needs roughly two gigabytes, so it is theoretical — but a vault whose job is to
+     * hold an eight-digit code should not be willing to encrypt two gigabytes of
+     * anything, and the bound is the honest statement of what this is for.
+     */
+    private static final int MAX_SECRET_CHARS = 128;
+
     public String encrypt(String puk, String iccid) {
+        if (puk == null || puk.isEmpty() || puk.length() > MAX_SECRET_CHARS) {
+            throw new IllegalArgumentException(
+                    "refusing to seal a PUK of " + (puk == null ? "null" : puk.length() + " characters")
+                            + " — expected at most " + MAX_SECRET_CHARS);
+        }
+        if (iccid == null || iccid.isEmpty() || iccid.length() > MAX_SECRET_CHARS) {
+            throw new IllegalArgumentException(
+                    "refusing an ICCID of " + (iccid == null ? "null" : iccid.length() + " characters")
+                            + " — it is bound into the ciphertext as additional authenticated data");
+        }
         try {
             byte[] iv = new byte[IV_BYTES];
             random.nextBytes(iv);

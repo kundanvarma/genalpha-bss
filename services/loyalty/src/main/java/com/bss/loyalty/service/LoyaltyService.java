@@ -285,7 +285,14 @@ public class LoyaltyService {
                 .orElseThrow(() -> new NotFoundException("not a loyalty member"));
         journal(tenant, party, points > 0 ? LoyaltyTransaction.EARN : LoyaltyTransaction.BURN,
                 points, "adjust:" + reason + ":" + UUID.randomUUID().toString().substring(0, 8));
-        m.setBalance(Math.max(0, m.getBalance() + points));
+        // WIDENED, THEN CLAMPED. `points` is caller-supplied, and int addition of two
+        // positives wraps NEGATIVE — which Math.max(0, …) then quietly turned into a
+        // ZEROED balance. A loyalty balance vanishing because somebody sent a large
+        // adjustment is a silent wrong answer rather than a crash, which is the kind
+        // that survives (CodeQL java/tainted-arithmetic). Adding in long cannot
+        // overflow from two ints, and the clamp states both bounds out loud.
+        long updated = (long) m.getBalance() + points;
+        m.setBalance((int) Math.max(0L, Math.min(Integer.MAX_VALUE, updated)));
         m.setLastUpdate(OffsetDateTime.now());
         recomputeTier(p, m);
         members.save(m);
