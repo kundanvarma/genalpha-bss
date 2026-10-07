@@ -126,7 +126,7 @@ public class VippsPspAdapter implements RedirectPspAdapter {
         }
         boolean approved = "CHARGED".equals(str(resp.get("state")));
         Map<String, Object> amt = resp.get("amount") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-        log.info("vipps agreement {} charged -> {}", fingerprint(token), approved);
+        log.info("vipps agreement {} charged -> {}", str(resp.get("chargeId")), approved);
         return new Confirmation(approved, kroner(amt.get("value")), str(amt.get("currency")),
                 str(resp.get("chargeId")), "Vipps (avtale)", approved ? null : str(resp.get("state")));
     }
@@ -156,18 +156,4 @@ public class VippsPspAdapter implements RedirectPspAdapter {
         return o == null ? null : String.valueOf(o);
     }
 
-    /**
-     * A stored-payment token is a CREDENTIAL — it is what lets this adapter charge
-     * the customer again without them present. It was being written to the log at
-     * INFO, which puts it in front of anyone who can read logs (CodeQL
-     * java/sensitive-log). This keeps the line useful for tracing a charge — the
-     * last four characters are enough to tell two tokens apart in a log — without
-     * the log becoming a place payment credentials are stored.
-     */
-    private static String fingerprint(String token) {
-        if (token == null || token.isBlank()) {
-            return "<none>";
-        }
-        return token.length() <= 4 ? "****" : "****" + token.substring(token.length() - 4);
-    }
 }

@@ -115,7 +115,7 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
             return new Confirmation(false, null, null, null, "Klarna", "token charge failed");
         }
         boolean approved = Boolean.TRUE.equals(resp.get("approved"));
-        log.info("klarna token charge {} -> {}", fingerprint(token), approved);
+        log.info("klarna token charge {} -> {}", str(resp.get("charge_id")), approved);
         return new Confirmation(approved, num(resp.get("amount")), str(resp.get("currency")),
                 str(resp.get("charge_id")), "Klarna (saved)",
                 approved ? null : str(resp.get("decline_reason")));
@@ -139,18 +139,4 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
         return o == null ? null : new BigDecimal(String.valueOf(o));
     }
 
-    /**
-     * A stored-payment token is a CREDENTIAL — it is what lets this adapter charge
-     * the customer again without them present. It was being written to the log at
-     * INFO, which puts it in front of anyone who can read logs (CodeQL
-     * java/sensitive-log). This keeps the line useful for tracing a charge — the
-     * last four characters are enough to tell two tokens apart in a log — without
-     * the log becoming a place payment credentials are stored.
-     */
-    private static String fingerprint(String token) {
-        if (token == null || token.isBlank()) {
-            return "<none>";
-        }
-        return token.length() <= 4 ? "****" : "****" + token.substring(token.length() - 4);
-    }
 }
