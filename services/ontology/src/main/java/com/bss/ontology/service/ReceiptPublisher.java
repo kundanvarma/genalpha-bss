@@ -162,6 +162,13 @@ public class ReceiptPublisher implements InitializingBean {
      * value still has to be readable by whoever is reading the alert.
      */
     private static String oneLine(String value) {
-        return value == null ? null : value.replaceAll("[\\r\\n\\u0085\\u2028\\u2029]+", " ");
+        // CHAINED replace(char, char), not replaceAll with a class. Both collapse
+        // the line breaks; only this shape is the one CodeQL models as a
+        // log-injection sanitiser, so the regex version left the alert standing
+        // on a line that was already safe. Same spelling as oneLine() in
+        // service-orchestration, which learned it first.
+        return value == null ? null : value
+                .replace('\n', '_').replace('\r', '_')
+                .replace('\u0085', '_').replace('\u2028', '_').replace('\u2029', '_');
     }
 }
