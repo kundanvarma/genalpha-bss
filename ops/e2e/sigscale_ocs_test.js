@@ -20,7 +20,7 @@
  *    old product retired); vacation hold disables the charging identity
  *  - another tenant sees none of it
  */
-const { execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const API = 'http://localhost:8080';
 const OCS = 'http://localhost:8155';

@@ -14,7 +14,7 @@
  *  - the dashboard's Hire goes through the controller when deployed
  *    ("Hired AND started", no credentials block)
  */
-const { execSync, execFileSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { chromium } = require('playwright');
 
