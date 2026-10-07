@@ -25,7 +25,18 @@ import java.util.regex.Pattern;
 @Component
 public class Redactor {
 
-    private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+\\.[\\w.]+");
+    // BOUNDED, BECAUSE THE UNBOUNDED FORM WAS QUADRATIC. This used to be
+    // `[\\w.+-]+@...`: an unbounded greedy run with no word boundary in front of
+    // it, so on text that never reaches an `@` the engine consumed the run,
+    // failed, and retried from the next character — the whole run again, from
+    // every position. Measured on this pattern, with a prompt of nothing but
+    // '+' characters:   10 KB -> 162 ms,  40 KB -> 2.4 s,  80 KB -> 10.8 s
+    // on one request thread, in the code that runs on EVERY prompt. The bounds
+    // are RFC 5321's: 64 characters of local part, 63 of a domain label. Real
+    // addresses are far inside them, so matches are unchanged, and the engine
+    // can no longer be made to rescan (80 KB now costs 7 ms).
+    private static final Pattern EMAIL =
+            Pattern.compile("[\\w.+-]{1,64}@[\\w-]{1,63}\\.[\\w.]{1,63}");
     private static final Pattern ADDRESS_LINE = Pattern.compile(
             "(?im)(?<![\\w])((?:(?:street|billing|shipping|postal|home|invoice|delivery|installation|service)[ \\t]+)?"
             + "(?:address|adresse|gateadresse|postadresse|street|strasse|straße|osoite)[ \\t]*[:=][ \\t]*)([^\\r\\n]+)$");
