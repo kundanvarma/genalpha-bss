@@ -194,10 +194,12 @@ public class DecisionPoints {
             this.allowed = allowed;
         }
 
+        @Override
         public String name() {
             return "learning-contract";
         }
 
+        @Override
         public Optional<String> reject(String action, DecisionRequest request) {
             return allowed.contains(action) ? Optional.empty() : Optional.of("not in the contract's allowed actions");
         }

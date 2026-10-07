@@ -23,12 +23,15 @@ public class MetaDestination implements AdDestination {
         this.providers = providers;
     }
 
+    @Override
     public String name() { return "meta"; }
 
     /** Per tenant: the current tenant's social line (or the deployment fallback) has a url. */
+    @Override
     public boolean enabled() { return providers.current().audiencesEnabled(); }
 
     /** Batches of 500 through the tenant's adapter: the Graph payload for 'meta', the dev shape for 'mock'. */
+    @Override
     public int push(String externalAudienceId, List<String> hashedEmails) {
         com.bss.insight.social.SocialConfig cfg = providers.current();
         if (!cfg.audiencesEnabled() || hashedEmails.isEmpty()) return 0;

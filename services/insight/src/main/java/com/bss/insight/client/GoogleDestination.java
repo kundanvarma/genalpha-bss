@@ -30,10 +30,13 @@ public class GoogleDestination implements AdDestination {
         this.token = token;
     }
 
+    @Override
     public String name() { return "google"; }
 
+    @Override
     public boolean enabled() { return baseUrl != null && !baseUrl.isBlank(); }
 
+    @Override
     public int push(String externalAudienceId, List<String> hashedEmails) {
         if (!enabled() || hashedEmails.isEmpty()) return 0;
         int sent = 0;
