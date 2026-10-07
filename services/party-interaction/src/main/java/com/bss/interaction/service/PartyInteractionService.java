@@ -253,7 +253,7 @@ public class PartyInteractionService {
         // TMF683 channel is an array of channel references; normalise a legacy
         // string value (app-created rows) so it round-trips as an array.
         if (channel != null && channel.isString()) {
-            channel = objectMapper.valueToTree(List.of(new ChannelRef(channel.textValue())));
+            channel = objectMapper.valueToTree(List.of(new ChannelRef(channel.stringValue())));
         }
         // TMF683 makes channel, direction and reason mandatory on EVERY
         // interaction. House-written rows (touchpoint feed, older writers)

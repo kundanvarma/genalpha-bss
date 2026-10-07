@@ -126,7 +126,7 @@ class DtoRoundTripTest {
         TemplateRequest cleared = mapper.readValue("{\"promotionRef\":null}", TemplateRequest.class);
         assertThat(cleared.promotionRef().isNull()).isTrue();          // explicit null: clear it
         TemplateRequest asString = mapper.readValue("{\"locales\":\"{\\\"en\\\":{}}\"}", TemplateRequest.class);
-        assertThat(asString.locales().textValue()).isEqualTo("{\"en\":{}}");
+        assertThat(asString.locales().stringValue()).isEqualTo("{\"en\":{}}");
     }
 
     @Test

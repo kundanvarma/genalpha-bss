@@ -358,7 +358,7 @@ public class EcsService {
 
     /** What {@code String.valueOf(map.get(k))} said: the value's own text, "null" when there was none. */
     private static String text(JsonNode node) {
-        return node == null || node.isNull() ? "null" : node.isString() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? "null" : node.isString() ? node.stringValue() : node.toString();
     }
 
     private static String statusWord(JsonNode status) {

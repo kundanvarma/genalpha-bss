@@ -85,7 +85,7 @@ public record SubscriberUpsertRequest(
 
     /** What {@code String.valueOf(map.get(k))} produced, for a value that is present. */
     public static String scalar(JsonNode node) {
-        return node == null || node.isNull() ? null : node.isString() ? node.textValue() : node.toString();
+        return node == null || node.isNull() ? null : node.isString() ? node.stringValue() : node.toString();
     }
 
     /** What {@code Boolean.parseBoolean(String.valueOf(v))} produced: only "true", in any case. */

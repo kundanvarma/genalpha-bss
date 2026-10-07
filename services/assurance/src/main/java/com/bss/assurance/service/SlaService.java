@@ -174,7 +174,7 @@ public class SlaService {
 
     /** The map compared with a String, so only a JSON string ever matched. */
     private static boolean isText(JsonNode node, String expected) {
-        return node != null && node.isString() && expected.equals(node.textValue());
+        return node != null && node.isString() && expected.equals(node.stringValue());
     }
 
     /** {@code getOrDefault(k, "0")}: a key present with a JSON null wins the null. */

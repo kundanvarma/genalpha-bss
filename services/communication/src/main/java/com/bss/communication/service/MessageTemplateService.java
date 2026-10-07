@@ -164,7 +164,7 @@ public class MessageTemplateService {
     private String serializeLocales(JsonNode locales) {
         if (locales == null || locales.isNull()) throw new BadRequestException("locales are required, e.g. {\"en\": {\"subject\": ..., \"body\": ...}}");
         try {
-            String json = locales.isString() ? locales.textValue() : locales.toString();
+            String json = locales.isString() ? locales.stringValue() : locales.toString();
             objectMapper.readValue(json, new TypeReference<Map<String, Map<String, String>>>() { });
             return json;
         } catch (Exception e) {

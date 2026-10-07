@@ -36,7 +36,7 @@ public final class Json {
             return "null";
         }
         if (node.isString()) {
-            return node.textValue();
+            return node.stringValue();
         }
         return String.valueOf(PLAIN.convertValue(node, Object.class));
     }

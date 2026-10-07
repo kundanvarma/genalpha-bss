@@ -151,7 +151,7 @@ public class CarrierConfigService {
             return null;
         }
         if (v.isString()) {
-            return v.textValue();
+            return v.stringValue();
         }
         try {
             return mapper.writeValueAsString(v);

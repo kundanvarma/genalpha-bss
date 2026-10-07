@@ -80,7 +80,7 @@ public final class Ts43Xml {
     }
 
     private static String text(JsonNode node) {
-        return node.isString() ? node.textValue() : node.toString();
+        return node.isString() ? node.stringValue() : node.toString();
     }
 
     private static String esc(String s) {
