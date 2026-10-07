@@ -49,6 +49,10 @@ ontology:
   dir: ${ONTOLOGY_DIR:}
   downstream-timeout-ms: ${ONTOLOGY_DOWNSTREAM_TIMEOUT_MS:8000}
   receipt-topic: bss.ontology.events
+  # A governed action must leave a receipt, so the service refuses to START when
+  # it cannot write one (see ReceiptPublisher). True is the application default;
+  # false is a deliberate decision to run actions that cannot be proved.
+  receipts-required: ${ONTOLOGY_RECEIPTS_REQUIRED:true}
   # the declared outcome of an action is measured this long after it (90 days in life; the demo compresses it)
   outcome-after-days: ${ONTOLOGY_OUTCOME_AFTER_DAYS:90}
   outcome-sweep-ms: ${ONTOLOGY_OUTCOME_SWEEP_MS:300000}
