@@ -202,6 +202,19 @@ public class PaymentService {
                         attempt.provider(), e.getMessage());
             }
         }
+        // THE INVARIANT, SAID WHERE IT IS RELIED ON. `auth` is non-null here only
+        // because PspRouter.candidatesFor() never returns an empty list — it falls
+        // back to forCurrentTenant(), which falls back to defaultAdapter(). So the
+        // loop above either sets `auth` or throws. That is true, and it is true two
+        // files away: nothing at this line says so, and a routing change that let the
+        // list come back empty would turn the next line into a NullPointerException
+        // on a payment path. CodeQL reads the same ambiguity as a user-controlled
+        // bypass (java/user-controlled-bypass, from the caller-supplied currency that
+        // selects the candidates).
+        if (auth == null) {
+            throw new IllegalStateException(
+                    "no PSP responded for this payment — the router returned no candidate to authorize against");
+        }
         if (auth.requiresAction()) {
             // Strong customer authentication (3-D Secure / BankID): the channel
             // completes the challenge and retries with the same correlator.

@@ -285,7 +285,20 @@ public class LoyaltyService {
                 .orElseThrow(() -> new NotFoundException("not a loyalty member"));
         journal(tenant, party, points > 0 ? LoyaltyTransaction.EARN : LoyaltyTransaction.BURN,
                 points, "adjust:" + reason + ":" + UUID.randomUUID().toString().substring(0, 8));
-        m.setBalance(Math.max(0, m.getBalance() + points));
+        // SATURATING, NOT WRAPPING. Both the balance and `points` are long, and
+        // `points` is caller-supplied — so this addition can overflow, and a long
+        // that wraps goes NEGATIVE, which Math.max(0, …) then quietly turned into a
+        // ZEROED balance. A customer's points vanishing is a silent wrong answer
+        // rather than a crash, which is the kind that survives (CodeQL
+        // java/tainted-arithmetic). addExact refuses to wrap; the saturation is
+        // explicit, and the floor at zero is the rule that was always there.
+        long updated;
+        try {
+            updated = Math.addExact(m.getBalance(), points);
+        } catch (ArithmeticException overflow) {
+            updated = points > 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
+        }
+        m.setBalance(Math.max(0L, updated));
         m.setLastUpdate(OffsetDateTime.now());
         recomputeTier(p, m);
         members.save(m);
