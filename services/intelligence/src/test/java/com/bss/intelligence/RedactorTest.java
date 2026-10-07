@@ -130,6 +130,38 @@ class RedactorTest {
         }, "redaction of a 100 KB prompt took longer than 2s — the quadratic backtracking is back");
     }
 
+    /**
+     * The SAME shape in the email recogniser, found by the same CodeQL rule once the
+     * address line stopped shouting. EMAIL was {@code [\w.+-]+@...}: an unbounded
+     * greedy run with no word boundary in front of it. On text that never reaches an
+     * {@code @} the engine consumed the run, failed, and retried from the next
+     * character -- the whole run again, from every position:
+     *
+     *     10 KB of '+' -> 162 ms,  40 KB -> 2.4 s,  80 KB -> 10.8 s
+     *
+     * A prompt is caller-supplied text of exactly that size, so this was a request
+     * thread anyone could hold for ten seconds. Bounded to RFC 5321's lengths the
+     * same 80 KB costs 7 ms.
+     */
+    @Test
+    void aPromptOfPunctuationDoesNotStallTheEmailRecogniser() {
+        String hostile = "+".repeat(81_920);
+        assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+            Redaction map = redactor.begin();
+            redactor.redact(hostile, map);
+        }, "redaction of an 80 KB run of '+' took longer than 2s — EMAIL is backtracking again");
+    }
+
+    /** Bounding the lengths must not change which addresses are recognised. */
+    @Test
+    void boundingTheEmailPatternStillRedactsARealAddress() {
+        Redaction map = redactor.begin();
+        String out = redactor.redact("Write to paula.nordmann+shop@family.example today.", map);
+
+        assertThat(out).isEqualTo("Write to <email#1> today.").doesNotContain("nordmann");
+        assertThat(map.restore(out)).isEqualTo("Write to paula.nordmann+shop@family.example today.");
+    }
+
     /** The fix must not change WHAT is redacted: same input, same placeholder, value still gone. */
     @Test
     void trailingWhitespaceDoesNotChangeWhatAnAddressRedactsTo() {

@@ -822,6 +822,10 @@ public class TenantOnboardingService {
                 + "no name, email or id crossed; every subscriber here is fictional by construction");
     }
 
+    /** One call may move a sandbox clock ten years; the total stops at a century. */
+    private static final int MAX_CLOCK_STEP_DAYS = 3650;
+    private static final int MAX_CLOCK_OFFSET_DAYS = 36500;
+
     /** T1 — advance a SANDBOX clone's clock (clock-offset-days in its block). */
     public ClockReceipt advanceClock(String cloneId, int days) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
@@ -830,13 +834,34 @@ public class TenantOnboardingService {
             throw new com.bss.userroles.exception.BadRequestException(
                     "the clock only moves in a sandbox — '" + cloneId + "' is not one");
         }
+        // THE CLOCK ONLY MOVES FORWARD, AND ONLY SO FAR. `days` arrives straight
+        // from the request body, and `current + days` was a plain int add: a
+        // caller passing Integer.MAX_VALUE overflowed it to a NEGATIVE offset,
+        // which moves a sandbox's clock BACKWARD — the one thing the method's
+        // own error message says it will not do. It also poisons the file: the
+        // rewrite below matches `\d+`, which a negative value no longer is, so
+        // the next call takes the insert branch and writes a SECOND
+        // clock-offset-days key into the block. A negative `days` did the same
+        // thing without needing an overflow at all. Ten years a call and a
+        // century in total is past any simulation anyone wants (T1 moves 30 days
+        // at a time) and far inside int, so the add below cannot overflow.
+        if (days < 1 || days > MAX_CLOCK_STEP_DAYS) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "the clock moves forward between 1 and " + MAX_CLOCK_STEP_DAYS
+                    + " days at a time — " + days + " is not a step");
+        }
         String block = m.group(1);
         int current = 0;
-        String cur = firstGroup(block, "clock-offset-days: \"?(\\d+)");
+        String cur = firstGroup(block, "clock-offset-days: \"?(\\d{1,9})");
         if (cur != null) {
             current = Integer.parseInt(cur);
         }
         int next = current + days;
+        if (next > MAX_CLOCK_OFFSET_DAYS) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "'" + cloneId + "' is already " + current + " days ahead; "
+                    + MAX_CLOCK_OFFSET_DAYS + " is as far as a sandbox clock goes");
+        }
         String updated = block.contains("clock-offset-days:")
                 ? block.replaceAll("clock-offset-days: \"?\\d+\"?", "clock-offset-days: \"" + next + "\"")
                 : block.replaceFirst("( +)sandbox: ", "$1clock-offset-days: \"" + next + "\"\n$1sandbox: ");
