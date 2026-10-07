@@ -89,6 +89,32 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# ------------------------------------------------------ securityconfig-drift ----
+# Tokens are validated in EVERY component rather than at the gateway, which
+# takes 39 copies of SecurityConfig — and 39 copies is 39 chances to drift.
+# CLAUDE.md has carried "a drift check across the copies is a follow-up" since
+# the hardening arc; this is it. Four invariants per copy (an authenticated
+# terminal rule, the component validates its own tokens, stateless sessions, a
+# multi-issuer resolver that consults the registry) plus the fleet's whole
+# anonymous surface pinned to ops/security/public-paths.txt, so a new public
+# path is a deliberate edit instead of a line in a diff nobody reads.
+#
+# SENTINEL, same lesson as billing above: a crashed checker prints nothing on
+# stdout, and silence is exactly how a pass looks. The gate hangs on evidence
+# that the check RAN, not merely that it said nothing.
+drift_err=$(mktemp)
+drift_out=$(python3 ops/security/security_config_drift.py 2>"$drift_err")
+drift_rc=$?
+if ! printf '%s' "$drift_out" | grep -q '^drift: \(clean\|FAIL\)'; then
+  sed 's/^/         /' "$drift_err" >&2
+  fail "the SecurityConfig drift check did not run" \
+       "no sentinel line on stdout — see the output above"
+elif [ "$drift_rc" -ne 0 ]; then
+  printf '%s\n' "$drift_out" | sed 's/^/         /' >&2
+  fail "the SecurityConfig copies have drifted" \
+       "a new anonymous path belongs in ops/security/public-paths.txt, in the same commit"
+fi
+rm -f "$drift_err"
 # ------------------------------------------------------- jackson3-deprecated ----
 # The Jackson 2 -> 3 migration renamed the string accessors, and the old names
 # were kept as DEPRECATED rather than removed, so every one of them compiles,

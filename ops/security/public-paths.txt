@@ -1,0 +1,352 @@
+# THE ANONYMOUS SURFACE OF THE FLEET — every path reachable without a token.
+#
+# One line per (service, matcher). ops/security/security_config_drift.py reads
+# this and fails when a SecurityConfig opens something this file does not
+# declare, or declares something the config no longer opens.
+#
+# This file does NOT assert that everything below is correctly public. Several
+# entries are deliberate and documented in their own config: a guest cart's
+# random id is its bearer secret, the public catalog is readable by design, the
+# TS.43 door answers handsets before they have an account. What it asserts is
+# that the set cannot GROW by accident. Adding a line is the deliberate act,
+# and it belongs in the same commit as the config change, with the reason in
+# the config's own comment.
+#
+# Generated from the code as it stood when the check was written, not typed
+# from memory. 253 entries, 39 services.
+#
+# Five appear in nearly every component and are infrastructure, not API:
+#   /actuator/health/**  /actuator/prometheus   (probes and scraping)
+#   /v3/api-docs/**  /swagger-ui/**  /swagger-ui.html   (discovery)
+
+# ---- agreement ----   (infrastructure only)
+agreement "/actuator/health/**"
+agreement "/actuator/prometheus"
+agreement "/swagger-ui.html"
+agreement "/swagger-ui/**"
+agreement "/v3/api-docs/**"
+
+# ---- appointment ----
+appointment "/actuator/health/**"
+appointment "/actuator/prometheus"
+appointment "/swagger-ui.html"
+appointment "/swagger-ui/**"
+appointment "/v3/api-docs/**"
+appointment ApiConstants.BASE_PATH+"/searchTimeSlot"
+
+# ---- assurance ----   (infrastructure only)
+assurance "/actuator/health/**"
+assurance "/actuator/prometheus"
+assurance "/swagger-ui.html"
+assurance "/swagger-ui/**"
+assurance "/v3/api-docs/**"
+
+# ---- base-migration ----   (infrastructure only)
+base-migration "/actuator/health/**"
+base-migration "/actuator/prometheus"
+base-migration "/swagger-ui.html"
+base-migration "/swagger-ui/**"
+base-migration "/v3/api-docs/**"
+
+# ---- billing ----
+billing "/.well-known/genalpha-component.json"
+billing "/actuator/health/**"
+billing "/actuator/prometheus"
+billing "/bank/v1/remittance"
+billing "/distribution/v1/response"
+billing "/swagger-ui.html"
+billing "/swagger-ui/**"
+billing "/v3/api-docs/**"
+
+# ---- campaign ----   (infrastructure only)
+campaign "/actuator/health/**"
+campaign "/actuator/prometheus"
+campaign "/swagger-ui.html"
+campaign "/swagger-ui/**"
+campaign "/v3/api-docs/**"
+
+# ---- communication ----
+communication "/actuator/health/**"
+communication "/actuator/prometheus"
+communication "/esp/v1/event"
+communication "/esp/v1/unsubscribe"
+communication "/swagger-ui.html"
+communication "/swagger-ui/**"
+communication "/v3/api-docs/**"
+
+# ---- device-commerce ----   (infrastructure only)
+device-commerce "/actuator/health/**"
+device-commerce "/actuator/prometheus"
+device-commerce "/swagger-ui.html"
+device-commerce "/swagger-ui/**"
+device-commerce "/v3/api-docs/**"
+
+# ---- device-entitlement ----
+device-entitlement "/.well-known/genalpha-component.json"
+device-entitlement "/actuator/health/**"
+device-entitlement "/actuator/prometheus"
+device-entitlement "/rcs/autoconfig"
+device-entitlement "/rcs/autoconfig/"
+device-entitlement "/swagger-ui.html"
+device-entitlement "/swagger-ui/**"
+device-entitlement "/v3/api-docs/**"
+device-entitlement ApiConstants.TS43_PATH
+device-entitlement ApiConstants.TS43_PATH+"/**"
+
+# ---- document ----
+document "/actuator/health/**"
+document "/actuator/prometheus"
+document "/swagger-ui.html"
+document "/swagger-ui/**"
+document "/v3/api-docs/**"
+document ApiConstants.BASE_PATH+"/document/*/content"
+document ApiConstants.BASE_PATH+"/document/banners"
+document ApiConstants.BASE_PATH+"/document/brand-logo"
+document ApiConstants.BASE_PATH+"/webhook/**"
+
+# ---- event-hub ----   (infrastructure only)
+event-hub "/actuator/health/**"
+event-hub "/actuator/prometheus"
+event-hub "/swagger-ui.html"
+event-hub "/swagger-ui/**"
+event-hub "/v3/api-docs/**"
+
+# ---- fulfilment ----
+fulfilment "/actuator/health/**"
+fulfilment "/actuator/prometheus"
+fulfilment "/swagger-ui.html"
+fulfilment "/swagger-ui/**"
+fulfilment "/v3/api-docs/**"
+fulfilment ApiConstants.BASE_PATH+"/carrier/deliveryOptions"
+fulfilment ApiConstants.BASE_PATH+"/carrier/pickupPoints"
+fulfilment ApiConstants.BASE_PATH+"/carrierEvent"
+
+# ---- geographic-address ----
+geographic-address "/actuator/health/**"
+geographic-address "/actuator/prometheus"
+geographic-address "/swagger-ui.html"
+geographic-address "/swagger-ui/**"
+geographic-address "/v3/api-docs/**"
+geographic-address ApiConstants.BASE_PATH+"/geographicAddressValidation"
+
+# ---- insight ----
+insight "/actuator/health/**"
+insight "/actuator/prometheus"
+insight "/swagger-ui.html"
+insight "/swagger-ui/**"
+insight "/v3/api-docs/**"
+insight ApiConstants.BASE_PATH+"/consent"
+insight ApiConstants.BASE_PATH+"/event"
+insight ApiConstants.BASE_PATH+"/experience"
+insight ApiConstants.BASE_PATH+"/hook/*"
+insight ApiConstants.BASE_PATH+"/landing/*/lead"
+insight ApiConstants.BASE_PATH+"/landing/*/view"
+
+# ---- intelligence ----
+intelligence "/actuator/health/**"
+intelligence "/actuator/prometheus"
+intelligence "/swagger-ui.html"
+intelligence "/swagger-ui/**"
+intelligence "/v3/api-docs/**"
+intelligence ApiConstants.BASE_PATH+"/careChat/guest/**"
+
+# ---- knowledge ----   (infrastructure only)
+knowledge "/actuator/health/**"
+knowledge "/actuator/prometheus"
+knowledge "/swagger-ui.html"
+knowledge "/swagger-ui/**"
+knowledge "/v3/api-docs/**"
+
+# ---- loyalty ----   (infrastructure only)
+loyalty "/actuator/health/**"
+loyalty "/actuator/prometheus"
+loyalty "/swagger-ui.html"
+loyalty "/swagger-ui/**"
+loyalty "/v3/api-docs/**"
+
+# ---- ontology ----
+ontology "/actuator/health/**"
+ontology "/actuator/prometheus"
+ontology ApiConstants.WELL_KNOWN
+
+# ---- party-account ----   (infrastructure only)
+party-account "/actuator/health/**"
+party-account "/actuator/prometheus"
+party-account "/swagger-ui.html"
+party-account "/swagger-ui/**"
+party-account "/v3/api-docs/**"
+
+# ---- party-interaction ----   (infrastructure only)
+party-interaction "/actuator/health/**"
+party-interaction "/actuator/prometheus"
+party-interaction "/swagger-ui.html"
+party-interaction "/swagger-ui/**"
+party-interaction "/v3/api-docs/**"
+
+# ---- payment ----
+payment "/actuator/health/**"
+payment "/actuator/prometheus"
+payment "/swagger-ui.html"
+payment "/swagger-ui/**"
+payment "/v3/api-docs/**"
+payment ApiConstants.BASE_PATH+"/payment/methods"
+payment ApiConstants.BASE_PATH+"/webhook/**"
+
+# ---- payment-method ----   (infrastructure only)
+payment-method "/actuator/health/**"
+payment-method "/actuator/prometheus"
+payment-method "/swagger-ui.html"
+payment-method "/swagger-ui/**"
+payment-method "/v3/api-docs/**"
+
+# ---- policy ----
+policy "/actuator/health/**"
+policy "/actuator/prometheus"
+policy "/swagger-ui.html"
+policy "/swagger-ui/**"
+policy "/v3/api-docs/**"
+policy ApiConstants.BASE_PATH+"/price/indicative"
+policy ApiConstants.BASE_PATH+"/price/teaser"
+
+# ---- porting ----   (infrastructure only)
+porting "/actuator/health/**"
+porting "/actuator/prometheus"
+porting "/swagger-ui.html"
+porting "/swagger-ui/**"
+porting "/v3/api-docs/**"
+
+# ---- process ----   (infrastructure only)
+process "/actuator/health/**"
+process "/actuator/prometheus"
+process "/swagger-ui.html"
+process "/swagger-ui/**"
+process "/v3/api-docs/**"
+
+# ---- product-catalog ----
+product-catalog "/.well-known/genalpha-component.json"
+product-catalog "/acp/product_feed"
+product-catalog "/actuator/health/**"
+product-catalog "/actuator/prometheus"
+product-catalog "/discovery/v1/**"
+product-catalog "/seo/**"
+product-catalog "/swagger-ui.html"
+product-catalog "/swagger-ui/**"
+product-catalog "/tmf-api/productConfigurationManagement/v5/**"
+product-catalog "/v3/api-docs/**"
+product-catalog ApiConstants.BASE_PATH+"/**"
+product-catalog ApiConstants.RESOURCE_CATALOG_BASE_PATH+"/**"
+product-catalog ApiConstants.SERVICE_CATALOG_BASE_PATH+"/**"
+product-catalog ApiConstants.SERVICE_CATALOG_V3_BASE_PATH+"/**"
+
+# ---- product-inventory ----
+product-inventory "/.well-known/genalpha-component.json"
+product-inventory "/actuator/health/**"
+product-inventory "/actuator/prometheus"
+product-inventory "/swagger-ui.html"
+product-inventory "/swagger-ui/**"
+product-inventory "/v3/api-docs/**"
+
+# ---- product-ordering ----
+product-ordering "/.well-known/genalpha-component.json"
+product-ordering "/actuator/health/**"
+product-ordering "/actuator/prometheus"
+product-ordering "/swagger-ui.html"
+product-ordering "/swagger-ui/**"
+product-ordering "/v3/api-docs/**"
+
+# ---- product-stock ----
+product-stock "/actuator/health/**"
+product-stock "/actuator/prometheus"
+product-stock "/swagger-ui.html"
+product-stock "/swagger-ui/**"
+product-stock "/v3/api-docs/**"
+product-stock ApiConstants.BASE_PATH+"/**"
+
+# ---- promotion ----
+promotion "/actuator/health/**"
+promotion "/actuator/prometheus"
+promotion "/swagger-ui.html"
+promotion "/swagger-ui/**"
+promotion "/v3/api-docs/**"
+promotion ApiConstants.BASE_PATH+"/checkPromotion"
+
+# ---- qualification ----
+qualification "/actuator/health/**"
+qualification "/actuator/prometheus"
+qualification "/swagger-ui.html"
+qualification "/swagger-ui/**"
+qualification "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification"
+qualification "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification/*"
+qualification "/tmf-api/serviceQualificationManagement/v4/queryAccessOptions"
+qualification "/tmf-api/serviceQualificationManagement/v4/queryServiceQualification"
+qualification "/v3/api-docs/**"
+qualification ApiConstants.BASE_PATH+"/**"
+qualification ApiConstants.BASE_PATH+"/checkProductOfferingQualification"
+
+# ---- quote ----
+quote "/actuator/health/**"
+quote "/actuator/prometheus"
+quote "/swagger-ui.html"
+quote "/swagger-ui/**"
+quote "/v3/api-docs/**"
+quote ApiConstants.SALES_BASE+"/salesLead"
+
+# ---- recommendation ----
+recommendation "/actuator/health/**"
+recommendation "/actuator/prometheus"
+recommendation "/swagger-ui.html"
+recommendation "/swagger-ui/**"
+recommendation "/v3/api-docs/**"
+recommendation ApiConstants.BASE_PATH+"/affinity"
+
+# ---- revenue ----   (infrastructure only)
+revenue "/actuator/health/**"
+revenue "/actuator/prometheus"
+revenue "/swagger-ui.html"
+revenue "/swagger-ui/**"
+revenue "/v3/api-docs/**"
+
+# ---- service-orchestration ----
+service-orchestration "/.well-known/genalpha-component.json"
+service-orchestration "/actuator/health/**"
+service-orchestration "/actuator/prometheus"
+service-orchestration "/mefApi/serviceOrdering/v1/serviceOrder"
+service-orchestration "/swagger-ui.html"
+service-orchestration "/swagger-ui/**"
+service-orchestration "/tmf-api/resourcePoolManagement/v4/numberOffer"
+service-orchestration "/tmf-api/serviceOrdering/v4/wholesaleAccessOrder/*/notification/*"
+service-orchestration "/v3/api-docs/**"
+service-orchestration org.springframework.http.HttpMethod.GET
+
+# ---- shopping-cart ----
+shopping-cart "/acp/checkout_sessions"
+shopping-cart "/acp/checkout_sessions/**"
+shopping-cart "/actuator/health/**"
+shopping-cart "/actuator/prometheus"
+shopping-cart "/swagger-ui.html"
+shopping-cart "/swagger-ui/**"
+shopping-cart "/v3/api-docs/**"
+shopping-cart ApiConstants.BASE_PATH+"/**"
+
+# ---- trouble-ticket ----   (infrastructure only)
+trouble-ticket "/actuator/health/**"
+trouble-ticket "/actuator/prometheus"
+trouble-ticket "/swagger-ui.html"
+trouble-ticket "/swagger-ui/**"
+trouble-ticket "/v3/api-docs/**"
+
+# ---- usage ----
+usage "/actuator/health/**"
+usage "/actuator/prometheus"
+usage "/internal/ocs/**"
+usage "/swagger-ui.html"
+usage "/swagger-ui/**"
+usage "/v3/api-docs/**"
+
+# ---- user-roles ----   (infrastructure only)
+user-roles "/actuator/health/**"
+user-roles "/actuator/prometheus"
+user-roles "/swagger-ui.html"
+user-roles "/swagger-ui/**"
+user-roles "/v3/api-docs/**"
+
