@@ -113,6 +113,18 @@ public class Ts43Controller {
     /** The other service flows (carrier billing, satellite): a terms web sheet; POST records acceptance. */
     @GetMapping("/flow/{name}")
     public ResponseEntity<String> otherFlow(@PathVariable("name") String name) {
+        // AN ALLOW-LIST, BECAUSE THE SET IS KNOWN. `name` is a path variable that was
+        // echoed into a single-quoted HTML attribute below, unescaped — so
+        //     /flow/x'><script>alert(document.domain)</script>
+        // closed the attribute and the tag and injected markup (CodeQL java/xss).
+        //
+        // Escaping would close the hole, but this page only ever makes sense for the
+        // four flows the switch already names: anything else rendered a form that
+        // posts a flow nothing handles. Refusing an unknown name fixes the injection
+        // and the nonsense page in the same move, and leaves nothing to escape.
+        if (!FLOWS.contains(name)) {
+            return ResponseEntity.notFound().build();
+        }
         String title = switch (name) {
             case "carrier-billing" -> "Pay with your phone bill";
             case "satellite" -> "Satellite messaging";
@@ -126,6 +138,9 @@ public class Ts43Controller {
                 + ("not-enabled".equals(name) ? "" : "<form method=post><input type=hidden name=flow value='" + name
                 + "'><label><input type=checkbox name=terms required> I accept the terms</label> <button>Confirm</button></form>"));
     }
+
+    private static final java.util.Set<String> FLOWS =
+            java.util.Set.of("carrier-billing", "satellite", "not-enabled", "subscribe");
 
     @PostMapping("/flow/{name}")
     public ResponseEntity<Object> otherFlowDone(@PathVariable("name") String name, @RequestParam Map<String, String> form) {
