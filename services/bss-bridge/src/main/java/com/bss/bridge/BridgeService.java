@@ -67,6 +67,16 @@ public class BridgeService {
     }
 
     private static Map<String, String> paths(String... kv) {
+        // The pairs are literals in the table above, so an odd count is a typo
+        // in a new mapping rather than bad input — but kv[i + 1] would read past
+        // the end, and this runs in a static initialiser, so the failure would
+        // be a service that does not start with ArrayIndexOutOfBounds buried in
+        // ExceptionInInitializerError. Say which mapping instead.
+        if (kv.length % 2 != 0) {
+            throw new IllegalArgumentException(
+                    "a bridge mapping needs field/path PAIRS; got " + kv.length
+                    + " values ending at '" + kv[kv.length - 1] + "'");
+        }
         Map<String, String> m = new LinkedHashMap<>();
         for (int i = 0; i < kv.length; i += 2) {
             m.put(kv[i], kv[i + 1]);

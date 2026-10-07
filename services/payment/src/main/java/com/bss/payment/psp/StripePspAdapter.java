@@ -51,13 +51,24 @@ public class StripePspAdapter implements PspAdapter {
         Map<String, Object> intent = stripe.post().uri("/v1/payment_intents")
                 .header("Idempotency-Key", idempotencyKey == null ? "" : idempotencyKey)
                 .body(form).retrieve().body(Map.class);
+        // A BODYLESS ANSWER IS A DECLINE, NEVER AN APPROVAL. This method used to
+        // read intent.get("status") first and only check `intent == null` three
+        // lines later, which made that check dead code and the NPE certain: a
+        // 204, an empty 200 or a proxy's blank page turned an authorization into
+        // a 500 — and by then Stripe may already hold an uncaptured intent, so
+        // the customer sees a server error for money that moved. We cannot know
+        // the status from an empty body, and on money "unknown" has to resolve
+        // to not-approved.
+        if (intent == null) {
+            return Authorization.declined(null, "Stripe answered with no body");
+        }
         String status = String.valueOf(intent.get("status"));
         String label = labelOf(intent);
         // An approval carries the id CAPTURE will use: capture() POSTs to
         // /v1/payment_intents/{code}/capture, so an absent id would send the
         // literal "null" to Stripe and the money would go nowhere with an
         // approved-looking receipt. No id, no approval.
-        Object intentId = intent == null ? null : intent.get("id");
+        Object intentId = intent.get("id");
         return switch (status) {
             case "requires_capture" -> intentId == null
                     ? Authorization.declined(label, "Stripe returned no payment_intent id")
@@ -73,6 +84,12 @@ public class StripePspAdapter implements PspAdapter {
         Map<String, Object> res = stripe.post()
                 .uri("/v1/payment_intents/" + authorizationCode + "/capture")
                 .body("").retrieve().body(Map.class);
+        // Same reading as authorize, and the same reason: an empty body tells us
+        // nothing, and claiming a capture succeeded on no evidence books revenue
+        // that may not exist.
+        if (res == null) {
+            return new Capture(false, authorizationCode, "Stripe answered with no body");
+        }
         boolean ok = "succeeded".equals(String.valueOf(res.get("status")));
         return new Capture(ok, authorizationCode, ok ? null : "capture not succeeded");
     }

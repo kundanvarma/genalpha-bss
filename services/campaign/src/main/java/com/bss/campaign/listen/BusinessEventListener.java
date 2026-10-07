@@ -75,8 +75,7 @@ public class BusinessEventListener {
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 campaigns.onEvent(eventType, state, party, offeringIds);
                 journeys.onEvent(eventType, state, party, offeringIds, context);
-                if ("ProductOrderStateChangeEvent".equals(eventType) && "completed".equals(state)
-                        && party != null) {
+                if ("ProductOrderStateChangeEvent".equals(eventType) && "completed".equals(state)) {
                     // G1: a completed first order turns a pending referral into GBs
                     referrals.onOrderCompleted(tenantId, party);
                 }
