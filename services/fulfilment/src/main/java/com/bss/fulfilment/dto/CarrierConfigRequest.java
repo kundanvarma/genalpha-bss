@@ -1,7 +1,7 @@
 package com.bss.fulfilment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A carrier binding as the operator saves it. The two flags keep the map's

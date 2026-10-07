@@ -3,7 +3,7 @@ package com.bss.ticket.dto;
 import com.bss.ticket.api.Json;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * POST troubleTicket. The body is a record so it cannot carry a field the

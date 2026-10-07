@@ -35,13 +35,13 @@ import com.bss.quote.entity.OpportunityItem;
 import com.bss.quote.entity.Quote;
 import com.bss.quote.entity.SalesLead;
 import com.bss.quote.entity.SalesOpportunity;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -63,10 +63,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper()
-            .registerModule(new JavaTimeModule()).registerModule(new Jdk8Module())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private static final OffsetDateTime AT = OffsetDateTime.parse("2026-09-22T09:08:12.169178Z");
 
@@ -345,8 +347,8 @@ class DtoRoundTripTest {
         JsonNode tree = json.valueToTree(OpportunityView.of(opp, List.of(), List.of()));
         assertEquals(3, tree.get("daysInStage").asLong());
         assertEquals("{\"id\":\"u1\",\"name\":\"Ada\"}", tree.get("owner").toString());
-        assertEquals("2026-10-01", tree.get("expectedCloseDate").asText());
-        assertEquals("signed", tree.get("closeReason").asText());
+        assertEquals("2026-10-01", tree.get("expectedCloseDate").asString());
+        assertEquals("signed", tree.get("closeReason").asString());
         assertFalse(tree.has("items"));
         assertFalse(tree.has("activities"));
         assertFalse(tree.has("description"));

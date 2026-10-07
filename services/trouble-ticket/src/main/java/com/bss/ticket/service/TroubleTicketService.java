@@ -19,12 +19,12 @@ import com.bss.ticket.repository.TroubleTicketRepository;
 import com.bss.ticket.security.OrgScope;
 import com.bss.ticket.security.PartyScope;
 import com.bss.ticket.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -235,7 +235,7 @@ public class TroubleTicketService {
     private String writeJson(Object value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -247,7 +247,7 @@ public class TroubleTicketService {
             }
             JsonNode node = objectMapper.readTree(json);
             return node == null || node.isNull() ? null : node;
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON value is unreadable", e);
         }
     }
@@ -255,7 +255,7 @@ public class TroubleTicketService {
     private List<TicketNote> readNotes(String json) {
         try {
             return json == null ? new ArrayList<>() : objectMapper.readValue(json, NOTES);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }

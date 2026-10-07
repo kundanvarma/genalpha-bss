@@ -6,11 +6,11 @@ import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.events.DomainEventPublisher;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -70,7 +70,7 @@ class EventPublishingTest {
         String id = create();
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOrderCreateEvent"), eq("productOrder"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asText()).isEqualTo(id);
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("id").asString()).isEqualTo(id);
     }
 
     @Test
@@ -96,7 +96,7 @@ class EventPublishingTest {
                 .andExpect(status().isOk());
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events).publish(eq("ProductOrderStateChangeEvent"), eq("productOrder"), payload.capture());
-        assertThat(objectMapper.valueToTree(payload.getValue()).get("state").asText()).isEqualTo("completed");
+        assertThat(objectMapper.valueToTree(payload.getValue()).get("state").asString()).isEqualTo("completed");
     }
 
     @Test
@@ -115,7 +115,7 @@ class EventPublishingTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(response).get("id").asText();
+        return objectMapper.readTree(response).get("id").asString();
     }
 
     private static RequestPostProcessor writeToken() {

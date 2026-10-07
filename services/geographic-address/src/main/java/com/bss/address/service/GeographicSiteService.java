@@ -10,9 +10,9 @@ import com.bss.address.exception.NotFoundException;
 import com.bss.address.repository.GeographicAddressRepository;
 import com.bss.address.repository.GeographicSiteRepository;
 import com.bss.address.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -161,7 +161,7 @@ public class GeographicSiteService {
         try {
             return json == null || "null".equals(json) ? List.of()
                     : objectMapper.readValue(json, JSON_LIST);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored related parties are unreadable", e);
         }
     }
@@ -169,7 +169,7 @@ public class GeographicSiteService {
     private String writeJson(Object value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }

@@ -148,7 +148,7 @@ public class IncidentAgentService {
            .append('\n');
         ctx.append("FAILED STEP: ").append(taskCode).append(" — ")
            .append(event.getOrDefault("message", "no message")).append('\n');
-        com.fasterxml.jackson.databind.JsonNode flow = bss.processFlow(flowId);
+        tools.jackson.databind.JsonNode flow = bss.processFlow(flowId);
         ctx.append("TASK STATES: ").append(flow.has("taskFlow") ? flow.get("taskFlow") : "?").append('\n');
         ctx.append("CROSS-SYSTEM TIMELINE: ").append(flow.has("timeline") ? flow.get("timeline") : "empty")
            .append('\n');

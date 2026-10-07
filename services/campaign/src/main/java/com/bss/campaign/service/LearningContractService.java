@@ -14,9 +14,9 @@ import com.bss.campaign.entity.LearningContract;
 import com.bss.campaign.exception.BadRequestException;
 import com.bss.campaign.repository.LearningContractRepository;
 import com.bss.campaign.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -127,7 +127,7 @@ public class LearningContractService implements ContractProvider {
         c.setExplorationMaxPercent(cap);
         c.setAutonomy(autonomy);
         c.setFallbackAction(str(dto.fallbackAction()));
-        c.setEnabled(absent(dto.enabled()) || Boolean.parseBoolean(dto.enabled().asText()));
+        c.setEnabled(absent(dto.enabled()) || Boolean.parseBoolean(dto.enabled().asString()));
         c.setNotes(str(dto.notes()));
         c.setVersion(c.getVersion() + 1);
         c.setUpdatedBy(caller());
@@ -194,8 +194,8 @@ public class LearningContractService implements ContractProvider {
             List<String> items = new ArrayList<>();
             o.forEach(n -> items.add(text(n)));
             list = items.stream().map(s -> s == null ? "" : s.trim()).filter(s -> !s.isEmpty()).toList();
-        } else if (o != null && o.isTextual() && !o.asText().isBlank()) {
-            list = List.of(o.asText().split("\\s*[\\n,]\\s*"));
+        } else if (o != null && o.isString() && !o.asString().isBlank()) {
+            list = List.of(o.asString().split("\\s*[\\n,]\\s*"));
         } else {
             list = List.of();
         }
@@ -225,7 +225,7 @@ public class LearningContractService implements ContractProvider {
         if (absent(n)) {
             return null;
         }
-        return n.isValueNode() ? n.asText() : n.toString();
+        return n.isValueNode() ? n.asString() : n.toString();
     }
 
     private static String str(Object o) {

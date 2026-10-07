@@ -1,7 +1,7 @@
 package com.bss.usage.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 
@@ -28,6 +28,6 @@ public record AutoTopupPolicyRequest(Boolean enabled, Boolean consent, String bo
 
     public BigDecimal maxSpendPerCycleValue() {
         return maxSpendPerCycle == null || maxSpendPerCycle.isNull() ? null
-                : new BigDecimal(maxSpendPerCycle.asText());
+                : new BigDecimal(maxSpendPerCycle.asString());
     }
 }

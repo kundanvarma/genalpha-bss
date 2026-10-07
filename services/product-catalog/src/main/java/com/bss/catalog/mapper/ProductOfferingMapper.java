@@ -3,9 +3,9 @@ package com.bss.catalog.mapper;
 import com.bss.catalog.dto.EntityRef;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.entity.ProductOffering;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -133,7 +133,7 @@ public class ProductOfferingMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON object", e);
         }
     }
@@ -144,7 +144,7 @@ public class ProductOfferingMapper {
         }
         try {
             return objectMapper.readValue(json, EntityRef.class);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }
     }
@@ -155,7 +155,7 @@ public class ProductOfferingMapper {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON array", e);
         }
     }
@@ -166,7 +166,7 @@ public class ProductOfferingMapper {
         }
         try {
             return objectMapper.readValue(json, JSON_OBJECT_LIST);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }

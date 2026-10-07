@@ -18,9 +18,9 @@ import com.bss.som.repository.ServiceInstanceRepository;
 import com.bss.som.repository.ServiceMonitorRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -95,10 +95,10 @@ public class ServiceActivationController {
     @PostMapping({BASE + "/service", BASE + "/service/"})
     public ResponseEntity<JsonNode> activate(@RequestBody ObjectNode dto) {
         JsonNode spec = dto.path("serviceSpecification");
-        boolean specified = spec.isObject() && !spec.path("id").asText("").isBlank();
+        boolean specified = spec.isObject() && !spec.path("id").asString("").isBlank();
         String name = text(dto.get("name"));
         if (name == null && specified) {
-            name = text(spec.get("name")) != null ? text(spec.get("name")) : spec.get("id").asText();
+            name = text(spec.get("name")) != null ? text(spec.get("name")) : spec.get("id").asString();
         }
         if (name == null) {
             throw new BadRequestException(
@@ -123,7 +123,7 @@ public class ServiceActivationController {
         s.setLastUpdate(now);
         services.save(s);
 
-        ObjectNode document = dto.deepCopy();
+        ObjectNode document = (ObjectNode) dto.deepCopy();
         document.remove("id");
         document.remove("href");
         ServiceActivation a = new ServiceActivation();
@@ -140,13 +140,13 @@ public class ServiceActivationController {
         monitor.setTenantId(tenant);
         monitor.setServiceId(id);
         monitor.setState(ServiceMonitor.COMPLETED);
-        monitor.setSourceHref(view.get("href").asText());
+        monitor.setSourceHref(view.get("href").asString());
         monitor.setRequestJson(fit(writeJson(new MonitorRequest("POST", BASE + "/service", document))));
         monitor.setResponseJson(fit(writeJson(new MonitorResponse(201, view))));
         monitor.setCreatedAt(now);
         monitors.save(monitor);
 
-        return ResponseEntity.created(URI.create(view.get("href").asText()))
+        return ResponseEntity.created(URI.create(view.get("href").asString()))
                 .header("monitorId", monitor.getId())
                 .body(view);
     }
@@ -279,7 +279,7 @@ public class ServiceActivationController {
             return false;
         }
         if (i == path.length) {
-            return node.isValueNode() && expected.equals(node.asText());
+            return node.isValueNode() && expected.equals(node.asString());
         }
         if (node.isObject()) {
             return valueMatches(node.get(path[i]), path, i + 1, expected);
@@ -295,26 +295,26 @@ public class ServiceActivationController {
             return null;
         }
         for (JsonNode party : parties) {
-            if ("customer".equals(party.path("role").asText(null)) && party.hasNonNull("id")) {
-                return party.get("id").asText();
+            if ("customer".equals(party.path("role").asString(null)) && party.hasNonNull("id")) {
+                return party.get("id").asString();
             }
         }
         return null;
     }
 
     private static Optional<OffsetDateTime> parseDate(JsonNode raw) {
-        if (raw == null || !raw.isTextual() || raw.asText().isBlank()) {
+        if (raw == null || !raw.isString() || raw.asString().isBlank()) {
             return Optional.empty();
         }
         try {
-            return Optional.of(OffsetDateTime.parse(raw.asText()).truncatedTo(ChronoUnit.MILLIS));
+            return Optional.of(OffsetDateTime.parse(raw.asString()).truncatedTo(ChronoUnit.MILLIS));
         } catch (Exception e) {
             return Optional.empty();
         }
     }
 
     private static String text(JsonNode o) {
-        return o != null && o.isTextual() && !o.asText().isBlank() ? o.asText() : null;
+        return o != null && o.isString() && !o.asString().isBlank() ? o.asString() : null;
     }
 
     private static int intParam(Map<String, String> params, String key, int fallback) {

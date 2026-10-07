@@ -28,9 +28,9 @@ import com.bss.som.repository.ServiceTestRepository;
 import com.bss.som.repository.ServiceTestSpecRepository;
 import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -170,7 +170,7 @@ public class StandardFacesController {
             throw new BadRequestException("name is required");
         }
         JsonNode rel = dto.relatedServiceSpecification();
-        if (rel == null || !rel.isObject() || rel.path("id").asText("").isBlank()) {
+        if (rel == null || !rel.isObject() || rel.path("id").asString("").isBlank()) {
             throw new BadRequestException(
                     "relatedServiceSpecification {id} is required — a test spec tests SOMETHING");
         }
@@ -200,7 +200,7 @@ public class StandardFacesController {
         }
         if (relatedSpecId != null) {
             out.removeIf(v -> !(v.relatedServiceSpecification().isObject()
-                    && relatedSpecId.equals(v.relatedServiceSpecification().path("id").asText())));
+                    && relatedSpecId.equals(v.relatedServiceSpecification().path("id").asString())));
         }
         return ResponseEntity.ok(out);
     }
@@ -246,22 +246,22 @@ public class StandardFacesController {
     @PostMapping("/tmf-api/resourceInventoryManagement/v4/resource")
     public ResponseEntity<JsonNode> createResource(@RequestBody ObjectNode dto) {
         JsonNode name = dto.get("name");
-        if (name == null || !name.isTextual() || name.asText().isBlank()) {
+        if (name == null || !name.isString() || name.asString().isBlank()) {
             throw new BadRequestException("name is required — an inventory record IS a named thing");
         }
         InventoryResource r = new InventoryResource();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
-        r.setName(name.asText());
-        r.setCategory(dto.get("category") != null && dto.get("category").isTextual()
-                ? dto.get("category").asText() : null);
-        r.setResourceStatus(dto.get("resourceStatus") != null && dto.get("resourceStatus").isTextual()
-                ? dto.get("resourceStatus").asText() : "available");
+        r.setName(name.asString());
+        r.setCategory(dto.get("category") != null && dto.get("category").isString()
+                ? dto.get("category").asString() : null);
+        r.setResourceStatus(dto.get("resourceStatus") != null && dto.get("resourceStatus").isString()
+                ? dto.get("resourceStatus").asString() : "available");
         r.setDocumentJson(writeJson(dto));
         r.setCreatedAt(OffsetDateTime.now());
         inventory.save(r);
         ObjectNode view = storedView(r);
-        return ResponseEntity.created(java.net.URI.create(view.get("href").asText())).body(view);
+        return ResponseEntity.created(java.net.URI.create(view.get("href").asString())).body(view);
     }
 
     @GetMapping("/tmf-api/resourceInventoryManagement/v4/resource")
@@ -286,10 +286,10 @@ public class StandardFacesController {
         }
         if (serviceId != null) {
             out.removeIf(v -> !(v.path("relatedService").isObject()
-                    && serviceId.equals(v.path("relatedService").path("id").asText(null))));
+                    && serviceId.equals(v.path("relatedService").path("id").asString(null))));
         }
         if (name != null) {
-            out.removeIf(v -> !name.equals(v.path("name").asText(null)));
+            out.removeIf(v -> !name.equals(v.path("name").asString(null)));
         }
         return ResponseEntity.ok(out);
     }

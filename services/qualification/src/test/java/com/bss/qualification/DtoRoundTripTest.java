@@ -18,9 +18,11 @@ import com.bss.qualification.dto.ServiceQualificationRequest;
 import com.bss.qualification.dto.ServiceView;
 import com.bss.qualification.dto.ServiceableAreaRequest;
 import com.bss.qualification.dto.ServiceableAreaView;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -36,9 +38,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);
@@ -235,7 +239,7 @@ class DtoRoundTripTest {
         ServiceableAreaRequest req = mapper.readValue(
                 "{\"postcodePrefix\":\"111\",\"productOffering\":{\"id\":\"po-1\"},"
                         + "\"unknown\":1}", ServiceableAreaRequest.class);
-        assertThat(req.productOffering().get("id").asText()).isEqualTo("po-1");
+        assertThat(req.productOffering().get("id").asString()).isEqualTo("po-1");
         assertThat(req.name()).isNull();
         assertThat(mapper.readValue("{\"productOffering\":\"not an object\"}",
                 ServiceableAreaRequest.class).productOffering().isObject()).isFalse();

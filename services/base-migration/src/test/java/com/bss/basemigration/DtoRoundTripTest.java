@@ -10,8 +10,8 @@ import com.bss.basemigration.dto.MigrationProgress;
 import com.bss.basemigration.dto.TriggerScanResult;
 import com.bss.basemigration.entity.MigrationCustomer;
 import com.bss.basemigration.entity.MigrationPlan;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;

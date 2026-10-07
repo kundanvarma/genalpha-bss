@@ -2,7 +2,7 @@ package com.bss.intelligence.sim;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.OffsetDateTime;
 
@@ -42,6 +42,6 @@ public record SavedReport(
 
     private static JsonNode headline(JsonNode report, String key) {
         JsonNode value = report.get(key);
-        return value == null ? com.fasterxml.jackson.databind.node.NullNode.getInstance() : value;
+        return value == null ? tools.jackson.databind.node.NullNode.getInstance() : value;
     }
 }

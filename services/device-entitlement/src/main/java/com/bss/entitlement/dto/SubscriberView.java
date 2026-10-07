@@ -3,7 +3,7 @@ package com.bss.entitlement.dto;
 import com.bss.entitlement.entity.EntitlementSubscriber;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 

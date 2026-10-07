@@ -16,9 +16,9 @@ import com.bss.payment.dto.SessionRequest;
 import com.bss.payment.dto.VaultMethodRequest;
 import com.bss.payment.dto.VaultRecurringRequest;
 import com.bss.payment.dto.VaultedRecurringMethod;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.bss.payment.entity.Payment;
 import com.bss.payment.events.DomainEventPublisher;
 import com.bss.payment.client.PaymentMethodClient;
@@ -145,12 +145,12 @@ public class PaymentService {
             }
             JsonNode parties = saved.path("relatedParty");
             String methodOwner = parties.isArray() && !parties.isEmpty()
-                    ? parties.get(0).path("id").asText(null) : null;
+                    ? parties.get(0).path("id").asString(null) : null;
             String payer = partyScope.scopedPartyId().orElse(null);
             if (payer != null && !payer.equals(methodOwner)) {
                 throw new BadRequestException("saved payment method not found");
             }
-            savedType = saved.path("@type").asText(null);
+            savedType = saved.path("@type").asString(null);
             JsonNode details = saved.path("details");
             method = details.isObject() ? json.convertValue(details, OPEN_MAP) : null;
         }
@@ -440,7 +440,7 @@ public class PaymentService {
         JsonNode saved = paymentMethods.save(
                 VaultMethodRequest.bnplToken(provider, grant.token(), owner));
         return VaultedRecurringMethod.of(
-                saved == null ? null : saved.path("id").asText(null), grant.label(), provider);
+                saved == null ? null : saved.path("id").asString(null), grant.label(), provider);
     }
 
     /** Safe to fail over to a backup PSP? Only when the acquirer was demonstrably

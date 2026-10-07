@@ -4,7 +4,7 @@ import com.bss.interaction.api.ApiConstants;
 import com.bss.interaction.api.PagedResult;
 import com.bss.interaction.dto.InteractionView;
 import com.bss.interaction.service.PartyInteractionService;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.ObjectNode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;

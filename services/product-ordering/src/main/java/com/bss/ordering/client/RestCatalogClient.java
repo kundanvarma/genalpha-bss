@@ -23,7 +23,7 @@ public class RestCatalogClient implements CatalogClient {
                     if (org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
                             instanceof org.springframework.web.context.request.ServletRequestAttributes attrs) {
                         String ch = attrs.getRequest().getHeader("X-Channel");
-                        if (ch != null && !ch.isBlank() && !request.getHeaders().containsKey("X-Channel")) {
+                        if (ch != null && !ch.isBlank() && !request.getHeaders().containsHeader("X-Channel")) {
                             request.getHeaders().add("X-Channel", ch.trim());
                         }
                     }

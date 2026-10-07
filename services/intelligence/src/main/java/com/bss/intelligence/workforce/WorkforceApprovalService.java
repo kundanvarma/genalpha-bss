@@ -1,10 +1,10 @@
 package com.bss.intelligence.workforce;
 
 import com.bss.intelligence.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -170,7 +170,7 @@ public class WorkforceApprovalService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -179,8 +179,8 @@ public class WorkforceApprovalService {
     private JsonNode readJson(String json) {
         try {
             return objectMapper.readTree(json);
-        } catch (JsonProcessingException e) {
-            return TextNode.valueOf(json);
+        } catch (JacksonException e) {
+            return StringNode.valueOf(json);
         }
     }
 }

@@ -19,10 +19,10 @@ import com.bss.promotion.exception.NotFoundException;
 import com.bss.promotion.repository.PromotionRedemptionRepository;
 import com.bss.promotion.repository.PromotionRepository;
 import com.bss.promotion.security.TenantScope;
-import com.fasterxml.jackson.core.JacksonException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -97,10 +97,10 @@ public class PromotionService {
         JsonNode valid = dto.validFor();
         if (valid != null && valid.isObject()) {
             if (!PromotionRequest.absent(valid.get("startDateTime"))) {
-                entity.setValidFrom(OffsetDateTime.parse(valid.get("startDateTime").asText()));
+                entity.setValidFrom(OffsetDateTime.parse(valid.get("startDateTime").asString()));
             }
             if (!PromotionRequest.absent(valid.get("endDateTime"))) {
-                entity.setValidUntil(OffsetDateTime.parse(valid.get("endDateTime").asText()));
+                entity.setValidUntil(OffsetDateTime.parse(valid.get("endDateTime").asString()));
             }
         }
         entity.setCreatedAt(OffsetDateTime.now());
@@ -112,7 +112,7 @@ public class PromotionService {
 
     /** The caller's own scale, exactly as {@code String.valueOf} handed it over. */
     private static BigDecimal decimalOf(JsonNode node) {
-        return new BigDecimal(node.asText());
+        return new BigDecimal(node.asString());
     }
 
     @Transactional(readOnly = true)

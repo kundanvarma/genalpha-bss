@@ -178,7 +178,7 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
             }
             if (tiers != null && !tiers.isEmpty()) {
                 chars.add(Map.of("name", "bssOverageTiers", "value",
-                        new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tiers)));
+                        new tools.jackson.databind.ObjectMapper().writeValueAsString(tiers)));
             }
             patch(c, INVENTORY + "/product/" + product.get("id"),
                     List.of(Map.of("op", "replace", "path", "/characteristic", "value", chars)));

@@ -123,8 +123,8 @@ public class WorkforceKpiService {
                 if (WorkforceTask.COMPLETED.equals(t.getStatus())
                         && WorkforceService.KIND_TICKET.equals(t.getKind()) && ticketChecked < 25) {
                     ticketChecked++;
-                    com.fasterxml.jackson.databind.JsonNode ticket = bss.ticketById(t.getSubjectRef());
-                    String status = ticket == null ? null : ticket.path("status").asText(null);
+                    tools.jackson.databind.JsonNode ticket = bss.ticketById(t.getSubjectRef());
+                    String status = ticket == null ? null : ticket.path("status").asString(null);
                     if ("inProgress".equals(status) || "acknowledged".equals(status)) {
                         ticketReopened++;
                     }

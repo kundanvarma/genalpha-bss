@@ -6,9 +6,9 @@ import com.bss.stock.entity.ReserveProductStock;
 import com.bss.stock.exception.NotFoundException;
 import com.bss.stock.repository.ReserveProductStockRepository;
 import com.bss.stock.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,7 +40,7 @@ public class ReserveProductStockService {
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/reserveProductStock/" + id);
         entity.setTenantId(tenantScope.currentTenantId());
-        entity.setState(body.hasNonNull("state") ? body.get("state").asText() : "reserved");
+        entity.setState(body.hasNonNull("state") ? body.get("state").asString() : "reserved");
         entity.setPayloadJson(body.toString());
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -68,7 +68,7 @@ public class ReserveProductStockService {
         JsonNode items = stored.has("reserveProductStockItem")
                 ? stored.get("reserveProductStockItem") : mapper.createArrayNode();
         Map<String, JsonNode> rest = new LinkedHashMap<>();
-        stored.fields().forEachRemaining(f -> {
+        stored.properties().forEach(f -> {
             if (!ReserveProductStockView.DECLARED.contains(f.getKey())) {
                 rest.put(f.getKey(), f.getValue());
             }

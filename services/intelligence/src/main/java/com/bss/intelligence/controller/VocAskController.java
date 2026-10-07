@@ -4,7 +4,7 @@ import com.bss.intelligence.api.ApiConstants;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.llm.AiGovernor;
 import com.bss.intelligence.llm.LlmAdapter;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

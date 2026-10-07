@@ -1,7 +1,7 @@
 package com.bss.knowledge.api;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The open edge's two habits, written down once.
@@ -33,7 +33,7 @@ public final class Json {
             return "null";
         }
         if (node.isValueNode()) {
-            return node.asText();
+            return node.asString();
         }
         return String.valueOf(PLAIN.convertValue(node, Object.class));
     }

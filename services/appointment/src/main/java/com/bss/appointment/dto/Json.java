@@ -1,6 +1,6 @@
 package com.bss.appointment.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -54,6 +54,6 @@ public final class Json {
     }
 
     private static String plain(JsonNode node) {
-        return node.isValueNode() ? node.asText() : node.toString();
+        return node.isValueNode() ? node.asString() : node.toString();
     }
 }

@@ -8,9 +8,12 @@ import com.bss.stock.dto.Quantity;
 import com.bss.stock.dto.ReserveProductStockView;
 import com.bss.stock.dto.StockOperationDto;
 import com.bss.stock.dto.TaskReceipt;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
@@ -23,9 +26,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Pure Jackson: the bytes and the key order of every product-stock wire record. */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);
@@ -33,7 +38,7 @@ class DtoRoundTripTest {
 
     @Test
     void aStockRowDeclaresWhatTheServerOwnsAndRoundTripsTheRest() throws Exception {
-        Map<String, com.fasterxml.jackson.databind.JsonNode> rest = new LinkedHashMap<>();
+        Map<String, tools.jackson.databind.JsonNode> rest = new LinkedHashMap<>();
         rest.put("place", mapper.readTree("[{\"name\":\"Warehouse 1\"}]"));
         rest.put("validFor", mapper.readTree("{\"startDateTime\":\"2026-01-01\"}"));
         ProductStockView v = new ProductStockView("s-1", "/tmf-api/productStockManagement/v4/productStock/s-1",

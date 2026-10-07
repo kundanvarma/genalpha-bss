@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import com.bss.insight.dto.PublishedPost;
 import com.bss.insight.dto.SocialMessage;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -130,7 +130,7 @@ class MetaGraphProviderTest {
     void leads_comeBackInMetaFieldDataShape() {
         List<JsonNode> rows = new MetaGraphProvider(RestClient.builder()).leads(cfg(null), "form3");
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).path("id").asText()).isEqualTo("l1");
+        assertThat(rows.get(0).path("id").asString()).isEqualTo("l1");
         assertThat(rows.get(0).has("field_data")).isTrue();
     }
 }

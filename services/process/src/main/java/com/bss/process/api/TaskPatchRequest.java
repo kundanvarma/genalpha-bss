@@ -2,7 +2,7 @@ package com.bss.process.api;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * TMF701's lever: an operator completes, retries or fails a task by hand.

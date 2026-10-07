@@ -13,11 +13,12 @@ import com.bss.catalog.dto.ProductConfigurationRequest;
 import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.dto.ReadinessItem;
 import com.bss.catalog.dto.TimePeriod;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -37,9 +38,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     @Test
     void money_keepsExtensionsAndOmitsAbsent() throws Exception {
@@ -86,7 +90,7 @@ class DtoRoundTripTest {
         JsonNode back = json.readTree(json.writeValueAsString(dto));
         assertEquals("{\"unit\":\"EUR\",\"value\":39.99}", back.get("price").toString());
         assertEquals("{\"amount\":12,\"units\":\"month\"}", back.get("unitOfMeasure").toString());
-        assertEquals("ProductOfferingPrice", back.get("@type").asText());
+        assertEquals("ProductOfferingPrice", back.get("@type").asString());
         assertFalse(back.has("tax"));
     }
 
@@ -133,8 +137,8 @@ class DtoRoundTripTest {
         assertEquals("go", r.note());
         assertTrue(r.force());
         assertFalse(r.done());
-        assertEquals("web", r.channel().get(0).asText());
-        assertEquals("app", r.channel().get(1).get("id").asText());
+        assertEquals("web", r.channel().get(0).asString());
+        assertEquals("app", r.channel().get(1).get("id").asString());
         assertEquals(" — go", r.noteSuffix());
     }
 
@@ -153,7 +157,7 @@ class DtoRoundTripTest {
         assertEquals("1", item.id());
         assertEquals(3, item.configuration().quantityOr(1));
         assertTrue(item.configuration().isPriceOnly());
-        assertTrue(item.configuration().configurationCharacteristic().isTextual());
+        assertTrue(item.configuration().configurationCharacteristic().isString());
         assertEquals("o1", item.configuration().selectedOption().get(0).id());
         assertEquals(1, json.readValue("{}", ProductConfigurationRequest.Check.Item.class).configuration().quantityOr(1));
     }

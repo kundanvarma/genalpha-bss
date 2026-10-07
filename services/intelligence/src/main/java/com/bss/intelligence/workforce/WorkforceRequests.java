@@ -1,7 +1,7 @@
 package com.bss.intelligence.workforce;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** The bodies a badged worker or an approver posts. A record cannot carry a
  * field it does not declare. */

@@ -1,7 +1,7 @@
 package com.bss.fulfilment.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * What the warehouse may change on a parcel. The map read the state with

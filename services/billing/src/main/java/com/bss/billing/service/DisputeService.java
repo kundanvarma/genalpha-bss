@@ -50,8 +50,8 @@ public class DisputeService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
-            new com.fasterxml.jackson.databind.ObjectMapper();
+    private final tools.jackson.databind.ObjectMapper objectMapper =
+            new tools.jackson.databind.ObjectMapper();
 
     private final CreditNoteService creditNoteService;
 

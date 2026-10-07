@@ -5,8 +5,8 @@ import com.bss.party.entity.Individual;
 import com.bss.party.repository.ErasureRecordRepository;
 import com.bss.party.repository.IndividualRepository;
 import com.bss.party.security.TenantScope;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -200,11 +200,11 @@ public class PrivacyService {
                     return false;
                 }
                 for (JsonNode product : page) {
-                    if (!"active".equalsIgnoreCase(product.path("status").asText())) {
+                    if (!"active".equalsIgnoreCase(product.path("status").asString())) {
                         continue;
                     }
                     for (JsonNode related : product.path("relatedParty")) {
-                        if (partyId.equals(related.path("id").asText())) {
+                        if (partyId.equals(related.path("id").asString())) {
                             return true;
                         }
                     }

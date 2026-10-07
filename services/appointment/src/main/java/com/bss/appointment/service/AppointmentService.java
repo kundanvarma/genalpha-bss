@@ -23,9 +23,9 @@ import com.bss.appointment.schedule.ScheduleConfig;
 import com.bss.appointment.schedule.ScheduleService;
 import com.bss.appointment.security.PartyScope;
 import com.bss.appointment.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -123,8 +123,8 @@ public class AppointmentService {
         if (validFor == null || !validFor.hasNonNull("startDateTime") || !validFor.hasNonNull("endDateTime")) {
             throw new BadRequestException("validFor.startDateTime and endDateTime are required");
         }
-        OffsetDateTime start = OffsetDateTime.parse(validFor.get("startDateTime").asText());
-        OffsetDateTime end = OffsetDateTime.parse(validFor.get("endDateTime").asText());
+        OffsetDateTime start = OffsetDateTime.parse(validFor.get("startDateTime").asString());
+        OffsetDateTime end = OffsetDateTime.parse(validFor.get("endDateTime").asString());
         if (!start.isBefore(end)) {
             throw new BadRequestException("validFor must start before it ends");
         }
@@ -208,7 +208,7 @@ public class AppointmentService {
     private String writeJson(JsonNode value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -216,7 +216,7 @@ public class AppointmentService {
     private JsonNode readJson(String json) {
         try {
             return json == null ? null : objectMapper.readTree(json);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored JSON value is unreadable", e);
         }
     }

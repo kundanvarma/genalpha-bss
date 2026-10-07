@@ -1,8 +1,8 @@
 package com.bss.porting.events;
 
 import com.bss.porting.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
@@ -51,7 +51,7 @@ public class OutboxDomainEventPublisher implements DomainEventPublisher {
     private String write(DomainEvent event) {
         try {
             return objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable domain event", e);
         }
     }

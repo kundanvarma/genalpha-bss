@@ -6,7 +6,7 @@ import com.bss.fulfilment.dto.CarrierConfigRequest;
 import com.bss.fulfilment.dto.CarrierConfigView;
 import com.bss.fulfilment.dto.CarrierProbe;
 import com.bss.fulfilment.dto.DeliveryOption;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import com.bss.fulfilment.security.TenantScope;
 import com.bss.fulfilment.service.CarrierConfigService;
 import org.springframework.http.ResponseEntity;

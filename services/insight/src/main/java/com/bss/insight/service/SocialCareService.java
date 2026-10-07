@@ -7,7 +7,7 @@ import com.bss.insight.entity.SocialDm;
 import com.bss.insight.events.DomainEventPublisher;
 import com.bss.insight.repository.SocialDmRepository;
 import com.bss.insight.security.TenantScope;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.JsonNodeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

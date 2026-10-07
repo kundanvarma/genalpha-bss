@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A problem DECLARED from outside the alarm loop. The originator block is the

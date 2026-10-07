@@ -2,8 +2,8 @@ package com.bss.catalog;
 
 import com.bss.catalog.dto.SchemaOrg;
 import com.bss.catalog.mapper.JsonLd;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -43,10 +43,10 @@ class SchemaOrgSerialisationTest {
     void aQuotedNameRoundTripsThroughAParsableDocument() throws Exception {
         String document = jsonLd.write(fixture());
         JsonNode read = json.readTree(document);          // well formed, or this throws
-        assertEquals(NAME, read.get("name").asText());
-        assertEquals(DESCRIPTION, read.get("description").asText());
-        assertTrue(read.get("description").asText().contains("\n"), "the newline survived");
-        assertTrue(read.get("description").asText().contains("\\"), "the backslash survived");
+        assertEquals(NAME, read.get("name").asString());
+        assertEquals(DESCRIPTION, read.get("description").asString());
+        assertTrue(read.get("description").asString().contains("\n"), "the newline survived");
+        assertTrue(read.get("description").asString().contains("\\"), "the backslash survived");
     }
 
     @Test
@@ -65,10 +65,10 @@ class SchemaOrgSerialisationTest {
         assertTrue(document.startsWith("{\"@context\":\"https://schema.org\",\"@type\":\"Product\""),
                 "@context and @type lead the document: " + document.substring(0, 60));
         JsonNode offer = json.readTree(document).get("offers");
-        assertEquals("Offer", offer.get("@type").asText());
-        assertEquals("https://schema.org/OnlineOnly", offer.get("availability").asText());
-        assertEquals("UnitPriceSpecification", offer.get("priceSpecification").get("@type").asText());
-        assertEquals("MON", offer.get("priceSpecification").get("unitCode").asText());
+        assertEquals("Offer", offer.get("@type").asString());
+        assertEquals("https://schema.org/OnlineOnly", offer.get("availability").asString());
+        assertEquals("UnitPriceSpecification", offer.get("priceSpecification").get("@type").asString());
+        assertEquals("MON", offer.get("priceSpecification").get("unitCode").asString());
     }
 
     @Test
@@ -98,7 +98,7 @@ class SchemaOrgSerialisationTest {
         String old = "{\"@context\":\"https://schema.org\",\"@type\":\"Product\","
                 + "\"name\":\"" + NAME + "\",\"description\":\"" + escaped + "\"}";
         assertTrue(org.junit.jupiter.api.Assertions.assertThrows(
-                        com.fasterxml.jackson.core.JacksonException.class,
+                        tools.jackson.core.JacksonException.class,
                         () -> json.readTree(old))
                 .getMessage().length() > 0,
                 "the old generator must be unparsable, or this test proves nothing");

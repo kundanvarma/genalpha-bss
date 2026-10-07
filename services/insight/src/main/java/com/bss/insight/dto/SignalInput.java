@@ -1,7 +1,7 @@
 package com.bss.insight.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** A customer signal at the front door — raw text in, the PII firewall runs before anything is stored. Context is the source's own document. */
 @JsonIgnoreProperties(ignoreUnknown = true)

@@ -1,7 +1,7 @@
 package com.bss.promotion.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A promotion patch: two fields, and an explicit null means "leave alone",

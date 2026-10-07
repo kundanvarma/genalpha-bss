@@ -1,7 +1,7 @@
 package com.bss.appointment.provider;
 
 import com.bss.appointment.schedule.ScheduleConfig;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.OffsetDateTime;
 import java.util.List;

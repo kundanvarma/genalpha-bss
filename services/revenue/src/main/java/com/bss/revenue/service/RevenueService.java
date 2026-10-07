@@ -26,9 +26,9 @@ import com.bss.revenue.dto.RemittanceRequest;
 import com.bss.revenue.dto.RevRecRow;
 import com.bss.revenue.dto.SubscriptionMetricsView;
 import com.bss.revenue.dto.SummaryView;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.bss.revenue.entity.AccountMapping;
 import com.bss.revenue.entity.JournalEntry;
 import com.bss.revenue.entity.JournalLine;
@@ -1183,7 +1183,7 @@ public class RevenueService {
         // absent leaves the setting alone; an explicit JSON null clears it
         BigDecimal value = m.getConfigValue();
         if (dto.configValue() != null) {
-            value = dto.configValue().isNull() ? null : new BigDecimal(dto.configValue().asText());
+            value = dto.configValue().isNull() ? null : new BigDecimal(dto.configValue().asString());
         }
         // The SAME checks the Configuration ladder runs. This door is the one a
         // seed and a machine caller use, and a rule only the screen enforced

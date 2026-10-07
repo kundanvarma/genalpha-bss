@@ -7,9 +7,11 @@ import com.bss.promotion.dto.PromotionRedemptionView;
 import com.bss.promotion.dto.PromotionRequest;
 import com.bss.promotion.dto.PromotionView;
 import com.bss.promotion.dto.RedeemRequest;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -21,9 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Pure Jackson: the bytes, the key order and the money scale of promotion. */
 class DtoRoundTripTest {
 
-    private final ObjectMapper mapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private String write(Object o) throws Exception {
         return mapper.writeValueAsString(o);
@@ -86,11 +90,11 @@ class DtoRoundTripTest {
     @Test
     void aPercentageKeepsTheCallersOwnText() throws Exception {
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":10}", PromotionRequest.class)
-                .percentage().asText())).isEqualTo(new BigDecimal("10"));
+                .percentage().asString())).isEqualTo(new BigDecimal("10"));
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":12.5}", PromotionRequest.class)
-                .percentage().asText())).isEqualTo(new BigDecimal("12.5"));
+                .percentage().asString())).isEqualTo(new BigDecimal("12.5"));
         assertThat(new BigDecimal(mapper.readValue("{\"percentage\":\"12.50\"}",
-                PromotionRequest.class).percentage().asText())).isEqualTo(new BigDecimal("12.50"));
+                PromotionRequest.class).percentage().asString())).isEqualTo(new BigDecimal("12.50"));
     }
 
     @Test
@@ -126,7 +130,7 @@ class DtoRoundTripTest {
                         + "\"validFor\":{\"startDateTime\":\"2026-01-01T00:00:00Z\"},"
                         + "\"unknown\":1}", PromotionRequest.class);
         assertThat(write(req.appliesTo())).isEqualTo("[\"off-1\"]");
-        assertThat(req.validFor().get("startDateTime").asText()).isEqualTo("2026-01-01T00:00:00Z");
+        assertThat(req.validFor().get("startDateTime").asString()).isEqualTo("2026-01-01T00:00:00Z");
         assertThat(req.appliesTo().isArray()).isTrue();
         assertThat(mapper.readValue("{\"appliesTo\":[]}", PromotionRequest.class)
                 .appliesTo().isEmpty()).isTrue();

@@ -5,8 +5,8 @@ import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -14,7 +14,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -98,18 +98,18 @@ class OrderEventsKafkaIntegrationTest {
                                     """))
                     .andExpect(status().isCreated())
                     .andReturn().getResponse().getContentAsString();
-            String orderId = objectMapper.readTree(response).get("id").asText();
+            String orderId = objectMapper.readTree(response).get("id").asString();
 
             ConsumerRecord<String, String> record = pollForOrder(consumer, orderId);
             assertThat(record).as("event for order %s on %s", orderId, TOPIC).isNotNull();
 
             JsonNode envelope = objectMapper.readTree(record.value());
-            assertThat(envelope.get("eventType").asText()).isEqualTo("ProductOrderCreateEvent");
-            assertThat(envelope.get("eventId").asText()).isNotBlank();
-            assertThat(envelope.get("eventTime").asText()).isNotBlank();
-            assertThat(envelope.at("/event/productOrder/id").asText()).isEqualTo(orderId);
-            assertThat(envelope.at("/event/productOrder/state").asText()).isEqualTo("acknowledged");
-            assertThat(record.key()).isEqualTo(envelope.get("eventId").asText());
+            assertThat(envelope.get("eventType").asString()).isEqualTo("ProductOrderCreateEvent");
+            assertThat(envelope.get("eventId").asString()).isNotBlank();
+            assertThat(envelope.get("eventTime").asString()).isNotBlank();
+            assertThat(envelope.at("/event/productOrder/id").asString()).isEqualTo(orderId);
+            assertThat(envelope.at("/event/productOrder/state").asString()).isEqualTo("acknowledged");
+            assertThat(record.key()).isEqualTo(envelope.get("eventId").asString());
         }
     }
 

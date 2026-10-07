@@ -25,13 +25,13 @@ import com.bss.cart.exception.ConflictException;
 import com.bss.cart.exception.NotFoundException;
 import com.bss.cart.repository.AcpSessionRepository;
 import com.bss.cart.security.TenantScope;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.NullNode;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -161,10 +161,10 @@ public class AcpCheckoutService {
                 throw new BadRequestException("payment_data.token is required — the delegated "
                         + "payment token that authorizes exactly this cart");
             }
-            paymentId = createPayment(session, dueNow, token, authorization).path("id").asText(null);
+            paymentId = createPayment(session, dueNow, token, authorization).path("id").asString(null);
         }
 
-        String orderId = createOrder(session, lines, paymentId, authorization).path("id").asText(null);
+        String orderId = createOrder(session, lines, paymentId, authorization).path("id").asString(null);
 
         // The cart retires exactly as a human checkout retires it.
         carts.patch(session.getCartId(), new CartPatch(null, "checkedOut",
@@ -254,7 +254,7 @@ public class AcpCheckoutService {
      * the agent learns exactly what a human shopper would.
      */
     private LineItem configuredLine(RequestedItem item, String lineId, String tenantId) {
-        ObjectNode config = item.configuration().deepCopy();
+        ObjectNode config = (ObjectNode) item.configuration().deepCopy();
         config.set("productOffering", objectMapper.createObjectNode().put("id", item.id()));
         JsonNode checked;
         try {
@@ -272,26 +272,26 @@ public class AcpCheckoutService {
         // for "approved", so an agent buying a CONFIGURED bundle was refused
         // every single time, with the configurator's own empty message as the
         // reason. No gate ran the suite that proves this path, so it sat broken.
-        if (!"accepted".equals(result.path("state").asText())) {
+        if (!"accepted".equals(result.path("state").asString())) {
             JsonNode messages = result.path("message");
             throw new BadRequestException("the configuration was rejected: "
                     + (messages.isArray() ? String.join("; ",
                             StreamSupport.stream(messages.spliterator(), false).map(JsonNode::asText).toList())
-                            : messages.asText()));
+                            : messages.asString()));
         }
         JsonNode price = result.path("configurationPrice");
         JsonNode monthly = price.path("monthlyTotal");
         JsonNode oneTime = price.path("oneTimeTotal");
         JsonNode orderReady = result.path("productConfiguration");
         int quantity = item.quantity();
-        String currency = monthly.path("unit").asText();
-        BigDecimal dueNow = new BigDecimal(oneTime.path("value").asText())
+        String currency = monthly.path("unit").asString();
+        BigDecimal dueNow = new BigDecimal(oneTime.path("value").asString())
                 .multiply(BigDecimal.valueOf(quantity));
 
         // the recurring side of the configuration; one-time charges are due now
         return LineItem.configured(lineId,
-                new LineItem.Item(item.id(), orderReady.path("productOffering").path("name").asText()),
-                quantity, new AcpMoney(monthly.path("value").asText(), currency), AcpMoney.of(dueNow, currency),
+                new LineItem.Item(item.id(), orderReady.path("productOffering").path("name").asString()),
+                quantity, new AcpMoney(monthly.path("value").asString(), currency), AcpMoney.of(dueNow, currency),
                 orderReady, price.path("priceLine"));
     }
 
@@ -375,7 +375,7 @@ public class AcpCheckoutService {
             }
             JsonNode picks = option.path("characteristic");
             children.add(new OrderItem(parentId + "." + j++, "add", quantity,
-                    EntityRef.of(option.path("id").asText(), option.path("name").asText(), "ProductOffering"),
+                    EntityRef.of(option.path("id").asString(), option.path("name").asString(), "ProductOffering"),
                     picks.isArray() && !picks.isEmpty() ? new Product(picks) : null, null));
         }
         JsonNode own = config.path("configurationCharacteristic");
@@ -425,7 +425,7 @@ public class AcpCheckoutService {
         try {
             return session.getLineItemJson() == null ? List.of()
                     : objectMapper.readValue(session.getLineItemJson(), LINES);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("stored line items are unreadable", e);
         }
     }
@@ -433,7 +433,7 @@ public class AcpCheckoutService {
     private String writeJson(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
@@ -441,8 +441,8 @@ public class AcpCheckoutService {
     private JsonNode readTree(String json) {
         try {
             return objectMapper.readTree(json);
-        } catch (JsonProcessingException e) {
-            return new TextNode(json); // degrade as the map read degraded: the raw text, never a 500
+        } catch (JacksonException e) {
+            return new StringNode(json); // degrade as the map read degraded: the raw text, never a 500
         }
     }
 }

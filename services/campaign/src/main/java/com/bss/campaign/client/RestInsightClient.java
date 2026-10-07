@@ -1,7 +1,7 @@
 package com.bss.campaign.client;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -35,7 +35,7 @@ public class RestInsightClient implements InsightClient {
                             .queryParam("segment", segment).build())
                     .retrieve().body(String.class);
             return body == null ? List.of() : objectMapper.readValue(body, MEMBERS);
-        } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (RestClientException | tools.jackson.core.JacksonException e) {
             return List.of();
         }
     }
@@ -48,7 +48,7 @@ public class RestInsightClient implements InsightClient {
                     .uri("/insight/v1/audience/{id}/members", audienceId)
                     .retrieve().body(String.class);
             return body == null ? List.of() : objectMapper.readValue(body, MEMBERS);
-        } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (RestClientException | tools.jackson.core.JacksonException e) {
             return List.of();
         }
     }

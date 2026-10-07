@@ -4,7 +4,7 @@ import com.bss.insight.api.ApiConstants;
 import com.bss.insight.dto.PublishRequest;
 import com.bss.insight.dto.PublishResult;
 import com.bss.insight.service.SocialPublishService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;

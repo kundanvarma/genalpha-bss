@@ -1,4 +1,14 @@
 spring:
+  # Jackson 3 arrived with Spring Boot 4 and flipped two defaults under us, both
+  # visible on the wire: keys would come out alphabetically (@type first, then
+  # a-z) on every TM Forum body, and a sparse payload that omits a primitive
+  # would throw instead of reading as 0/false. Pinned back to what this
+  # component's payloads and DTOs were written against.
+  jackson:
+    mapper:
+      sort-properties-alphabetically: false
+    deserialization:
+      fail-on-null-for-primitives: false
   # Outbound HTTP has an end. The JDK client waits forever by default, so a
   # dependency that accepts the connection and then goes quiet holds a request
   # thread until something kills it.

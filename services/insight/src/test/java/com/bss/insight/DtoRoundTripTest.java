@@ -21,10 +21,11 @@ import com.bss.insight.dto.StitchReceipt;
 import com.bss.insight.dto.SuggestedAction;
 import com.bss.insight.dto.VisitorRequests;
 import com.bss.insight.dto.VocSummary;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -47,10 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class DtoRoundTripTest {
 
-    private final ObjectMapper json = new ObjectMapper()
-            .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+    private final ObjectMapper json = JsonMapper.builder()
+            .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+            .build();
 
     private static final OffsetDateTime T = OffsetDateTime.parse("2026-09-22T10:00:00Z");
 
@@ -130,7 +133,7 @@ class DtoRoundTripTest {
         assertTrue(asObject.hasCriteria());
         assertTrue(asObject.criteria().isObject());
         AudienceRequest asText = json.readValue("{\"name\":\"n\",\"criteria\":\"{\\\"type\\\":\\\"trait\\\"}\"}", AudienceRequest.class);
-        assertTrue(asText.criteria().isTextual());
+        assertTrue(asText.criteria().isString());
         AudienceRequest nulled = json.readValue("{\"name\":\"n\",\"criteria\":null}", AudienceRequest.class);
         assertFalse(nulled.hasCriteria());
     }

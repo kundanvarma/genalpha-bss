@@ -6,7 +6,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version>
+        <version>4.0.8</version>
         <relativePath/>
     </parent>
     <groupId>com.bss</groupId>
@@ -34,6 +34,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+        </dependency>
+        <!-- Boot 4 split autoconfiguration into per-technology modules: a
+             technology this service uses directly needs its own module, or its
+             autoconfiguration is simply absent at runtime (#199). Missed here on
+             the first pass: bss-bridge failed loudly (no KafkaTemplate bean),
+             but flow's @KafkaListener and ontology's ObjectProvider lookup
+             would both have gone QUIET — a consumer that never subscribes and
+             receipts that are never published. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-kafka</artifactId>
         </dependency>
     </dependencies>
     <build>

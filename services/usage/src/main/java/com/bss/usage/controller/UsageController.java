@@ -13,7 +13,7 @@ import com.bss.usage.dto.UsageSpecificationView;
 import com.bss.usage.dto.UsageView;
 import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.service.UsageService;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;

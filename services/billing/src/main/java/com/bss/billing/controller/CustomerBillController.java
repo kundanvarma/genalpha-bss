@@ -23,8 +23,8 @@ import com.bss.billing.dto.RemittanceApplied;
 import com.bss.billing.dto.ResendReceipt;
 import com.bss.billing.dto.UnappliedRemittanceView;
 import com.bss.billing.service.CustomerBillService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
@@ -127,7 +127,7 @@ public class CustomerBillController {
     @PostMapping("/customerBillOnDemand")
     public ResponseEntity<ObjectNode> createOnDemand(@RequestBody JsonNode body) {
         ObjectNode created = service.createOnDemand(body);
-        return ResponseEntity.created(URI.create(created.path("href").asText())).body(created);
+        return ResponseEntity.created(URI.create(created.path("href").asString())).body(created);
     }
 
     @GetMapping("/customerBillOnDemand")

@@ -1,7 +1,7 @@
 package com.bss.intelligence.client;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -57,7 +57,7 @@ public class KnowledgeClient {
                     .header("Authorization", "Bearer " + bearerToken)
                     .retrieve().body(String.class);
             return body == null ? List.of() : objectMapper.readValue(body, JSON_LIST);
-        } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
+        } catch (RestClientException | tools.jackson.core.JacksonException e) {
             return List.of();
         }
     }

@@ -1,7 +1,7 @@
 package com.bss.campaign.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * What the desk (or the growth copilot's draft) sends to create or edit a
@@ -41,6 +41,6 @@ public record JourneyRequest(
         if (node == null || node.isNull()) {
             return null;
         }
-        return node.isValueNode() ? node.asText() : node.toString();
+        return node.isValueNode() ? node.asString() : node.toString();
     }
 }

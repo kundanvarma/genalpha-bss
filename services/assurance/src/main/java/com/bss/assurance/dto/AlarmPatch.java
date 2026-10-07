@@ -1,7 +1,7 @@
 package com.bss.assurance.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** EMS-grade attribute updates: cause, severity, type, state. An explicit null leaves the column alone. */
 @JsonIgnoreProperties(ignoreUnknown = true)

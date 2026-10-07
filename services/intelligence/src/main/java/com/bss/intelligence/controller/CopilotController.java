@@ -18,7 +18,7 @@ import com.bss.intelligence.service.ProductCopilotService;
 import com.bss.intelligence.service.QuoteNarrative;
 import com.bss.intelligence.service.TicketReplyDraft;
 import com.bss.intelligence.service.WrapUp;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;

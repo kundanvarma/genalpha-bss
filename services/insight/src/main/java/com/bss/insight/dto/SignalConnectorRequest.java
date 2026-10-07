@@ -1,7 +1,7 @@
 package com.bss.insight.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** Bind (or rebind) a connector by name. Config is the adapter's own document (JSON pointers for a webhook, say). */
 @JsonIgnoreProperties(ignoreUnknown = true)

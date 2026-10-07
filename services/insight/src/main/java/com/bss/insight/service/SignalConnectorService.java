@@ -10,8 +10,8 @@ import com.bss.insight.repository.SignalConnectorRepository;
 import com.bss.insight.security.TenantScope;
 import com.bss.insight.signal.SignalConnectorAdapter;
 import com.bss.insight.signal.SignalConnectorRegistry;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -186,12 +186,12 @@ public class SignalConnectorService {
     }
 
     private static String at(JsonNode body, JsonNode cfg, String key, String fallback) {
-        String pointer = cfg.hasNonNull(key) ? cfg.get(key).asText() : fallback;
+        String pointer = cfg.hasNonNull(key) ? cfg.get(key).asString() : fallback;
         if (pointer == null || pointer.isBlank()) {
             return null;
         }
         JsonNode v = body.at(pointer);
-        return v.isMissingNode() || v.isNull() ? null : v.asText();
+        return v.isMissingNode() || v.isNull() ? null : v.asString();
     }
 
     private SignalConnector required(String name) {
@@ -205,8 +205,8 @@ public class SignalConnectorService {
         if (v == null || v.isNull()) {
             return null;
         }
-        if (v.isTextual()) {
-            return v.asText();
+        if (v.isString()) {
+            return v.asString();
         }
         try {
             return objectMapper.writeValueAsString(v);

@@ -2,7 +2,7 @@ package com.bss.party.privacy;
 
 import com.bss.party.entity.Individual;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
 import java.util.List;

@@ -9,7 +9,7 @@ import com.bss.basemigration.security.TenantContext;
 import com.bss.basemigration.service.MigrationEngine;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -174,7 +174,7 @@ class BaseMigrationApiTest {
         when(agreements.commitmentEnd(eq("bindy-1"), eq("off-legacy"), any()))
                 .thenReturn(Optional.of(OffsetDateTime.now(clock).plusDays(60)));
         when(ordering.placeModifyOrder(anyString(), anyString(), anyString(), any(), any(), anyString()))
-                .thenReturn(new com.fasterxml.jackson.databind.ObjectMapper()
+                .thenReturn(new tools.jackson.databind.ObjectMapper()
                         .createObjectNode().put("id", "ord-1").put("state", "completed"));
 
         String planId = createPlan("""

@@ -6,8 +6,8 @@ import com.bss.document.entity.StoredDocument;
 import com.bss.document.repository.ContentProviderConfigRepository;
 import com.bss.document.repository.DocumentRepository;
 import com.bss.document.security.TenantContext;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -60,11 +60,11 @@ public class ContentWebhookService {
             verify(rawBody, signatureHeader, secret);
 
             JsonNode body = readBody(rawBody);
-            String assetId = firstNonBlank(body.path("assetId").asText(null), body.path("_id").asText(null));
+            String assetId = firstNonBlank(body.path("assetId").asString(null), body.path("_id").asString(null));
             if (assetId == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "webhook body needs assetId");
             }
-            String operation = body.path("operation").asText("upsert");
+            String operation = body.path("operation").asString("upsert");
             boolean deleted = "delete".equalsIgnoreCase(operation);
 
             String key = "ref:sanity:" + assetId;

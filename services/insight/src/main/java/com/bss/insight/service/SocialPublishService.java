@@ -2,7 +2,7 @@ package com.bss.insight.service;
 
 import com.bss.insight.dto.PublishResult;
 import com.bss.insight.dto.PublishedPost;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

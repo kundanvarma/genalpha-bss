@@ -15,11 +15,11 @@ import com.bss.insight.security.TenantScope;
 import com.bss.insight.entity.TwinVault;
 import com.bss.insight.repository.TwinVaultRepository;
 import com.bss.insight.signal.TwinningService;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.node.StringNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -155,9 +155,9 @@ public class SignalService {
                         "no signal '" + signalId + "'"));
         Map<String, String> evidence = new LinkedHashMap<>();
         if (dto.evidence() != null && dto.evidence().isObject()) {
-            for (Map.Entry<String, JsonNode> e : (Iterable<Map.Entry<String, JsonNode>>) dto.evidence()::fields) {
+            for (Map.Entry<String, JsonNode> e : dto.evidence().properties()) {
                 JsonNode v = e.getValue();
-                evidence.put(e.getKey(), v.isNull() ? null : v.isValueNode() ? v.asText() : v.toString());
+                evidence.put(e.getKey(), v.isNull() ? null : v.isValueNode() ? v.asString() : v.toString());
             }
         }
         if (evidence.isEmpty()) {
@@ -304,8 +304,8 @@ public class SignalService {
             if (evidence != null && evidence.isObject() && spans != null) {
                 ObjectNode twinEv = objectMapper.createObjectNode();
                 boolean ok = true;
-                for (Map.Entry<String, JsonNode> q : (Iterable<Map.Entry<String, JsonNode>>) evidence::fields) {
-                    String mapped = toTwinSpace(q.getValue().isValueNode() ? q.getValue().asText() : q.getValue().toString(),
+                for (Map.Entry<String, JsonNode> q : evidence.properties()) {
+                    String mapped = toTwinSpace(q.getValue().isValueNode() ? q.getValue().asString() : q.getValue().toString(),
                             s.getText(), s.getTwinText(), spans);
                     if (mapped == null) {
                         ok = false;
@@ -390,7 +390,7 @@ public class SignalService {
         try {
             return objectMapper.readTree(json);
         } catch (Exception e) {
-            return TextNode.valueOf(json);
+            return StringNode.valueOf(json);
         }
     }
 
