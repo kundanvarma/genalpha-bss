@@ -5,6 +5,7 @@ import com.bss.intelligence.service.Redactor;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /** What the redactor recognises, how placeholders stay stable, and that the map reverses. */
 class RedactorTest {
@@ -102,5 +103,39 @@ class RedactorTest {
                 // prose that merely mentions the words is not a labelled name
                 .contains("The customer asked about pricing");
         assertThat(map.count()).isZero();
+    }
+
+    /**
+     * A PROMPT IS UNTRUSTED TEXT, AND IT IS BIG. The labelled-address pattern used to
+     * end `([^\\r\\n]+?)[ \\t]*$` — a lazy group whose character class also matches
+     * space and tab, followed by a run of spaces and tabs. The two overlap, so the
+     * engine retried the tail at every position. Measured on the real redactor before
+     * the fix:
+     *
+     *     25 KB of trailing spaces -> 1.3 s,  51 KB -> 5.4 s,  100 KB -> 20.5 s
+     *
+     * One request thread, in the code that runs on every prompt, from input a caller
+     * supplies. After the fix the same inputs take single-digit milliseconds.
+     *
+     * The bound here is deliberately loose. It is not measuring performance; it is
+     * asking whether the cost is still linear, and two seconds is far below the
+     * twenty this used to take while being far above any honest linear run.
+     */
+    @Test
+    void aHugeAdversarialPromptStaysLinear() {
+        String hostile = "Address: " + "a".repeat(10) + " ".repeat(102_400) + "!";
+        assertTimeoutPreemptively(java.time.Duration.ofSeconds(2), () -> {
+            Redaction map = redactor.begin();
+            redactor.redact(hostile, map);
+        }, "redaction of a 100 KB prompt took longer than 2s — the quadratic backtracking is back");
+    }
+
+    /** The fix must not change WHAT is redacted: same input, same placeholder, value still gone. */
+    @Test
+    void trailingWhitespaceDoesNotChangeWhatAnAddressRedactsTo() {
+        Redaction map = redactor.begin();
+        String out = redactor.redact("Address: Storgata 12, 0155 Oslo      ", map);
+        assertThat(out).isEqualTo("Address: <address#1>").doesNotContain("Storgata");
+        assertThat(map.restore(out)).isEqualTo("Address: Storgata 12, 0155 Oslo");
     }
 }
