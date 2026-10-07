@@ -72,6 +72,15 @@ public class SecurityConfig {
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
             TenantRegistry tenants) throws Exception {
         http
+                // OFF ON PURPOSE. A cross-site request forgery works by making the
+                // browser send a request carrying its AMBIENT credentials — a cookie
+                // it attaches by itself. This API has none: the session policy on the
+                // next line is STATELESS, nothing here reads a cookie, and the only
+                // credential is a bearer token a caller must attach deliberately,
+                // which an attacker's page cannot do. Enabling CSRF here would break
+                // every channel and protect nothing. Recorded as ADR 0024, and the
+                // CodeQL alerts are dismissed against that decision rather than left
+                // open to bury real findings.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

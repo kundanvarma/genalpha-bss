@@ -126,7 +126,7 @@ public class VippsPspAdapter implements RedirectPspAdapter {
         }
         boolean approved = "CHARGED".equals(str(resp.get("state")));
         Map<String, Object> amt = resp.get("amount") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-        log.info("vipps agreement {} charged -> {}", token, approved);
+        log.info("vipps agreement {} charged -> {}", str(resp.get("chargeId")), approved);
         return new Confirmation(approved, kroner(amt.get("value")), str(amt.get("currency")),
                 str(resp.get("chargeId")), "Vipps (avtale)", approved ? null : str(resp.get("state")));
     }
@@ -155,4 +155,5 @@ public class VippsPspAdapter implements RedirectPspAdapter {
     private static String str(Object o) {
         return o == null ? null : String.valueOf(o);
     }
+
 }

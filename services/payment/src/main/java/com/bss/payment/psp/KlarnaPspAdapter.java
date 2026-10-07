@@ -115,7 +115,7 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
             return new Confirmation(false, null, null, null, "Klarna", "token charge failed");
         }
         boolean approved = Boolean.TRUE.equals(resp.get("approved"));
-        log.info("klarna token charge {} -> {}", token, approved);
+        log.info("klarna token charge {} -> {}", str(resp.get("charge_id")), approved);
         return new Confirmation(approved, num(resp.get("amount")), str(resp.get("currency")),
                 str(resp.get("charge_id")), "Klarna (saved)",
                 approved ? null : str(resp.get("decline_reason")));
@@ -138,4 +138,5 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
     private static BigDecimal num(Object o) {
         return o == null ? null : new BigDecimal(String.valueOf(o));
     }
+
 }

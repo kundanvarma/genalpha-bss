@@ -14,7 +14,7 @@
  *  - the dashboard's Hire goes through the controller when deployed
  *    ("Hired AND started", no credentials block)
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const { chromium } = require('playwright');
 
@@ -94,7 +94,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (let i = 0; i < 12 && !rolled; i++) {
       await sleep(10000);
       try {
-        const env = execSync(`docker inspect ${container} --format '{{range .Config.Env}}{{println .}}{{end}}'`,
+        // execFileSync, not execSync: `container` is a value the SERVER chose and
+        // handed back, and putting a server-supplied string into a shell command
+        // line is how a test harness becomes an injection point (CodeQL
+        // js/command-line-injection, critical). Passing argv directly means there
+        // is no shell to inject into, whatever the name contains.
+        const env = execFileSync('docker',
+          ['inspect', container, '--format', '{{range .Config.Env}}{{println .}}{{end}}'],
           { encoding: 'utf8' });
         rolled = env.includes('WORKER_AI_MODEL=claude-haiku-4-5') && !env.includes('20251001');
       } catch { /* container mid-roll */ }

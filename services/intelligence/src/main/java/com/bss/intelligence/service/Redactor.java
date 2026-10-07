@@ -28,7 +28,17 @@ public class Redactor {
     private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+\\.[\\w.]+");
     private static final Pattern ADDRESS_LINE = Pattern.compile(
             "(?im)(?<![\\w])((?:(?:street|billing|shipping|postal|home|invoice|delivery|installation|service)[ \\t]+)?"
-            + "(?:address|adresse|gateadresse|postadresse|street|strasse|straße|osoite)[ \\t]*[:=][ \\t]*)([^\\r\\n]+?)[ \\t]*$");
+            + "(?:address|adresse|gateadresse|postadresse|street|strasse|straße|osoite)[ \\t]*[:=][ \\t]*)([^\\r\\n]+)$");
+    // GREEDY, AND TRIMMED IN JAVA. This used to end `([^\r\n]+?)[ \t]*$`: a lazy
+    // group whose character class also matches space and tab, followed by a run of
+    // spaces and tabs. The two overlap, so the engine retries the whole tail at
+    // every position — quadratic, and measurably so on this very pattern:
+    //     25 KB of trailing spaces -> 1.3 s,  51 KB -> 5.4 s,  100 KB -> 20.5 s
+    // on one request thread, in the code that runs on EVERY prompt. Prompts are
+    // routinely that size, which is what made this worth changing (CodeQL
+    // java/polynomial-redos). Greedy to end-of-line has nothing to backtrack into,
+    // and the trailing whitespace is removed with strip() where the value is read,
+    // so the redacted output is byte-identical.
     /**
      * A LABELLED person name, in prose ({@code Customer: Mira Nilsen}) or in
      * embedded JSON ({@code "familyName": "Nilsen"}) — the two shapes a prompt
@@ -139,7 +149,7 @@ public class Redactor {
         StringBuilder out = new StringBuilder();
         while (m.find()) {
             m.appendReplacement(out, Matcher.quoteReplacement(
-                    m.group(1) + map.placeholder("address", m.group(2))));
+                    m.group(1) + map.placeholder("address", m.group(2).strip())));
         }
         m.appendTail(out);
         return out.toString();

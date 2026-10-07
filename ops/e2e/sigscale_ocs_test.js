@@ -20,7 +20,7 @@
  *    old product retired); vacation hold disables the charging identity
  *  - another tenant sees none of it
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const API = 'http://localhost:8080';
 const OCS = 'http://localhost:8155';
@@ -80,10 +80,18 @@ async function until(what, fn, tries = 40, ms = 2000) {
 function gySession(msisdn, updates = 2) {
   const env = { ...process.env, PATH: '/opt/homebrew/bin:' + (process.env.PATH || ''),
     DOCKER_HOST: process.env.DOCKER_HOST || `unix://${process.env.HOME}/.colima/default/docker.sock` };
-  const cmd = `docker exec bss-sigscale-ocs sh -c 'cd /home/otp && ERL_LIBS=/home/otp/lib timeout 120 escript `
+  // Both values reach here from a SERVER response, and both used to be pasted
+  // into a shell command line — CodeQL js/command-line-injection, critical.
+  // Two changes: they are checked against what they are allowed to be, and the
+  // command is passed as argv so the outer `docker` invocation has no shell.
+  // The inner `sh -c` is still a shell, which is why the check above it matters.
+  if (!/^\d{6,15}$/.test(String(msisdn))) throw new Error(`refusing a non-numeric msisdn: ${msisdn}`);
+  if (!/^\d{1,3}$/.test(String(updates))) throw new Error(`refusing a non-numeric update count: ${updates}`);
+  const inner = `cd /home/otp && ERL_LIBS=/home/otp/lib timeout 120 escript `
     + `lib/ocs-*/priv/bin/data_session.escript --msisdn ${msisdn} --imsi 001001123456789 --raddr 127.0.0.1 `
-    + `--updates ${updates} --interval 200 2>&1'`;
-  return execSync(cmd, { env, encoding: 'utf8', timeout: 150000 });
+    + `--updates ${updates} --interval 200 2>&1`;
+  return execFileSync('docker', ['exec', 'bss-sigscale-ocs', 'sh', '-c', inner],
+    { env, encoding: 'utf8', timeout: 150000 });
 }
 
 (async () => {

@@ -38,3 +38,9 @@ ls -t "$BACKUP_DIR"/bss-*.sql.gz 2>/dev/null | tail -n +$((KEEP + 1)) | while re
 done
 
 echo "backup: done — now prove it with ops/restore-drill.sh"
+# The drill proves the BYTES restore. It does not prove a fleet runs on them:
+# pg_dumpall carries roles, and roles carry the SOURCE machine's passwords, so
+# every service fails to authenticate after a cross-machine restore. That path
+# is ops/restore-into-fleet.sh, which realigns them. Learned the hard way,
+# 7 Oct 2026, restoring this dump onto the hosted box.
+echo "backup: to restore into a RUNNING fleet use ops/restore-into-fleet.sh"
