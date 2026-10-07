@@ -38,7 +38,8 @@
  * documents that keeping a URL out of an index requires letting the crawler in
  * and telling it noindex — a blocked fetch still indexes the bare URL.
  */
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { render, SHELVES } from '../dist-ssr/entry-server.js';
 
 const PORT = Number(process.env.PORT || 8080);
@@ -108,13 +109,63 @@ async function template() {
  * one either: `null` here means "no answer", which is a different fact from an
  * answer of nothing, and the caller is required to tell them apart.
  */
+/*
+ * WHY THIS IS NOT fetch().
+ *
+ * The tenant is decided by the HOSTNAME, and the gateway reads it off the
+ * request URI's authority — which is to say, off the Host header. So every call
+ * this renderer makes on a visitor's behalf has to carry THAT visitor's host,
+ * not this container's.
+ *
+ * fetch() cannot do it. `Host` is a forbidden header name in the fetch spec and
+ * undici drops it SILENTLY — no error, no warning. The request left here saying
+ * `Host: gateway:8080`, the gateway matched no tenant, fell back to the DEFAULT
+ * tenant, and every tenant's server-rendered pages were rendered from the
+ * default tenant's catalogue: a dark tenant served a crawler another operator's
+ * product page, and a Norwegian tenant's pages came out declaring lang="en".
+ *
+ * It was invisible on a one-tenant demo — which is exactly the failure the
+ * comment at the top of this file predicted, and believed it had fixed by
+ * routing through the gateway. Routing through the gateway was right. The
+ * header never arrived.
+ *
+ * node:http sends the Host it is given, so this does what the fetch call meant.
+ */
+function ask(url, headers = {}, timeoutMs = TIMEOUT) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const send = u.protocol === 'https:' ? httpsRequest : httpRequest;
+    const req = send({
+      protocol: u.protocol,
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: `${u.pathname}${u.search}`,
+      method: 'GET',
+      headers,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({
+        status: res.statusCode,
+        text: Buffer.concat(chunks).toString('utf8'),
+      }));
+      res.on('error', reject);
+    });
+    // a slow catalogue must not become a slow page
+    req.setTimeout(timeoutMs, () => req.destroy(new Error('ssr upstream timeout')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function fetchJson(url, headers) {
   try {
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+    const res = await ask(url, headers);
     if (res.status === 404) {
       return { status: 404, json: null };
     }
-    return { status: res.status, json: res.ok ? await res.json() : null };
+    const ok = res.status >= 200 && res.status < 300;
+    return { status: res.status, json: ok ? JSON.parse(res.text) : null };
   } catch {
     return { status: 0, json: null };
   }
@@ -122,10 +173,9 @@ async function fetchJson(url, headers) {
 
 /** The tenant manifest the gateway stamps into every page, fetched the same way. */
 async function tenantConfig(host) {
-  const js = await fetch(`${GATEWAY}/shop/tenant-config.js`, {
-    headers: host ? { Host: host, 'X-Forwarded-Host': host } : {},
-    signal: AbortSignal.timeout(TIMEOUT),
-  }).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+  const js = await ask(`${GATEWAY}/shop/tenant-config.js`,
+    host ? { Host: host, 'X-Forwarded-Host': host } : {})
+    .then((r) => (r.status >= 200 && r.status < 300 ? r.text : '')).catch(() => '');
   const m = js.match(/window\.BSS_STOREFRONT_CONFIG\s*=\s*(\{[\s\S]*?\});/);
   if (!m) return {};
   try {

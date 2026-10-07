@@ -146,7 +146,17 @@ public class BillingRunService {
         // The run is triggered by an authenticated staff request, so the
         // caller's tenant scopes everything the run reads and creates.
         String tenantId = tenantScope.currentTenantId();
-        LocalDate today = clock.today();   // the T1 seam: sandbox clones may live in the future
+        // the T1 seam: sandbox clones may live in the future. TenantClock.today()
+        // cannot return null — its last statement is LocalDate.now() — so a null here
+        // means the seam itself was replaced and left unstubbed. That used to surface
+        // three lines later as "Cannot invoke LocalDate.withDayOfMonth(int) because
+        // today is null", which points at the calendar instead of at the seam (#140).
+        LocalDate today = clock.today();
+        if (today == null) {
+            throw new IllegalStateException(
+                    "TenantClock.today() returned null — the clock seam is stubbed but unset; "
+                            + "a billing run cannot choose a period without a date");
+        }
         LocalDate defaultStart = today.withDayOfMonth(1);
         LocalDate defaultEnd = defaultStart.plusMonths(1).minusDays(1);
 

@@ -65,7 +65,14 @@ public class ShadowBillingService {
         this.sampleCap = sampleCap;
     }
 
-    @Scheduled(fixedDelayString = "${bss.billing.shadow-tick-ms:300000}")
+    // The initial delay is a TEST SEAM, zero by default so production behaviour is
+    // exactly what it was. A fixedDelay schedule fires once immediately at context
+    // start, and in a @SpringBootTest that tick lands on the same @MockBean clock the
+    // test is stubbing — Mockito stubbing is not thread-safe, the stub is lost, and the
+    // next call returns null (#140). Tests set bss.billing.sweep-initial-delay-ms high;
+    // they drive the sweeps by calling them directly, never by waiting for a tick.
+    @Scheduled(fixedDelayString = "${bss.billing.shadow-tick-ms:300000}",
+            initialDelayString = "${bss.billing.sweep-initial-delay-ms:0}")
     public void tick() {
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
