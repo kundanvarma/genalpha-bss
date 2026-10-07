@@ -89,6 +89,19 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# ------------------------------------------------------- jackson3-deprecated ----
+# The Jackson 2 -> 3 migration renamed the string accessors, and the old names
+# were kept as DEPRECATED rather than removed, so every one of them compiles,
+# passes its tests and behaves identically. That is exactly why eight of them
+# survived the migration and were found later by CodeQL rather than by the
+# build: nothing anywhere said no. Spring 7 did the same to the 422 matcher
+# when HTTP renamed the status to Unprocessable Content.
+DEPRECATED=$(grep -rnE '\.textNode\(|\.asText\(\)|JsonNode::asText|isUnprocessableEntity\(\)' \
+    --include='*.java' services/*/src 2>/dev/null || true)
+[ -z "$DEPRECATED" ] || fail "a deprecated Jackson 2 or Spring 6 accessor is back" \
+    "use stringNode(), asString() and isUnprocessableContent(); found:
+$DEPRECATED"
+
 # --------------------------------------------------------- boot4-modules ----
 # Spring Boot 4 split autoconfiguration into one module per technology. A
 # service that uses a technology directly but does not depend on its module

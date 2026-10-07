@@ -60,7 +60,7 @@ public class ProductStockService {
         JsonNode level = stored.has("productStockLevel") ? stored.get("productStockLevel")
                 : json.createObjectNode().put("amount", stocked);
         JsonNode status = stored.has("productStockStatusType") ? stored.get("productStockStatusType")
-                : json.getNodeFactory().textNode("available");
+                : json.getNodeFactory().stringNode("available");
         JsonNode product = stored.has("stockedProduct") ? stored.get("stockedProduct")
                 : entity.getProductOfferingId() == null ? json.createObjectNode()
                         : json.createObjectNode().put("id", entity.getProductOfferingId());

@@ -146,8 +146,8 @@ class DtoRoundTripTest {
     @Test
     void usageSpecification_writesTheServerKeysThenTheDocument() throws Exception {
         Map<String, Object> extensions = new LinkedHashMap<>();
-        extensions.put("units", json.getNodeFactory().textNode("GB"));
-        extensions.put("description", json.getNodeFactory().textNode("snapshot"));
+        extensions.put("units", json.getNodeFactory().stringNode("GB"));
+        extensions.put("description", json.getNodeFactory().stringNode("snapshot"));
         assertEquals("{\"id\":\"s1\",\"href\":\"/x/s1\",\"name\":null,\"lastUpdate\":\"2026-09-22T09:08:12.169178Z\","
                 + "\"@type\":\"UsageSpecification\",\"units\":\"GB\",\"description\":\"snapshot\"}",
                 json.writeValueAsString(new UsageSpecificationView("s1", "/x/s1", null, AT, "UsageSpecification", extensions)));

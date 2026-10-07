@@ -177,10 +177,10 @@ public class MessageTemplateService {
         try {
             locales = objectMapper.readTree(t.getLocales() == null ? "{}" : t.getLocales());
             if (!locales.isObject()) {
-                locales = objectMapper.getNodeFactory().textNode(t.getLocales());
+                locales = objectMapper.getNodeFactory().stringNode(t.getLocales());
             }
         } catch (Exception e) {
-            locales = objectMapper.getNodeFactory().textNode(t.getLocales());
+            locales = objectMapper.getNodeFactory().stringNode(t.getLocales());
         }
         return new TemplateView(t.getId(), t.getHref(), t.getName(), t.getChannel(), locales,
                 t.getPromotionRef(), t.getLastUpdate(), "MessageTemplate");

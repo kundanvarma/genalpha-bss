@@ -276,7 +276,7 @@ public class AcpCheckoutService {
             JsonNode messages = result.path("message");
             throw new BadRequestException("the configuration was rejected: "
                     + (messages.isArray() ? String.join("; ",
-                            StreamSupport.stream(messages.spliterator(), false).map(JsonNode::asText).toList())
+                            StreamSupport.stream(messages.spliterator(), false).map(JsonNode::asString).toList())
                             : messages.asString()));
         }
         JsonNode price = result.path("configurationPrice");
