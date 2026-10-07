@@ -149,6 +149,19 @@ public class ReceiptPublisher implements InitializingBean {
             dropped.increment();
         }
         log.error("RECEIPT LOST: {} for tenant {} (eventId {}) was not published: {} — "
-                + "a governed action ran with no evidence", type, tenant, eventId, why);
+                + "a governed action ran with no evidence",
+                type, oneLine(tenant), eventId, oneLine(why));
+    }
+
+    /**
+     * A line break in a logged value stops being part of the value and becomes
+     * a log line of someone else's choosing. The tenant id arrives on a token
+     * and the reason is a provider's exception message, so neither is ours —
+     * and this one line is the evidence that a receipt went missing, which is
+     * precisely the line worth forging. Collapsed, not dropped: a mangled
+     * value still has to be readable by whoever is reading the alert.
+     */
+    private static String oneLine(String value) {
+        return value == null ? null : value.replaceAll("[\\r\\n\\u0085\\u2028\\u2029]+", " ");
     }
 }
