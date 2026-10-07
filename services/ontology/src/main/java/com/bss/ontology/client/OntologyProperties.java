@@ -15,6 +15,13 @@ public class OntologyProperties {
     private String receiptTopic = "bss.ontology.events";
     /** how long after an action its declared outcome is measured (the demo compresses this) */
     private int outcomeAfterDays = 90;
+    /**
+     * A governed action must leave a receipt, so this service refuses to start
+     * when it cannot write one. True is the application default — see
+     * ReceiptPublisher for the incident that made it one. Setting it false is a
+     * deliberate choice to run actions that cannot be proved.
+     */
+    private boolean receiptsRequired = true;
 
     public String getDir() { return dir; }
     public void setDir(String dir) { this.dir = dir; }
@@ -24,6 +31,8 @@ public class OntologyProperties {
     public void setComponents(Map<String, String> components) { this.components = components; }
     public String getReceiptTopic() { return receiptTopic; }
     public void setReceiptTopic(String receiptTopic) { this.receiptTopic = receiptTopic; }
+    public boolean isReceiptsRequired() { return receiptsRequired; }
+    public void setReceiptsRequired(boolean receiptsRequired) { this.receiptsRequired = receiptsRequired; }
     public int getOutcomeAfterDays() { return outcomeAfterDays; }
     public void setOutcomeAfterDays(int outcomeAfterDays) { this.outcomeAfterDays = outcomeAfterDays; }
 

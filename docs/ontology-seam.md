@@ -78,6 +78,8 @@ Concepts, actions and capabilities carry `version` and `introduced`; a retired a
 - The Subscription → Service link is by name (the inventory carries no `realizingService`), the same weak seam the shop and the business console use today; a `realizingService` column plus a back-fill on service activation is the fix, an inventory change.
 - Qualification is offering-by-place only, so "eligible for this customer" is approximated by serviceability at the customer's postcode.
 - A customer's token cannot see a stranger's objects at all (404 by design), so that refusal reads "could not be read" rather than "not yours".
+- **There is no receipt store.** Receipts are published to `bss.ontology.events`; two components consume it by pattern — event-hub (fan-out to TMF688 subscribers) and flow (journey triggers) — and neither is an archive. The ontology service has no migrations, so there is no receipt table anywhere, and the durable record of a governed action is Kafka retention plus whatever a subscriber happened to keep. Issue #234.
+- A receipt that fails to send **after** the action completed still cannot be undone. The service now refuses to start when it cannot write receipts at all (`bss.ontology.receipts-required`, true by default — the Boot 4 migration proved why: one missing autoconfigure module and every receipt silently vanished while the service reported healthy), and a send that fails anyway is logged at ERROR and counted on `bss.ontology.receipts.dropped`. That makes the loss visible, not impossible; making it impossible needs the store above.
 
 
 ## Agents — the registry of AI actors
