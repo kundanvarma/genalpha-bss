@@ -69,7 +69,9 @@ class DecisionPointsTest {
     @Test
     void constraintsRemoveActionsBeforeThePolicySeesThem() {
         Constraint noB = new Constraint() {
+            @Override
             public String name() { return "channel-availability"; }
+            @Override
             public Optional<String> reject(String action, DecisionRequest r) {
                 return "B".equals(action) ? Optional.of("not sellable on this channel") : Optional.empty();
             }
@@ -86,7 +88,9 @@ class DecisionPointsTest {
     @Test
     void fallbackAnswersWhenNothingIsEligibleOrThePolicyFails() {
         Constraint all = new Constraint() {
+            @Override
             public String name() { return "consent"; }
+            @Override
             public Optional<String> reject(String action, DecisionRequest r) { return Optional.of("no marketing consent"); }
         };
         DecisionRecord none = points.decide(DecisionPoints.JOURNEY_ENROLMENT, "p-1", Map.of("seed", "j3", "partyId", "p-1"),
@@ -96,8 +100,11 @@ class DecisionPointsTest {
         assertThat(none.eligibleActions()).isEmpty();
 
         DecisionPolicy broken = new DecisionPolicy() {
+            @Override
             public String name() { return "broken"; }
+            @Override
             public String version() { return "0"; }
+            @Override
             public Decision decide(DecisionRequest r) { throw new IllegalStateException("model offline"); }
         };
         DecisionRecord failed = points.decide(points.spec(DecisionPoints.JOURNEY_ENROLMENT), broken, "p-1",

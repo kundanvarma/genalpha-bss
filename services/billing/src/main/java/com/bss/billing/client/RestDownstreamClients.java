@@ -100,6 +100,7 @@ public class RestDownstreamClients {
                 return all;
             }
 
+            @Override
             public List<Map<String, Object>> offeringsByName(String name) {
                 try {
                     List<Map<String, Object>> page = rest.get()
