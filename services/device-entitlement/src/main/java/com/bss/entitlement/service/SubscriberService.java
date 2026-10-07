@@ -291,13 +291,31 @@ public class SubscriberService {
      * eUICC. The companion or transfer it belongs to follows; an installed
      * profile makes a companion ACTIVE and completes what the transfer began.
      */
+    /**
+     * ES2+ names BOTH identifiers and we used to match on only one. The ICCID
+     * identifies the profile; the EID identifies the eUICC it was downloaded
+     * onto, and OdsaService stores it on the companion or the transfer BEFORE
+     * ordering the profile (`companion_terminal_eid`, `target_terminal_eid`),
+     * so by the time the SM-DP+ reports back we already know which chip the
+     * profile was meant for. Ignoring that let a callback naming a valid ICCID
+     * and a different eUICC flip a companion device to ACTIVE.
+     *
+     * Known-and-different is the only refusal. An absent EID on either side
+     * still matches on the ICCID alone, because the EID is not always known at
+     * download time and tightening that would break the ordinary path rather
+     * than any attack.
+     */
+    private static boolean sameChip(String reported, String stored) {
+        return reported == null || stored == null || reported.equalsIgnoreCase(stored);
+    }
+
     @Transactional
     public Es2PlusReply.ProfileProgress profileProgress(String tenantId, String iccid, String eid, int point, String status) {
         boolean ok = status == null || status.equalsIgnoreCase("Executed-Success");
         String state = !ok ? "failed" : point >= 4 ? "installed" : point == 3 ? "downloading" : "confirmed";
         Es2PlusReply.ProfileProgress out = new Es2PlusReply.ProfileProgress(iccid, state);
         for (CompanionDevice c : companions.findTop200ByTenantIdOrderByLastUpdateDesc(tenantId)) {
-            if (iccid != null && iccid.equals(c.getIccid())) {
+            if (iccid != null && iccid.equals(c.getIccid()) && sameChip(eid, c.getEid())) {
                 c.setProfileState(state);
                 if ("installed".equals(state)) {
                     c.setStatus(CompanionDevice.ACTIVE);
@@ -313,7 +331,7 @@ public class SubscriberService {
             }
         }
         for (SubscriptionTransfer t : transfers.findTop200ByTenantIdOrderByCreatedAtDesc(tenantId)) {
-            if (iccid != null && iccid.equals(t.getNewIccid())) {
+            if (iccid != null && iccid.equals(t.getNewIccid()) && sameChip(eid, t.getTargetEid())) {
                 t.setProfileState(state);
                 t.setLastUpdate(OffsetDateTime.now());
                 transfers.save(t);

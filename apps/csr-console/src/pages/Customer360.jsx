@@ -4,7 +4,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, getCustomer,
   interactionsPage, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf,
   activeServicesOf, agreementsOf, completeCutover, fulfilmentFamilies, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  verifyPartyAddress, autoTopupOf, creditDecisionsOf, directorySettingsOf, linkRegistryPerson,
+  autoTopupOf, creditDecisionsOf, directorySettingsOf, linkRegistryPerson,
   poolsOf, runRegistrySync, saveDirectorySetting, spendPoliciesOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import Assist from './Assist.jsx';
@@ -91,7 +91,6 @@ export default function Customer360() {
   const go = (a) => navigate(`/customer/${id}${a === 'overview' ? '' : '#' + a}`);
 
   const [customer, setCustomer] = useState(null);
-  const [regCheck, setRegCheck] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
