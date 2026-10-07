@@ -210,7 +210,44 @@ public class LandingPageService {
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 
+    /**
+     * A STRING LITERAL INSIDE A &lt;script&gt; BLOCK, which is a harder problem than a
+     * quoted attribute. This used to escape only the backslash and the apostrophe,
+     * which keeps the literal well-formed but does nothing about the one thing that
+     * matters here: the HTML parser finds the closing tag BEFORE JavaScript ever sees
+     * the string. So a utm_source of
+     *
+     *     x&lt;/script&gt;&lt;script&gt;alert(document.domain)&lt;/script&gt;
+     *
+     * ended the block early and the rest was parsed as markup — reflected XSS, from a
+     * query parameter, on a PUBLIC landing page a campaign links to.
+     *
+     * Escaping &lt; and &gt; as unicode escapes keeps the value identical to JavaScript
+     * while making it impossible for the HTML parser to see a tag. The line
+     * terminators matter too: a raw newline (or U+2028/U+2029, which JavaScript also
+     * treats as one) would break the literal.
+     */
     private static String jsStr(String s) {
-        return "'" + (s == null ? "" : s.replace("\\", "\\\\").replace("'", "\\'")) + "'";
+        if (s == null) {
+            return "''";
+        }
+        StringBuilder b = new StringBuilder("'");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> b.append("\\\\");
+                case '\'' -> b.append("\\'");
+                case '"' -> b.append("\\\"");
+                case '<' -> b.append("\\u003C");
+                case '>' -> b.append("\\u003E");
+                case '&' -> b.append("\\u0026");
+                case '\n' -> b.append("\\n");
+                case '\r' -> b.append("\\r");
+                case '\u2028' -> b.append("\\u2028");
+                case '\u2029' -> b.append("\\u2029");
+                default -> b.append(c);
+            }
+        }
+        return b.append("'").toString();
     }
 }
