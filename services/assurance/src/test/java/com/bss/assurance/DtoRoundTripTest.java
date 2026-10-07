@@ -186,6 +186,15 @@ class DtoRoundTripTest {
         assertThat(mapper.readValue("{\"priority\":\"3\"}", ServiceProblemRequest.class)
                 .priorityOr(2)).isEqualTo(3);
         assertThat(mapper.readValue("{}", ServiceProblemRequest.class).priorityOr(2)).isEqualTo(2);
+        /* A WORD WHERE TMF656 WANTS AN INTEGER. This threw NumberFormatException
+         * out of the request mapper -- a 500 for a body anyone could send by
+         * hand -- while the method's whole job is to supply a value when the
+         * field is unusable. An absent key already fell back; a malformed one
+         * did not. */
+        assertThat(mapper.readValue("{\"priority\":\"urgent\"}", ServiceProblemRequest.class)
+                .priorityOr(2)).isEqualTo(2);
+        assertThat(mapper.readValue("{\"priority\":\" 4 \"}", ServiceProblemRequest.class)
+                .priorityOr(2)).isEqualTo(4);
         assertThat(mapper.readValue("{}", ServiceProblemRequest.class)
                 .affectedObjectOr("declared")).isEqualTo("declared");
         assertThat(mapper.readValue("{\"reason\":null}", ServiceProblemRequest.class)
