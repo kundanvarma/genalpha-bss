@@ -89,6 +89,18 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# -------------------------------------------------------- merge-markers ----
+# A conflict marker that reached a commit. This is here because one did: a
+# `git stash pop` left "<<<<<<< Updated upstream" in docs/adr/README.md and it
+# was committed to main without anyone noticing, because nothing lints a
+# markdown table and the eye skims a diff it believes it understands. Cheap to
+# check, and silent otherwise.
+MARKERS=$(grep -rlE '^(<<<<<<< |>>>>>>> |={7}$)' --include='*.java' --include='*.js' --include='*.mjs' \
+          --include='*.md' --include='*.yml' --include='*.yaml' --include='*.sh' --include='*.sql' \
+          --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.git . 2>/dev/null \
+          | grep -v 'ops/arch/claims.sh' || true)
+[ -z "$MARKERS" ] || fail "a merge conflict marker is committed" "$MARKERS"
+
 # ----------------------------------------------------------------- stack ----
 BOOT=$(grep -m1 -A2 'spring-boot-starter-parent' services/product-catalog/pom.xml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 grep -q "Spring Boot $BOOT" README.md \

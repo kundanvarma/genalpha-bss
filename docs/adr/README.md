@@ -43,11 +43,7 @@ more deliberate than it was; 0016 says so explicitly.
 | [0020](0020-licensing-wording-no-prospect-names-no-pdfs.md) | Public repo hygiene | Source-available (BUSL-1.1) wording; no prospect names in the repo; no report PDFs in git. |
 | [0021](0021-tmf634-served-by-product-catalog.md) | TMF634 in product-catalog | The resource catalog is served by the product-catalog component on the standard path; a resource spec names a seam, never a vendor; extraction later is along the API path. |
 | [0022](0022-react-islands-in-the-back-office.md) | React islands in the back office | A desk may render React inside its own panel; one bundle built in the image, `island: '<name>'` is the whole coupling; the shell keeps sign-in, nav and the palette. |
-<<<<<<< Updated upstream
-=======
-| [0023](0023-jackson-3-wire-shape-is-pinned.md) | Jackson 3's wire shape is pinned | Boot 4 brought Jackson 3 with alphabetical keys and primitives that throw on a sparse payload; every component pins both back, and the claims gate names the one that forgets. |
 | [0024](0024-csrf-is-off-because-there-is-nothing-ambient-to-forge.md) | CSRF is off, deliberately | Nothing ambient to forge: stateless, no cookie auth, bearer token only — so the 39 CodeQL alerts are dismissed against a written decision rather than left to bury real findings. |
->>>>>>> Stashed changes
 
 ## How to add one
 
