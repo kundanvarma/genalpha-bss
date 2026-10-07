@@ -185,7 +185,7 @@ public class TenantOnboardingService {
      *  marketing team may read: name, color, tagline. Nothing operational. */
     public BrandView brandOf(String id) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher m = Pattern.compile("(      - id: " + Pattern.quote(id) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!m.find()) {
             throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
         }
@@ -290,7 +290,7 @@ public class TenantOnboardingService {
             throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
         }
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher m = Pattern.compile("(      - id: " + Pattern.quote(id) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!m.find()) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "operator '" + id + "' is a built-in — built-ins mutate by env, not by form");
@@ -698,7 +698,7 @@ public class TenantOnboardingService {
      */
     public CloneReceipt cloneOperator(String sourceId, CloneRequest dto) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher src = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher src = Pattern.compile("(      - id: " + Pattern.quote(sourceId) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!src.find()) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "unknown source operator '" + sourceId + "'");
@@ -739,13 +739,13 @@ public class TenantOnboardingService {
      */
     public TwinBaseReceipt seedTwinBase(String cloneId, SeedTwinRequest dto) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher cm = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher cm = Pattern.compile("(      - id: " + Pattern.quote(cloneId) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!cm.find() || !cm.group(1).contains("sandbox:")) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "twin seeding is sandbox-only — '" + cloneId + "' is not a sandbox clone");
         }
         String sourceId = dto.sourceId() == null ? "genalpha" : dto.sourceId();
-        Matcher sm = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher sm = Pattern.compile("(      - id: " + Pattern.quote(sourceId) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!sm.find()) {
             throw new com.bss.userroles.exception.BadRequestException("unknown source '" + sourceId + "'");
         }
@@ -829,7 +829,7 @@ public class TenantOnboardingService {
     /** T1 — advance a SANDBOX clone's clock (clock-offset-days in its block). */
     public ClockReceipt advanceClock(String cloneId, int days) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher m = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher m = Pattern.compile("(      - id: " + Pattern.quote(cloneId) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!m.find() || !m.group(1).contains("sandbox:")) {
             throw new com.bss.userroles.exception.BadRequestException(
                     "the clock only moves in a sandbox — '" + cloneId + "' is not one");
@@ -1111,7 +1111,7 @@ public class TenantOnboardingService {
     /** Stamp the clone's block: the whole fleet reads this flag. */
     private void markSandbox(String id) throws Exception {
         String yml = Files.readString(Path.of(tenantsFile));
-        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        Matcher m = Pattern.compile("(      - id: " + Pattern.quote(id) + "\\n(?:        .*\\n)*)").matcher(yml);
         if (!m.find()) {
             return;
         }
