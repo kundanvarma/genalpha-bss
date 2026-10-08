@@ -113,6 +113,26 @@ elif [ "$tenants_rc" -ne 0 ]; then
 fi
 rm -f "$tenants_err"
 
+# -------------------------------------------------------- receipt-store ----
+# insight's decision_log IS the durable store for governed-action receipts: the
+# ontology publishes each executed action as a DecisionRecordedEvent and
+# DecisionLogListener persists it. I filed #234 claiming no store existed —
+# wrong, and checkable: 3,603 ontology-sourced rows were already there.
+#
+# The real defect was that bss.ontology.events reached that listener only
+# through docker-compose.yml. Compose is the right home for a DEMO opt-in; this
+# is not one. A production deployment on application defaults would have
+# persisted no governed-action receipt and nothing would have said so — the
+# same shape as #233, where evidence could silently not exist.
+INSIGHT_YML=services/insight/src/main/resources/application.yml
+ONTOLOGY_TOPIC=$(grep -oE 'receipt-topic: *[a-z0-9.]+' services/ontology/src/main/resources/application.yml \
+                 | head -1 | awk '{print $2}')
+[ -n "$ONTOLOGY_TOPIC" ] || fail "cannot read the ontology receipt topic" \
+    "ops/arch/claims.sh expects receipt-topic in services/ontology/.../application.yml"
+grep -q "decision-topics:.*$ONTOLOGY_TOPIC" "$INSIGHT_YML" \
+  || fail "governed-action receipts are not in insight's APPLICATION default" \
+          "decision-topics in $INSIGHT_YML must include $ONTOLOGY_TOPIC — a deployment on
+         application defaults would persist no receipt, and nothing would say so (#234)"
 # ----------------------------------------------------- family-taxonomies ----
 # "Service" on the agent desk was never a type — it was the word printed when
 # the desk could not tell what something was (#143). The mechanism is already

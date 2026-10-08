@@ -66,6 +66,21 @@ bss:
   events:
     topic: bss.insight.events
   insight:
+    # THE DECISION LOG'S SOURCES, GOVERNED ACTIONS INCLUDED.
+    # insight's decision_log IS the durable store for every decision the BSS
+    # makes, receipts included: the ontology publishes each executed action as a
+    # DecisionRecordedEvent in exactly this shape and DecisionLogListener
+    # persists it. The store is real and populated — 3,603 ontology-sourced rows
+    # on the demo box when this was checked.
+    #
+    # The list used to default to campaign + intelligence only, with
+    # bss.ontology.events added in docker-compose.yml. Compose is the right home
+    # for a DEMO opt-in; this is not one. A production deployment on application
+    # defaults would have persisted no governed-action receipt at all, and
+    # nothing would have said so — the same shape as #233, where evidence could
+    # silently not exist. The application default now carries it; compose may
+    # still override.
+    decision-topics: ${BSS_INSIGHT_DECISION_TOPICS:bss.campaign.events,bss.intelligence.events,bss.ontology.events}
     # Auto-refresh scheduler for materialized audiences — bounded + controllable.
     refresh:
       enabled: ${INSIGHT_REFRESH_ENABLED:true}
