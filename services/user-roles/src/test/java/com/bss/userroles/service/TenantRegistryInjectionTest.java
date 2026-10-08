@@ -72,13 +72,58 @@ bss:
         given(tenants.byId("acme")).willReturn(mock(TenantRegistry.TenantEntry.class));
 
         onboarding = new TenantOnboardingService(RestClient.builder(),
-                "http://localhost:8085", "admin", "admin",
+                "http://localhost:8085", "", "admin", "admin",
                 "infra/keycloak/nova-realm.json", registry.toString(),
                 "http://localhost:8081", "http://localhost:8113", "http://localhost:8083",
                 "http://localhost:8097", "http://localhost:8086", "http://localhost:8104",
                 "http://localhost:8084", "genalpha,nova",
                 mock(IdpAdminClient.class),
                 tenants, mock(TenantFileRefresher.class));
+    }
+
+    /** The same service, told what the fleet will actually see as an issuer. */
+    private TenantOnboardingService withIssuerBase(String base) {
+        return new TenantOnboardingService(RestClient.builder(),
+                "http://localhost:8085", base, "admin", "admin",
+                "infra/keycloak/nova-realm.json", registry.toString(),
+                "http://localhost:8081", "http://localhost:8113", "http://localhost:8083",
+                "http://localhost:8097", "http://localhost:8086", "http://localhost:8104",
+                "http://localhost:8084", "genalpha,nova",
+                mock(IdpAdminClient.class),
+                mock(TenantRegistry.class), mock(TenantFileRefresher.class));
+    }
+
+    /**
+     * A cloned issuer is the TEMPLATE's, not the deployment's. The block is
+     * copied from nova, so a newborn inherits
+     * ${OIDC_ISSUER_URI_<ID>:http://localhost:8085/realms/<id>} — and that
+     * variable exists only for tenants present when gen-override.py ran. On the
+     * hosted box Keycloak stamps https://id.<domain>/realms/<id>, so the
+     * newborn's own tokens were refused with "Invalid issuer": the operator
+     * appeared, catalog and brand correct, and its first customer got a 401.
+     * Issue #264.
+     */
+    @Test
+    void aPublicIssuerBaseIsWrittenIntoTheNewBlock() throws Exception {
+        withIssuerBase("https://id.taranga.no/realms")
+                .appendTenantBlock("acme", "Acme Telecom", "en", "EUR", "#112233", "a-secret");
+
+        assertThat(Files.readString(registry))
+                .contains("issuer: https://id.taranga.no/realms/acme")
+                .doesNotContain("OIDC_ISSUER_URI_ACME");
+    }
+
+    /**
+     * And with no base configured the laptop is untouched: the clone keeps the
+     * template's placeholder exactly as it always did.
+     */
+    @Test
+    void withNoIssuerBaseTheTemplatesIssuerIsCloned() throws Exception {
+        onboarding.appendTenantBlock("acme", "Acme Telecom", "en", "EUR", "#112233", "a-secret");
+
+        assertThat(Files.readString(registry))
+                .contains("realms/acme")
+                .doesNotContain("https://id.taranga.no");
     }
 
     /* ---------- the path that mints an operator ---------- */

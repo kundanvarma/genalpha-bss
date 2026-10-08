@@ -64,6 +64,8 @@ public class TenantOnboardingService {
 
     private final RestClient rest;
     private final String keycloakBase;
+    /** What the fleet will SEE as a new tenant's issuer; empty = clone the template's. */
+    private final String issuerBase;
     private final String adminUser;
     private final String adminPassword;
     private final String templatePath;
@@ -82,6 +84,10 @@ public class TenantOnboardingService {
 
     public TenantOnboardingService(RestClient.Builder builder,
             @Value("${bss.onboarding.keycloak-base:http://localhost:8085}") String keycloakBase,
+            // THE ISSUER THE FLEET WILL ACTUALLY SEE, which is not always the
+            // address onboarding used to reach Keycloak. Empty by default, so a
+            // laptop keeps cloning the template's issuer exactly as before.
+            @Value("${bss.onboarding.issuer-base:}") String issuerBase,
             @Value("${bss.onboarding.admin-user:admin}") String adminUser,
             @Value("${bss.onboarding.admin-password:admin}") String adminPassword,
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
@@ -99,6 +105,7 @@ public class TenantOnboardingService {
             com.bss.userroles.security.TenantFileRefresher refresher) {
         this.rest = builder.build();
         this.keycloakBase = keycloakBase;
+        this.issuerBase = issuerBase == null ? "" : issuerBase.trim().replaceAll("/+$", "");
         this.adminUser = adminUser;
         this.adminPassword = adminPassword;
         this.templatePath = templatePath;
@@ -647,6 +654,18 @@ public class TenantOnboardingService {
                 .replace("- id: nova", "- id: " + id)
                 .replace("realms/nova", "realms/" + id)
                 .replaceAll("\\$\\{(\\w+)_NOVA:([^}]*)\\}", "\\${$1_" + id.toUpperCase() + ":$2}")
+                // A CLONED ISSUER IS THE TEMPLATE'S, NOT THIS DEPLOYMENT'S. The block
+                // is copied from nova, so a newborn inherits
+                // ${OIDC_ISSUER_URI_<ID>:http://localhost:8085/realms/<id>} — and
+                // that variable exists only for tenants that were present when
+                // gen-override.py ran. On the hosted box Keycloak stamps
+                // https://id.<domain>/realms/<id>, so the newborn's own tokens
+                // were refused with "Invalid issuer": the operator appeared,
+                // its catalog and brand were right, and its first customer got a
+                // 401 (#264). Where the deployment knows its public issuer, it
+                // says so here and the clone is overridden.
+                .replaceAll(issuerBase.isEmpty() ? "(?!)" : "issuer: .*",
+                        Matcher.quoteReplacement("issuer: " + issuerBase + "/" + id))
                 .replaceAll("jwks-uri: \\$\\{[^}]*\\}", "jwks-uri: http://keycloak:8080/realms/"
                         + id + "/protocol/openid-connect/certs")
                 .replaceAll("token-uri: \\$\\{[^}]*\\}", "token-uri: http://keycloak:8080/realms/"

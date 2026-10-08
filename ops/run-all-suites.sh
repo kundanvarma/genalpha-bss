@@ -25,6 +25,21 @@
 #   PROOF_CONTINUE_ON_NOT_READY=1   diagnose against a half-up fleet (never in CI)
 set -u
 cd "$(dirname "$0")/.."
+
+# A DEPLOYMENT'S OWN COMPOSE OVERRIDE IS PART OF ITS IDENTITY. The readiness
+# gate below starts a suite's dependencies with `docker compose up -d`, and on
+# a host with an override (the demo box generates docker-compose.cloud.yml,
+# which rewrites every tenant's issuer to the public hostname) an unset
+# COMPOSE_FILE recreates those containers from the BASE file alone. They come
+# back trusting http://localhost:8085 while Keycloak stamps
+# https://id.<domain>, and from that moment every authenticated call in the run
+# fails with "Invalid issuer". install.sh exports COMPOSE_FILE in ~/.bashrc,
+# which a nohup'd non-interactive sweep never reads — so 75 of the first 85
+# suites went red on the box before this was found.
+if [ -z "${COMPOSE_FILE:-}" ] && [ -f docker-compose.cloud.yml ]; then
+  export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
+  echo "[$(date +%H:%M:%S)] COMPOSE_FILE set from the deployment's override (docker-compose.cloud.yml)"
+fi
 export PATH=/opt/homebrew/bin:$PATH
 
 # the suites are Playwright and axe — make sure both are installed before we
@@ -102,6 +117,22 @@ ensure_needs() {
 # committed file is the truth: restore it after the preamble and at the end.
 restore_tenants_fixture() {
   git checkout -- infra/tenants/tenants.yml 2>/dev/null || return 0
+  # GIT CHECKOUT REWRITES THE FILE AS THE INVOKING USER, which silently reverts
+  # the ownership the services need. infra/tenants is the one read-write bind
+  # mount in the fleet and the containers run as uid 1001 (#256); after a
+  # restore the file is owned by whoever ran the sweep, and user-roles can no
+  # longer write it. The symptom is not a permission error — onboarding returns
+  # an opaque 500 and every operator suite after the first restore fails. Found
+  # on the box 8 Oct, where it cost the first two suites of a proof run.
+  #
+  # On a laptop the bind mount is writable whatever the owner, so this is a
+  # no-op there; on a Linux host it is the difference between a green run and a
+  # red one.
+  if [ "$(stat -c '%u' infra/tenants/tenants.yml 2>/dev/null || echo 1001)" != "1001" ]; then
+    chown 1001 infra/tenants/tenants.yml 2>/dev/null \
+      || sudo -n chown 1001 infra/tenants/tenants.yml 2>/dev/null \
+      || echo "[$(date +%H:%M:%S)] WARNING: tenants.yml is uid $(stat -c '%u' infra/tenants/tenants.yml) and the services run as 1001 — onboarding suites will fail (#256)" >&2
+  fi
   echo "[$(date +%H:%M:%S)] tenants.yml restored from git (the fleet re-reads it within a refresh interval)"
 }
 

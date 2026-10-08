@@ -50,6 +50,15 @@ for name, svc in base["services"].items():
         if tid == "genalpha":
             continue
         env[f"OIDC_ISSUER_URI_{tid.upper()}"] = f"{issuer_base}/{tid}"
+    if name == "user-roles":
+        # OPERATORS MINTED AFTER INSTALL need the issuer too, and the loop above
+        # can only name the tenants that exist right now. A newborn's block is
+        # cloned from nova's, so without this it inherits
+        # ${OIDC_ISSUER_URI_<ID>:http://localhost:8085/realms/<id>} — a variable
+        # nothing sets — while Keycloak stamps {issuer_base}/<id>. The operator
+        # appears, catalog and brand correct, and its first customer gets a 401
+        # on "Invalid issuer". Issue #264.
+        env["BSS_ONBOARDING_ISSUER_BASE"] = issuer_base
     if name == "device-entitlement":
         # phones and the OIDC callback reach the TS.43 door on the public demo host
         env["ENTITLEMENT_PUBLIC_BASE_URL"] = f"https://demo.{domain}"
