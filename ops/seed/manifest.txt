@@ -1,0 +1,96 @@
+# THE SEED PATH: an empty fleet to the state the suites assert on.
+#
+# Read by ops/seed-fleet.sh (which runs it) and ops/arch/seed_coverage_check.py
+# (which holds it against what the suites actually assert on). One file, so the
+# runner and the gate cannot disagree.
+#
+# WHY THIS EXISTS. The order used to live in two places and neither was
+# runnable: ops/README.md documented 13 of 54 scripts in prose, and
+# .github/workflows/browser-proof.yml carried a 22-script list inside the
+# nightly job. That job is gated on `vars.BROWSER_PROOF_RUNNER`, which has
+# never been set, so every scheduled run reports "skipped" — the 22-script
+# order had never once executed. Meanwhile the laptop's fleet state was
+# ACCUMULATED by hand, which is why the committed proof run sat at 122 of 258
+# suites since 24 September and could not be reproduced anywhere. Issue #261.
+#
+# FORMAT:  <tier>  <script>  [args...]
+#   smoke  also run by the PR smoke tier (keep it small — it blocks every PR)
+#   full   the whole path, for a proof run
+#
+# ORDER MATTERS in three places, and only three, all recorded where they bite:
+#   - seed_genalpha_one before reshape_bundle before link_prices: the bundle is
+#     reshaped and then priced.
+#   - seed_content AFTER seed_nova: it writes artwork for both tenants' catalogs.
+#   - seed_service_specifications and seed_resource_facing_services LAST: they
+#     stamp the CFS/RFS chain onto whatever specs the other seeds left sellable,
+#     and the bundle seed re-points specs.
+# Everything else is independent as far as I could determine by reading them;
+# where that turns out to be wrong, the fix is a line move here, not a hunt.
+
+# ---- the GenAlpha catalog core (the documented 13, in the documented order) --
+smoke  seed_genalpha_one
+smoke  reshape_bundle
+smoke  link_prices
+full   seed_stock
+full   seed_serviceable_areas
+full   seed_coverage_map
+full   seed_usage_allowances
+full   seed_agreement_terms
+smoke  seed_promotions
+full   seed_resource_pools
+full   seed_ai_slice
+full   seed_verified_identity
+
+# ---- the GenAlpha fixtures the suites assert on -----------------------------
+# Every one of these was missing from the nightly list; the gate found them by
+# matching suite assertions against what each seed creates.
+full   seed_catalog_taxonomy
+full   seed_family_max
+full   seed_vas
+full   seed_lifecycle_characteristics
+full   seed_screens_plus
+full   seed_entitlement
+full   seed_plan_compare
+full   seed_color_pricing
+full   seed_device_commerce
+full   seed_device_content
+full   seed_demo_images
+full   seed_ocs_charging
+full   seed_sigscale_ocs
+full   seed_usage_policy
+full   seed_norway_rails
+full   seed_registry
+full   seed_carriers_psp
+
+# ---- the other operators ----------------------------------------------------
+full   seed_nova
+full   seed_content
+full   seed_taranga
+full   seed_taranga_growth
+full   seed_enet
+full   seed_enet_growth
+full   seed_enet_history
+full   seed_chilimobil
+
+# ---- wholesale and open access ----------------------------------------------
+full   seed_wholesale_partners
+full   seed_wholesale_access_products
+full   seed_wholesale_coverage
+full   seed_novafibre_owner
+full   seed_mobile_wholesale
+
+# ---- knowledge, ontology, growth surfaces -----------------------------------
+# These default to TENANT=taranga, and the suites that assert on them are
+# genalpha suites (carrier_picker, channel_availability, console_nav), so the
+# tenant is named explicitly rather than left to the default.
+full   seed_knowledge_help         genalpha
+full   seed_knowledge_help         taranga
+full   seed_knowledge_manual       genalpha
+full   seed_ontology
+full   seed_signal_connectors
+full   seed_social                 genalpha
+full   seed_launch_governance      taranga
+
+# ---- LAST: the CFS/RFS chain over whatever is sellable by now ---------------
+smoke  seed_service_specifications
+smoke  seed_resource_facing_services

@@ -83,11 +83,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet requests
-          # seed_service_specifications runs LAST: it stamps the CFS on whatever
-          # specs the other seeds left sellable (the bundle seed re-points specs)
-          for s in seed_genalpha_one reshape_bundle link_prices seed_promotions seed_service_specifications seed_resource_facing_services; do
-            echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
-          done
+          # The order lives in ops/seed/manifest.txt and is run by ops/seed-fleet.sh,
+          # which the seed-coverage gate also reads — so this job, the nightly and
+          # a developer's laptop cannot drift apart. It used to be this list,
+          # duplicated here and in the nightly below (#261).
+          bash ops/seed-fleet.sh smoke
 
       # TAR-15: the RLS invariant checker against a LIVE catalogue. Migration
       # tests prove the migrations; this proves the database that actually
@@ -203,15 +203,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --quiet requests
-          for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
-                   seed_serviceable_areas seed_coverage_map seed_usage_allowances \
-                   seed_agreement_terms seed_promotions seed_resource_pools \
-                   seed_ai_slice seed_verified_identity seed_nova \
-                   seed_catalog_taxonomy seed_family_max seed_vas seed_content \
-                   seed_device_content seed_color_pricing seed_ocs_charging \
-                   seed_service_specifications seed_resource_facing_services; do
-            echo "::group::$s"; python3 "ops/seed/$s.py"; echo "::endgroup::"
-          done
+          bash ops/seed-fleet.sh full
       # run-all-suites.sh is the gate: it exits 1 on any failed suite and 2
       # when the fleet never came ready. PROOF_STRICT makes a retry-pass fail
       # too — a nightly should be held to a higher bar than a laptop.
