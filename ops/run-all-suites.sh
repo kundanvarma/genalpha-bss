@@ -102,6 +102,22 @@ ensure_needs() {
 # committed file is the truth: restore it after the preamble and at the end.
 restore_tenants_fixture() {
   git checkout -- infra/tenants/tenants.yml 2>/dev/null || return 0
+  # GIT CHECKOUT REWRITES THE FILE AS THE INVOKING USER, which silently reverts
+  # the ownership the services need. infra/tenants is the one read-write bind
+  # mount in the fleet and the containers run as uid 1001 (#256); after a
+  # restore the file is owned by whoever ran the sweep, and user-roles can no
+  # longer write it. The symptom is not a permission error — onboarding returns
+  # an opaque 500 and every operator suite after the first restore fails. Found
+  # on the box 8 Oct, where it cost the first two suites of a proof run.
+  #
+  # On a laptop the bind mount is writable whatever the owner, so this is a
+  # no-op there; on a Linux host it is the difference between a green run and a
+  # red one.
+  if [ "$(stat -c '%u' infra/tenants/tenants.yml 2>/dev/null || echo 1001)" != "1001" ]; then
+    chown 1001 infra/tenants/tenants.yml 2>/dev/null \
+      || sudo -n chown 1001 infra/tenants/tenants.yml 2>/dev/null \
+      || echo "[$(date +%H:%M:%S)] WARNING: tenants.yml is uid $(stat -c '%u' infra/tenants/tenants.yml) and the services run as 1001 — onboarding suites will fail (#256)" >&2
+  fi
   echo "[$(date +%H:%M:%S)] tenants.yml restored from git (the fleet re-reads it within a refresh interval)"
 }
 
