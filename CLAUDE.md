@@ -21,7 +21,12 @@ matter are enforced by tools (see *Checks*), not by this prose.
 cd services/<x> && mvn -q clean package -DskipTests      # no mvnw; needs a JDK 21+ (java.version 21 — a JDK 17 fails with "release version 21 not supported"). On this laptop /usr/libexec/java_home knows no JDK; use brew's: export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home
 docker compose build <x> && docker compose up -d --no-deps --force-recreate <x>
 cd ops/e2e && node <suite>_test.js                        # one suite at a time on the laptop
-bash ops/run-all-suites.sh                                # ~40 min, writes ops/e2e/.proof-run/
+bash ops/run-all-suites.sh                                # writes ops/e2e/.proof-run/; MEASURED ~70 s a suite
+#                                                        on this laptop at the 81-container demo shape, so ~5 h
+#                                                        for 258 suites. The "~40 min" this line used to claim
+#                                                        dates from a far smaller tree. Suites run serially on
+#                                                        purpose; the fleet sits at 540-820% of 1000% CPU while
+#                                                        they run, so do not expect to use the machine.
 ops/arch/ratchet.sh                                       # architecture ratchet (also a pre-commit + edit hook)
 ops/arch/claims.sh                                        # claims gate: the prose must match the code
 ```
