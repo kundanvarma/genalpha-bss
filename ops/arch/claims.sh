@@ -89,6 +89,30 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# ------------------------------------------------------ tenant-registry ----
+# infra/tenants/tenants.yml is a git-tracked FIXTURE: the onboarding suites
+# rewrite it through the API and run-all-suites.sh restores it from git, so the
+# committed file is what the fleet boots from. It governs every tenant's
+# issuer, JWKS URI, machine credentials, seam URLs and brand.
+#
+# Three tenants with GENERATED ids had accumulated in it (sc229066, ib249958,
+# parity148420 — shadow_clone, import_base and price_parity each derive an id
+# from Date.now()). Nothing could reference them by name; they were residue,
+# and they had leaked into docker-compose.yml's OCS_NOTIFY_SECRETS as well.
+# Each run of those suites would have added another.
+tenants_err=$(mktemp)
+tenants_out=$(python3 ops/arch/tenant_registry_check.py 2>"$tenants_err")
+tenants_rc=$?
+if ! printf '%s' "$tenants_out" | grep -q '^tenant-registry: '; then
+  sed 's/^/         /' "$tenants_err" >&2
+  fail "the tenant registry check did not run" "no sentinel line on stdout — see above"
+elif [ "$tenants_rc" -ne 0 ]; then
+  printf '%s\n' "$tenants_out" | sed 's/^/         /' >&2
+  fail "the tenant registry declares something nobody decided on" \
+       "add it to ops/arch/tenants-declared.txt with a reason, or remove it"
+fi
+rm -f "$tenants_err"
+
 # ------------------------------------------------------------- proof-run ----
 # The gate above checks that the README's suite COUNT matches the number of
 # files. It never checked that any of them PASS — which is how the committed
