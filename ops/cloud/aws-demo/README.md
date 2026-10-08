@@ -103,6 +103,25 @@ what is down, regenerates the override and the Caddyfile. Seeds are idempotent;
 re-run them by hand after a catalog change:
 `cd /opt/taranga/bss && python3 ops/seed/seed_taranga.py`.
 
+## The one writable bind mount
+
+`infra/tenants` is the only read-write host bind in the compose file — the
+other ten are `:ro`. It carries `tenants.yml`, which **user-roles writes**
+when an operator is minted or re-branded.
+
+The services run as `USER 1001` (all 42 Dockerfiles). The installer builds
+this tree as root, and with `GIT_URL=local` it arrives by a root-run rsync,
+so the file lands `root:root 0644` and uid 1001 cannot write it. Onboarding
+then fails with an opaque 500 from further along the path — nothing says "the
+registry is read-only". That is exactly what the box did until 8 Oct 2026
+(issue #256).
+
+`install.sh` now chowns the directory to uid **1001** on every run (by number:
+1001 has no host account, and the image's group id is auto-assigned at build
+time, so it differs between boxes), and then **asserts** it, exiting rather
+than continuing if the ownership did not take. Re-running the installer is the
+deploy path, so a redeploy repairs this instead of reintroducing it.
+
 ## What the script changes versus the laptop
 
 * `docker-compose.cloud.yml` (generated): every tenant's issuer becomes

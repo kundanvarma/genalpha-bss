@@ -146,6 +146,44 @@ chown "$DEMO_USER" docker-compose.cloud.yml
 grep -q COMPOSE_FILE "$HOME_DIR/.bashrc" || echo 'export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml' >> "$HOME_DIR/.bashrc"
 export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
 
+# ---------- 5b. the one writable bind mount ----------
+# infra/tenants is the ONLY read-write host bind in the compose file (the other
+# ten are :ro, checked). It carries tenants.yml — every tenant's issuer, JWKS
+# URI, machine credentials, seam URLs and brand — and user-roles WRITES it when
+# an operator is minted or re-branded.
+#
+# The services run as USER 1001 (all 42 Dockerfiles; `useradd --system --uid
+# 1001`). The installer creates this tree as root, and with GIT_URL=local it
+# arrives by root-run rsync, so the file lands root:root 0644 and uid 1001
+# cannot write it. The failure is silent in the worst way: onboarding returns a
+# 500 from somewhere further along and nothing says "the registry is read-only".
+# Seen on the box 8 Oct 2026 — operator onboarding and re-branding could not
+# persist at all. Issue #256.
+#
+# chown by NUMBER, not by name: 1001 has no host account, and the image's GROUP
+# id is auto-assigned at build time (`--user-group`), so it is 999 on one box
+# and something else on the next. Owner-write is what matters.
+log "tenant registry writable by the services (uid 1001)"
+chown -R 1001 "$APP_DIR/infra/tenants"
+chmod 775 "$APP_DIR/infra/tenants"
+[ -f "$APP_DIR/infra/tenants/tenants.yml" ] && chmod 664 "$APP_DIR/infra/tenants/tenants.yml"
+# Prove it rather than assume it. A silent chown that did not take is exactly
+# how this shipped the first time, so refuse to continue instead.
+REG="$APP_DIR/infra/tenants/tenants.yml"
+if [ -f "$REG" ]; then
+  REG_UID=$(stat -c '%u' "$REG"); REG_MODE=$(stat -c '%a' "$REG")
+  # the OWNER digit is the one that matters, and it is the last three digits of
+  # the mode that describe u/g/o — so take the first of those three, not "any
+  # digit anywhere" (mode 466 would pass that and the owner still could not write)
+  REG_U=$(printf '%s' "$REG_MODE" | tail -c 3 | cut -c1)
+  case "$REG_U" in [2367]) OWNER_CAN_WRITE=yes ;; *) OWNER_CAN_WRITE=no ;; esac
+  if [ "$REG_UID" != "1001" ] || [ "$OWNER_CAN_WRITE" != "yes" ]; then
+    echo "FATAL: $REG is uid=$REG_UID mode=$REG_MODE — the services run as uid 1001" >&2
+    echo "       and must write this file; onboarding would fail with an opaque 500." >&2
+    exit 1
+  fi
+fi
+
 # ---------- 6. fleet + seeds ----------
 if [ ! -f .cloud-seeded ]; then
   log "fleet up (first boot ~5 min), then shape: $FLEET_SHAPE"
