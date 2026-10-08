@@ -2270,9 +2270,7 @@ services:
       OCS_NOTIFY_SECRETS: >-
         {"genalpha":"ocs-notify-genalpha-dev","nova":"ocs-notify-nova-dev",
          "chilimobil":"ocs-notify-chilimobil-dev","fjordnett":"ocs-notify-fjordnett-dev",
-         "nordlys":"ocs-notify-nordlys-dev","sc229066":"ocs-notify-sc229066-dev",
-         "ib249958":"ocs-notify-ib249958-dev","parity148420":"ocs-notify-parity148420-dev",
-         "aurora":"ocs-notify-aurora-dev","fjord":"ocs-notify-fjord-dev",
+         "nordlys":"ocs-notify-nordlys-dev","aurora":"ocs-notify-aurora-dev","fjord":"ocs-notify-fjord-dev",
          "enet":"ocs-notify-enet-dev","taranga":"ocs-notify-taranga-dev"}
     ports:
       - "8115:8080"

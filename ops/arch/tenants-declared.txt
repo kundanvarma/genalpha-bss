@@ -1,0 +1,40 @@
+# EVERY TENANT THE TRACKED REGISTRY MAY DECLARE, and why it is there.
+#
+# infra/tenants/tenants.yml is a git-tracked FIXTURE: the onboarding suites
+# rewrite it through the API and ops/run-all-suites.sh restores it from git
+# afterwards, so the committed file is the truth the fleet boots from. That
+# makes it a good fixture and a bad place for accidents — it governs every
+# tenant's issuer, JWKS URI, machine credentials, seam URLs and brand.
+#
+# Three tenants had accumulated in it by 8 Oct 2026 with GENERATED ids:
+#
+#     sc229066      "MyGenAlpha Sandbox"  shadow_clone_test.js:19
+#                                         const SC = `sc${String(run).slice(-6)}`
+#     ib249958      "Import Probe"        import_base_test.js
+#     parity148420  "Parity Probe"        price_parity_test.js:15
+#                                         const run = Date.now()
+#
+# The id changes every run, so nothing can ever reference one by name — they
+# were pure residue, committed by accident, and they had leaked into
+# docker-compose.yml's OCS_NOTIFY_SECRETS map as well. Left alone, each run of
+# those suites adds another, forever.
+#
+# ops/arch/tenant_registry_check.py holds this list against the registry, in
+# both directions: a tenant in the file and not here fails the build, and a
+# name here that the file no longer declares fails too (so the list cannot rot
+# into a wish). Adding a tenant is then a deliberate edit, with a reason, in
+# the same commit.
+
+genalpha      the primary demo operator; most suites run against it
+nova          the second operator — the isolation and white-label proofs need two
+taranga       our own tenant (taranga.no), the hosted demo's shop and console
+enet          Guyana market adaptation; seeded by seed_enet*.py
+chilimobil    prospect demo tenant
+fjordnett     wholesale/open-access demo operator
+nordlys       simulation operator for the wholesale and settlement proofs
+aurora        FIXTURE, not residue: operator_form_test re-brands it through the
+              API, and model_routing_test fails with "run operator_form_test
+              first (aurora must exist)" if it is gone
+fjord         FIXTURE: third_operator_test re-onboards it as a clone of nova;
+              run-all-suites.sh documents restoring the file because fjord's
+              ai-visibility flips during that suite
