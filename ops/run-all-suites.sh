@@ -25,6 +25,21 @@
 #   PROOF_CONTINUE_ON_NOT_READY=1   diagnose against a half-up fleet (never in CI)
 set -u
 cd "$(dirname "$0")/.."
+
+# A DEPLOYMENT'S OWN COMPOSE OVERRIDE IS PART OF ITS IDENTITY. The readiness
+# gate below starts a suite's dependencies with `docker compose up -d`, and on
+# a host with an override (the demo box generates docker-compose.cloud.yml,
+# which rewrites every tenant's issuer to the public hostname) an unset
+# COMPOSE_FILE recreates those containers from the BASE file alone. They come
+# back trusting http://localhost:8085 while Keycloak stamps
+# https://id.<domain>, and from that moment every authenticated call in the run
+# fails with "Invalid issuer". install.sh exports COMPOSE_FILE in ~/.bashrc,
+# which a nohup'd non-interactive sweep never reads — so 75 of the first 85
+# suites went red on the box before this was found.
+if [ -z "${COMPOSE_FILE:-}" ] && [ -f docker-compose.cloud.yml ]; then
+  export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
+  echo "[$(date +%H:%M:%S)] COMPOSE_FILE set from the deployment's override (docker-compose.cloud.yml)"
+fi
 export PATH=/opt/homebrew/bin:$PATH
 
 # the suites are Playwright and axe — make sure both are installed before we
