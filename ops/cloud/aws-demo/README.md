@@ -103,6 +103,35 @@ what is down, regenerates the override and the Caddyfile. Seeds are idempotent;
 re-run them by hand after a catalog change:
 `cd /opt/taranga/bss && python3 ops/seed/seed_taranga.py`.
 
+## The admin credential Keycloak actually has
+
+`KC_BOOTSTRAP_ADMIN_*` applies only when Keycloak creates its admin on an
+**empty** database, and Keycloak here has a persistent volume. So if `.env` is
+ever regenerated — `install.sh` generates passwords whenever `.env` is absent —
+every service receives the new value and Keycloak keeps the old one.
+
+Both halves then look right: same username, same password, in both containers.
+Only Keycloak disagrees, and the single visible symptom is operator onboarding
+returning an opaque **500**, with `401 invalid_grant` buried in the user-roles
+log. Onboarding and re-branding were dead on this box for an unknown length of
+time (issue #257).
+
+`ops/cloud/aws-demo/kc-admin-converge.sh` proves the credential and converges
+it when wrong, using Keycloak's own recovery path (`kc.sh bootstrap-admin
+user`, which refuses an existing username — so it creates a uniquely-named
+temporary admin, resets the real one through the admin API, then removes the
+temporary one and any stray from an interrupted run). It mints no new secret:
+it puts back the value `.env` already gives every service.
+
+    ops/cloud/aws-demo/kc-admin-converge.sh            # check, converge if needed
+    ops/cloud/aws-demo/kc-admin-converge.sh --check    # check only, exit 1 if wrong
+
+`install.sh` runs it on every install, so a redeploy repairs this rather than
+leaving it. Three things the script had to learn the hard way, all recorded in
+its header: the Keycloak image has **no curl**, the host port is **8085** (8080
+is the gateway), and a temporary admin must be deleted **last**, because
+deleting it invalidates the token doing the deleting.
+
 ## The one writable bind mount
 
 `infra/tenants` is the only read-write host bind in the compose file — the
