@@ -73,6 +73,21 @@ FAMILY_OF_CATEGORY = {
     # profile gets the boost variant, decided per spec below
     "Insurance": "billing-only",
     "Top-ups": "billing-only",
+    # Added after reading the LIVE catalog (#143). Three of the thirteen
+    # categories in use had no family, so every offering in them fell through to
+    # the desk's name-pattern guess and printed the word "Service".
+    "Edge & compute": "compute",      # Edge AI Inferencing — the family existed, the mapping did not
+    "Network services": "mobile",     # Stadium 5G Slice: a slice is a mobile-network capability
+    # NOT MAPPED, on purpose:
+    #   "Bundles"       — a container. The family belongs to each component, and
+    #                     a bundle that claimed one would lie about the others.
+    #   "Legacy estate" — it holds Heritage DSL 20 (internet) AND Heritage Voice
+    #                     Line, which is a family the catalog does not have at
+    #                     all. One category cannot name two families, and this
+    #                     file's own rule says a spec shared by two families is
+    #                     a catalog defect. Mapping it would bury that; the
+    #                     family belongs per spec here. See #143 for the missing
+    #                     `voice` family, which the DESK already has a word for.
 }
 
 

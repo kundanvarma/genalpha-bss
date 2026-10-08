@@ -113,6 +113,23 @@ elif [ "$tenants_rc" -ne 0 ]; then
 fi
 rm -f "$tenants_err"
 
+# ----------------------------------------------------- family-taxonomies ----
+# "Service" on the agent desk was never a type — it was the word printed when
+# the desk could not tell what something was (#143). The mechanism is already
+# fixed: ServiceRows.jsx reads the family the catalog DECLARES before falling
+# back to a name pattern. What remains is drift, because the taxonomy is
+# written down twice — the authoritative list in Java, the desk's words in JS.
+# A family added to one and not the other prints "Service" again, silently.
+FAM_JS=$(sed -n '/FAMILY_KIND *= *{/,/}/p' apps/csr-console/src/pages/customer/ServiceRows.jsx \
+         | grep -oE "'?[a-z-]+'?:" | tr -d "':" | sort -u)
+for f in mobile internet tv device partner security compute billing-only; do
+  grep -q "\"$f\"" services/service-orchestration/src/main/java/com/bss/som/client/CatalogClient.java || continue
+  printf '%s\n' "$FAM_JS" | grep -qx "$f" \
+    || fail "the catalog declares fulfilment family '$f' and the agent desk has no word for it" \
+            "add it to FAMILY_KIND and KIND_WORDS in apps/csr-console/src/pages/customer/ServiceRows.jsx,
+         or the desk prints \"Service\" for every service in that family (#143)"
+done
+
 # --------------------------------------------------------- seed-coverage ----
 # A suite that asserts on a fixture no seed in ops/seed/manifest.txt creates
 # cannot pass on a fleet seeded from scratch — it can only pass where somebody
