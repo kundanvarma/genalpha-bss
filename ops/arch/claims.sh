@@ -113,6 +113,29 @@ elif [ "$tenants_rc" -ne 0 ]; then
 fi
 rm -f "$tenants_err"
 
+# --------------------------------------------------------- seed-coverage ----
+# A suite that asserts on a fixture no seed in ops/seed/manifest.txt creates
+# cannot pass on a fleet seeded from scratch — it can only pass where somebody
+# once ran the right script by hand. That is how the laptop reached a state
+# nobody could reproduce and the committed proof run sat at 122 of 258 suites.
+#
+# The order used to live in prose (ops/README.md, 13 of 54 scripts) and in a
+# nightly workflow job gated on vars.BROWSER_PROOF_RUNNER, which has never been
+# set — so it had never run. Against that 22-script list this check reports 79
+# unreachable fixtures. Issue #261.
+seedcov_err=$(mktemp)
+seedcov_out=$(python3 ops/arch/seed_coverage_check.py 2>"$seedcov_err")
+seedcov_rc=$?
+if ! printf '%s' "$seedcov_out" | grep -q '^seed-coverage: '; then
+  sed 's/^/         /' "$seedcov_err" >&2
+  fail "the seed-coverage check did not run" "no sentinel line on stdout — see above"
+elif [ "$seedcov_rc" -ne 0 ]; then
+  printf '%s\n' "$seedcov_out" | sed 's/^/         /' >&2
+  fail "a suite asserts on a fixture the seed path never creates" \
+       "add the script to ops/seed/manifest.txt, or the literal to ops/arch/seed-coverage-allow.txt"
+fi
+rm -f "$seedcov_err"
+
 # ------------------------------------------------------------- proof-run ----
 # The gate above checks that the README's suite COUNT matches the number of
 # files. It never checked that any of them PASS — which is how the committed

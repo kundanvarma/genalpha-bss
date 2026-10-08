@@ -10,24 +10,52 @@ Service images package the **host-built** jar — always compile first:
 
 ## seed/ — demo catalogs and stock
 
-Run against a fresh stack (`docker compose up -d`), in this order:
+**One command takes an empty fleet to the state the suites assert on:**
 
-    python3 ops/seed/seed_genalpha_one.py   # specs, offerings, bundle, prices
-    python3 ops/seed/reshape_bundle.py      # phone choice group + characteristics
-    python3 ops/seed/link_prices.py         # offering -> price references
-    python3 ops/seed/seed_stock.py          # TMF687 stock for the phones
-    python3 ops/seed/seed_serviceable_areas.py  # TMF679 fiber footprint (111/222/333)
-    python3 ops/seed/seed_usage_allowances.py   # TMF635 bundle roaming allowance
-    python3 ops/seed/seed_agreement_terms.py    # TMF620/651 bundle commitment term
-    python3 ops/seed/seed_promotions.py         # TMF671 WELCOME10 (10% off the bundle)
-    python3 ops/seed/seed_resource_pools.py     # TMF685 per-tenant MSISDN pools
-    python3 ops/seed/seed_ai_slice.py           # AI-slice PoC: edge GPU pool, slice + token-metered AI
-    python3 ops/seed/seed_verified_identity.py  # postpaid offering requiring BankID step-up
-    python3 ops/seed/seed_content.py            # TMF667 logos + offering artwork (run AFTER seed_nova)
-    python3 ops/seed/seed_nova.py           # second tenant: Nova Telecom's catalog
+    ops/seed-fleet.sh           # the whole path (51 scripts) — a proof run wants this
+    ops/seed-fleet.sh smoke     # the small tier the PR gate runs (6)
+    ops/seed-fleet.sh --list    # what would run, in order, without running it
 
-All scripts are idempotent-ish (safe to re-run) and authenticate as each
-tenant's demo staff user through the gateway.
+The order lives in `ops/seed/manifest.txt`, and `ops/arch/seed_coverage_check.py`
+reads the same file — so the runner, the gate and CI cannot drift apart.
+`.github/workflows/browser-proof.yml` calls the script for both tiers.
+
+The full tier needs the **full** fleet (`docker compose up -d`): a seed writes
+through the gateway into the service it is seeding, so a stopped service is a
+failed seed. The runner checks the gateway before it starts and stops at the
+first failure, naming the script — later seeds build on earlier ones, so a
+cascade would hide the one that mattered.
+
+### Why it was built (issue #261)
+
+The order used to live in two places and neither was runnable. This file
+documented **13 of 54** scripts in prose, and `browser-proof.yml` carried a
+22-script list inside its nightly job — a job gated on
+`vars.BROWSER_PROOF_RUNNER`, which has never been set, so every scheduled run
+reports `skipped` and that order had **never once executed**. The laptop's
+fleet state was accumulated by hand instead, which is why the committed proof
+run sat at 122 of 258 suites from 24 September and could not be reproduced
+anywhere.
+
+The gate is the part that keeps it true: a suite asserting on a fixture no seed
+in the manifest creates cannot pass on a fleet seeded from scratch. Measured
+against the old 22-script list, **79 fixtures were unreachable** — including
+`seed_knowledge_help`, which 26 suites depend on.
+
+Three places where order genuinely matters, and only three:
+
+* `seed_genalpha_one` → `reshape_bundle` → `link_prices` — the bundle is
+  reshaped and then priced.
+* `seed_content` after `seed_nova` — it writes artwork for both catalogs.
+* `seed_service_specifications` and `seed_resource_facing_services` last — they
+  stamp the CFS/RFS chain onto whatever specs the other seeds left sellable.
+
+All scripts authenticate as each tenant's demo staff user through the gateway,
+and are idempotent: re-running the smoke tier against an already-seeded fleet
+is a no-op.
+
+Excluded from the path on purpose: `realm_*.py` (live-Keycloak patches, not
+fixtures) and `backfill_payer.py` (a one-time backfill).
 
 ## e2e/ — browser end-to-end suites (Playwright)
 

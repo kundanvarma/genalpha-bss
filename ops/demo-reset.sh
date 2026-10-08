@@ -13,13 +13,31 @@ echo "== 1/3  storefront catalog =="
 echo; echo "== 2/3  campaigns / journeys =="
 bash "$HERE/demo-reset-campaigns.sh"
 
-echo; echo "== 3/3  product imagery + plan comparison specs =="
-"$PY" "$HERE/seed/seed_demo_images.py" || echo "  (imagery step skipped — see ops/seed/seed_demo_images.py)"
-"$PY" "$HERE/seed/seed_plan_compare.py" || echo "  (plan-compare step skipped — see ops/seed/seed_plan_compare.py)"
-"$PY" "$HERE/seed/seed_lifecycle_characteristics.py" || echo "  (lifecycle-characteristics step skipped — see ops/seed/seed_lifecycle_characteristics.py)"
-"$PY" "$HERE/seed/seed_wholesale_partners.py" || echo "  (wholesale-partners step skipped — see ops/seed/seed_wholesale_partners.py)"
-"$PY" "$HERE/seed/seed_wholesale_access_products.py" || echo "  (wholesale-access-products step skipped — see ops/seed/seed_wholesale_access_products.py)"
-"$PY" "$HERE/seed/seed_wholesale_coverage.py" || echo "  (wholesale-coverage step skipped — see ops/seed/seed_wholesale_coverage.py)"
-"$PY" "$HERE/seed/seed_novafibre_owner.py" || echo "  (novafibre-owner step skipped — see ops/seed/seed_novafibre_owner.py)"
+echo; echo "== 3/3  demo fixtures (imagery, plan comparison, wholesale) =="
+# NOT `|| echo "(step skipped)"` any more. Every one of these steps used to end
+# that way, so a failed seed printed one quiet line and the script still said
+# "demo reset complete" and exited 0 — the exact shape this repository forbids:
+# a script that prints failures and exits 0 reads as a pass to everything
+# downstream, including the person about to demo. Found while building the seed
+# path for #261.
+FAILED=""
+for s in seed_demo_images seed_plan_compare seed_lifecycle_characteristics \
+         seed_wholesale_partners seed_wholesale_access_products \
+         seed_wholesale_coverage seed_novafibre_owner; do
+  printf '  %-34s' "$s"
+  if out=$("$PY" "$HERE/seed/$s.py" 2>&1); then
+    echo "ok"
+  else
+    echo "FAILED"
+    printf '%s\n' "$out" | tail -8 | sed 's/^/      /'
+    FAILED="$FAILED $s"
+  fi
+done
+if [ -n "$FAILED" ]; then
+  echo >&2
+  echo "demo reset INCOMPLETE — these seeds failed:$FAILED" >&2
+  echo "The stage is NOT ready. Fix them before demoing." >&2
+  exit 1
+fi
 
 echo; echo "demo reset complete — the stage is clean and curated."
