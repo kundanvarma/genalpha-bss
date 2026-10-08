@@ -38,7 +38,25 @@ public class ArticleService {
      * re-salting it on every JVM start.
      */
     private static final Set<String> AUDIENCES = new LinkedHashSet<>(
-            List.of("customer", "csr", "productOwner", "all", "sales"));
+            List.of("public", "customer", "csr", "productOwner", "all", "sales"));
+
+    /**
+     * THE ONLY SHELF AN ANONYMOUS READER SEES, and it is empty until somebody
+     * decides otherwise.
+     *
+     * "customer" has never meant the public — it means a SIGNED-IN customer, so
+     * making help crawlable could not reuse it without publishing 43 articles
+     * nobody reviewed for the open internet (#225). `public` is a separate,
+     * explicit shelf: an article reaches it only when an author sets this
+     * audience on that article, one at a time.
+     *
+     * Deliberately NOT a default and NOT inherited: no migration moves an
+     * article here, "all" does not include it, and a new article does not land
+     * here by omission. Publishing support material is an operator's decision
+     * about what their words say in the open, and the safe direction for a
+     * mistake is an empty page rather than a disclosure.
+     */
+    public static final String PUBLIC_AUDIENCE = "public";
 
     private final ArticleRepository repository;
     private final TenantScope tenantScope;
@@ -106,6 +124,37 @@ public class ArticleService {
     }
 
     @Transactional(readOnly = true)
+    /**
+     * THE ANONYMOUS DOOR. Published articles on the `public` shelf and nothing
+     * else — no token, no audience negotiation, no author preview.
+     *
+     * It does not call readableAudiences(), and that is the point: this path
+     * has no caller to ask, so the shelf is hard-coded rather than derived.
+     * A reader who is nobody must not be able to widen it by what they send.
+     *
+     * Today it returns an empty list, because no article carries the audience.
+     * That is the correct state to ship: the mechanism is reviewable now, and
+     * what appears through it stays an operator's decision, taken one article
+     * at a time (#225).
+     */
+    public List<ArticleView> findPublic(String q, String category, String tag) {
+        String tenantId = tenantScope.currentTenantId();
+        List<Article> hits = repository.findByTenantIdOrderByLastUpdateDesc(tenantId);
+        String needle = q == null ? null : q.trim().toLowerCase();
+        return hits.stream()
+                .filter(a -> PUBLIC_AUDIENCE.equals(a.getAudience()))
+                .filter(a -> "published".equals(a.getStatus()))
+                .filter(a -> category == null || category.equals(a.getCategory()))
+                .filter(a -> tag == null || hasTag(a, tag))
+                // keyword match in Java, not SQL: the anonymous path takes no
+                // caller-shaped query into the database
+                .filter(a -> needle == null || needle.isEmpty()
+                        || (a.getTitle() != null && a.getTitle().toLowerCase().contains(needle))
+                        || (a.getBody() != null && a.getBody().toLowerCase().contains(needle)))
+                .map(this::toView)
+                .toList();
+    }
+
     public ArticleView findById(String id) {
         Article a = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
@@ -195,24 +244,27 @@ public class ArticleService {
         if (authorities.contains("knowledge:write")) {
             return AUDIENCES;
         }
+        // the public shelf is the most open one there is, so anybody who can
+        // read anything can read it too — it is added to each shelf below
+        // rather than replacing one
         if (authorities.contains("customer")) {
             // THE MODULE WALL: a customer's self-service authorities (billing:write,
             // ticket:write…) look like staff ones — the customer role decides, first
-            return Set.of("customer", "all");
+            return Set.of(PUBLIC_AUDIENCE, "customer", "all");
         }
         if (authorities.contains("catalog:write") || authorities.contains("campaign:write")
                 || authorities.contains("billing:write") || authorities.contains("catalog:approve")) {
             // back-office staff (product, marketing, finance, approvers): their
             // how-tos plus everything customer-facing — never a customer
-            return Set.of("customer", "csr", "sales", "productOwner", "all");
+            return Set.of(PUBLIC_AUDIENCE, "customer", "csr", "sales", "productOwner", "all");
         }
         if (authorities.contains("ticket:write") || authorities.contains("wholesale:admin")) {
-            return Set.of("customer", "csr", "sales", "all");
+            return Set.of(PUBLIC_AUDIENCE, "customer", "csr", "sales", "all");
         }
         if (authorities.contains("agent")) {
-            return Set.of("customer", "csr", "sales", "all");
+            return Set.of(PUBLIC_AUDIENCE, "customer", "csr", "sales", "all");
         }
-        return Set.of("customer", "all");
+        return Set.of(PUBLIC_AUDIENCE, "customer", "all");
     }
 
     private boolean isAuthor() {

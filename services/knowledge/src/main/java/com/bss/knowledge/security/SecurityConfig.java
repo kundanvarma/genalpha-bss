@@ -51,6 +51,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // THE ANONYMOUS HELP DOOR (#225). Only the `public` shelf is reachable
+                        // here, and no article carries that audience today, so this serves an
+                        // empty list until an operator publishes something deliberately.
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/publicArticle").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("knowledge:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("knowledge:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("knowledge:write")
