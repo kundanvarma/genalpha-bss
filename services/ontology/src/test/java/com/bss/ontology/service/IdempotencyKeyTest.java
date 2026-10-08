@@ -46,6 +46,15 @@ class IdempotencyKeyTest {
     }
 
     private Map<String, String> inputs(String... kv) {
+        // The same off-the-end read I fixed in BridgeService.paths() this
+        // morning (#247) and then wrote again here. An odd count is a typo in
+        // a test, not bad input — but kv[i + 1] still runs past the end, and
+        // the failure would be an ArrayIndexOutOfBounds in the setup rather
+        // than the assertion anyone was reading.
+        if (kv.length % 2 != 0) {
+            throw new IllegalArgumentException(
+                    "inputs() takes key/value PAIRS; got " + kv.length + " values");
+        }
         Map<String, String> m = new LinkedHashMap<>();
         for (int i = 0; i < kv.length; i += 2) {
             m.put(kv[i], kv[i + 1]);
