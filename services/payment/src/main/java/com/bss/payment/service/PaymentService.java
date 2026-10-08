@@ -70,12 +70,14 @@ public class PaymentService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final com.bss.payment.security.TenantRegistry tenantRegistry;
+    private final com.bss.payment.repository.PspRedirectSessionRepository redirectSessions;
 
     public PaymentService(PaymentRepository repository, com.bss.payment.psp.PspRouter pspRouter,
             com.bss.payment.psp.RedirectPspRegistry redirectRegistry, PspConfigService pspConfigs,
             PaymentMethodClient paymentMethods, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope,
-            com.bss.payment.security.TenantRegistry tenantRegistry) {
+            com.bss.payment.security.TenantRegistry tenantRegistry,
+            com.bss.payment.repository.PspRedirectSessionRepository redirectSessions) {
         this.tenantRegistry = tenantRegistry;
         this.repository = repository;
         this.pspRouter = pspRouter;
@@ -85,6 +87,7 @@ public class PaymentService {
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
+        this.redirectSessions = redirectSessions;
     }
 
     @Transactional(readOnly = true)
@@ -308,6 +311,10 @@ public class PaymentService {
             try {
                 com.bss.payment.psp.RedirectPspAdapter.Session session = redirectRegistry.get(cfg.getProvider())
                         .createSession(cfg, amount, currency, returnUrl);
+                // WHO STARTED IT. Without this row, confirm had nothing to compare
+                // the confirming caller against and gave the payment to whoever
+                // quoted the session id (#250).
+                rememberWhoStarted(tenant, cfg.getProvider(), session.sessionId(), amount, currency);
                 PaymentSession out = PaymentSession.served(
                         session.sessionId(), session.redirectUrl(), cfg.getProvider());
                 if (i > 0) {
@@ -324,6 +331,87 @@ public class PaymentService {
         }
         throw new ConflictException("all redirect providers failed for method '" + method + "'"
                 + (last == null ? "" : ": " + last.getMessage()));
+    }
+
+    /**
+     * Record who started a redirect session, so confirming it later cannot hand
+     * the payment to somebody else (#250). Best effort by design: a session the
+     * PSP already created must still be returned to the caller, so a failure to
+     * write this row is logged rather than thrown — and {@link #ownerOfSession}
+     * treats a missing row as an unknown owner, which is the safe reading.
+     */
+    private void rememberWhoStarted(String tenant, String provider, String sessionRef,
+            java.math.BigDecimal amount, String currency) {
+        if (sessionRef == null || sessionRef.isBlank()) {
+            return;
+        }
+        try {
+            com.bss.payment.entity.PspRedirectSession row =
+                    redirectSessions.findByTenantIdAndSessionRef(tenant, sessionRef)
+                            .orElseGet(com.bss.payment.entity.PspRedirectSession::new);
+            if (row.getId() == null) {
+                row.setId(UUID.randomUUID().toString());
+                row.setCreatedAt(OffsetDateTime.now());
+            }
+            row.setTenantId(tenant);
+            row.setSessionRef(sessionRef);
+            row.setProvider(provider);
+            row.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
+            row.setAmountValue(amount);
+            row.setAmountUnit(currency);
+            redirectSessions.save(row);
+        } catch (RuntimeException e) {
+            log.error("could not record the owner of redirect session for tenant {}: {} — "
+                    + "confirm will treat this session as having an unknown owner",
+                    oneLine(tenant), oneLine(e.getMessage()));
+        }
+    }
+
+    /**
+     * Whose session this is. Three cases, and the middle one is the fix:
+     *
+     * <ul>
+     *   <li><b>A row with an owner, and a customer confirming who is not them</b>
+     *       — refused as 404, the house convention for a customer reaching
+     *       somebody else's object (a 403 would confirm it exists).</li>
+     *   <li><b>A row with an owner</b> — that owner, whoever is confirming. The
+     *       webhook has no party scope at all and must keep working, so "no
+     *       scope" means "use the recorded owner", never "refuse".</li>
+     *   <li><b>No row</b> — unknown owner. Sessions created before this shipped
+     *       have none, and a redirect session lives minutes, so this fades on
+     *       its own; it is logged at WARN because after a deploy it should go to
+     *       zero and a steady trickle would mean rememberWhoStarted is failing.
+     *       Falls back to the confirming caller, which is the old behaviour.</li>
+     * </ul>
+     */
+    private String ownerOfSession(String tenant, String sessionRef) {
+        var row = redirectSessions.findByTenantIdAndSessionRef(tenant, sessionRef);
+        if (row.isEmpty()) {
+            log.warn("redirect session {} for tenant {} has no recorded owner — "
+                    + "confirming with the caller's own party (pre-#250 session?)",
+                    oneLine(sessionRef), oneLine(tenant));
+            return partyScope.scopedPartyId().orElse(null);
+        }
+        String recorded = row.get().getOwnerPartyId();
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (recorded != null && caller != null && !recorded.equals(caller)) {
+            log.warn("a customer tried to confirm a redirect session started by another party "
+                    + "(tenant {}) — refused", oneLine(tenant));
+            throw new NotFoundException("no such payment session");
+        }
+        return recorded != null ? recorded : caller;
+    }
+
+    /**
+     * A line break in a logged value stops being part of the value and becomes a
+     * log line of someone else's choosing. Chained replace(char, char) is the
+     * shape CodeQL models as a sanitiser; service-orchestration spells it the
+     * same way.
+     */
+    private static String oneLine(String value) {
+        return value == null ? null : value
+                .replace('\n', '_').replace('\r', '_')
+                .replace('\u0085', '_').replace('\u2028', '_').replace('\u2029', '_');
     }
 
     /**
@@ -350,6 +438,12 @@ public class PaymentService {
         if (adapter == null) {
             throw new BadRequestException("no redirect adapter for '" + provider + "'");
         }
+        // THE SESSION'S OWNER IS THE ONE RECORDED AT START, NEVER THE CONFIRMER.
+        // The PSP is the authority on whether the money moved; it is not the
+        // authority on whose money it was. A caller holding a leaked session id
+        // used to receive an AUTHORIZED payment owned by themselves (#250).
+        String owner = ownerOfSession(tenant, sessionId);
+
         com.bss.payment.psp.RedirectPspAdapter.Confirmation c = adapter.confirm(cfg, sessionId);
         if (!c.approved()) {
             throw new ConflictException(c.declineReason() == null ? "session not approved" : c.declineReason());
@@ -367,7 +461,7 @@ public class PaymentService {
         entity.setAuthorizationCode(c.authorizationCode());
         entity.setPspProvider(provider);
         entity.setSessionRef(sessionId);
-        entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
+        entity.setOwnerPartyId(owner);
         entity.setPaymentDate(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         PaymentDto created = toDto(repository.save(entity));
