@@ -89,6 +89,34 @@ for svc in $READERS; do
             "without it that container resolves \${AGENT_COMMERCE:off} to off and disagrees with the gateway"
 done
 
+# ------------------------------------------------------------- proof-run ----
+# The gate above checks that the README's suite COUNT matches the number of
+# files. It never checked that any of them PASS — which is how the committed
+# proof run sat at 122 of 258 suites with 30 failures, dated 24 Sep 2026,
+# while every document said "258 browser suites prove the behaviour end to
+# end". The evidence itself was the stale claim.
+#
+# covered and green are RATCHETS in ops/arch/proof-baseline.txt: they may rise
+# and never fall. A hard "all green" gate would block every unrelated pull
+# request the day one suite goes flaky, and a gate people route around is
+# worse than no gate.
+#
+# SENTINEL, the same lesson as billing and the drift check: a crashed checker
+# prints nothing on stdout, and silence is exactly how a pass looks.
+proof_err=$(mktemp)
+proof_out=$(python3 ops/arch/proof_run_check.py 2>"$proof_err")
+proof_rc=$?
+if ! printf '%s' "$proof_out" | grep -q '^proof-run: '; then
+  sed 's/^/         /' "$proof_err" >&2
+  fail "the proof-run check did not run" "no sentinel line on stdout — see above"
+elif [ "$proof_rc" -ne 0 ]; then
+  printf '%s\n' "$proof_out" | sed 's/^/         /' >&2
+  fail "the proof run regressed" "coverage or green count fell below ops/arch/proof-baseline.txt"
+else
+  printf '%s\n' "$proof_out" | head -1 | sed 's/^/claims:   /'
+fi
+rm -f "$proof_err"
+
 # ------------------------------------------------------ securityconfig-drift ----
 # Tokens are validated in EVERY component rather than at the gateway, which
 # takes 39 copies of SecurityConfig — and 39 copies is 39 chances to drift.

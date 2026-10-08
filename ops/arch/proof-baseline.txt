@@ -1,0 +1,10 @@
+# THE PROOF-RUN RATCHET. Read by ops/arch/proof_run_check.py, which the claims
+# gate calls. Both numbers may RISE and never fall.
+#
+# Starting at zero on purpose. The run committed on 24 Sep 2026 covered 122 of
+# 258 suites with 30 failures, and the gate that would have caught that did not
+# exist until now — so there is no honest number to start from except the one
+# the next full run earns. Raise these in the same commit as a results.tsv that
+# justifies them.
+covered=0
+green=0
