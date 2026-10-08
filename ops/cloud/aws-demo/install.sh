@@ -201,6 +201,22 @@ else
   as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d >/dev/null 2>&1; COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh $FLEET_SHAPE"
 fi
 
+# ---------- 6a. the admin credential keycloak ACTUALLY has ----------
+# KC_BOOTSTRAP_ADMIN_* applies only when Keycloak creates its admin on an EMPTY
+# database, and Keycloak here has a persistent volume. So if .env is ever
+# regenerated — this script generates passwords whenever .env is absent — every
+# service gets the new value and Keycloak keeps the old one. Both halves then
+# look identical; only Keycloak disagrees, and the single visible symptom is
+# operator onboarding returning an opaque 500 with `401 invalid_grant` buried
+# in the user-roles log. Onboarding and re-branding were dead on this box for
+# an unknown length of time. Issue #257.
+log "keycloak admin credential matches .env"
+as_user "cd '$APP_DIR' && bash ops/cloud/aws-demo/kc-admin-converge.sh" || {
+  echo "FATAL: keycloak's admin credential could not be converged with .env." >&2
+  echo "       operator onboarding would fail with an opaque 500 — see issue #257." >&2
+  exit 1
+}
+
 # ---------- 6b. boot hook: after a stop/start, shed to the demo slice on its own ----------
 # Docker restarts the FULL fleet on boot (restart policies); on a 32 GB box that
 # sits at the memory ceiling. This oneshot waits for Keycloak, then runs the same
