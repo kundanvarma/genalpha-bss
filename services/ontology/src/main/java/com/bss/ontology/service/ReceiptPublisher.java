@@ -82,7 +82,7 @@ public class ReceiptPublisher implements InitializingBean {
     public void afterPropertiesSet() {
         if (!props.isReceiptsRequired()) {
             log.warn("receipts are NOT required: governed actions will run without evidence "
-                    + "if Kafka is absent — bss.ontology.receipts-required is false");
+                    + "if Kafka is absent — ontology.receipts-required is false");
             return;
         }
         if (kafka.getIfAvailable() == null) {
@@ -91,7 +91,7 @@ public class ReceiptPublisher implements InitializingBean {
                     + "writes the evidence for every action it executes and must not run without "
                     + "it. Check that spring-boot-kafka is on the classpath and spring.kafka is "
                     + "configured. To run deliberately without evidence, set "
-                    + "bss.ontology.receipts-required=false and accept that actions will not be "
+                    + "ontology.receipts-required=false and accept that actions will not be "
                     + "provable.");
         }
     }
