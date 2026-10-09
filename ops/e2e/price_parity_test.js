@@ -10,6 +10,7 @@
  *    hides; the attestation follows the policy either way
  */
 const { request } = require('playwright');
+const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -98,7 +99,7 @@ async function token(ctx, realm, client, user, pass) {
   await ctx.delete(`http://localhost:8085/admin/realms/${OP}`, { headers: {
     Authorization: 'Bearer ' + (await (await ctx.post(
       'http://localhost:8085/realms/master/protocol/openid-connect/token',
-      { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } }
+      { form: masterTokenForm() }
     )).json()).access_token } }).catch(() => {});
   console.log('OK cleanup: probe realm deleted (its tenants.yml block is inert without it)');
 

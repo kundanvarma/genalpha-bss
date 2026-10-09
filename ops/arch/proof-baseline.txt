@@ -14,7 +14,18 @@
 # re-running until they pass.
 #
 # The 42 that stay red are inventoried in #269 with their evidence, bucketed by
-# cause. Of those, 4 share one suite-side bug (`roles.find is not a function`)
-# and several are environment rather than product — the triage says which.
+# cause. Several are environment rather than product — the triage says which.
+#
+# FIXED 9 Oct 2026, and the first entry was mis-stated here: the 4 suites that
+# reported `roles.find is not a function` were not suffering a type error. Ten
+# suites asked Keycloak's master realm for an admin token with a literal
+# `admin`/`admin`; the box's installer generates that password into its .env, so
+# the request was refused, and the 401's JSON error object was then used as if it
+# were the list of realm roles. The TypeError was the first line to touch it —
+# four lines below the real failure, and in the wrong file. Credentials now come
+# from KEYCLOAK_ADMIN_PASSWORD via ops/e2e/kc_admin.js, which proves every status
+# before it parses. In the other 6 of the 10 the admin token is only used to
+# delete a throwaway realm at the end, so a refusal never failed an assertion —
+# it silently leaked a realm. Raising `green` still needs a new run on the box.
 covered=258
 green=216
