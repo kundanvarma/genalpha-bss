@@ -45,6 +45,7 @@ more deliberate than it was; 0016 says so explicitly.
 | [0022](0022-react-islands-in-the-back-office.md) | React islands in the back office | A desk may render React inside its own panel; one bundle built in the image, `island: '<name>'` is the whole coupling; the shell keeps sign-in, nav and the palette. |
 | [0023](0023-jackson-3-wire-shape-is-pinned.md) | Jackson 3's wire shape is pinned | Boot 4 brought Jackson 3 with alphabetical keys and primitives that throw on a sparse payload; every component pins both back, and the claims gate names the one that forgets. |
 | [0024](0024-csrf-is-off-because-there-is-nothing-ambient-to-forge.md) | CSRF is off, deliberately | Nothing ambient to forge: stateless, no cookie auth, bearer token only — so the 39 CodeQL alerts are dismissed against a written decision rather than left to bury real findings. |
+| [0025](0025-an-action-receipt-is-written-before-the-action.md) | A receipt is written before the action | Attempt committed before dispatch or the action is refused; outcome appended as a linked row, never an update. **Accepted, not yet implemented.** |
 
 ## How to add one
 
