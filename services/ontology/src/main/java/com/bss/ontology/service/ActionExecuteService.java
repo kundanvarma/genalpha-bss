@@ -401,6 +401,17 @@ public class ActionExecuteService {
         context.put("channel", caller.channel());
         context.put("callerKind", caller.isCustomer() ? "customer" : "staff");
         context.put("agent", agentLabel(caller));
+        // THE IDEMPOTENCY KEY. Without one, the retry and timeout rules in the
+        // receipts proposal are unimplementable: two receipts for one intent
+        // are indistinguishable from two intents, and a reader cannot tell a
+        // retry from a repeat.
+        //
+        // It rides in `context` rather than as a new column or a new top-level
+        // event field, so nothing migrates and no consumer contract changes —
+        // insight's decision_log already stores context as JSON and its
+        // listener reads named fields, ignoring the rest. The store for all of
+        // this already exists; see insight's decision-topics default.
+        context.put("idempotencyKey", idempotencyKey(caller, action, inputs));
         d.put("context", context);
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("preconditions", check.preconditions());
@@ -425,6 +436,41 @@ public class ActionExecuteService {
             return "none";
         }
         return registry.forTenant(caller.tenant()).agents().containsKey(caller.agent()) ? caller.agent() : caller.agent() + " (unregistered)";
+    }
+
+    /**
+     * One intent, one key. A SHA-256 over tenant, caller, action, version and
+     * the inputs — DERIVED, so a retry of the same intent produces the same key
+     * while a different intent cannot collide with it. Truncated to 32 hex
+     * characters: 128 bits, far past any collision concern for a receipt
+     * stream, and short enough to read in a log line.
+     *
+     * Note what is deliberately NOT in it: the timestamp, and decisionId.
+     * Either would make every attempt its own "intent", and the key would be a
+     * decoration rather than a key. decisionId stays the per-ATTEMPT identity;
+     * this is the per-INTENT one, and the pair is what makes retries countable.
+     */
+    private static String idempotencyKey(Caller caller, JsonNode action, Map<String, String> inputs) {
+        StringBuilder material = new StringBuilder()
+                .append(caller.tenant()).append('\u001f')
+                .append(caller.subject()).append('\u001f')
+                .append(action.path("action").asString("")).append('\u001f')
+                .append(action.path("version").asInt(1)).append('\u001f');
+        // inputs in a STABLE order: a map's iteration order must not change the
+        // key, or a retry stops matching the original it is retrying
+        new java.util.TreeMap<String, String>(inputs).forEach((k, v) ->
+                material.append(k).append('=').append(v).append('\u001e'));
+        try {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(material.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(32);
+            for (int i = 0; i < 16; i++) {
+                hex.append(String.format("%02x", digest[i]));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is required of every JVM", impossible);
+        }
     }
 
     private String agentLabel(Caller caller) {
