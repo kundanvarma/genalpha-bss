@@ -40,6 +40,36 @@ if [ -z "${COMPOSE_FILE:-}" ] && [ -f docker-compose.cloud.yml ]; then
   export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
   echo "[$(date +%H:%M:%S)] COMPOSE_FILE set from the deployment's override (docker-compose.cloud.yml)"
 fi
+# THE MASTER-REALM ADMIN PASSWORD IS PART OF THAT IDENTITY TOO, and for exactly
+# the same reason as COMPOSE_FILE above: it lives in a file a non-interactive
+# sweep never reads.
+#
+# Ten suites mint a throwaway realm user through Keycloak's master realm
+# (ops/e2e/kc_admin.js). docker-compose.yml spells the password
+# ${KEYCLOAK_ADMIN_PASSWORD:-admin} and ops/cloud/aws-demo/install.sh GENERATES
+# a random one into .env — so on the box the literal 'admin' is always wrong.
+# Without this the suites fall back to that default, Keycloak refuses them, and
+# the 401's JSON error object flows on as if it were the list of realm roles:
+# four suites reported `roles.find is not a function` in the 8 Oct run, which
+# named a type error four lines below a credentials failure. Fixing the suites
+# to READ this variable (#271) does nothing until something SETS it.
+#
+# The length is echoed, never the value — enough to prove the lookup ran, which
+# is the whole point of a check whose silence would otherwise read as a pass.
+if [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ] && [ -f .env ]; then
+  kc_pw_line=$(grep -m1 '^KEYCLOAK_ADMIN_PASSWORD=' .env || true)
+  if [ -n "$kc_pw_line" ]; then
+    kc_pw=${kc_pw_line#KEYCLOAK_ADMIN_PASSWORD=}
+    kc_pw=${kc_pw%\"}; kc_pw=${kc_pw#\"}       # tolerate a quoted scalar
+    kc_pw=${kc_pw%\'}; kc_pw=${kc_pw#\'}
+    export KEYCLOAK_ADMIN_PASSWORD="$kc_pw"
+    echo "[$(date +%H:%M:%S)] KEYCLOAK_ADMIN_PASSWORD taken from .env (${#KEYCLOAK_ADMIN_PASSWORD} chars)"
+    unset kc_pw kc_pw_line
+  else
+    echo "[$(date +%H:%M:%S)] WARNING: .env names no KEYCLOAK_ADMIN_PASSWORD — the ten master-realm suites will use 'admin' and may be refused"
+  fi
+fi
+
 export PATH=/opt/homebrew/bin:$PATH
 
 # the suites are Playwright and axe — make sure both are installed before we
