@@ -988,6 +988,13 @@ services:
     # 224m heap + 128m metaspace above; 1g catches a runaway, not a busy day.
     mem_limit: 1g
     environment:
+      # ADR 0025: the receipt store. Runtime uses the restricted role so RLS
+      # binds it; Flyway runs as the owner, which RLS does not bind.
+      DB_URL: jdbc:postgresql://postgres:5432/ontology
+      DB_USERNAME: ontology_app
+      DB_PASSWORD: ontology_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
@@ -1023,6 +1030,10 @@ services:
         condition: service_started
       kafka:
         condition: service_started
+      # ADR 0025: the receipt store is a precondition of acting, so the
+      # component should not start before the database it writes evidence to.
+      postgres:
+        condition: service_healthy
 
   mock-hss:
     build: ./integrations/mock-hss
