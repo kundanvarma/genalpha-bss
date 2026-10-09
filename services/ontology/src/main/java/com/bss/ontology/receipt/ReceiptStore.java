@@ -46,6 +46,22 @@ public class ReceiptStore {
         this.rows = rows;
     }
 
+    /**
+     * Collapse line breaks before anything reaches the log. The action name and
+     * tenant come from a caller, and a newline in either would let one request
+     * forge extra log lines.
+     *
+     * <p>CHAINED replace(char, char), not replaceAll with a character class.
+     * Both collapse the breaks; only this shape is the one CodeQL models as a
+     * log-injection sanitiser. Same spelling as oneLine() in ReceiptPublisher
+     * and service-orchestration, which learned it first.
+     */
+    private static String oneLine(String value) {
+        return value == null ? null : value
+                .replace('\n', '_').replace('\r', '_')
+                .replace('\u0085', '_').replace('\u2028', '_').replace('\u2029', '_');
+    }
+
     /** What the caller needs back to append the outcome later. */
     public record Attempt(String receiptId, int attemptNo) {
     }
@@ -105,7 +121,8 @@ public class ReceiptStore {
             // ERROR, not WARN: the action happened and the evidence did not land.
             log.error("receipt outcome NOT stored for receiptId={} action={} tenant={} status={} — "
                             + "the attempt stays unresolved for reconciliation: {}",
-                    receiptId, action, tenant, status, e.toString());
+                    oneLine(receiptId), oneLine(action), oneLine(tenant), oneLine(status),
+                    oneLine(e.toString()));
             return false;
         }
     }
@@ -140,7 +157,8 @@ public class ReceiptStore {
             rows.saveAndFlush(row);
             return true;
         } catch (RuntimeException e) {
-            log.error("refusal of {} for tenant {} was NOT recorded: {}", action, tenant, e.toString());
+            log.error("refusal of {} for tenant {} was NOT recorded: {}",
+                    oneLine(action), oneLine(tenant), oneLine(e.toString()));
             return false;
         }
     }
