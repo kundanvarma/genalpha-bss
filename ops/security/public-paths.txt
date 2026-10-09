@@ -151,6 +151,7 @@ intelligence "/v3/api-docs/**"
 intelligence ApiConstants.BASE_PATH+"/careChat/guest/**"
 
 # ---- knowledge ----   (infrastructure only)
+knowledge ApiConstants.BASE_PATH+"/publicArticle"
 knowledge "/actuator/health/**"
 knowledge "/actuator/prometheus"
 knowledge "/swagger-ui.html"
