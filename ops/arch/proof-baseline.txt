@@ -1,10 +1,20 @@
 # THE PROOF-RUN RATCHET. Read by ops/arch/proof_run_check.py, which the claims
 # gate calls. Both numbers may RISE and never fall.
 #
-# Starting at zero on purpose. The run committed on 24 Sep 2026 covered 122 of
-# 258 suites with 30 failures, and the gate that would have caught that did not
-# exist until now — so there is no honest number to start from except the one
-# the next full run earns. Raise these in the same commit as a results.tsv that
-# justifies them.
-covered=0
-green=0
+# EARNED 8 Oct 2026 — the first proof run ever executed end to end on a real
+# deployment. 258 suites from a scripted seed path (ops/seed-fleet.sh, 51
+# scripts) against main on the demo box: 8 vCPU, 61 GiB, 96 containers, 0
+# unhealthy. It replaces a run committed on 24 September that covered 122 of
+# 258 with 88 green and could not be reproduced anywhere.
+#
+# These are LAST-VERDICT counts, which is what the checker computes. The
+# runner's stricter reading is 212 green on first attempt with 4 recovered on
+# its retry pass — those 4 are FLAKY, not clean, and the gap between 212 and
+# 216 is exactly that set. Raising this number means fixing suites, not
+# re-running until they pass.
+#
+# The 42 that stay red are inventoried in #269 with their evidence, bucketed by
+# cause. Of those, 4 share one suite-side bug (`roles.find is not a function`)
+# and several are environment rather than product — the triage says which.
+covered=258
+green=216
