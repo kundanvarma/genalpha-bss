@@ -41,6 +41,9 @@ public class ActionCheckService {
         return registry.forTenant(caller.tenant()).actions().get(name);
     }
 
+    /** The digital-worker badge. Authenticated, unlike the agent header. */
+    private static final String WORKFORCE_BADGE = "workforce:use";
+
     public Check check(JsonNode action, Map<String, String> inputs, Caller caller) {
         Registry.Layer layer = registry.forTenant(caller.tenant());
         Resolver.Resolved r = resolver.resolve(action, inputs, caller);
@@ -50,6 +53,10 @@ public class ActionCheckService {
         }
         PermissionVerdict permission = permission(action, r, caller);
         PolicyVerdict policy = policy(action, inputs, r, caller, layer);
+        Verdict autonomy = autonomy(action, caller, layer);
+        if (autonomy != null) {
+            verdicts.add(autonomy);
+        }
         String refusal = null;
         for (String p : r.problems) {
             if (refusal == null && p.contains("is required")) {
@@ -68,6 +75,88 @@ public class ActionCheckService {
             refusal = "a business rule refuses it: " + (policy.message() != null ? policy.message() : policy.ruleName());
         }
         return new Check(refusal == null, refusal, verdicts, permission, policy, r);
+    }
+
+    /* ------------------------------------------------------------------ autonomy */
+
+    /**
+     * HOW MUCH OF THIS MAY A MACHINE DO ALONE.
+     *
+     * <p>Until 9 Oct 2026 {@code governance.autonomy} was written on every action
+     * and read by nothing: it appeared in the receipt and in two DTOs, and no code
+     * ever consulted it. A field that reads like a control and is not one is worse
+     * than no field, because anyone auditing the registry concludes a SIM swap is
+     * gated when nothing gates it.
+     *
+     * <p><b>The trust model matters more than the matrix.</b> {@code X-GenAlpha-Agent}
+     * is a plain request header: self-declared, unverified, and omitting it would
+     * make a robot look like a person. So the header can only ever TIGHTEN this
+     * check. The authenticated signal is the badge — a caller holding
+     * {@code workforce:use} is a digital worker whatever it calls itself, and that
+     * claim comes from the token.
+     *
+     * <ul>
+     *   <li>{@code high} — a machine may act alone.</li>
+     *   <li>{@code medium} — only a REGISTERED agent may act alone, and only one
+     *       whose own declared autonomy is {@code supervised} or
+     *       {@code policy-autonomous}. An unknown caller-with-a-badge is refused.</li>
+     *   <li>{@code low} — no machine acts alone. A person must do it.</li>
+     * </ul>
+     *
+     * <p>Returns null when the caller is a person, so nothing about human use changes.
+     */
+    /* package-private and static: the rule is pure, and a control with no test
+     * that goes red when it is deleted is not a control. */
+    static Verdict autonomy(JsonNode action, Caller caller, Registry.Layer layer) {
+        String declared = action.path("governance").path("autonomy").asString("medium");
+        boolean badged = caller.has(WORKFORCE_BADGE);
+        String named = caller.agent();
+        boolean machine = badged || (named != null && !named.isBlank());
+        if (!machine) {
+            return null;   // a person at a screen; autonomy says nothing about them
+        }
+        String who = named == null || named.isBlank() ? "a badged worker" : named;
+        if ("high".equals(declared)) {
+            return new Verdict("agent-autonomy",
+                    "a machine may run this one alone", true,
+                    who + " acted alone; the action is marked autonomy=high");
+        }
+        // none and low both mean "not alone". The registry ranks them
+        // none < low < medium < high, so anything that is not high and not
+        // medium must refuse — an unknown value fails CLOSED rather than
+        // falling through to the most permissive branch.
+        if ("low".equals(declared) || "none".equals(declared)) {
+            return new Verdict("agent-autonomy",
+                    "this action is not one a machine runs alone — a person must do it", false,
+                    who + " is a machine and " + action.path("action").asString()
+                            + " is marked autonomy=" + declared);
+        }
+        if (!"medium".equals(declared)) {
+            return new Verdict("agent-autonomy",
+                    "this action does not say a machine may run it alone", false,
+                    who + " is a machine and " + action.path("action").asString()
+                            + " declares an unrecognised autonomy '" + declared + "'");
+        }
+        // medium: a registered agent, and one trusted to act under policy
+        JsonNode agent = named == null ? null : layer.agents().get(named);
+        if (agent == null) {
+            return new Verdict("agent-autonomy",
+                    "only a registered agent may run this one alone", false,
+                    (named == null
+                            ? "the caller holds a worker badge but named no registered agent"
+                            : "no agent '" + named + "' is registered for this tenant")
+                            + "; " + action.path("action").asString() + " is marked autonomy=medium");
+        }
+        String agentAutonomy = agent.path("autonomy").asString("advisory");
+        if (!"supervised".equals(agentAutonomy) && !"policy-autonomous".equals(agentAutonomy)) {
+            return new Verdict("agent-autonomy",
+                    "this agent only advises; it does not run this one alone", false,
+                    named + " is autonomy=" + agentAutonomy + " and "
+                            + action.path("action").asString() + " is marked autonomy=medium");
+        }
+        return new Verdict("agent-autonomy",
+                "a registered agent trusted to act under policy may run this one", true,
+                named + " is autonomy=" + agentAutonomy);
     }
 
     /* ------------------------------------------------------------------ preconditions */
