@@ -45,6 +45,12 @@ CREATE DATABASE eventhub;
 CREATE DATABASE device_commerce;
 CREATE DATABASE base_migration;
 CREATE DATABASE device_entitlement;
+-- The ontology's own store, added 2026-10-09 (ADR 0025). Until then ontology was
+-- the only component in the fleet without a database, which is exactly why a
+-- governed action could not record its intent before executing: there was no
+-- local transaction to record it in.
+CREATE DATABASE ontology;
+
 -- Keycloak keeps the realms here (compose: KC_DB_URL → postgres/keycloak).
 -- Missing from this file until 2026-09-07: the laptop had it by hand, a fresh box did not.
 CREATE DATABASE keycloak;

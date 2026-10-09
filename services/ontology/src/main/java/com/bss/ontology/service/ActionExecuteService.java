@@ -20,6 +20,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.bss.ontology.receipt.ActionReceiptRow;
+import com.bss.ontology.receipt.ReceiptStore;
+
 /**
  * Execute = check, then do, then write the receipt. "Do" is the action's
  * capability, called with the caller's own token and channel, with a request
@@ -72,15 +75,19 @@ public class ActionExecuteService {
     private final ReceiptPublisher receipts;
     private final UpgradeService upgrades;
     private final ObjectMapper json;
+    /** ADR 0025: intent is committed here before the call is dispatched. */
+    private final ReceiptStore store;
 
     public ActionExecuteService(Registry registry, ActionCheckService checks, ComponentClient client,
-            ReceiptPublisher receipts, UpgradeService upgrades, ObjectMapper json) {
+            ReceiptPublisher receipts, UpgradeService upgrades, ObjectMapper json,
+            ReceiptStore store) {
         this.registry = registry;
         this.checks = checks;
         this.client = client;
         this.receipts = receipts;
         this.upgrades = upgrades;
         this.json = json;
+        this.store = store;
     }
 
     public Outcome execute(JsonNode action, Map<String, String> inputs, Caller caller) {
@@ -98,6 +105,10 @@ public class ActionExecuteService {
         Check check = checks.check(action, inputs, caller);
         out.check = check;
         if (!check.allowed()) {
+            // A blocked proposal is evidence too (ADR 0025): "tried and stopped"
+            // is invisible if only the actions that ran are written down.
+            store.recordRefusal(caller.tenant(), name, caller.subject(),
+                    writeJson(inputs), writeJson(check), check.refusal());
             receipt(action, inputs, caller, check, null, "refused", check.refusal());
             return out.refused(422, check.refusal());
         }
@@ -108,6 +119,8 @@ public class ActionExecuteService {
         JsonNode body = fill(template, action, inputs, check.resolved(), missing);
         if (!missing.isEmpty()) {
             String why = "the request could not be built: " + String.join(", ", missing);
+            store.recordRefusal(caller.tenant(), name, caller.subject(),
+                    writeJson(inputs), writeJson(check), why);
             receipt(action, inputs, caller, check, null, "refused", why);
             return out.refused(422, why);
         }
@@ -149,11 +162,49 @@ public class ActionExecuteService {
         }
         boolean asRegistry = "registry".equals(action.path("executes").path("as").asString("caller")) && !isApprover;
         Object payload = template.isMissingNode() || template.isNull() ? null : body;
-        ComponentClient.Reply reply = asRegistry
-                ? client.callAsMachine(cap.path("component").asString(), cap.path("route").path("method").asString(),
-                        fillPath(cap.path("route").path("path").asString(), pathVars), query, payload, Map.of(Caller.CHANNEL_HEADER, caller.channel()))
-                : client.call(cap.path("component").asString(), cap.path("route").path("method").asString(),
-                        cap.path("route").path("path").asString(), pathVars, query, payload, caller.bearer(), Map.of(Caller.CHANNEL_HEADER, caller.channel()));
+
+        /* ADR 0025 — WRITE AHEAD. The intent is committed before the call goes
+         * out. If the store will not take it, the action is REFUSED and never
+         * dispatched: no side effect, so a refusal is a safe answer.
+         *
+         * The old order was the other way round — dispatch, then publish a
+         * receipt asynchronously — and a publish failure reached a counter
+         * while the action had already happened. Evidence that can silently not
+         * exist is worse than no evidence, because people believe it. */
+        String target = cap.path("component").asString() + " / " + cap.path("id").asString() + " / "
+                + cap.path("route").path("method").asString() + " " + cap.path("route").path("path").asString();
+        ReceiptStore.Attempt attempt;
+        try {
+            attempt = store.recordAttempt(caller.tenant(), name, caller.subject(), caller.agent(),
+                    agentVersion(caller), String.join(",", caller.roles()),
+                    String.valueOf(action.path("version").asInt(1)),
+                    writeJson(inputs), writeJson(check), target,
+                    idempotencyKey(caller, action, inputs));
+        } catch (RuntimeException e) {
+            // Deliberately a refusal, not a 500: nothing was dispatched.
+            return out.refused(503, "the action was not attempted because its receipt could not be "
+                    + "recorded first — evidence is a precondition of acting (ADR 0025)");
+        }
+
+        ComponentClient.Reply reply;
+        try {
+            reply = asRegistry
+                    ? client.callAsMachine(cap.path("component").asString(), cap.path("route").path("method").asString(),
+                            fillPath(cap.path("route").path("path").asString(), pathVars), query, payload, Map.of(Caller.CHANNEL_HEADER, caller.channel()))
+                    : client.call(cap.path("component").asString(), cap.path("route").path("method").asString(),
+                            cap.path("route").path("path").asString(), pathVars, query, payload, caller.bearer(), Map.of(Caller.CHANNEL_HEADER, caller.channel()));
+        } catch (RuntimeException e) {
+            /* A timeout or a dropped connection is NOT a failure — the far side
+             * may well have acted. It is uncertain until something checks, and
+             * saying "failed" here would be a lie the reconciler cannot undo. */
+            store.recordOutcome(caller.tenant(), attempt.receiptId(), name,
+                    ActionReceiptRow.UNCERTAIN, null, null, null, null, e.toString());
+            out.done = false;
+            out.refusal = "the component did not answer; the outcome is uncertain and recorded as such";
+            out.said = "The " + cap.path("component").asString() + " component did not answer in time. "
+                    + "Whether it acted is unknown until this is reconciled.";
+            return new Outcome(false, 504, out.receipt());
+        }
         out.executedAs = asRegistry ? "the registry's own identity — the action's permission model governed this, and the receipt names " + caller.subject() : "the caller";
         out.executedBy = new ExecuteReceipt.ExecutedBy(cap.path("component").asString(), cap.path("id").asString(),
                 cap.path("route").path("method").asString() + " " + cap.path("route").path("path").asString());
@@ -163,10 +214,20 @@ public class ActionExecuteService {
             out.refusal = why;
             out.said = "The " + cap.path("component").asString() + " component refused: " + why;
             out.componentStatus = reply.status();
+            // The component answered, and the answer was no: a definite outcome.
+            store.recordOutcome(caller.tenant(), attempt.receiptId(), name, ActionReceiptRow.FAILED,
+                    reply.status(), null, null, null, why);
             receipt(action, inputs, caller, check, null, "refused-by-component", why);
             return new Outcome(false, reply.status() >= 400 && reply.status() < 500 ? reply.status() : 502, out.receipt());
         }
         JsonNode result = reply.body();
+        /* The outcome write must NOT fail the caller: the action has already
+         * happened, and refusing now would report a failure that did not occur.
+         * A lost outcome leaves the attempt unresolved, which is exactly what
+         * the reconciler looks for. */
+        store.recordOutcome(caller.tenant(), attempt.receiptId(), name, ActionReceiptRow.SUCCEEDED,
+                reply.status(), result == null ? null : result.path("id").asString(null),
+                writeJson(action.path("effects")), writeJson(action.path("emits")), null);
         String decisionId = receipt(action, inputs, caller, check, result, "executed", null);
         out.done = true;
         out.result = result.isMissingNode() ? json.getNodeFactory().nullNode() : result;
@@ -356,6 +417,27 @@ public class ActionExecuteService {
     }
 
     /* ------------------------------------------------------------------ the receipt */
+
+    /** The registered agent's version, when an agent acted; null for a human. */
+    private String agentVersion(Caller caller) {
+        if (caller.agent() == null || caller.agent().isBlank()) {
+            return null;
+        }
+        JsonNode a = registry.forTenant(caller.tenant()).agents().get(caller.agent());
+        return a == null ? null : a.path("version").asString(null);
+    }
+
+    /** Receipt payloads are stored as JSON text; a serialisation slip must not cost the receipt. */
+    private String writeJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return json.writeValueAsString(value);
+        } catch (RuntimeException e) {
+            return "{\"unserialisable\":\"" + e.getClass().getSimpleName() + "\"}";
+        }
+    }
 
     private String receipt(JsonNode action, Map<String, String> inputs, Caller caller, Check check,
             JsonNode result, String outcome, String why) {
