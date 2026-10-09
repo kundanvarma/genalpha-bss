@@ -27,5 +27,32 @@
 # before it parses. In the other 6 of the 10 the admin token is only used to
 # delete a throwaway realm at the end, so a refusal never failed an assertion —
 # it silently leaked a realm. Raising `green` still needs a new run on the box.
+#
+# SECOND RUN, 9 Oct 2026, same box and same 96 containers, 0 unhealthy, load never
+# above 1.5. It earned 216 green on FIRST ATTEMPT and 220 on last verdict.
+#
+# `green` stays at 216, deliberately, and this is the honest reading of why:
+#
+#   8 Oct   first attempt 212   last verdict 216   <- the number below
+#   9 Oct   first attempt 216   last verdict 220
+#
+# The first-attempt figure rose by 4, and that rise is real: three of those are
+# the credential suites above (cfs_decomposition, cfs_realisation,
+# bundle_decomposition), each red on BOTH attempts on 8 Oct and green on attempt
+# one now. So the number below is now met without the retry pass helping at all,
+# which is a stronger claim than it was yesterday with the same digits.
+#
+# Raising it to 220 would mean ratcheting onto 4 suites that only passed on the
+# retry — operator_form, attribution_report, journey_autotune, mobile_wholesale —
+# and this file already says flaky is not clean. A baseline that may only rise
+# must not rest on suites that pass when re-run; the next run would go red for
+# no change in the code. The number moves when those four are fixed, or when the
+# first-attempt count passes it.
+#
+# The 38 still red are triaged by cause on #269: one already fixed in #274 (SDK
+# drift), three pure environment, one the category-fallback debt, two real
+# product defects (#276 is the worst — the human page publishes 0.00 while every
+# machine projection publishes the real price), 13+ browser timeouts whose shared
+# cause is NOT yet established, 9 data/state and 3 behaviour assertions.
 covered=258
 green=216
