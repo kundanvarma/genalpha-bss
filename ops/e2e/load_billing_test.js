@@ -4,6 +4,7 @@
  * says so. Parties are direct rows (no logins — billing needs ids, not
  * passwords); products ride the inventory API in parallel batches. */
 const { request } = require('playwright');
+const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
 // the gateway rate-limiter (a deliberate protection) throttles bulk seeding —
@@ -89,7 +90,9 @@ async function token(ctx, realm, client, user, pass) {
     + `billed nothing new (${JSON.stringify(again).slice(0, 120)})`);
 
   const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
-    { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;
+    { form: masterTokenForm() })).json()).access_token;
+
+  if (!admin) console.warn('WARN cleanup: master admin refused the token — the throwaway realm is LEFT BEHIND. Set KEYCLOAK_ADMIN_PASSWORD (the box generates one).');
   await ctx.delete(`http://localhost:8085/admin/realms/${OP}`,
     { headers: { Authorization: 'Bearer ' + admin } }).catch(() => {});
   console.log('OK cleanup: probe realm deleted');

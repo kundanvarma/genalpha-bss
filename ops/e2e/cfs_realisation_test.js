@@ -67,20 +67,17 @@ async function created(method, p, tok, body) {
  * Recorded on this object rather than returned, so the call sites below stay
  * exactly as they were. */
 const parties = require('./party_debris');
+const { adminToken, createRealmUser } = require('./kc_admin');
 const fixture = {};
 async function freshCustomer() {
-  const admin = (await form(`${KCB}/realms/master/protocol/openid-connect/token`, { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' })).access_token;
+  const admin = await adminToken(KCB);
   const uname = `e2e-rfs-${run}@example.com`;
-  const areq = (m, p, body) => fetch(`${KCB}/admin/realms/bss${p}`, { method: m, headers: { Authorization: `Bearer ${admin}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
-  await areq('POST', '/users', { username: uname, email: uname, enabled: true, emailVerified: true, firstName: 'Rfs', lastName: 'Tester', credentials: [{ type: 'password', value: 'Passw0rd!', temporary: false }] });
-  const users = await (await areq('GET', `/users?username=${encodeURIComponent(uname)}`)).json();
-  const roles = await (await areq('GET', '/roles')).json();
-  const cust = roles.find((r) => r.name === 'customer');
-  if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
+  const userId = await createRealmUser(KCB, admin,
+    { username: uname, firstName: 'Rfs', lastName: 'Tester', password: 'Passw0rd!' });
   const tok = (await form(KC, { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
   const person = await call('POST', '/tmf-api/party/v4/individual', tok,
     { givenName: 'Rfs', familyName: 'Tester' });
-  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId: users[0].id,
+  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId,
     partyId: (person.body || {}).id });
   return tok;
 }

@@ -5,6 +5,7 @@
  * its face; the sandbox dies with its realm.
  */
 const { request } = require('playwright');
+const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -49,7 +50,8 @@ const run = Date.now();
 
   /* cleanup */
   const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
-    { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;
+    { form: masterTokenForm() })).json()).access_token;
+  if (!admin) console.warn('WARN cleanup: master admin refused the token — the throwaway realm is LEFT BEHIND. Set KEYCLOAK_ADMIN_PASSWORD (the box generates one).');
   await ctx.delete(`http://localhost:8085/admin/realms/${report.sandboxId}`,
     { headers: { Authorization: 'Bearer ' + admin } }).catch(() => {});
   console.log('OK cleanup: the prospect sandbox died with its realm');

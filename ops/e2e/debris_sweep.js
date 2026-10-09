@@ -173,7 +173,58 @@ async function sweepParties() {
       method: 'DELETE', headers: H }).catch(() => null);
     if (r && r.ok) deleted++;
   }
+
+  /* The SPECS behind those offerings, which nothing swept until now.
+   *
+   * The offering sweep above has kept the shelf clean since 24 Sep, and that is
+   * exactly how this stayed invisible: offerings read 0 stale while the specs
+   * they pointed at piled up for a fortnight. On 9 Oct a laptop carried 38
+   * orphaned spec fixtures from seven aborted runs between 25 Sep and 7 Oct —
+   * 22 service, 11 resource, 5 product specs and an offering price.
+   *
+   * It is not cosmetic. A dead run's CFS keeps DECLARING a required RFS that no
+   * service ever realised, so ops/arch/cfs_check.py counts the disagreement and
+   * cfs_decomposition_test fails on its final "clean after the fixtures are
+   * gone" check — reporting two-week-old debris as a fault in the run that
+   * just passed. That is what it did to me before this was written.
+   *
+   * Dependency order, children last: an offering points at a product spec and a
+   * price, a product spec at a CFS, a CFS at its RFSs, an RFS at a resource
+   * spec. Deleting a parent first means the child is then free. Offerings are
+   * already gone above, so prices come next.
+   */
+  const sweepPaged = async (api, kind, keep = () => true) => {
+    const ids = [];
+    for (let offset = 0; ; offset += 100) {
+      // the catalog caps limit at 100 and answers 400 above it
+      const page = await get(`/tmf-api/${api}/v4/${kind}?limit=100&offset=${offset}`);
+      if (!Array.isArray(page) || !page.length) break;
+      for (const x of page) if (stale(x.name) && keep(x)) ids.push(x.id);
+      if (page.length < 100) break;
+    }
+    let gone = 0;
+    for (const id of ids) {
+      const r = await fetch(`${API}/tmf-api/${api}/v4/${kind}/${id}`, {
+        method: 'DELETE', headers: H }).catch(() => null);
+      if (r && r.ok) gone++;
+    }
+    return { gone, found: ids.length };
+  };
+
+  const specs = {};
+  specs.price = await sweepPaged('productCatalogManagement', 'productOfferingPrice');
+  specs.product = await sweepPaged('productCatalogManagement', 'productSpecification');
+  // CFS before RFS: a CFS names its RFSs, so the parent goes first.
+  specs.cfs = await sweepPaged('serviceCatalogManagement', 'serviceSpecification', (s) => s.serviceType === 'CFS');
+  specs.rfs = await sweepPaged('serviceCatalogManagement', 'serviceSpecification', (s) => s.serviceType !== 'CFS');
+  specs.resource = await sweepPaged('resourceCatalogManagement', 'resourceSpecification');
+
+  const specLine = Object.entries(specs)
+    .filter(([, v]) => v.found)
+    .map(([k, v]) => `${v.gone}/${v.found} ${k}`)
+    .join(', ') || 'none';
   console.log(`debris sweep: ${paused} stale journeys/campaigns paused, ${deleted}/${debris.length} stale offerings deleted`);
+  console.log(`debris sweep: stale specs deleted — ${specLine}`);
 })().catch((e) => {
   // the battery preflight is allowed to be skipped; a party run asked for
   // on purpose is not — it must not print a failure and exit 0

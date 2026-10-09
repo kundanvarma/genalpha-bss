@@ -63,28 +63,21 @@ async function form(url, params) {
  * Recorded on this object rather than returned, so the call sites below stay
  * exactly as they were. */
 const parties = require('./party_debris');
+const { adminToken, createRealmUser } = require('./kc_admin');
 const fixture = {};
 /* A brand-new customer with a clean inventory — so the upgrade leg reads its
  * one product without fighting a shared persona's capped product page. */
 async function freshCustomer(tag) {
   const KCB = 'http://localhost:8085';
-  const admin = (await form(`${KCB}/realms/master/protocol/openid-connect/token`,
-    { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' })).access_token;
+  const admin = await adminToken(KCB);
   const uname = `e2e-${tag}-${Date.now()}@example.com`;
-  const areq = (m, path, body) => fetch(`${KCB}/admin/realms/bss${path}`, { method: m,
-    headers: { Authorization: `Bearer ${admin}`, 'Content-Type': 'application/json' },
-    ...(body ? { body: JSON.stringify(body) } : {}) });
-  await areq('POST', '/users', { username: uname, email: uname, enabled: true, emailVerified: true,
-    firstName: 'Bundle', lastName: 'Tester', credentials: [{ type: 'password', value: 'Passw0rd!', temporary: false }] });
-  const users = await (await areq('GET', `/users?username=${encodeURIComponent(uname)}`)).json();
-  const roles = await (await areq('GET', '/roles')).json();
-  const cust = roles.find((r) => r.name === 'customer');
-  if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
+  const userId = await createRealmUser(KCB, admin,
+    { username: uname, firstName: 'Bundle', lastName: 'Tester', password: 'Passw0rd!' });
   const tok = (await form(`${KCB}/realms/bss/protocol/openid-connect/token`,
     { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
   const person = await call('POST', '/tmf-api/party/v4/individual', tok,
     { givenName: 'Bundle', familyName: 'Tester' });
-  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId: users[0].id,
+  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId,
     partyId: (person.body || {}).id });
   return tok;
 }
