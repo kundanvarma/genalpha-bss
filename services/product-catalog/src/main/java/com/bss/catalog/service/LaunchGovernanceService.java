@@ -151,9 +151,37 @@ public class LaunchGovernanceService {
         return new ReadinessItem(SomDryRunClient.OWNER, SomDryRunClient.LABEL, done, "dry run", at, plan.reason());
     }
 
+    /** The authority that owns the category question — the catalog itself. */
+    static final String CATEGORY_OWNER = "catalog";
+    static final String CATEGORY_LABEL = "Shelf";
+
+    /**
+     * A SECOND ITEM NOBODY TICKS: does this offering say what shelf it belongs on?
+     *
+     * An offering with no category reaches the shop as "Service" — the word the
+     * desk prints when nothing told it what something is. #143 traced two such
+     * rows on the agent desk to exactly this, fixed the desk half (it now reads
+     * the declared fulfilment family first) and left the catalog half open:
+     * nothing stopped an uncategorised offering being launched in the first
+     * place, and the proof run on the box still found six of them.
+     *
+     * Computed like the fulfilment plan, never stored, and refused at the same
+     * door — so an approver can still force a launch deliberately, which is the
+     * difference between a gate and a wall.
+     */
+    private ReadinessItem categoryItem(ProductOffering e) {
+        String json = e.getCategoryJson();
+        String t = json == null ? "" : json.trim();
+        boolean declared = !t.isEmpty() && !t.equals("[]") && !t.equals("null");
+        return new ReadinessItem(CATEGORY_OWNER, CATEGORY_LABEL, declared, "catalog", now(),
+                declared ? "the offering declares a shelf"
+                        : "no category — the shop would file this under \"Service\", which is not a kind of product");
+    }
+
     private List<ReadinessItem> withFulfilmentPlan(ProductOffering e, List<ReadinessItem> stored) {
         List<ReadinessItem> out = new ArrayList<>(stored);
         out.add(fulfilmentPlanItem(e));
+        out.add(categoryItem(e));
         return out;
     }
 
@@ -706,6 +734,10 @@ public class LaunchGovernanceService {
             ReadinessItem plan = fulfilmentPlanItem(e);
             if (!plan.done()) {
                 open.add(plan.label() + " (" + plan.note() + ")");
+            }
+            ReadinessItem shelf = categoryItem(e);
+            if (!shelf.done()) {
+                open.add(shelf.label() + " (" + shelf.note() + ")");
             }
             if (!open.isEmpty() && !force) {
                 throw new BadRequestException("'" + e.getName() + "' is approved but not ready: " + String.join(", ", open)
