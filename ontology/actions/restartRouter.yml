@@ -18,7 +18,7 @@ permissions:
   anyOf:
     - { self: owner }
     - { role: service:write }
-governance: { autonomy: low, approval: none, audit: mandatory }
+governance: { autonomy: high, approval: none, audit: mandatory }
 executes:
   capability: cpe.restart
   pathVars: { id: "${serviceId}" }

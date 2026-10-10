@@ -30,7 +30,11 @@ permissions:
     - { role: agent }
 policy: { domain: credit, capability: policy.evaluate }
 governance:
-  autonomy: low
+  # medium, not low: the VALUE ladder below is this action's human-in-the-loop
+  # control and it is finer than a blanket block — approval above 25, a named
+  # approver, a hard cap of 50. autonomy=medium adds the other half: only a
+  # REGISTERED agent trusted to act under policy may use the ladder at all.
+  autonomy: medium
   approval: human
   approvalAbove: { input: amount, amount: 25 }
   approverRole: billing:admin

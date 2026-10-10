@@ -577,7 +577,7 @@ export class GenAlpha {
    * - a credit note needs a reason
    * - the credit must be more than zero and no more than what the bill still owes
    * - no single credit above 50 — larger corrections are a finance decision, not a desk one
-   * Governance: autonomy low, approval human, audit mandatory.
+   * Governance: autonomy medium, approval human, audit mandatory.
    * Version 1 (active).
    */
   async issueCredit(inputs: IssueCreditInputs): Promise<Executed> {
@@ -648,7 +648,7 @@ export class GenAlpha {
    * Who may: the owner themselves, or anyone holding service:write.
    * Before it happens:
    * - only an active line's router can be restarted — a paused line has nothing to restart
-   * Governance: autonomy low, approval none, audit mandatory.
+   * Governance: autonomy high, approval none, audit mandatory.
    * Version 1 (active).
    */
   async restartRouter(inputs: RestartRouterInputs): Promise<Executed> {

@@ -159,7 +159,7 @@ class RegistryLoadTest {
         assertThatThrownBy(() -> new Registry(withCreditOverlay("  audit: optional").toString()))
                 .hasMessageContaining("may not loosen audit");
         assertThatThrownBy(() -> new Registry(withCreditOverlay("  autonomy: high").toString()))
-                .hasMessageContaining("may not loosen autonomy from \"low\" to \"high\"");
+                .hasMessageContaining("may not loosen autonomy from \"medium\" to \"high\"");
         assertThatThrownBy(() -> new Registry(withCreditOverlay("  limits: { maxAmount: 5000 }").toString()))
                 .hasMessageContaining("may not loosen limits.maxAmount from 50 to 5000");
     }
