@@ -102,8 +102,19 @@ async function fromJsonLd(id) {
 async function fromPageText(id) {
   const { status, text } = await crawl(`/shop/offering/${id}`);
   if (status !== 200) return { absent: true, status };
-  const m = text.match(/Price: <b>([^<]*)<\/b>/);
-  return { price: m && m[1] };
+  // THE PAGE A HUMAN READS IS THE STOREFRONT'S OWN SSR, and has been since the
+  // Java bot page that used to answer /shop/offering/** was deleted (the gateway
+  // says so where it routes this path: the machine-readable head now comes from
+  // /seo/offering/{id}/meta instead). This used to look for that dead page's
+  // `Price: <b>…</b>`, match nothing, and — because Number('') is 0 — report the
+  // page as publishing 0.00. A missing price read as a free product, for however
+  // many runs: the extractor broke and the number it invented looked like a bug
+  // in the shop.
+  //
+  // The price table's total row is the monthly figure a reader sees:
+  //   <tr class="total"><td>Total per month</td><td class="num">42.00 NOK</td></tr>
+  const m = text.match(/<tr class="total">.*?<td class="num">([^<]*)<\/td>/s);
+  return { price: m && m[1].trim() };
 }
 /** The number llms.txt quotes for it. */
 async function fromLlms(id) {
@@ -127,7 +138,10 @@ async function inSitemap(id) {
   return text.includes(`/shop/offering/${id}<`);
 }
 
-const money = (v) => (v == null ? null : Number(v).toFixed(2));
+/* A price that was never found is NOT zero. Number('') is 0, so the old spelling
+ * turned "the extractor matched nothing" into a confident "0.00" — the failure
+ * that hid a broken extractor behind what looked like a product defect. */
+const money = (v) => (v == null || String(v).trim() === '' ? null : Number(v).toFixed(2));
 
 (async () => {
   const staff = await token('pat@bss.local', 'pat');
@@ -172,6 +186,10 @@ const money = (v) => (v == null ? null : Number(v).toFixed(2));
   };
   console.log('   ' + JSON.stringify(seen));
   for (const [surface, value] of Object.entries(seen)) {
+    if (value === null) {
+      fail(`${surface} published NO PRICE this suite could read — the surface or its`
+        + ' markup changed and the reader did not. That is a broken check, not a free product.');
+    }
     if (value !== '42.00') {
       fail(`${surface} published ${value}, not the 42.00 monthly charge`
         + ' — this is the defect SEO-3 exists to close (the joining fee was 99.00)');

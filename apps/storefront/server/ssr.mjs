@@ -160,7 +160,24 @@ function ask(url, headers = {}, timeoutMs = TIMEOUT) {
 
 async function fetchJson(url, headers) {
   try {
-    const res = await ask(url, headers);
+    /* A DOCUMENT MUST NOT CONTRADICT ITSELF.
+     *
+     * The gateway caches the public catalogue for 60s (LocalResponseCache on
+     * /tmf-api/productCatalogManagement/**). It honours the catalogue's
+     * no-store for TOKENED requests, so a signed-in reader never sees a stale
+     * price — but this renderer reads anonymously, so it did.
+     *
+     * The head of this page is built from /seo/offering/{id}/meta, which is NOT
+     * on that cached route. So for up to a minute after a price change the page
+     * carried the new price in its JSON-LD and the old one in the words a
+     * person reads: one document, two prices. A crawler is entitled to treat
+     * that as a lie, and one_projection_test calls it exactly that.
+     *
+     * Asking past the edge cache costs this renderer a catalogue read per page
+     * — crawler traffic, not the campaign-day browse surge the cache exists to
+     * absorb — and it buys a page that agrees with itself.
+     */
+    const res = await ask(url, { 'Cache-Control': 'no-cache', ...headers });
     if (res.status === 404) {
       return { status: 404, json: null };
     }
