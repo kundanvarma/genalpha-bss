@@ -160,6 +160,26 @@ done
 # nightly workflow job gated on vars.BROWSER_PROOF_RUNNER, which has never been
 # set — so it had never run. Against that 22-script list this check reports 79
 # unreachable fixtures. Issue #261.
+# ----------------------------------------------------- agent-badge ----------
+# THE REGISTRY MAY NOT CLAIM POWERS THE TOKEN DOES NOT CARRY. hermes-worker
+# declared seven executable actions; its digital-worker badge granted the roles
+# for one. The badge was TIGHTER than the declaration, so nothing was ever
+# wrongly permitted — but a registry that overstates is one nobody can trust,
+# and "the robot can replace a SIM" is the sentence someone repeats in a room.
+# Only machine-run agents can be checked this way; an agent that runs as the
+# caller borrows rights that vary per caller.
+badge_err=$(mktemp)
+badge_out=$(python3 ops/arch/agent_badge_check.py 2>"$badge_err")
+badge_rc=$?
+if ! printf '%s' "$badge_out" | grep -q '^agent-badge: '; then
+  sed 's/^/         /' "$badge_err" >&2
+  fail "the agent-badge check did not run" "no sentinel line on stdout — see above"
+elif [ "$badge_rc" -ne 0 ]; then
+  printf '%s\n' "$badge_out" | sed 's/^/         /' >&2
+  fail "an agent declares an action its badge cannot perform" "see above"
+fi
+rm -f "$badge_err"
+
 seedcov_err=$(mktemp)
 seedcov_out=$(python3 ops/arch/seed_coverage_check.py 2>"$seedcov_err")
 seedcov_rc=$?

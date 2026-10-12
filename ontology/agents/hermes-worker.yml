@@ -6,11 +6,30 @@ kind: autonomous
 meaning: The digital workforce — a worker the operator hires for a shift (care deflection, order chasing) that acts through the ontology's actions with its own machine account, files approvals when the ladder says so, and reports deflection, handle time and reopen rate honestly.
 intent: An AI colleague that is metered, audited and revocable like a contractor.
 runsAs: machine:bss-worker
+# the role bundle a hired worker is granted on its TMF672 badge; ops/arch/
+# agent_badge_check.py proves every action below is actually permitted by it
+badge: digital-worker
 autonomy: policy-autonomous
 reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, billing.collectionCases]
 actions:
   check: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit, configureProduct]
-  execute: [restartRouter, resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit, configureProduct]
+  # WHAT THE BADGE ACTUALLY PERMITS, not what we would like it to do. Until
+  # 2026-10-12 this listed seven actions while the digital-worker badge granted
+  # the roles for one; ops/arch/agent_badge_check.py now refuses that gap.
+  #
+  # The six removed, and what would have to be true to restore each:
+  #   restartRouter, resumeSubscription  need service:write. Granting it is now
+  #     SAFER than it was — the autonomy gate refuses replaceSim to a machine
+  #     whatever roles it holds — but a realm role is also a master key to the
+  #     raw service API, which the ontology does not stand in front of. Finer
+  #     permissions (a service:restart scope) are the honest unlock, not a
+  #     wider badge.
+  #   replaceSim       needs service:write AND stays autonomy: low. A machine
+  #     must not swap a SIM alone; this is the fraud path.
+  #   cancelOrder      needs ordering:write; the badge reads only.
+  #   disputeBill      needs billing:write; the badge has read and admin.
+  #   configureProduct needs agent / catalog:read / ordering:write.
+  execute: [issueCredit]
 uses: []
 tools: [list_actions, explain, recommend, customer_context, available_upgrades]
 component: workforce
