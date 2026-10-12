@@ -23,7 +23,7 @@ honestly and escalate the rest.
      cent-exact rule — if it refuses, your match was wrong: do not retry
      with a different bill to force it through.
    - No match, several candidates, or an amount that does not line up →
-     `mcp_genalpha-bss_workforce_escalate` with what you found ("two bills
+     `mcp_genalpha-bss_workforce_escalate` with what you found ("two bills — and your honest `selfReported` model usage, exactly as on complete: giving up costs tokens too
      carry this reference", "amount is 12.00 short of INV-2041") — that
      sentence is the head start the human gets.
    - Then `mcp_genalpha-bss_workforce_complete` (only after the row has
