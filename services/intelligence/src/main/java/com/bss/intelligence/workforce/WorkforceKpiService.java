@@ -62,6 +62,19 @@ public class WorkforceKpiService {
         String tenant = tenantScope.currentTenantId();
         List<WorkforceTask> all = tasks.findTop200ByTenantIdOrderByLastUpdateDesc(tenant);
 
+        /* TRUE TOTALS, counted over every row rather than the 200-row window
+         * above. The window is ordered by lastUpdate and is right for "who is
+         * working now"; it is wrong for "how much has been done", because a
+         * task whose lease expires updates again and pushes an older row out.
+         * Counts taken from it move in BOTH directions — observed 12 Oct,
+         * completed went 48 -> 47 -> 49 while the ledger recorded 39 tasks. */
+        long totalCompleted = tasks.countByTenantIdAndStatus(tenant, WorkforceTask.COMPLETED);
+        long totalEscalated = tasks.countByTenantIdAndStatus(tenant, WorkforceTask.ESCALATED);
+        long costReported = tasks.countByTenantIdAndStatusAndSelfTokensIsNotNull(
+                tenant, WorkforceTask.COMPLETED)
+                + tasks.countByTenantIdAndStatusAndSelfTokensIsNotNull(
+                tenant, WorkforceTask.ESCALATED);
+
         long completed = 0;
         long escalated = 0;
         long handleSecondsSum = 0;
@@ -188,14 +201,16 @@ public class WorkforceKpiService {
         }
         return new WorkforceKpis(
                 OffsetDateTime.now().toString(),
-                completed,
-                escalated,
-                completed + escalated == 0 ? null
-                        : Math.round(100.0 * completed / (completed + escalated)) / 100.0,
+                totalCompleted,
+                totalEscalated,
+                totalCompleted + totalEscalated == 0 ? null
+                        : Math.round(100.0 * totalCompleted / (totalCompleted + totalEscalated)) / 100.0,
                 handleCount == 0 ? null : handleSecondsSum / handleCount,
                 reopen,
                 selfCostMicros,
                 "the workers' own word about their own models — not control-plane metered",
+                new WorkforceKpis.CostCoverage(costReported, totalCompleted + totalEscalated,
+                        "tasks that reported tokens, of all tasks — the cost above counts only these; a worker that reports nothing is not counted"),
                 saved,
                 kindCounts,
                 workers,
