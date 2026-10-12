@@ -57,6 +57,10 @@
       "type": "string",
       "description": "caller = the signed-in person's own token and rights; machine:<client> = a machine account"
     },
+    "badge": {
+      "type": "string",
+      "description": "the realm role bundle this agent's machine account is granted when it is hired (e.g. digital-worker). Required when runsAs is a machine AND the agent declares executable actions: ops/arch/agent_badge_check.py proves every declared action is actually permitted by this badge's roles, so the registry cannot claim powers the token does not carry."
+    },
     "autonomy": {
       "type": "string",
       "enum": [
@@ -95,7 +99,7 @@
       "items": {
         "type": "string"
       },
-      "description": "AI use cases it makes \u2014 every one governed, metered and audited by the intelligence component"
+      "description": "AI use cases it makes — every one governed, metered and audited by the intelligence component"
     },
     "tools": {
       "type": "array",
