@@ -10,18 +10,29 @@ public final class WorkforceRequests {
     private WorkforceRequests() {
     }
 
+    /**
+     * What a worker spent on this task, in its own words.
+     *
+     * Top-level on purpose: it used to live inside CompleteTaskRequest, so a
+     * worker could only declare its spend when it FINISHED something. The
+     * worker escalates most of what it touches — 34 of 39 tasks in the 12 Oct
+     * run — so the majority of spend had nowhere to be written down and the
+     * cost ledger read as nearly free. The worker was not being silent; there
+     * was no field to speak into.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SelfReport(Integer tokens, Long costMicros, String model) {
+    }
+
     /** POST /tasks/{id}/complete — optional outcome and the worker's self-report. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CompleteTaskRequest(String outcome, SelfReport selfReported) {
-
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record SelfReport(Integer tokens, Long costMicros, String model) {
-        }
     }
 
-    /** POST /tasks/{id}/escalate — a reason is required. */
+    /** POST /tasks/{id}/escalate — a reason is required; the self-report is not,
+     *  but giving up still costs tokens and the ledger should know. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record EscalateRequest(String reason) {
+    public record EscalateRequest(String reason, SelfReport selfReported) {
     }
 
     /** POST /approvals — the action filed as data; the body is the caller's

@@ -21,7 +21,7 @@ same queue as human CSRs, through the same systems, under the same rules.
      `mcp_genalpha-bss_workforce_complete` with a one-sentence outcome and
      your honest `selfReported` model usage.
    - If the fix needs money, a truck, or a decision you are not sure of:
-     `mcp_genalpha-bss_workforce_escalate` with a reason a human can act
+     `mcp_genalpha-bss_workforce_escalate` with a reason a human can act — and your honest `selfReported` model usage, exactly as on complete: giving up costs tokens too
      on. Escalating honestly beats resolving wrongly — escalations are
      counted, not punished.
    - If the remedy is a refund, credit or termination: NEVER do it.

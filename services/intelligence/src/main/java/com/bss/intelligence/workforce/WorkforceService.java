@@ -166,6 +166,10 @@ public class WorkforceService {
         }
         row.setStatus(WorkforceTask.ESCALATED);
         row.setOutcome(reason);
+        // GIVING UP STILL COSTS TOKENS. Until 12 Oct the escalate body had no
+        // field for a self-report at all, so the spend behind every escalation
+        // was unrecordable — and the worker escalates most of what it touches.
+        applySelfReport(row, body.selfReported());
         row.setCompletedAt(OffsetDateTime.now());
         row.setLastUpdate(OffsetDateTime.now());
         return view(tasks.save(row));
@@ -286,7 +290,7 @@ public class WorkforceService {
                 && row.getLeaseUntil().isAfter(OffsetDateTime.now());
     }
 
-    private void applySelfReport(WorkforceTask row, WorkforceRequests.CompleteTaskRequest.SelfReport self) {
+    private void applySelfReport(WorkforceTask row, WorkforceRequests.SelfReport self) {
         /* A WORKER THAT REPORTS NOTHING COSTS NOTHING, as far as the ledger can
          * tell. That is how two hours of real model work totalled five micros on
          * 12 Oct: one task in thirty-nine said anything, and the silence was

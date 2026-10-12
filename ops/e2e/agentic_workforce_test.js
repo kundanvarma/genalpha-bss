@@ -150,7 +150,12 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   if (cEarly.status !== 409) fail(`completing unapplied cash still parked must 409: ${cEarly.status}`);
   const esc = await call('POST',
     `/ai/v1/workforce/tasks/${encodeURIComponent(cTask.id)}/escalate`, worker,
-    { reason: 'No open bill matches reference or amount — needs a human AR decision.' });
+    { reason: 'No open bill matches reference or amount — needs a human AR decision.',
+      // GIVING UP COSTS TOKENS TOO. The escalate body had no field for this
+      // until 12 Oct, so the spend behind every escalation was unrecordable —
+      // and a worker escalates most of what it touches. The ledger read as
+      // nearly free because the majority of its work had nowhere to report.
+      selfReported: { tokens: 310, costMicros: 44, model: 'hermes-4-70b' } });
   if (esc.status !== 200) fail(`escalate: ${esc.status} ${esc.text.slice(0, 200)}`);
   const ledger = (await call('GET', '/ai/v1/workforce/ledger', worker)).body;
   const lDone = ledger.find((t) => t.id === tTask.id);
@@ -159,6 +164,11 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   if (!lEsc || lEsc.status !== 'escalated') fail('the escalated task is not on the ledger');
   if (!lDone.selfReported || lDone.selfReported.model !== 'hermes-4-70b') {
     fail('the self-reported model usage did not reach the ledger');
+  }
+  if (!lEsc.selfReported || lEsc.selfReported.costMicros !== 44) {
+    fail('an ESCALATION reported its cost and the ledger lost it — giving up is not free,'
+      + ' and a cost figure that only counts successes understates by however much the'
+      + ' worker gives up (34 of 39 tasks in the 12 Oct run)');
   }
   console.log('OK HONEST ESCALATION: the cash with no matching bill could not be force-completed'
     + ' (409) — the worker escalated with a reason, and the shift ledger now shows one completed'
