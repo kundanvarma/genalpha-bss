@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import static com.bss.intelligence.api.Wire.idOf;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The digital workforce: a task queue DERIVED live from the backlogs that
@@ -33,6 +35,8 @@ import static com.bss.intelligence.api.Wire.idOf;
  */
 @Service
 public class WorkforceService {
+
+    private static final Logger log = LoggerFactory.getLogger(WorkforceService.class);
 
     public static final String KIND_TICKET = "ticket";
     public static final String KIND_CASH = "unapplied-cash";
@@ -283,6 +287,17 @@ public class WorkforceService {
     }
 
     private void applySelfReport(WorkforceTask row, WorkforceRequests.CompleteTaskRequest.SelfReport self) {
+        /* A WORKER THAT REPORTS NOTHING COSTS NOTHING, as far as the ledger can
+         * tell. That is how two hours of real model work totalled five micros on
+         * 12 Oct: one task in thirty-nine said anything, and the silence was
+         * indistinguishable from free. The spend is real either way — the worker
+         * calls its provider directly, where no budget of ours can see it — so
+         * the only honest response is to make the silence audible. */
+        if (self == null || (self.tokens() == null && self.costMicros() == null)) {
+            log.warn("workforce task {} ({}) closed by {} with NO self-report — its model spend is"
+                            + " invisible to the ledger and to every figure derived from it",
+                    row.getId(), row.getKind(), row.getClaimedBy());
+        }
         if (self != null) {
             if (self.tokens() != null) {
                 row.setSelfTokens(self.tokens());

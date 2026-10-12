@@ -24,6 +24,7 @@ public record WorkforceKpis(
         Reopen reopen,
         long selfReportedCostMicros,
         String selfReportedCostLabel,
+        CostCoverage costCoverage,
         HumanMinutesSaved humanMinutesSaved,
         Map<String, KindCount> byKind,
         List<WorkerRow> workers,
@@ -31,6 +32,21 @@ public record WorkforceKpis(
         long workingNow,
         Approvals approvals,
         Staffing staffing) {
+
+    /**
+     * HOW MUCH OF THE COST FIGURE IS ACTUALLY MEASURED.
+     *
+     * The cost above is the worker's own word, posted on completion, and a
+     * worker that says nothing is simply not counted. On 12 Oct one task in
+     * thirty-nine reported anything at all, so the total read $0.000005 for two
+     * hours of real model work. The number was not wrong so much as nearly
+     * empty, and nothing on the payload said so.
+     *
+     * A reader can now see the denominator and judge the figure themselves.
+     */
+    @JsonPropertyOrder({"reported", "ofTasks", "definition"})
+    public record CostCoverage(long reported, long ofTasks, String definition) {
+    }
 
     /** The honesty metric: completed ticket tasks whose ticket is open again. */
     @JsonPropertyOrder({"checked", "reopened", "rate", "definition"})
