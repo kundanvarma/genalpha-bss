@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { aiTicketReply, workTicket } from '../api.js';
+import { aiTicketReply, judgeIncident, workTicket } from '../api.js';
 import { hasRole } from '../auth.js';
 
 const NEXT = {
@@ -8,10 +8,26 @@ const NEXT = {
   resolved: ['closed', 'inProgress'],
 };
 
-export default function TicketCard({ ticket, onChanged }) {
+export default function TicketCard({ ticket, onChanged, trace }) {
   const [note, setNote] = useState('');
   const [error, setError] = useState(null);
   const [drafting, setDrafting] = useState(false);
+  const [judged, setJudged] = useState(null);
+
+  /* WAS THE MACHINE'S DIAGNOSIS ANY GOOD? The agent already wrote it onto this
+   * ticket as a note, so the answer is on the screen in front of whoever is
+   * reading. Until now there was nowhere to say so — and three "useful"
+   * verdicts on one signature are what draft a runbook that makes every later
+   * diagnosis of it deterministic and free. (#285) */
+  async function judge(useful) {
+    try {
+      setError(null);
+      await judgeIncident(trace.id, useful, null);
+      setJudged(useful ? 'useful' : 'not-useful'); // the store's spelling, so one branch covers both
+    } catch (e) {
+      setError('Verdict: ' + e.message);
+    }
+  }
 
   async function change(status) {
     try {
@@ -60,6 +76,21 @@ export default function TicketCard({ ticket, onChanged }) {
       {(ticket.note || []).map((n, i) => (
         <p className="dim small ticketnote" key={i}>“{n.text}” — {n.author}</p>
       ))}
+      {trace && hasRole('ai:use') && (
+        <div className="stack" data-testid="diagnosis-verdict">
+          {judged || trace.verdict !== 'pending' ? (
+            <span className="dim small">{(judged || trace.verdict) === 'useful'
+              ? 'Diagnosis marked useful — it counts toward a runbook for this kind of fault.'
+              : 'Diagnosis marked not useful — it will not be reused.'}</span>
+          ) : (
+            <>
+              <span className="dim small">Did the agent’s diagnosis help?</span>
+              <button className="ghost" data-testid="diagnosis-useful" onClick={() => judge(true)}>Useful</button>
+              <button className="ghost" data-testid="diagnosis-not-useful" onClick={() => judge(false)}>Not useful</button>
+            </>
+          )}
+        </div>
+      )}
       {error && <p className="error small">{error}</p>}
       {NEXT[ticket.status] && (
         <div className="stack">
