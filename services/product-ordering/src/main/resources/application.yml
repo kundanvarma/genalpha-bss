@@ -119,3 +119,13 @@ bss:
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8089}
     risk-base-url: ${RISK_BASE_URL:http://localhost:8109}
+
+# LOG INJECTION, CLOSED AT THE SINK. A CR or LF inside a logged VALUE forges a
+# log line, and the fleet ships logs to Loki/Grafana where a forged line is a
+# forged record someone may later read as evidence. Stripping it here rather
+# than at each call site means a new log statement cannot reopen the hole by
+# forgetting a helper. Only %m is wrapped: stack traces need their newlines,
+# and those are ours, not the caller's.
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %replace(%m){'[\\r\\n]+', ' '}%n%wEx"
