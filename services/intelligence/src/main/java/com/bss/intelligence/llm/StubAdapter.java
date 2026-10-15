@@ -1,5 +1,7 @@
 package com.bss.intelligence.llm;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +14,20 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "bss.intelligence.provider", havingValue = "stub", matchIfMissing = true)
 public class StubAdapter implements LlmAdapter {
+
+    /* A PRICE-SHAPED TOKEN, FOUND RATHER THAN MATCHED AROUND.
+     *
+     * These used to be written as `.*(\\d+[.,]\\d{2}).*` and `.*Brief:\\s*`, which
+     * ask the engine to match the WHOLE prompt and then backtrack to find the
+     * interesting part. On a long prompt that is polynomial, and the prompt is
+     * caller-supplied: three open CodeQL alerts (java/polynomial-redos), and the
+     * same shape that already cost this fleet a 10.8s and an 18.4s hang in the
+     * PII paths. Matcher.find() looks for the token directly, and indexOf does
+     * the rest, so there is nothing to backtrack over. */
+    private static final Pattern MONEY = Pattern.compile("\\d+[.,]\\d{2}");
+
+    /** The looser one: a number that MAY carry decimals ("12", "12,5", "12.50"). */
+    private static final Pattern AMOUNT = Pattern.compile("\\d+(?:[.,]\\d{1,2})?");
 
     @Override
     public String complete(String system, String user) {
@@ -156,7 +172,11 @@ public class StubAdapter implements LlmAdapter {
                     + " will keep you posted here. (Drafted by the stub provider; configure"
                     + " a real model for tailored replies.)";
         }
-        String brief = user.replaceAll("(?s).*Brief:\\s*", "").replaceAll("(?s)\\n.*", "").trim();
+        int at = user.lastIndexOf("Brief:");
+        String brief = at < 0 ? user : user.substring(at + "Brief:".length());
+        int eol = brief.indexOf('\n');
+        String briefLine = (eol < 0 ? brief : brief.substring(0, eol)).strip();
+        brief = briefLine;
         String subject = brief.isEmpty() ? "A little something for you"
                 : Character.toUpperCase(brief.charAt(0)) + brief.substring(1);
         boolean promo = user.contains("promotion code");
@@ -219,7 +239,7 @@ public class StubAdapter implements LlmAdapter {
         boolean asksStreaming = !asksWatch
                 && (lastOwner.contains("streaming") || convo.contains("streaming"));
         boolean saidMonthly = lastOwner.contains("/month") || lastOwner.contains("per month")
-                || lastOwner.contains("monthly") || lastOwner.matches("(?s).*\\d+[.,]\\d{2}.*");
+                || lastOwner.contains("monthly") || MONEY.matcher(lastOwner).find();
         if (asksStreaming && !saidMonthly) {
             return "{\"kind\":\"question\",\"message\":\"A streaming service fits the"
                     + " 'Partner services' category — the orchestrator will mint a partner"
@@ -227,7 +247,8 @@ public class StubAdapter implements LlmAdapter {
                     + " What should it cost per month?\",\"proposal\":null}";
         }
         if (asksStreaming && !asksWatch) {
-            String price = convo.replaceAll("(?s).*?(\\d+[.,]\\d{2}).*", "$1").replace(',', '.');
+            Matcher money = MONEY.matcher(convo);
+            String price = (money.find() ? money.group() : convo).replace(',', '.');
             if (price.length() > 8) {
                 price = "9.99";
             }
@@ -247,7 +268,8 @@ public class StubAdapter implements LlmAdapter {
         }
         if (lastOwner.contains("social") || lastOwner.contains("zero-rated") || lastOwner.contains("zero rated")
                 || lastOwner.contains("whatsapp") || lastOwner.contains("tiktok")) {
-            String price = lastOwner.replaceAll("(?s).*?(\\d+(?:[.,]\\d{1,2})?).*", "$1").replace(',', '.');
+            Matcher amount = AMOUNT.matcher(lastOwner);
+            String price = (amount.find() ? amount.group() : "").replace(',', '.');
             if (price.length() > 8 || price.isEmpty() || !Character.isDigit(price.charAt(0))) {
                 price = "12";
             }
