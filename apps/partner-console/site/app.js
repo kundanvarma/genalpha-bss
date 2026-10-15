@@ -15,10 +15,20 @@ async function json(res) {
 const el = (id) => document.getElementById(id);
 const eur = (v) => (v == null ? '—' : Number(v).toFixed(2) + ' EUR');
 
-// Escape before any value reaches innerHTML. Owner names, layers and error text
-// are data, never markup: an owner named `<img src=x onerror=…>` must print, not run.
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) =>
-  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Build the DOM as NODES, never as markup. This file used to assemble strings and
+// assign them to innerHTML, with every value wrapped in an esc() helper. That was
+// correct — and correct by vigilance, which is the kind that lapses the day someone
+// adds a field and forgets the wrapper. An owner named `<img src=x onerror=…>` now
+// cannot be markup, because nothing here parses markup: textContent is text by
+// construction. The esc() helper is gone with the last innerHTML that needed it.
+const node = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+};
+const put = (box, ...kids) => box.replaceChildren(...kids);
+const row = (...kids) => { const d = node('div', 'row'); d.append(...kids); return d; };
 
 async function main() {
   // OIDC redirect return
@@ -55,8 +65,8 @@ function claims() {
 async function checkAddress() {
   const pc = el('pc').value.trim();
   const box = el('options');
-  if (!pc) { box.innerHTML = '<div class="dim">Enter a postcode.</div>'; return; }
-  box.innerHTML = '<div class="dim">Checking&hellip;</div>';
+  if (!pc) { put(box, node('div', 'dim', 'Enter a postcode.')); return; }
+  put(box, node('div', 'dim', 'Checking…'));
   try {
     const r = await fetch(`${SQ}/queryAccessOptions`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -65,16 +75,16 @@ async function checkAddress() {
     const d = await json(r);
     const opts = d.accessOption || [];
     if (!opts.length) {
-      box.innerHTML = `<div class="dim">No open-access owner serves ${esc(pc)} — this would be our own network.</div>`;
+      put(box, node('div', 'dim', `No open-access owner serves ${pc} — this would be our own network.`));
       return;
     }
-    box.innerHTML = opts.map((o) => `<div class="row">
-      <span class="code">${esc(o.accessOwner)}</span>
-      <span class="layer">${esc(o.accessLayer || '')}</span>
-      <span class="dim">fibre</span>
-      <span class="end">up to ${esc(o.maxDownMbps)} Mbit/s</span></div>`).join('');
+    put(box, ...opts.map((o) => row(
+      node('span', 'code', o.accessOwner),
+      node('span', 'layer', o.accessLayer || ''),
+      node('span', 'dim', 'fibre'),
+      node('span', 'end', `up to ${o.maxDownMbps} Mbit/s`))));
   } catch (e) {
-    box.innerHTML = `<div class="err">Could not check: ${esc(e.message)}</div>`;
+    put(box, node('div', 'err', `Could not check: ${e.message}`));
   }
 }
 
@@ -84,7 +94,7 @@ async function loadCatalog() {
   try {
     const offs = await json(await fetch(`${CAT}/productOffering?limit=100`));
     const wholesale = offs.filter((o) => ((o.category || [{}])[0] || {}).name === 'Wholesale access');
-    if (!wholesale.length) { box.innerHTML = '<div class="dim">No access products published.</div>'; return; }
+    if (!wholesale.length) { put(box, node('div', 'dim', 'No access products published.')); return; }
     const rows = await Promise.all(wholesale.map(async (o) => {
       let layer = '', bw = '';
       try {
@@ -99,12 +109,14 @@ async function loadCatalog() {
         const p = (o.productOfferingPrice || [])[0];
         if (p) { const pr = await json(await fetch(`${CAT}/productOfferingPrice/${p.id}`)); price = pr.price?.value; }
       } catch {}
-      return `<div class="row"><span class="code">${esc(o.name)}</span>
-        <span class="layer">${esc(layer)}</span><span class="dim">up to ${esc(bw)} Mbit/s</span>
-        <span class="end">${esc(eur(price))}/line/mo</span></div>`;
+      return row(
+        node('span', 'code', o.name),
+        node('span', 'layer', layer),
+        node('span', 'dim', `up to ${bw} Mbit/s`),
+        node('span', 'end', `${eur(price)}/line/mo`));
     }));
-    box.innerHTML = rows.join('');
-  } catch (e) { box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+    put(box, ...rows);
+  } catch (e) { put(box, node('div', 'err', e.message)); }
 }
 
 // --- my access orders (what I have bought) ---
@@ -112,14 +124,19 @@ async function loadOrders() {
   const box = el('orders');
   try {
     const rows = await json(await authFetch(`${SO}/wholesaleAccessOrder`));
-    if (!rows.length) { box.innerHTML = '<div class="dim">No access ordered yet.</div>'; return; }
-    box.innerHTML = rows.slice(-20).reverse().map((w) => `<div class="row">
-      <span class="code">${esc(w.accessOwner)}</span>
-      <span class="layer">${esc(w.accessLayer || '')}</span>
-      <span class="dim">${esc(w.bandwidthMbps || '')} Mbit/s${w.postCode ? ' · ' + esc(w.postCode) : ''}</span>
-      <span class="end"><span class="state ${esc(w.state)}">${esc(w.state)}</span></span></div>`).join('');
+    if (!rows.length) { put(box, node('div', 'dim', 'No access ordered yet.')); return; }
+    put(box, ...rows.slice(-20).reverse().map((w) => {
+      const end = node('span', 'end');
+      end.append(node('span', `state ${w.state}`, w.state));
+      return row(
+        node('span', 'code', w.accessOwner),
+        node('span', 'layer', w.accessLayer || ''),
+        node('span', 'dim',
+          `${w.bandwidthMbps || ''} Mbit/s${w.postCode ? ' · ' + w.postCode : ''}`),
+        end);
+    }));
   } catch (e) {
-    box.innerHTML = `<div class="dim">Access orders need a staff/service:read sign-in (${esc(e.message)}).</div>`;
+    put(box, node('div', 'dim', `Access orders need a staff/service:read sign-in (${e.message}).`));
   }
 }
 
@@ -129,17 +146,21 @@ async function loadSettlement() {
   try {
     const s = await json(await authFetch(`${SO}/wholesaleSettlement`));
     const owners = s.owner || [];
-    if (!owners.length) { box.innerHTML = '<div class="dim">Nothing owed yet.</div>'; return; }
-    box.innerHTML =
-      `<div class="money"><span>Owed this month <b>${esc(eur(s.totalMonthlyOwed))}</b></span>
-       <span>Retail margin <b>${esc(eur(s.totalMonthlyMargin))}</b></span></div>` +
-      owners.map((o) => `<div class="row"><span class="code">${esc(o.accessOwner)}</span>
-        <span class="layer">${esc(o.accessLayer || '')}</span>
-        <span class="dim">${esc(o.activeLines)} line(s) × ${esc(eur(o.ratePerLine))}</span>
-        <span class="end">${esc(eur(o.monthlyOwed))}${o.marginPerLine != null
-          ? ` · margin ${esc(eur(o.marginPerLine))}/line` : ''}</span></div>`).join('');
+    if (!owners.length) { put(box, node('div', 'dim', 'Nothing owed yet.')); return; }
+    const money = node('div', 'money');
+    const owed = node('span');
+    owed.append('Owed this month ', node('b', null, eur(s.totalMonthlyOwed)));
+    const margin = node('span');
+    margin.append('Retail margin ', node('b', null, eur(s.totalMonthlyMargin)));
+    money.append(owed, margin);
+    put(box, money, ...owners.map((o) => row(
+      node('span', 'code', o.accessOwner),
+      node('span', 'layer', o.accessLayer || ''),
+      node('span', 'dim', `${o.activeLines} line(s) × ${eur(o.ratePerLine)}`),
+      node('span', 'end', eur(o.monthlyOwed)
+        + (o.marginPerLine != null ? ` · margin ${eur(o.marginPerLine)}/line` : '')))));
   } catch (e) {
-    box.innerHTML = `<div class="dim">Settlement needs a staff/service:read sign-in (${esc(e.message)}).</div>`;
+    put(box, node('div', 'dim', `Settlement needs a staff/service:read sign-in (${e.message}).`));
   }
 }
 
