@@ -57,7 +57,15 @@ async function token(ctx, client, user, pass) {
 
   /* ---------- the delivered message carries BOTH the name and the order number ---------- */
   const custTok = await token(ctx, 'bss-biz', email, login.temporaryPassword);
-  if (!custTok) fail('customer login failed — no token (temporaryPassword=' + login.temporaryPassword + ')');
+  // The failure message used to print the temporary password itself. It is a
+  // throwaway for a throwaway user, but CI logs are kept and read by people who
+  // were not here, and "the test prints passwords" is true however short-lived
+  // the password is. Say whether one arrived, which is the thing worth knowing.
+  if (!custTok) {
+    fail('customer login failed — no token (onboarding '
+       + (login.temporaryPassword ? 'did return a temporary password' : 'returned NO temporary password')
+       + ')');
+  }
   let msg = null;
   for (let i = 0; i < 30; i++) {
     const res = await ctx.get(INBOX, { headers: H(custTok) });
