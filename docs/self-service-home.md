@@ -133,3 +133,58 @@ customer sees no attention items and the zones in order; an alarm on her line
 becomes the first thing on Home in her words; a paused line is an attention item
 and Resume works from Home; the shop hero height; Support's guided steps with the
 line check. Every suite that drove the shop by its old labels was moved with it.
+
+## Saying only what was checked (2026-10-16) — #289
+
+Home reads sixteen things at once and stays fail-soft, so a bad day never
+blanks it. But every failed read used to become an empty answer, and Home built
+its sentences from those. With billing stopped, Paula's Home said **"Everything
+looks good"**. It also said it a second time in a quieter way: the health line
+waited only for the ontology, so for the seconds Home's own reads were still
+in flight it made the all-clear about facts it had not received yet.
+
+Now:
+
+- **Home remembers which reads failed** (`src/reach.js`) and makes no all-clear
+  about them: *"We could not check your bills and your payment status just now
+  — so we cannot say everything is fine. Try again in a minute."* The facts an
+  all-clear rests on are the customer's plans, services, bills, payment status,
+  usage and orders; the extras (offers, loyalty, referrals) may fail quietly.
+- **No all-clear before the page has heard back.** The health line says
+  "Reading your services…" until Home's own reads answer, not only the ontology.
+- **"Nothing active yet"** and **"No data allowance on this account"** are said
+  only when service inventory and usage actually answered; otherwise Home says
+  it could not load them.
+- **Bills: the payment status is "unknown", not "current".** A collections read
+  that failed used to return `null`, which is the value for an account in good
+  standing — a customer in collections saw no warning while billing was down.
+  It throws now, and the page says it cannot tell whether anything is overdue.
+
+The architecture ratchet's rule 8 now also counts the helper spelling
+`p.catch(() => fallback)` — the one Home used. It took the mobile app's
+`soft` helper into the count (1 → 2: the code did not change, the rule got
+sharper). Fleet-wide the count went 115 → 113.
+
+### Proof
+
+`ops/e2e/shop_unreachable_test.js` signs in as Paula, stops `bss-billing`, and
+asserts Home makes no all-clear and the Bills page does not say "No bills yet";
+restarts it and asserts the notice clears; then answers ONLY the collections
+route with a 503 (the same component serves the bills, so a stopped container
+cannot separate them) and asserts the bills render with the payment status
+marked unknown. Run against `main`'s storefront it fails: Home says
+"Everything looks good" with billing down. `shop_home_test` and
+`home_attention_test` stay green.
+
+### Honest limits
+
+- **A stopped component costs about 30 seconds** of "Reading your services…"
+  on Home: the browser's billing reads wait out the gateway's timeout before
+  they fail. Honest, but slow; a faster failure belongs at the gateway.
+- **The Bills page itself** still shows the raw error text when the bills
+  cannot be read — honest, not yet friendly.
+- **Services, Shop, Family, Offering, Cart** keep 60-odd swallowed reads. Most
+  are extras (prices, also-bought, specs), but the Services page's usage and
+  service rows go quiet on failure rather than saying so. The count stops new
+  ones; it does not judge the old.
+- **The mobile app** has the same `soft` helper Home had, untouched.

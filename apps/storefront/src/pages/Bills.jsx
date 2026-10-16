@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n.js';
 import { CASE_CONSEQUENCE, Situation } from './bills/Situation.jsx';
-
 import { billRates, createPayment, disputeBill, myBills, myCollectionCase, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, promiseToPay, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
 
 
@@ -22,7 +21,7 @@ export default function Bills() {
   const load = () => {
     myBills().then(setBills).catch((e) => setError(e.message));
     myCreditNotes().then(setCreditNotes).catch(() => {});
-    myCollectionCase().then(setCcase).catch(() => {});
+    myCollectionCase().then(setCcase).catch(() => setCcase({ unknown: true })); // not "current" — unknown (#289)
   };
   useEffect(() => { load(); }, []);
   // Hooks must run unconditionally, BEFORE the early returns below.
@@ -116,6 +115,7 @@ export default function Bills() {
 
   return (
     <>
+      {ccase?.unknown && <p className="callout warn" data-testid="collections-unknown">{t('We could not check your payment status just now, so this page cannot say whether anything is overdue. Try again in a minute.')}</p>}
       {caseOpen && (
         <div className="collectionsbanner" data-testid="collections-banner">
           <div className="row" style={{ border: 'none', padding: 0 }}>

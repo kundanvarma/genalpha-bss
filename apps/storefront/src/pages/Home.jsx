@@ -8,6 +8,8 @@ import { priceIndex, myProducts, myActiveServices, myUsage, myBills, myOrders, m
 import { LineDoctor } from './Services.jsx';
 import { OfferingCard } from './Shop.jsx';
 import RouterPanel from './RouterPanel.jsx';
+import Meter from './home/Meter.jsx';
+import { tracker, unchecked, listed } from '../reach.js';
 
 /* Home — the customer's first screen answers two questions: is everything
  * okay, and what should I do next. Exception-first: the attention zone is empty
@@ -34,21 +36,11 @@ const OPEN_BILL = ['new', 'validated', 'sent', 'partiallyPaid'];
 const LIVE_ORDER = (o) => !['completed', 'cancelled', 'rejected', 'failed'].includes(o.state);
 const partOfDay = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
 
-function Meter({ label, used, allowed, units, warn }) {
-  const pct = allowed ? Math.min(100, (used / allowed) * 100) : 0;
-  return (
-    <div className="usage-meter" data-testid="home-meter">
-      <div className="usage-meter-head"><span>{label}</span><span className={warn ? 'error' : 'dim'}>{Math.max(0, allowed - used)} {units} {t('left')} · {used} / {allowed}</span></div>
-      <div className="usage-meter-track"><div className={`usage-meter-fill${warn ? ' over' : ''}`} style={{ width: `${pct}%` }} /></div>
-    </div>
-  );
-}
-
 export default function Home() {
   const claims = tokenClaims();
   const me = claims.sub;
   const [loaded, setLoaded] = useState(false); // the record has answered at least once — no 'nothing active' before then
-  const [d, setD] = useState({ products: [], services: [], usage: [], agreements: [], bills: [], orders: [], tickets: [], appointments: [], notifications: [], ccase: null, offerings: {}, personal: null, recIds: [], program: null, loyalty: null, spend: [] });
+  const [d, setD] = useState({ products: [], services: [], usage: [], agreements: [], bills: [], orders: [], tickets: [], appointments: [], notifications: [], ccase: null, offerings: {}, personal: null, recIds: [], program: null, loyalty: null, spend: [], missing: [] });
   const [ctx, setCtx] = useState(null); // the ontology's reading; null = reading, {} = unavailable
   const [busy, setBusy] = useState(false);
   const [sims, setSims] = useState({}); // serviceId -> masked ICCID, one read per mobile card
@@ -56,18 +48,18 @@ export default function Home() {
   const [error, setError] = useState(null);
 
   const load = () => {
-    const soft = (p, fallback) => p.catch(() => fallback);
+    const { soft, missing } = tracker(); // fail-soft, but it remembers WHAT failed (#289)
     Promise.all([
-      soft(myProducts(), []), soft(myActiveServices(), []), soft(myUsage(), []), soft(myBills(), []), soft(myOrders(), []),
-      soft(myTickets(), []), soft(myAppointments(), []), soft(myNotifications(), []), soft(myCollectionCase(), null),
-      soft(listOfferings(), []), soft(forYou(), null), soft(myRecommendations(), []), soft(loyaltyProgram(), null), soft(myLoyalty(), null), soft(mySpendPolicy(), []), soft(myAgreements(), []),
+      soft('products', myProducts(), []), soft('services', myActiveServices(), []), soft('usage', myUsage(), []), soft('bills', myBills(), []), soft('orders', myOrders(), []),
+      soft('tickets', myTickets(), []), soft('appointments', myAppointments(), []), soft('notifications', myNotifications(), []), soft('ccase', myCollectionCase(), null),
+      soft('offerings', listOfferings(), []), soft('forYou', forYou(), null), soft('recs', myRecommendations(), []), soft('program', loyaltyProgram(), null), soft('loyalty', myLoyalty(), null), soft('spend', mySpendPolicy(), []), soft('agreements', myAgreements(), []),
     ]).then(([products, services, usage, bills, orders, tickets, appointments, notifications, ccase, offerings, personal, recs, program, loyalty, spend, agreements]) => {
       const index = Object.fromEntries((Array.isArray(offerings) ? offerings : []).map((o) => [o.id, o]));
       const recIds = personal && personal.items?.length ? personal.items.map((i) => i.id) : (recs[0]?.recommendationItem?.map((i) => i.offering.id) || []);
       // the usage report wraps its meters in `bucket`
       const buckets = Array.isArray(usage) ? usage : (usage && Array.isArray(usage.bucket) ? usage.bucket : []);
       setLoaded(true);
-      setD({ products, services: Array.isArray(services) ? services : [], usage: buckets, agreements: Array.isArray(agreements) ? agreements : [], bills, orders, tickets: Array.isArray(tickets) ? tickets : [], appointments: Array.isArray(appointments) ? appointments : [], notifications: Array.isArray(notifications) ? notifications : [], ccase, offerings: index, personal, recIds, program, loyalty, spend: Array.isArray(spend) ? spend : [] });
+      setD({ products, services: Array.isArray(services) ? services : [], usage: buckets, agreements: Array.isArray(agreements) ? agreements : [], bills, orders, tickets: Array.isArray(tickets) ? tickets : [], appointments: Array.isArray(appointments) ? appointments : [], notifications: Array.isArray(notifications) ? notifications : [], ccase, offerings: index, personal, recIds, program, loyalty, spend: Array.isArray(spend) ? spend : [], missing });
     });
     setCtx(null);
     myHomeContext(me).then((c) => setCtx(c || {})).catch(() => setCtx({}));
@@ -124,6 +116,7 @@ export default function Home() {
   const more = attention.slice(3);
   const healthy = !attention.some((a) => a.level !== 'info');
   const critical = attention.some((a) => a.level === 'danger');
+  const unknown = unchecked(d.missing); // an all-clear is only said about what was actually checked
 
   const activity = useMemo(() => {
     const ev = [];
@@ -193,9 +186,10 @@ export default function Home() {
     <div className="home" data-testid="home">
       <section className="hero home-hero" data-testid="home-greeting">
         <h1>{t(partOfDay())}{given ? `, ${given}` : ''}</h1>
-        <p data-testid="home-health" className={critical ? 'error' : !healthy ? 'warn' : 'ok'}>
-          {ctx === null && !attention.length ? t('Reading your services…')
+        <p data-testid="home-health" className={critical ? 'error' : !healthy || unknown.length ? 'warn' : 'ok'}>
+          {(ctx === null || !loaded) && !attention.length ? t('Reading your services…')
             : !healthy ? `${attention.filter((a) => a.level !== 'info').length} ${attention.filter((a) => a.level !== 'info').length === 1 ? t('thing needs your attention') : t('things need your attention')}`
+            : unknown.length ? `${t('We could not check')} ${listed(unknown, t('and'))} ${t('just now — so we cannot say everything is fine. Try again in a minute.')}`
             : attention.length ? `${t('Everything is working')} · ${attention.length} ${attention.length === 1 ? t('update') : t('updates')}`
             : t('Everything looks good')}
         </p>
@@ -220,7 +214,8 @@ export default function Home() {
       <section data-testid="home-services">
         <h2>{t('My services')} <Link className="dim small" to="/services">{active.length > 6 ? `${t('All')} ${active.length} →` : `${t('Manage')} →`}</Link></h2>
         {!loaded && !cards.length && <p className="dim small">{t('Reading your services…')}</p>}
-        {loaded && !cards.length && <p className="dim">{t('Nothing active yet — your plan appears here once an order completes.')} <Link to="/shop">{t('Shop')} →</Link></p>}
+        {loaded && !cards.length && (d.missing.includes('services') ? <p className="callout warn" data-testid="home-services-unknown">{t('We could not load your services just now. Try again in a minute.')}</p>
+          : <p className="dim">{t('Nothing active yet — your plan appears here once an order completes.')} <Link to="/shop">{t('Shop')} →</Link></p>)}
         <div className="cards services">
           {cards.map((sv) => {
             const kind = kindOf(sv);
@@ -270,7 +265,7 @@ export default function Home() {
           </div>
           <div className="card">
             <h3>{t('Data this month')}</h3>
-            {dataBucket ? <Meter label={t('Mobile data')} used={dataUsed} allowed={dataAllowed} units={dataBucket.units} warn={nearLimit} /> : <p className="dim small">{t('No data allowance on this account.')}</p>}
+            {dataBucket ? <Meter label={t('Mobile data')} used={dataUsed} allowed={dataAllowed} units={dataBucket.units} warn={nearLimit} /> : d.missing.includes('usage') ? <p className="error small" data-testid="home-usage-unknown">{t('We could not read your usage just now.')}</p> : <p className="dim small">{t('No data allowance on this account.')}</p>}
             {roaming && roaming.limit && <p className="dim small">{t('Roaming')}: {Number(roaming.accrued?.value || 0)} / {roaming.limit.value} {roaming.limit.unit}</p>}
             {d.program && d.loyalty && <p className="dim small">{t('Points')}: <b>{d.loyalty.balance}</b></p>}
           </div>

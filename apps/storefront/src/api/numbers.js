@@ -46,8 +46,7 @@ export async function requestPortIn(partyId, number, currentProvider, portDate =
   return created;
 }
 
+/** Throws when service inventory does not answer — [] would read as "you have no services" (#289). */
 export async function myActiveServices() {
-  try {
-    return await json(await authFetch(`${SERVICE_INV}/service`));
-  } catch { return []; }
+  return json(await authFetch(`${SERVICE_INV}/service`));
 }

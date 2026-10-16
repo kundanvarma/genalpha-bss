@@ -155,7 +155,9 @@ def undeclared_jsx(src):
 # not a verdict on each — a NEW one has to be argued for. The page-side remedy is
 # apps/csr-console/src/pages/customer/reachable.jsx: throw, and say "could not reach".
 SWALLOW_BLOCK = re.compile(r'catch\s*(?:\([^)]*\))?\s*\{\s*return\s*(?:\[\]|null|\{\}|undefined)?\s*;?\s*\}')
-SWALLOW_CHAIN = re.compile(r'\.catch\(\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*(?:\[\]|null|\{\}|\(\s*\{\s*\}\s*\)|undefined)\s*\)')
+# the value may be a NAME too — `p.catch(() => fallback)` is the helper form, and the
+# one Home used to tell a customer "Everything looks good" while billing was down
+SWALLOW_CHAIN = re.compile(r'\.catch\(\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*(?:\[\]|\{\}|\(\s*\{\s*\}\s*\)|[A-Za-z_$][\w$]*)\s*\)')
 def swallowed(src):
     src = blank(src)   # a comment that QUOTES the shape (this file's, reachable.jsx's) is not one
     return len(SWALLOW_BLOCK.findall(src)) + len(SWALLOW_CHAIN.findall(src))
