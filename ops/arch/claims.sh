@@ -245,6 +245,20 @@ elif [ "$drift_rc" -ne 0 ]; then
   printf '%s\n' "$drift_out" | sed 's/^/         /' >&2
   fail "the SecurityConfig copies have drifted" \
        "a new anonymous path belongs in ops/security/public-paths.txt, in the same commit"
+else
+  # The prose quotes the run's own numbers ("39 SecurityConfig copies", "253
+  # declared anonymous paths"); a path added to public-paths.txt left CLAUDE.md
+  # saying 253 against a real 254, and nothing noticed. Read them off this run.
+  copies=$(printf '%s' "$drift_out" | grep -oE '[0-9]+ SecurityConfig copies' | grep -oE '^[0-9]+')
+  paths=$(printf '%s' "$drift_out" | grep -oE '[0-9]+ declared anonymous paths' | grep -oE '^[0-9]+')
+  [ -n "$copies" ] && [ -n "$paths" ] || fail "the drift check's counts could not be read" \
+      "its clean line no longer says 'N SecurityConfig copies' and 'M declared anonymous paths'"
+  for said in $(grep -rhoE '[0-9]+ `?SecurityConfig`? copies' README.md CLAUDE.md docs/*.md 2>/dev/null | grep -oE '^[0-9]+' | sort -u); do
+    [ "$said" = "$copies" ] || fail "the prose says $said SecurityConfig copies" "the drift check counts $copies"
+  done
+  for said in $(grep -rhoE '[0-9]+ declared anonymous paths' README.md CLAUDE.md docs/*.md 2>/dev/null | grep -oE '^[0-9]+' | sort -u); do
+    [ "$said" = "$paths" ] || fail "the prose says $said declared anonymous paths" "the drift check counts $paths (ops/security/public-paths.txt)"
+  done
 fi
 rm -f "$drift_err"
 # ------------------------------------------------------- jackson3-deprecated ----

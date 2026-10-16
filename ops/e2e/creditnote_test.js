@@ -201,6 +201,12 @@ const seqOf = (no) => Number(String(no).replace('CN-', ''));
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
   await page.locator('.nav >> text=Billing').click();
+  // more than two notes on a bill collapse into one summary (repeated runs mint them on
+  // kai's bills): open it — every note is still its own chip with its own PDF behind it
+  await page.locator('[data-testid="credit-note-chip"], [data-testid="credit-notes-summary"]').first().waitFor({ timeout: 15000 });
+  if (!(await page.locator('[data-testid="credit-note-chip"]').first().isVisible())) {
+    await page.locator('[data-testid="credit-notes-summary"]').first().click();
+  }
   await page.locator('[data-testid="credit-note-chip"]').first().waitFor({ timeout: 15000 });
   const chip = (await page.locator('[data-testid="credit-note-chip"]').first().innerText()).trim();
   await browser.close();
