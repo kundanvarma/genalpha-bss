@@ -7,6 +7,8 @@
 #      which as a write mints a fake reference and as a lookup or delete matches IS NULL (six real bugs)
 #   5. unescaped interpolations into innerHTML in a front end — operator or customer text
 #      reaching the DOM as markup is cross-site scripting with a care agent's session
+#   5b. TOTAL innerHTML uses per vanilla-console file — escaping is necessary but not
+#      sufficient, and the consoles are meant to shrink toward createElement desk by desk
 #   6. JSX components a file renders but never declares or imports (a ReferenceError the build never sees)
 #   7. raw JSON text boxes (kind: 'jsontext') on the admin-console pages a COMMERCIAL department
 #      opens — a product manager cannot write JSON. Designer-only pages (the service and resource
@@ -35,7 +37,7 @@ current() {
 import json, os, re, subprocess, sys
 mx = int(sys.argv[1])
 out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {},
-       "htmlInterpolations": {}, "undeclaredJsx": {}, "commercialJsonBoxes": {}}
+       "htmlInterpolations": {}, "innerHtmlUses": {}, "undeclaredJsx": {}, "commercialJsonBoxes": {}}
 
 # --- rule 7: a raw JSON box on a page a commercial user opens -------------------
 # A product manager cannot write JSON, and the back office used to ask them to:
@@ -357,6 +359,13 @@ for app in sorted(os.listdir('apps')):
                     if 'innerHTML' in src:
                         h = html_holes(src)
                         if h: out["htmlInterpolations"][p] = h
+                        # EVERY use, not only the unsafe ones. Rule 5 says a value may
+                        # not reach the DOM as markup; this says the vanilla consoles
+                        # must keep shrinking toward createElement, desk by desk, which
+                        # is the stated direction in CLAUDE.md and otherwise drifts.
+                        # React files build their DOM through JSX and are out of scope.
+                        if not f.endswith(('.jsx', '.tsx')):
+                            out["innerHtmlUses"][p] = src.count('.innerHTML')
                     if f.endswith(('.jsx', '.tsx')):
                         u = undeclared_jsx(src)
                         if u: out["undeclaredJsx"][p] = u
@@ -423,6 +432,10 @@ for p, n in now.get("htmlInterpolations", {}).items():
     if quick and f and not f.endswith(p): continue
     b = base.get("htmlInterpolations", {}).get(p, 0)
     if n > b: bad.append(f"{p}: {n} unescaped interpolations into innerHTML, baseline {b} — a name or a message off the wire reaches the DOM as markup; wrap it in esc(…), or build the node with createElement + textContent, see docs/engineering-conventions.md §4")
+for p, n in now.get("innerHtmlUses", {}).items():
+    if quick and f and not f.endswith(p): continue
+    b = base.get("innerHtmlUses", {}).get(p, 0)
+    if n > b: bad.append(f"{p}: {n} innerHTML uses, baseline {b} — the vanilla consoles shrink toward createElement/textContent; build this one as nodes (escaping it is necessary, not sufficient)")
 for p, n in now.get("undeclaredJsx", {}).items():
     if quick and f and not f.endswith(p): continue
     b = base.get("undeclaredJsx", {}).get(p, 0)
@@ -442,6 +455,7 @@ tm = sum(now["mapReturns"].values()); tb = sum(base["mapReturns"].values())
 tw = sum(now.get("rawMapWrites", {}).values()); twb = sum(base.get("rawMapWrites", {}).values())
 tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards", {}).values())
 th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
+ti = sum(now.get("innerHtmlUses", {}).values()); tib = sum(base.get("innerHtmlUses", {}).values())
 fb = f"; category fallbacks {live} (baseline {base.get('categoryFallbacks', '?')})" if live != "" else ""
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); commercial JSON boxes {sum(now.get("commercialJsonBoxes", {}).values())} (baseline {sum(base.get("commercialJsonBoxes", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); innerHTML uses {ti} (baseline {tib}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); commercial JSON boxes {sum(now.get("commercialJsonBoxes", {}).values())} (baseline {sum(base.get("commercialJsonBoxes", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
 PY
