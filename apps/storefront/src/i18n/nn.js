@@ -168,6 +168,7 @@ export const NN = {
   'Your line appears here once the plan activates.': 'Linja di vert vist her når abonnementet vert aktivert.',
   'Add to cart': 'Legg i handlekorga',
   'About this device': 'Om denne eininga',
+  'About this product': 'Om dette produktet',
   "private customers only; company purchases don't qualify": 'berre privatkundar; bedriftskjøp kvalifiserer ikkje',
   'for business customers': 'for bedriftskundar',
   'view the partner product': 'sjå partnerproduktet',

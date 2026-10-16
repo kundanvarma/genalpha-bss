@@ -53,6 +53,7 @@ export const NO_ACCOUNT = {
   // commerce
   'Add to cart': 'Legg i handlekurven',
   'About this device': 'Om denne enheten',
+  'About this product': 'Om dette produktet',
   "private customers only; company purchases don't qualify": 'kun privatkunder; bedriftskjøp kvalifiserer ikke',
   'for business customers': 'for bedriftskunder',
   'view the partner product': 'se partnerproduktet',

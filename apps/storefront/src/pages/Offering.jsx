@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { alsoBought, availabilityFor, beacon, checkConfiguration, getOffering, getSpec, myProducts, priceIndex, queryConfiguration, recommendationOutcome } from '../api.js';
 import { CART_EVENT, addToCart, cartLines, ensureInCart } from '../cart.js';
 import { fmtAmount, fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { plainName } from '../words.js';
 import { t } from '../i18n.js';
 
 const isChoice = (entry) => Array.isArray(entry.options);
@@ -440,7 +441,7 @@ export default function Offering() {
         <div className="chars">
           {activeCharacteristics.map(({ characteristic }) => (
             <label key={characteristic.name} className="charfield">
-              <span>{characteristic.name}</span>
+              <span>{t(plainName(characteristic.name))}</span>
               {(characteristic.productSpecCharacteristicValue || []).some((v) => v.value == null && (v.valueFrom != null || v.valueTo != null)) ? (
                 (() => { const r = (characteristic.productSpecCharacteristicValue || []).find((v) => v.valueFrom != null || v.valueTo != null); return (
                   <input type="number" data-testid={`range-${characteristic.name}`} min={r.valueFrom ?? undefined} max={r.valueTo ?? undefined} step="1"
@@ -476,12 +477,12 @@ export default function Offering() {
 
       {deviceFacts.length > 0 && (
         <>
-          <h2>{t('About this device')}</h2>
+          <h2>{t((offering?.category || []).some((c) => /device/i.test(c.name || '')) ? 'About this device' : 'About this product')}</h2>
           <table className="pricetable" data-testid="device-facts">
             <tbody>
               {deviceFacts.map((f, i) => (
                 <tr key={`${f.device}-${f.name}-${i}`}>
-                  <td>{deviceFacts.some((x) => x.device !== f.device) ? `${f.device} — ${f.name}` : f.name}</td>
+                  <td>{deviceFacts.some((x) => x.device !== f.device) ? `${f.device} — ${t(plainName(f.name))}` : t(plainName(f.name))}</td>
                   <td className="num">{f.value}</td>
                 </tr>
               ))}
@@ -501,10 +502,8 @@ export default function Offering() {
                   <td className="num">{fmtAmount(Number(l.amount), l.price?.unit)}{l.priceType === 'recurring' ? '/month' : l.priceType === 'oneTime' ? ` ${t('once')}` : ''}</td>
                 </tr>
               ))}
-              <tr className="total">
-                <td>Total per month</td>
-                <td className="num" data-testid="oracle-monthly">{fmtAmount(Number(oracleVerdict.configurationPrice?.monthlyTotal?.value || 0), oracleVerdict.configurationPrice?.monthlyTotal?.unit)}</td>
-              </tr>
+              {(Number(oracleVerdict.configurationPrice?.monthlyTotal?.value || 0) > 0 || !(Number(oracleVerdict.configurationPrice?.oneTimeTotal?.value || 0) > 0)) && (<tr className="total"><td>{t('Total per month')}</td>
+                <td className="num" data-testid="oracle-monthly">{fmtAmount(Number(oracleVerdict.configurationPrice?.monthlyTotal?.value || 0), oracleVerdict.configurationPrice?.monthlyTotal?.unit)}</td></tr>)}
               {Number(oracleVerdict.configurationPrice?.oneTimeTotal?.value || 0) > 0 && (
                 <tr><td>{t('Once')}</td><td className="num">{fmtAmount(Number(oracleVerdict.configurationPrice.oneTimeTotal.value), oracleVerdict.configurationPrice.oneTimeTotal.unit)}</td></tr>
               )}
@@ -531,7 +530,7 @@ export default function Offering() {
               ))}
               {monthly && (
                 <tr className="total">
-                  <td>Total per month</td>
+                  <td>{t('Total per month')}</td>
                   <td className="num">{fmtAmount(monthly.value, monthly.unit)}</td>
                 </tr>
               )}
