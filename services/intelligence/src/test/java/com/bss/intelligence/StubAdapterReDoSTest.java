@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  *     400 KB   never finished
  *
  * The prompt is caller-supplied and the stub is the DEFAULT adapter
- * (`matchIfMissing = true`), so an 8 KB message to a fresh deployment with no
+ * (`matchIfMissing = true`), so a 128 KB message to a fresh deployment with no
  * model configured is a denial of service that costs the attacker nothing.
  *
  * The bound below is deliberately loose. It is not a benchmark; it is the
@@ -49,12 +49,12 @@ class StubAdapterReDoSTest {
     private static final String PRODUCT_COPILOT = "you are the product copilot for a telecom BSS";
 
     @Test
-    @DisplayName("an 8 KB streaming prompt with no price token still answers promptly")
+    @DisplayName("a 12128 KB streaming prompt with no price token still answers promptly")
     void aLongPromptDoesNotHangTheThread() {
         StubAdapter adapter = new StubAdapter();
         // "monthly" matters: without it the copilot returns at the earlier "what should\n        // it cost?" branch and never reaches the price parse at all. Reaches\n        // `asksStreaming && !asksWatch` with saidMonthly true, which is where the price was pulled
         // out with `.*?(\d+[.,]\d{2}).*` — 304 seconds on this input before the fix
-        String hostile = "owner: add a streaming service monthly " + digits(8);
+        String hostile = "owner: add a streaming service monthly " + digits(128);
 
         Instant started = Instant.now();
         String reply = adapter.complete(PRODUCT_COPILOT, hostile);
@@ -73,7 +73,7 @@ class StubAdapterReDoSTest {
         StubAdapter adapter = new StubAdapter();
 
         Instant started = Instant.now();
-        adapter.complete("you are a marketing copy assistant", "Brief: " + digits(8));
+        adapter.complete("you are a marketing copy assistant", "Brief: " + digits(128));
         assertThat(Duration.between(started, Instant.now())).isLessThan(Duration.ofSeconds(5));
 
         // the fix must not have cost the behaviour it was protecting

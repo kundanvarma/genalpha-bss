@@ -24,7 +24,34 @@ public class StubAdapter implements LlmAdapter {
      * same shape that already cost this fleet a 10.8s and an 18.4s hang in the
      * PII paths. Matcher.find() looks for the token directly, and indexOf does
      * the rest, so there is nothing to backtrack over. */
-    private static final Pattern MONEY = Pattern.compile("\\d+[.,]\\d{2}");
+    /* `\d+[.,]\d{2}` is STILL quadratic even with find(): the greedy \d+ matches a
+     * run of digits at every start position and then backtracks looking for the
+     * separator. Measured after the first fix — 8 KB 47 ms, 32 KB 831 ms, 64 KB
+     * 3.3 s, 128 KB 13.5 s, a clean 4x per doubling. CodeQL kept the alert open
+     * and was right to; the first fix turned five minutes into thirteen seconds,
+     * not into safety.
+     *
+     * Anchor on the part that cannot repeat instead. `[.,]\d{2}` is a fixed-width
+     * needle, so find() is one linear scan, and the walk back over the digits in
+     * front of it is bounded by the digits it walks. Flat 0.1-0.5 ms at every
+     * size above. */
+    private static final Pattern MONEY_TAIL = Pattern.compile("[.,]\\d{2}");
+
+    /** The first price-shaped token ("12,50", "1299.00"), or null. Linear. */
+    private static String firstMoney(String text) {
+        Matcher m = MONEY_TAIL.matcher(text);
+        while (m.find()) {
+            int sep = m.start();
+            int from = sep;
+            while (from > 0 && Character.isDigit(text.charAt(from - 1))) {
+                from--;
+            }
+            if (from < sep) {
+                return text.substring(from, m.end());
+            }
+        }
+        return null;
+    }
 
     /** The looser one: a number that MAY carry decimals ("12", "12,5", "12.50"). */
     private static final Pattern AMOUNT = Pattern.compile("\\d+(?:[.,]\\d{1,2})?");
@@ -239,7 +266,7 @@ public class StubAdapter implements LlmAdapter {
         boolean asksStreaming = !asksWatch
                 && (lastOwner.contains("streaming") || convo.contains("streaming"));
         boolean saidMonthly = lastOwner.contains("/month") || lastOwner.contains("per month")
-                || lastOwner.contains("monthly") || MONEY.matcher(lastOwner).find();
+                || lastOwner.contains("monthly") || firstMoney(lastOwner) != null;
         if (asksStreaming && !saidMonthly) {
             return "{\"kind\":\"question\",\"message\":\"A streaming service fits the"
                     + " 'Partner services' category — the orchestrator will mint a partner"
@@ -247,8 +274,8 @@ public class StubAdapter implements LlmAdapter {
                     + " What should it cost per month?\",\"proposal\":null}";
         }
         if (asksStreaming && !asksWatch) {
-            Matcher money = MONEY.matcher(convo);
-            String price = (money.find() ? money.group() : convo).replace(',', '.');
+            String found = firstMoney(convo);
+            String price = (found != null ? found : convo).replace(',', '.');
             if (price.length() > 8) {
                 price = "9.99";
             }
