@@ -18,6 +18,7 @@ import { AddOrUpgrade, UpgradeCard } from './customer/Upgrades.jsx';
 import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, stillOwing } from './customer/Money.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue, authFetch } from '../auth.js';
+import { None, Unreachable, EmptyOr, useReach } from './customer/reachable.jsx';
 
 /* The customer workspace. Five stable areas, one customer context:
  *   Overview   — who is this, what do they have, is anything wrong, what is in
@@ -33,8 +34,6 @@ import { hasRole, currentTokenValue, authFetch } from '../auth.js';
 
 // the desk programs against business actions, not endpoints: the generated ontology SDK, the agent's own token
 const bss = new GenAlpha({ baseUrl: '', token: () => currentTokenValue(), channel: 'care', agent: 'care-assist' });
-
-const None = () => <span className="secnone"> — none</span>;
 const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
 const AREAS = [['overview', 'Overview'], ['services', 'Services'], ['activity', 'Activity'], ['billing', 'Billing & account'], ['more', 'More']];
 const LIVE_ORDER = (o) => !['completed', 'cancelled', 'rejected', 'failed', 'partial'].includes(o.state);
@@ -108,6 +107,7 @@ export default function Customer360() {
   const [redemptions, setRedemptions] = useState([]);
   const [methods, setMethods] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
+  const [down, soft] = useReach(id); // scope -> true: we could not ASK, which is not "none" (#289)
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState({}); // scope -> message: the error lands next to the block that raised it
   const [toast, setToast] = useState(null);
@@ -154,10 +154,10 @@ export default function Customer360() {
     ordersOf(id).then(setOrders).catch(() => {});
     ticketsOf(id).then(setTickets).catch(() => {});
     cartsOf(id).then(setCarts).catch(() => {});
-    activeServicesOf(id).then(setActiveServices);
+    soft('services', activeServicesOf, setActiveServices);
     // what the catalog DECLARES each service is, so the desk stops guessing (#143)
     fulfilmentFamilies().then(primeFulfilmentFamilies).catch(() => {});
-    portingOrdersOf(id).then(setPortingOrders);
+    soft('porting', portingOrdersOf, setPortingOrders);
     appointmentsOf(id).then(setAppointments).catch(() => {});
   };
   const reload = () => {
@@ -166,16 +166,11 @@ export default function Customer360() {
     productsOf(id).then(setProducts).catch(() => {});
     billsOf(id).then(setBills).catch(() => {});
     interactionsPage(id, 0).then(({ items, total }) => { setInteractions(items); setInteractionsTotal(total); }).catch(() => {});
-    usageOf(id).then(setUsage);
-    agreementsOf(id).then(setAgreements);
-    redemptionsOf(id).then(setRedemptions);
-    paymentMethodsOf(id).then(setMethods);
-    recommendationsOf(id).then(setSuggestions);
-    spendPoliciesOf(id).then(setSpendPolicies);
-    poolsOf(id).then(setPools);
-    autoTopupOf(id).then(setAutoTopup);
-    creditDecisionsOf(id).then(setCreditDecisions);
-    directorySettingsOf(id).then(setDirSettings);
+    for (const [scope, read, set] of [['usage', usageOf, setUsage], ['agreements', agreementsOf, setAgreements],
+      ['promos', redemptionsOf, setRedemptions], ['cards', paymentMethodsOf, setMethods],
+      ['suggestions', recommendationsOf, setSuggestions], ['spend', spendPoliciesOf, setSpendPolicies],
+      ['pools', poolsOf, setPools], ['autoTopup', autoTopupOf, setAutoTopup],
+      ['credit', creditDecisionsOf, setCreditDecisions], ['directory', directorySettingsOf, setDirSettings]]) soft(scope, read, set);
   };
   useEffect(reload, [id]);
   // orders complete, tickets move and lines change while the page is open — the desk never shows a stale state for long
@@ -413,14 +408,14 @@ export default function Customer360() {
                   {account.filter((l) => l.level === 'warn').slice(0, 3).map((l, i) => <p key={i} className="error small">{l.text}</p>)}
                   {!accountWarns && <p className="ok small">Account OK</p>}
                   <p className="dim small">
-                    <span data-testid="usage-card">{usage.length ? `${usage.length} meter${usage.length === 1 ? '' : 's'}${overAllowance.length ? '' : ' within allowance'}` : 'no usage this month'}</span>
-                    {' · '}<span data-testid="agreements-card">{agreements.length ? `${agreements.length} agreement${agreements.length === 1 ? '' : 's'}` : 'no agreements'}</span>
-                    {' · '}<span data-testid="promo-vault-card">{methods.length || redemptions.length ? `${methods.length} card${methods.length === 1 ? '' : 's'}, ${redemptions.length} promo${redemptions.length === 1 ? '' : 's'}` : 'no cards or promos'}</span>
+                    <span data-testid="usage-card">{usage.length ? `${usage.length} meter${usage.length === 1 ? '' : 's'}${overAllowance.length ? '' : ' within allowance'}` : down.usage ? 'usage unreachable' : 'no usage this month'}</span>
+                    {' · '}<span data-testid="agreements-card">{agreements.length ? `${agreements.length} agreement${agreements.length === 1 ? '' : 's'}` : down.agreements ? 'agreements unreachable' : 'no agreements'}</span>
+                    {' · '}<span data-testid="promo-vault-card">{methods.length || redemptions.length ? `${methods.length} card${methods.length === 1 ? '' : 's'}, ${redemptions.length} promo${redemptions.length === 1 ? '' : 's'}` : down.promos || down.cards ? 'cards and promos unreachable' : 'no cards or promos'}</span>
                   </p>
                 </button>
                 <button className="now-card clickable" data-testid="now-health" onClick={() => go('services')}>
                   <div className="assist-label">Service health</div>
-                  {!activeServices.length && <p className="dim small">No running services</p>}
+                  {!activeServices.length && <EmptyOr down={down.services} what="service inventory">No running services</EmptyOr>}
                   {activeServices.length > 0 && !paused.length && !overAllowance.length && <p className="ok small">All {activeServices.length} service{activeServices.length === 1 ? '' : 's'} healthy</p>}
                   {paused.map((s) => <p key={s.id} className="error small">Paused: {s.name} {numberOf(s) && <span className="msisdn">{numberOf(s)}</span>} — resume under Services</p>)}
                   {overAllowance.map((u, i) => <p key={i} className="error small">Over allowance: {u.name} ({u.usedValue} of {u.allowedValue} {u.units})</p>)}
@@ -524,13 +519,13 @@ export default function Customer360() {
               <p className="zone-note">State first: {account.map((l) => l.text).join(' · ') || 'nothing on file'}.</p>
               <Err scope="billing" />
               <Bills bills={bills} id={id} act={act} />
-              <Usage usage={usage} />
-              <PromoAndPayment redemptions={redemptions} methods={methods} act={act} />
-              <Policies spendPolicies={spendPolicies} id={id} act={act} />
-              <Agreements agreements={agreements} />
-              <Pool pools={pools} id={id} />
-              <AutoTopup autoTopup={autoTopup} />
-              <CreditDecisions creditDecisions={creditDecisions} />
+              <Usage usage={usage} down={down.usage} />
+              <PromoAndPayment redemptions={redemptions} methods={methods} act={act} down={down.promos || down.cards} />
+              <Policies spendPolicies={spendPolicies} id={id} act={act} down={down.spend} />
+              <Agreements agreements={agreements} down={down.agreements} />
+              <Pool pools={pools} id={id} down={down.pools} />
+              <AutoTopup autoTopup={autoTopup} down={down.autoTopup} />
+              <CreditDecisions creditDecisions={creditDecisions} down={down.credit} />
             </>
           )}
 
@@ -540,7 +535,7 @@ export default function Customer360() {
               <Err scope="more" />
               {hasRole('party:write') ? (
                 <div data-testid="registry-tools">
-                  <h3>Directory listing{!dirSettings.length && <None />}</h3>
+                  <h3>Directory listing{down.directory ? <Unreachable what="the directory" /> : !dirSettings.length && <None />}</h3>
                   <div className="rows" data-testid="directory-card">
                     {dirSettings.map((s) => (
                       <div className="row" key={s.id} data-testid="directory-setting-row">
@@ -551,7 +546,7 @@ export default function Customer360() {
                         </div>
                       </div>
                     ))}
-                    {!dirSettings.length && <p className="dim small">No directory choices recorded — the export applies the defaults.</p>}
+                    {!dirSettings.length && <EmptyOr down={down.directory} what="the directory">No directory choices recorded — the export applies the defaults.</EmptyOr>}
                   </div>
                   <form className="stack" data-testid="directory-form" onSubmit={(e) => {
                     e.preventDefault();
@@ -624,7 +619,7 @@ export default function Customer360() {
             copilot={copilot} summarize={summarize}
             interactions={interactions} openTickets={openTickets} openedAt={openedAt} />
 
-          <h2>Suggest next</h2>
+          <h2>Suggest next{down.suggestions && <Unreachable what="the recommendation engine" />}</h2>
           <div className="rows" data-testid="suggest-card">
             {suggestions.slice(0, 3).map((it) => (
               <div className="row" key={it.offering.id}>
@@ -639,7 +634,7 @@ export default function Customer360() {
                 </div>
               </div>
             ))}
-            {!suggestions.length && <p className="dim small">Nothing to suggest.</p>}
+            {!suggestions.length && <EmptyOr down={down.suggestions} what="the recommendation engine">Nothing to suggest.</EmptyOr>}
           </div>
         </div>
       </div>

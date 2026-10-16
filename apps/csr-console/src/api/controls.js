@@ -2,9 +2,7 @@
 import { ORDERING, PARTY, USAGE_POLICY, authFetch, json } from './_http.js';
 
 export async function spendPoliciesOf(partyId) {
-  try {
-    return await json(await authFetch(`${USAGE_POLICY}/spendPolicy?partyId=${encodeURIComponent(partyId)}`));
-  } catch { return []; }
+  return json(await authFetch(`${USAGE_POLICY}/spendPolicy?partyId=${encodeURIComponent(partyId)}`));
 }
 
 export async function patchSpendPolicy(partyId, meterType, body) {
@@ -17,25 +15,19 @@ export async function patchSpendPolicy(partyId, meterType, body) {
 /** Pools the party owns or draws from — staff list is tenant-wide, so
  * filter to this customer here. */
 export async function poolsOf(partyId) {
-  try {
-    const all = await json(await authFetch(`${USAGE_POLICY}/allowancePool`));
-    return all.filter((p) => p.ownerPartyId === partyId
-      || (p.member || []).some((m) => m.partyId === partyId));
-  } catch { return []; }
+  const all = await json(await authFetch(`${USAGE_POLICY}/allowancePool`));
+  return all.filter((p) => p.ownerPartyId === partyId
+    || (p.member || []).some((m) => m.partyId === partyId));
 }
 
 export async function autoTopupOf(partyId) {
-  try {
-    return await json(await authFetch(`${USAGE_POLICY}/autoTopupPolicy?partyId=${encodeURIComponent(partyId)}`));
-  } catch { return null; }
+  return json(await authFetch(`${USAGE_POLICY}/autoTopupPolicy?partyId=${encodeURIComponent(partyId)}`));
 }
 
 /* ---------------- Credit decisions (ordering credit seam) ----------------
  * The stored decisions only — there is never a report to show. */
 export async function creditDecisionsOf(partyId) {
-  try {
-    return await json(await authFetch(`${ORDERING}/creditDecision?relatedPartyId=${encodeURIComponent(partyId)}`));
-  } catch { return []; }
+  return json(await authFetch(`${ORDERING}/creditDecision?relatedPartyId=${encodeURIComponent(partyId)}`));
 }
 
 /* ---------------- Registry & directory tools (party-account) ----------------
@@ -53,9 +45,7 @@ export async function runRegistrySync() {
 }
 
 export async function directorySettingsOf(partyId) {
-  try {
-    return await json(await authFetch(`${PARTY}/individual/${partyId}/directorySetting`));
-  } catch { return []; }
+  return json(await authFetch(`${PARTY}/individual/${partyId}/directorySetting`));
 }
 
 /** Upsert by (party, serviceRef): {serviceRef?, exposure?, secretNumber?}. */

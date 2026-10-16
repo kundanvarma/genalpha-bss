@@ -452,3 +452,54 @@ A run where either negative control stays green fails the suite.
   actions that exist are on the rows.
 - The strip wraps to two lines on a customer with a long contact line. Nothing
   is hidden, but it costs vertical space on every page of the workspace.
+
+## Empty is not unavailable (2026-10-16) — #289
+
+`bss-recommendation` was stopped for five days and the 360 said **"Nothing to
+suggest."** the whole time. The read caught its own 500 and returned an empty
+list, and the empty list rendered as a fact about the customer. An agent on a
+retention call was told there was nothing to offer. The agreements, cards,
+spend-policy, pool, auto top-up, credit and directory cards had the same shape:
+"no agreements" while the agreement service was simply down.
+
+The 360's catch-up reads now **throw** when their component does not answer, and
+the page keeps the two answers apart (`pages/customer/reachable.jsx`):
+
+- what a component **said**, which may be nothing: "Nothing to suggest.", "— none";
+- which components it **could not ask**: "Could not reach the recommendation
+  engine, so this is unknown — not empty.", "Agreements — could not reach the
+  agreement service", and "agreements unreachable" on the account strip.
+
+A dead component still does not blank the page: every other card renders, and
+the last good answer stays on screen when a later refresh fails. When the
+component comes back, the notice clears on the next read.
+
+**The architecture ratchet now counts the habit** (rule 8, `swallowedReads`):
+`catch { return [] }`, `.catch(() => [])` and the no-op `.catch(() => {})` in the
+React channels, per file, and the count may only fall. It was 128 on main;
+this change took it to 115. Proved red on a deliberate 116th, both spellings,
+in the full run and in the edit hook.
+
+### Proof
+
+`ops/e2e/csr_unreachable_test.js` stops `bss-recommendation` and
+`bss-agreement`, opens Paula's 360 as `agent-anna`, and asserts the Suggest card,
+the account strip and the Agreements card each name the outage and none of them
+says "none"; the rest of the billing area still renders. It restarts both, waits
+for healthy, and asserts the notices are gone. Run against `main`'s console it
+fails — the outage notice never appears.
+
+### Honest limits
+
+- **115 sites remain**, most in the storefront (its pages, cart and checkout)
+  and the 360's own primary reads (`ordersOf`, `billsOf`, `ticketsOf` …
+  `.catch(() => {})`). Not all are bugs — a token that will not parse honestly
+  has no claims — but the count does not tell them apart; it only stops new ones.
+- **"No running services"** now says when service inventory could not be
+  reached, but the Services area's product rows still come from a read that
+  swallows its failure.
+- **`fulfilmentFamilies` still fails silently by design**: it only names service
+  rows, and a missing name falls back to the declared default. It throws now; the
+  page chooses to ignore it.
+- The storefront — where a customer, not an agent, reads "no bills" — is the
+  follow-up, and the larger half of the count.
