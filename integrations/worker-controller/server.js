@@ -22,6 +22,20 @@ const http = require('http');
 const { execFileSync, execFile } = require('child_process');
 const fs = require('fs');
 
+/* A HIRE REQUEST NAMES THE WORKER, AND THAT NAME IS LOGGED.
+ *
+ * `HIRED+STARTED ${email} as ${cname}` puts caller-supplied text in a log line,
+ * so a CR or LF in it forges a line — and these logs are the audit trail for who
+ * was given a badge and when, which is exactly the record worth forging. The
+ * services fix this in their logging pattern; this controller is Node, so the
+ * console itself is wrapped instead. Same reasoning either way: a new log
+ * statement should not be able to reopen the hole by forgetting a helper. */
+for (const level of ['log', 'warn', 'error']) {
+  const raw = console[level].bind(console);
+  console[level] = (...args) => raw(...args.map(
+    (a) => (typeof a === 'string' ? a.replace(/[\r\n]+/g, ' ') : a)));
+}
+
 const PORT = process.env.PORT || 8080;
 const GATEWAY = process.env.BSS_GATEWAY_URL || 'http://gateway:8080';
 const TOKEN_URL = process.env.BSS_TOKEN_URL
