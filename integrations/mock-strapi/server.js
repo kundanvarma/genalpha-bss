@@ -25,7 +25,10 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'im
 
 // Minimal binary-safe multipart parser for a single file part.
 function parseFirstFile(buf, contentType) {
-  const m = /boundary=(.+)$/.exec(contentType || '');
+  // Bounded on purpose: `boundary=(.+)$` lets a long Content-Type header walk
+  // the engine (js/polynomial-redos). A boundary is a token — it cannot contain
+  // a semicolon or whitespace — so say that and there is nothing to backtrack.
+  const m = /boundary=([^;\s]+)/.exec(contentType || '');
   if (!m) return null;
   const boundary = '--' + m[1].trim();
   let start = buf.indexOf(boundary);
