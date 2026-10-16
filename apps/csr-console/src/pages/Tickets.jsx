@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { orgTickets, getCustomer } from '../api.js';
+import { incidentTraces, orgTickets, getCustomer } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 
 /* The queue as a queue: dense rows with what triage needs — severity, age,
@@ -27,6 +27,25 @@ export default function Tickets() {
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState(null);
   const [names, setNames] = useState({}); // partyId -> display name, fetched once per id
+  /* ticketId -> the agent's diagnosis of it, so the card can offer a verdict on
+   * the note it is already showing. Fail-soft: no intelligence module, no map,
+   * no control, and the ticket behaves exactly as before. (#285) */
+  const [traces, setTraces] = useState({});
+
+  useEffect(() => {
+    let live = true;
+    incidentTraces()
+      .then((rows) => {
+        if (!live) return;
+        const byTicket = {};
+        for (const t of Array.isArray(rows) ? rows : []) {
+          if (t.ticketId) byTicket[t.ticketId] = t;
+        }
+        setTraces(byTicket);
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
 
   const load = () => orgTickets(status).then((rows) => {
     const sorted = [...rows].sort((a, b) => (SEV_RANK[a.severity] ?? 9) - (SEV_RANK[b.severity] ?? 9) || new Date(a.creationDate || 0) - new Date(b.creationDate || 0));
@@ -79,7 +98,7 @@ export default function Tickets() {
                     <Link className="ghost small linkbtn" data-testid="queue-open-customer" to={`/customer/${selected.relatedParty[0].id}`}>Open customer →</Link>
                   )}
                 </div>
-                <TicketCard ticket={selected} onChanged={load} />
+                <TicketCard ticket={selected} onChanged={load} trace={traces[selected.id]} />
               </>
             ) : <p className="dim">Pick a ticket.</p>}
           </div>
