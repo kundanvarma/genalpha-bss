@@ -34,13 +34,12 @@ export async function billRates(billId) {
 }
 
 /** Collections: the customer's OWN case (party-scoped by the backend) —
- * null when the account stands current, or the collections module is absent
- * (fail-soft, like every optional component). */
+ * null when the account stands current. It THROWS when billing does not
+ * answer: null used to mean "current" either way, so a customer in collections
+ * saw no warning while billing was down (#289). The page decides what to say. */
 export async function myCollectionCase() {
-  try {
-    const cases = await json(await authFetch(`${BILLING}/collectionCase`));
-    return Array.isArray(cases) && cases.length ? cases[0] : null;
-  } catch { return null; }
+  const cases = await json(await authFetch(`${BILLING}/collectionCase`));
+  return Array.isArray(cases) && cases.length ? cases[0] : null;
 }
 
 /** "I will pay by then" — the customer's own promise-to-pay pauses the
