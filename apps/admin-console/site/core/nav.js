@@ -7,7 +7,7 @@
 // Gates use STAFF-grade roles: the default 'customer' composite carries baseline
 // read/write (customers pay bills, book slots), so back-office visibility keys
 // on roles customers never hold.
-const TAB_ROLE = {
+const PER_TAB_GATE = {
   // 'home' is deliberately ABSENT: a tab without a gate shows to every STAFF token
   // (the door gate isStaff() below still keeps customers out). Any-of arrays here drop
   // customer-baseline roles (catalog:read, billing:read, ordering:write …), so listing
@@ -37,8 +37,7 @@ const TAB_ROLE = {
   wholesaleOwners: 'wholesale:admin',
   accessProduct: 'wholesale:admin',
   wholesaleSettlement: 'wholesale:admin',
-  mobileWholesale: 'wholesale:admin',
-  mobileWholesaleProvider: 'wholesale:admin',
+  mobileWholesale: 'wholesale:admin', mobileWholesaleProvider: 'wholesale:admin',
   partyRiskAssessment: 'risk:assess',
   productOrder: ['ordering:write', 'service:write'],
   appointment: 'appointment:admin',
@@ -57,20 +56,13 @@ const TAB_ROLE = {
   'simulate/prospect': 'catalog:write',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',
-  salesLead: 'quote:read',
-  salesOpportunity: 'quote:read',
-  salesPipeline: 'quote:read',
-  configRule: 'quote:read',
-  scoringRule: 'quote:read',
-  routingRule: 'quote:read',
-  guidedQuestion: 'quote:read',
-  guidedRecommendation: 'quote:read',
-  quota: 'quote:read',
-  pricingRule: 'quote:read',
-  audience: 'insight:read',
-  audienceBuilder: 'insight:read',
-  socialListening: 'insight:read',
-  socialCare: 'insight:read',
+  // the whole sales desk shares one gate, so it is written as one
+  salesLead: 'quote:read', salesOpportunity: 'quote:read', salesPipeline: 'quote:read',
+  configRule: 'quote:read', scoringRule: 'quote:read', routingRule: 'quote:read',
+  guidedQuestion: 'quote:read', guidedRecommendation: 'quote:read',
+  quota: 'quote:read', pricingRule: 'quote:read',
+  audience: 'insight:read', audienceBuilder: 'insight:read',
+  socialListening: 'insight:read', socialCare: 'insight:read',
   // VoC is the readout over the insight signal store — same gate as its
   // sibling sources; ungated it leaked the Marketing desk to every staff token.
   voc: 'insight:read',
@@ -89,7 +81,13 @@ const TAB_ROLE = {
   workforce: ['workforce:use', 'ai:admin'],
   reporting: ['billing:admin', 'billing:read'],
   integrations: ['roles:admin', 'document:write'],
-  // DEPARTMENT WALLS (last wins over the older per-tab gates above):
+};
+// DEPARTMENT WALLS, which WIN over the per-tab gates above. Until #298 these were
+// the tail of ONE literal relying on last-key-wins: ten keys appeared twice, so
+// `audience: 'insight:read'` read like the gate while a line forty below decided
+// it, and deleting a wall entry silently restored the old one. Named objects say
+// it out loud (js/overwritten-property, 10 alerts, error severity).
+const DEPARTMENT_WALL = {
   // Marketing is marketing's desk; Wholesale the wholesale desk; the platform
   // and AI governance rooms are the admin's — a product manager sees the
   // catalog, their help and their suggestions, nothing else
@@ -111,6 +109,8 @@ const TAB_ROLE = {
   // department on every persona's rail holding one dev page (listed twice, same value — deduped #117)
   islandHealth: 'roles:admin',
 };
+// The wall wins; spread order IS the policy.
+const TAB_ROLE = { ...PER_TAB_GATE, ...DEPARTMENT_WALL };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
 // shopper's token carries. Staff hold at least one authority BEYOND this set.
