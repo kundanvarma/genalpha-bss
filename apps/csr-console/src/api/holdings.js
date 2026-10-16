@@ -5,19 +5,16 @@ export async function cartsOf(customerId) {
   return json(await authFetch(`${CART}/shoppingCart?limit=10&status=active&relatedPartyId=${customerId}`));
 }
 
-/* CSR 360 catch-up reads — all fail-soft: a deployment without the
- * component simply shows an empty card. */
+/* CSR 360 catch-up reads. They THROW when the component does not answer: the
+ * page keeps them fail-soft (pages/customer/reachable.jsx) and says "could not
+ * reach", because a bare [] here read as "this customer has none" (#289). */
 export async function usageOf(customerId) {
-  try {
-    const report = await json(await authFetch(`${USAGE}/queryUsageConsumption?relatedPartyId=${customerId}`));
-    return report.bucket || [];
-  } catch { return []; }
+  const report = await json(await authFetch(`${USAGE}/queryUsageConsumption?relatedPartyId=${customerId}`));
+  return report.bucket || [];
 }
 
 export async function agreementsOf(customerId) {
-  try {
-    return await json(await authFetch(`${AGREEMENT}/agreement?relatedPartyId=${customerId}&limit=50`));
-  } catch { return []; }
+  return json(await authFetch(`${AGREEMENT}/agreement?relatedPartyId=${customerId}&limit=50`));
 }
 
 /**
@@ -29,7 +26,7 @@ export async function agreementsOf(customerId) {
  */
 export async function fulfilmentFamilies() {
   const rows = await json(await authFetch(
-    '/tmf-api/serviceCatalogManagement/v4/serviceSpecification?limit=100')).catch(() => []);
+    '/tmf-api/serviceCatalogManagement/v4/serviceSpecification?limit=100'));
   const byId = {};
   for (const spec of Array.isArray(rows) ? rows : []) {
     for (const ch of spec.serviceSpecCharacteristic || []) {
@@ -42,15 +39,11 @@ export async function fulfilmentFamilies() {
 }
 
 export async function activeServicesOf(customerId) {
-  try {
-    return await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${customerId}`));
-  } catch { return []; }
+  return json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${customerId}`));
 }
 
 export async function portingOrdersOf(customerId) {
-  try {
-    return await json(await authFetch(`${PORTING}/numberPortingOrder?relatedPartyId=${customerId}`));
-  } catch { return []; }
+  return json(await authFetch(`${PORTING}/numberPortingOrder?relatedPartyId=${customerId}`));
 }
 
 export async function completeCutover(portingOrderId) {
@@ -68,15 +61,11 @@ export async function ceaseService(serviceId, reason) {
 }
 
 export async function redemptionsOf(customerId) {
-  try {
-    return await json(await authFetch(`${PROMO}/redemption?relatedPartyId=${customerId}`));
-  } catch { return []; }
+  return json(await authFetch(`${PROMO}/redemption?relatedPartyId=${customerId}`));
 }
 
 export async function paymentMethodsOf(customerId) {
-  try {
-    return await json(await authFetch(`${VAULT}/paymentMethod?relatedPartyId=${customerId}`));
-  } catch { return []; }
+  return json(await authFetch(`${VAULT}/paymentMethod?relatedPartyId=${customerId}`));
 }
 
 export async function revokePaymentMethod(id) {
@@ -85,10 +74,8 @@ export async function revokePaymentMethod(id) {
 }
 
 export async function recommendationsOf(customerId) {
-  try {
-    const recs = await json(await authFetch(`${RECOMMEND}/recommendation?relatedPartyId=${customerId}`));
-    return recs[0]?.recommendationItem || [];
-  } catch { return []; }
+  const recs = await json(await authFetch(`${RECOMMEND}/recommendation?relatedPartyId=${customerId}`));
+  return recs[0]?.recommendationItem || [];
 }
 
 export async function stockLevels() {

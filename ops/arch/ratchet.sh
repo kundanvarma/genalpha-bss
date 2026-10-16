@@ -13,6 +13,8 @@
 #   7. raw JSON text boxes (kind: 'jsontext') on the admin-console pages a COMMERCIAL department
 #      opens — a product manager cannot write JSON. Designer-only pages (the service and resource
 #      specification forms, on the Wholesale desk) are out of scope and named in the metric below.
+#   8. a failed read swallowed into an empty answer in a front end — catch { return [] } or
+#      .catch(() => []) — so "we could not ask" renders as "there is none" (#289)
 # Usage: ops/arch/ratchet.sh            compare against ops/arch/baseline.json, exit 2 on regression
 #        ops/arch/ratchet.sh --baseline  rewrite the baseline from the current tree (deliberate, reviewed)
 #        ops/arch/ratchet.sh --quick <f> check only the service/app that owns file <f> (edit hook)
@@ -37,7 +39,8 @@ current() {
 import json, os, re, subprocess, sys
 mx = int(sys.argv[1])
 out = {"mapReturns": {}, "frontendFiles": {}, "rawMapWrites": {}, "nullIdGuards": {},
-       "htmlInterpolations": {}, "innerHtmlUses": {}, "undeclaredJsx": {}, "commercialJsonBoxes": {}}
+       "htmlInterpolations": {}, "innerHtmlUses": {}, "undeclaredJsx": {}, "commercialJsonBoxes": {},
+       "swallowedReads": {}}
 
 # --- rule 7: a raw JSON box on a page a commercial user opens -------------------
 # A product manager cannot write JSON, and the back office used to ask them to:
@@ -143,6 +146,19 @@ def undeclared_jsx(src):
     used = set(JSX_TAG.findall(body))
     # a dotted tag (<Tab.Screen>) is declared by its head; a destructured default (const {X} = ...) by DECLARED
     return sum(1 for u in used if u not in names and u not in BUILTIN_TAGS)
+# --- rule 8: a failed read swallowed into an empty answer ----------------------
+# `[]` renders "Nothing to suggest.", and the agent on the call takes a fact about
+# the FLEET for a fact about the customer: bss-recommendation was down five days
+# and the CSR desk never said so (#289). Both spellings, and the no-op swallow
+# `.catch(() => {})` that leaves the state at its empty default. Some are honest
+# (a token that will not parse has no claims); the count is a ceiling per file,
+# not a verdict on each — a NEW one has to be argued for. The page-side remedy is
+# apps/csr-console/src/pages/customer/reachable.jsx: throw, and say "could not reach".
+SWALLOW_BLOCK = re.compile(r'catch\s*(?:\([^)]*\))?\s*\{\s*return\s*(?:\[\]|null|\{\}|undefined)?\s*;?\s*\}')
+SWALLOW_CHAIN = re.compile(r'\.catch\(\s*(?:\(\s*\w*\s*\)|\w+)\s*=>\s*(?:\[\]|null|\{\}|\(\s*\{\s*\}\s*\)|undefined)\s*\)')
+def swallowed(src):
+    src = blank(src)   # a comment that QUOTES the shape (this file's, reachable.jsx's) is not one
+    return len(SWALLOW_BLOCK.findall(src)) + len(SWALLOW_CHAIN.findall(src))
 pat = re.compile(r'public .*Map<String, ?Object> [a-zA-Z_]+\(')
 write = re.compile(r'@(Patch|Put|Post)Mapping[^\n]*\n(?:[^\n]*\n){0,3}?[^\n]*@RequestBody\s+(?:final\s+)?Map<String, ?Object>')
 # an identifier KEY: exactly id/ref/…, or ending in Id/Ref, or a known owner-ish name.
@@ -369,6 +385,9 @@ for app in sorted(os.listdir('apps')):
                     if f.endswith(('.jsx', '.tsx')):
                         u = undeclared_jsx(src)
                         if u: out["undeclaredJsx"][p] = u
+                    if sub == 'src':   # the React channels; the vanilla consoles are counted by rule 5b
+                        sw = swallowed(src)
+                        if sw: out["swallowedReads"][p] = sw
 out["commercialJsonBoxes"] = json_boxes()
 print(json.dumps(out, indent=1, sort_keys=True))
 PY
@@ -440,6 +459,10 @@ for p, n in now.get("undeclaredJsx", {}).items():
     if quick and f and not f.endswith(p): continue
     b = base.get("undeclaredJsx", {}).get(p, 0)
     if n > b: bad.append(f"{p}: {n} JSX component(s) used but never declared or imported, baseline {b} — the page throws 'X is not defined' the first time that branch renders; import it")
+for p, n in now.get("swallowedReads", {}).items():
+    if quick and f and not f.endswith(p): continue
+    b = base.get("swallowedReads", {}).get(p, 0)
+    if n > b: bad.append(f"{p}: {n} failed reads swallowed into an empty answer, baseline {b} — 'could not ask' renders as 'there is none'; let the read throw and say so on the page (pages/customer/reachable.jsx in the CSR desk), see #289")
 for page, n in now.get("commercialJsonBoxes", {}).items():
     # --quick passes the edited FILE; this metric is keyed by page, so the whole
     # console is rechecked whenever a console file is the one being edited
@@ -457,5 +480,5 @@ tg = sum(now.get("nullIdGuards", {}).values()); tgb = sum(base.get("nullIdGuards
 th = sum(now.get("htmlInterpolations", {}).values()); thb = sum(base.get("htmlInterpolations", {}).values())
 ti = sum(now.get("innerHtmlUses", {}).values()); tib = sum(base.get("innerHtmlUses", {}).values())
 fb = f"; category fallbacks {live} (baseline {base.get('categoryFallbacks', '?')})" if live != "" else ""
-if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); innerHTML uses {ti} (baseline {tib}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); commercial JSON boxes {sum(now.get("commercialJsonBoxes", {}).values())} (baseline {sum(base.get("commercialJsonBoxes", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
+if not quick: print(f"ratchet ok: untyped public returns {tm} (baseline {tb}); raw-map write handlers {tw} (baseline {twb}); null-id guards {tg} (baseline {tgb}); unescaped innerHTML interpolations {th} (baseline {thb}); innerHTML uses {ti} (baseline {tib}); undeclared JSX components {sum(now.get("undeclaredJsx", {}).values())} (baseline {sum(base.get("undeclaredJsx", {}).values())}); commercial JSON boxes {sum(now.get("commercialJsonBoxes", {}).values())} (baseline {sum(base.get("commercialJsonBoxes", {}).values())}); swallowed reads {sum(now.get("swallowedReads", {}).values())} (baseline {sum(base.get("swallowedReads", {}).values())}); oversized front-end files {len(now['frontendFiles'])} (baseline {len(base['frontendFiles'])}){fb}")
 PY

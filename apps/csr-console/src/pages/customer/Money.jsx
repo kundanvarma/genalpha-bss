@@ -1,13 +1,13 @@
 import { hasRole } from '../../auth.js';
 import { openBillPdf, resendBill, issueCreditNote, disputeBill, splitBill, setBillDeliveryFor, patchSpendPolicy,
   revokePaymentMethod, logInteraction } from '../../api.js';
+import { None, Unreachable, EmptyOr } from './reachable.jsx';
 
 /* Billing & account: state first, configuration when asked for. The Overview
  * shows one line per topic (bills current / overdue, roaming 0 of 50, content
  * on) and this area holds the controls. Nothing here is hidden when it warns. */
 
 const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
-const None = () => <span className="secnone"> — none</span>;
 const dt = (v) => v ? new Date(v).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
 export { OPEN_BILL_STATES, due, situationOf, SITUATION_WORDS, STILL_OWING, stillOwing } from './situation.jsx';
@@ -103,10 +103,10 @@ export function Bills({ bills, id, act }) {
   );
 }
 
-export function Usage({ usage }) {
+export function Usage({ usage, down }) {
   return (
     <>
-      <h2>Usage this month{!usage.length && <None />}</h2>
+      <h2>Usage this month{down ? <Unreachable what="the usage service" /> : !usage.length && <None />}</h2>
       <div className="rows" data-testid="usage-card">
         {usage.map((b, i) => (
           <div className="row" key={i}>
@@ -121,10 +121,10 @@ export function Usage({ usage }) {
   );
 }
 
-export function Agreements({ agreements }) {
+export function Agreements({ agreements, down }) {
   return (
     <>
-      <h2>Agreements{!agreements.length && <None />}</h2>
+      <h2>Agreements{down ? <Unreachable what="the agreement service" /> : !agreements.length && <None />}</h2>
       <div className="rows" data-testid="agreements-card">
         {agreements.map((g) => (
           <div className="row" key={g.id}>
@@ -137,10 +137,10 @@ export function Agreements({ agreements }) {
   );
 }
 
-export function PromoAndPayment({ redemptions, methods, act }) {
+export function PromoAndPayment({ redemptions, methods, act, down }) {
   return (
     <>
-      <h2>Promotions &amp; payment{!redemptions.length && !methods.length && <None />}</h2>
+      <h2>Promotions &amp; payment{down ? <Unreachable what="promotions or the card vault" /> : !redemptions.length && !methods.length && <None />}</h2>
       <div className="rows" data-testid="promo-vault-card">
         {redemptions.map((r) => (
           <div className="row" key={r.id}><span>Promo <strong>{r.code}</strong> — {r.name}</span><span className="dim">−{r.percentage}%</span></div>
@@ -151,16 +151,16 @@ export function PromoAndPayment({ redemptions, methods, act }) {
             <button className="ghost danger" onClick={() => act(() => revokePaymentMethod(m.id), 'billing')}>Revoke</button>
           </div>
         ))}
-        {!redemptions.length && !methods.length && <p className="dim small">No promotions or saved cards.</p>}
+        {!redemptions.length && !methods.length && <EmptyOr down={down} what="promotions or the card vault">No promotions or saved cards.</EmptyOr>}
       </div>
     </>
   );
 }
 
-export function Policies({ spendPolicies, id, act }) {
+export function Policies({ spendPolicies, id, act, down }) {
   return (
     <>
-      <h2>Spend &amp; roaming policies{!spendPolicies.length && <None />}</h2>
+      <h2>Spend &amp; roaming policies{down ? <Unreachable what="usage policy" /> : !spendPolicies.length && <None />}</h2>
       <div className="rows" data-testid="policy-card">
         {spendPolicies.map((m) => (
           <div className="row" key={m.meterType} data-testid={`policy-${m.meterType}`}>
@@ -204,10 +204,10 @@ export function Policies({ spendPolicies, id, act }) {
   );
 }
 
-export function Pool({ pools, id }) {
+export function Pool({ pools, id, down }) {
   return (
     <>
-      <h2>Household pool{!pools.length && <None />}</h2>
+      <h2>Household pool{down ? <Unreachable what="usage policy" /> : !pools.length && <None />}</h2>
       <div className="rows" data-testid="pool-card">
         {pools.map((p) => {
           const mine = (p.member || []).find((mb) => mb.partyId === id);
@@ -232,10 +232,10 @@ export function Pool({ pools, id }) {
   );
 }
 
-export function AutoTopup({ autoTopup }) {
+export function AutoTopup({ autoTopup, down }) {
   return (
     <>
-      <h2>Auto top-up{(!autoTopup || !autoTopup.enabled) && <None />}</h2>
+      <h2>Auto top-up{down ? <Unreachable what="usage policy" /> : (!autoTopup || !autoTopup.enabled) && <None />}</h2>
       <div className="rows" data-testid="autotopup-card">
         {autoTopup && autoTopup.enabled ? (
           <div className="row">
@@ -250,16 +250,16 @@ export function AutoTopup({ autoTopup }) {
             </div>
             <span className="state active">enabled</span>
           </div>
-        ) : <p className="dim small">Off — it only ever turns on with the customer's recorded consent.</p>}
+        ) : <EmptyOr down={down} what="usage policy">Off — it only ever turns on with the customer's recorded consent.</EmptyOr>}
       </div>
     </>
   );
 }
 
-export function CreditDecisions({ creditDecisions }) {
+export function CreditDecisions({ creditDecisions, down }) {
   return (
     <>
-      <h2>Credit decisions{!creditDecisions.length && <None />}</h2>
+      <h2>Credit decisions{down ? <Unreachable what="the credit store" /> : !creditDecisions.length && <None />}</h2>
       <div className="rows" data-testid="credit-card">
         {creditDecisions.map((cd) => (
           <div className="row" key={cd.id} data-testid="credit-decision-row">
@@ -274,7 +274,7 @@ export function CreditDecisions({ creditDecisions }) {
             <span className="dim small">{dt(cd.decidedAt)}</span>
           </div>
         ))}
-        {!creditDecisions.length && <p className="dim small">No stored decisions — only the decision is ever kept, never a report.</p>}
+        {!creditDecisions.length && <EmptyOr down={down} what="the credit store">No stored decisions — only the decision is ever kept, never a report.</EmptyOr>}
       </div>
     </>
   );
