@@ -142,8 +142,22 @@ grep -q "decision-topics:.*$ONTOLOGY_TOPIC" "$INSIGHT_YML" \
 # A family added to one and not the other prints "Service" again, silently.
 FAM_JS=$(sed -n '/FAMILY_KIND *= *{/,/}/p' apps/csr-console/src/pages/customer/ServiceRows.jsx \
          | grep -oE "'?[a-z-]+'?:" | tr -d "':" | sort -u)
-for f in mobile internet tv device partner security compute billing-only; do
-  grep -q "\"$f\"" services/service-orchestration/src/main/java/com/bss/som/client/CatalogClient.java || continue
+# The family list is READ from the Java set, not copied here: a copy of eight
+# names could not see a ninth, which is the exact drift this check exists for.
+FAMILY_SRC=services/service-orchestration/src/main/java/com/bss/som/client/CatalogClient.java
+FAM_JAVA=$(grep -oE 'Set\.of\("mobile"[^)]*\)' "$FAMILY_SRC" | grep -oE '"[a-z-]+"' | tr -d '"' | sort -u)
+[ -n "$FAM_JAVA" ] || fail "the fulfilment family set could not be read from $FAMILY_SRC" \
+    "the check looks for Set.of(\"mobile\", ...); an empty list would pass every family by default"
+# ADR 0026: iot and energy are deferred by decision, not left out by accident —
+# building one starts by superseding the ADR, not by adding a label to the set.
+if ! grep -qi '^Status: superseded' docs/adr/0026-iot-and-energy-are-deferred-not-labels.md 2>/dev/null; then
+  for f in iot energy; do
+    printf '%s\n' "$FAM_JAVA" | grep -qx "$f" \
+      && fail "the catalog now declares fulfilment family '$f', which ADR 0026 defers" \
+              "supersede docs/adr/0026-iot-and-energy-are-deferred-not-labels.md with the spec that builds it — a family is a promise to provision, not a label"
+  done
+fi
+for f in $FAM_JAVA; do
   printf '%s\n' "$FAM_JS" | grep -qx "$f" \
     || fail "the catalog declares fulfilment family '$f' and the agent desk has no word for it" \
             "add it to FAMILY_KIND and KIND_WORDS in apps/csr-console/src/pages/customer/ServiceRows.jsx,
