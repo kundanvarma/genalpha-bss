@@ -264,6 +264,23 @@ class UsagePolicyApiTest {
     }
 
     @Test
+    void spendCap_isMoneyOnTheDomesticBill_neverAnAmountWithoutACurrency() throws Exception {
+        // the CSR desk read "used 0 null": the spend face was created with no currency
+        mockMvc.perform(get(MGMT + "/spendPolicy").with(customer("cust-spend-unit")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.meterType=='spend')].accrued.unit").value("NOK"));
+        // and the desk's "Set limit" sends no currency: the limit takes the face's, not null
+        mockMvc.perform(patch(MGMT + "/spendPolicy/spend").with(customer("cust-spend-unit"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"limit": 500, "enabled": true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.limit.unit").value("NOK"))
+                .andExpect(jsonPath("$.accrued.unit").value("NOK"));
+    }
+
+    @Test
     void roamingLimit_defaultsOn_cutsOffAt100_explicitContinueRestores() throws Exception {
         // the default financial limit exists without the customer ever asking
         mockMvc.perform(get(MGMT + "/spendPolicy").with(customer("cust-roam")))

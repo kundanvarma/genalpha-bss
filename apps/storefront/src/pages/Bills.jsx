@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n.js';
 import { CASE_CONSEQUENCE, Situation } from './bills/Situation.jsx';
+import CreditNotes from './bills/CreditNotes.jsx';
 import { billRates, createPayment, disputeBill, myBills, myCollectionCase, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, promiseToPay, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
 
 
@@ -240,20 +241,7 @@ export default function Bills() {
                     dispute {bill.dispute.status}
                   </span>
                 )}
-                {creditNotes.filter((cn) => cn.billId === bill.id).map((cn) => (
-                  <a key={cn.id} className="state settled" data-testid="credit-note-chip"
-                     title={cn.reason} style={{ textDecoration: 'none', cursor: 'pointer' }}
-                     onClick={(e) => {
-                       e.preventDefault();
-                       import('../auth.js').then(async ({ authFetch }) => {
-                         const res = await authFetch(`/tmf-api/customerBillManagement/v4/creditNote/${cn.id}/document.pdf`);
-                         if (!res.ok) { setError('PDF: HTTP ' + res.status); return; }
-                         window.open(URL.createObjectURL(await res.blob()), '_blank');
-                       });
-                     }}>
-                    {t('credit note')} {cn.creditNoteNo} · −{Number(cn.amount.value).toFixed(2)} {cn.amount.unit}
-                  </a>
-                ))}
+                <CreditNotes notes={creditNotes.filter((cn) => cn.billId === bill.id)} onError={setError} />
                 {(!bill.dispute || bill.dispute.status !== 'open') && (
                   <button className="ghost" data-testid="dispute-bill"
                     onClick={async () => {

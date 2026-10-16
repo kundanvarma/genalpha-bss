@@ -174,8 +174,8 @@ public class SpendPolicyService {
         events.publish("RoamingContinueElectedEvent", "spendMeter", Map.of(
                 "relatedParty", List.of(Map.of("id", partyId, "role", "customer")),
                 "meterType", SpendMeter.ROAMING,
-                "accrued", money(meter.getAccruedValue(), meter.getCurrency()),
-                "limit", money(meter.getLimitValue(), meter.getCurrency()),
+                "accrued", money(meter.getAccruedValue(), currencyOf(meter)),
+                "limit", money(meter.getLimitValue(), currencyOf(meter)),
                 "period", period().toString()), tenantId);
         return meterView(meter);
     }
@@ -274,8 +274,8 @@ public class SpendPolicyService {
                 "relatedParty", List.of(Map.of("id", meter.getPartyId(), "role", "customer")),
                 "meterType", meter.getMeterType(),
                 "threshold", threshold,
-                "accrued", money(meter.getAccruedValue(), meter.getCurrency()),
-                "limit", money(meter.getLimitValue(), meter.getCurrency()),
+                "accrued", money(meter.getAccruedValue(), currencyOf(meter)),
+                "limit", money(meter.getLimitValue(), currencyOf(meter)),
                 "blocked", meter.isBlocked(),
                 "period", period().toString()), tenantId);
     }
@@ -308,7 +308,10 @@ public class SpendPolicyService {
                             // mandatory default for minors, same derivation as the guardian reads
                             meter.setBarred(household.isMinor(partyId));
                         }
-                        default -> meter.setEnabled(false);     // spend cap: never default-on
+                        default -> {
+                            meter.setEnabled(false);            // spend cap: never default-on
+                            meter.setCurrency(contentCurrency); // ...but it is money on the domestic bill
+                        }
                     }
                     meter.setCreatedAt(OffsetDateTime.now());
                     return meters.save(meter);
@@ -347,12 +350,19 @@ public class SpendPolicyService {
         return new SpendMeterView(meter.getPartyId(), meter.getMeterType(), meter.isEnabled(),
                 content ? meter.isBarred() : null,
                 content ? money(contentCapFloor, contentCurrency) : null,
-                meter.getLimitValue() != null ? money(meter.getLimitValue(), meter.getCurrency()) : null,
+                meter.getLimitValue() != null ? money(meter.getLimitValue(), currencyOf(meter)) : null,
                 meter.getNotifyAtPct(), meter.isBlockOnBreach(),
-                money(accrued, meter.getCurrency()),
+                money(accrued, currencyOf(meter)),
                 thisPeriod && meter.isBlocked(),
                 roaming ? thisPeriod && meter.isContinueElected() : null,
                 period.toString(), "SpendMeter");
+    }
+
+    /** The meter's currency, or its face's default when none was stored: a spend meter
+     * created before it carried one — or a limit set without one — read "0 null". */
+    private String currencyOf(SpendMeter meter) {
+        if (meter.getCurrency() != null) return meter.getCurrency();
+        return SpendMeter.ROAMING.equals(meter.getMeterType()) ? roamingCurrency : contentCurrency;
     }
 
     private LocalDate period() {
