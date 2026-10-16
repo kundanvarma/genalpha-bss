@@ -5,7 +5,7 @@
 FROM eclipse-temurin:25-jre AS build
 WORKDIR /build
 COPY target/*.jar app.jar
-RUN java -Djarmode=layertools -jar app.jar extract --destination target/extracted
+RUN java -Djarmode=tools -jar app.jar extract --layers --launcher --destination target/extracted
 
 # Runtime stage
 FROM eclipse-temurin:25-jre
