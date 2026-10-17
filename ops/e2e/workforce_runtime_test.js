@@ -28,14 +28,21 @@ const API = 'http://localhost:8080';
 const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
 const TENANTS = `${__dirname}/../../infra/tenants/tenants.yml`;
 const run = Date.now();
-const DOOR = `${API}/ai/v1/modelDoor/anthropic/v1/messages`;
+// the door has a face per model API (#309): the worker's own base URL says which it was given
+const FACES = { '/ai/v1/modelDoor/anthropic': 'anthropic', '/ai/v1/modelDoor/openai/v1': 'openai' };
+let face = 'anthropic';
 const envOf = (container) => execFileSync('docker',
   ['inspect', container, '--format', '{{range .Config.Env}}{{println .}}{{end}}'], { encoding: 'utf8' });
 const envVar = (env, name) => (env.split('\n').find((l) => l.startsWith(`${name}=`)) || '').slice(name.length + 1);
 /* a DEAD key must be refused before any model is called — so this never costs a real call */
 async function doorRefuses(key) {
-  const r = await fetch(DOOR, { method: 'POST', headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }) });
+  const r = face === 'openai'
+    ? await fetch(`${API}/ai/v1/modelDoor/openai/v1/chat/completions`, { method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', messages: [{ role: 'user', content: 'ping' }] }) })
+    : await fetch(`${API}/ai/v1/modelDoor/anthropic/v1/messages`, { method: 'POST',
+      headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }) });
   return r.status === 401;
 }
 const fail = (m) => { throw new Error(m); };
@@ -89,13 +96,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     + ' credentials displayed, the badge went straight into the container env');
   const hiredEnv = envOf(container);
   const doorKey = envVar(hiredEnv, 'WORKER_AI_API_KEY');
-  if (!envVar(hiredEnv, 'WORKER_AI_BASE_URL').endsWith('/ai/v1/modelDoor/anthropic')) {
-    fail(`the worker is not pointed at the model door: "${envVar(hiredEnv, 'WORKER_AI_BASE_URL')}"`);
-  }
+  const base = envVar(hiredEnv, 'WORKER_AI_BASE_URL');
+  const facePath = Object.keys(FACES).find((p) => base.endsWith(p));
+  if (!facePath) fail(`the worker is not pointed at the model door: "${base}"`);
+  face = FACES[facePath];
   if (!doorKey.startsWith('bssw_') || /sk-ant/.test(hiredEnv)) {
     fail('the worker container holds something other than its own door key');
   }
-  console.log('OK THE DOOR: the worker holds its own door key and the door\'s address — the provider key never entered its container');
+  console.log(`OK THE DOOR: the worker holds its own door key and the door's ${face} address — the provider key never entered its container`);
 
   // its first shift lands on the ledger (verified at the source, as always)
   let mine = null;

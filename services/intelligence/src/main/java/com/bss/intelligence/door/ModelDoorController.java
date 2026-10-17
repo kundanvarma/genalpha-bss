@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  *   /workforce/doorKeys        staff (ai:admin): issue a worker's key at hire, revoke it at fire
  *   /modelDoor/anthropic/...   the worker: its model calls, authenticated by that key
+ *   /modelDoor/openai/v1/...   the same, for a worker whose tenant runs an OpenAI-API model
  *
  * The door's path ENDS IN /anthropic on purpose: Hermes accepts a custom base
  * URL for its Anthropic provider only when the path ends that way, and
@@ -49,8 +50,7 @@ public class ModelDoorController {
     @GetMapping(value = {ApiConstants.BASE_PATH + "/modelDoor/anthropic/v1/models",
             ApiConstants.BASE_PATH + "/modelDoor/anthropic/v1/models/**"}, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> models() {
-        DoorRequests.DoorReply reply = door.modelsNotServed();
-        return ResponseEntity.status(reply.status()).contentType(MediaType.APPLICATION_JSON).body(reply.body());
+        return reply(door.modelsNotServed(false));
     }
 
     /** Anthropic Messages, as the worker's SDK sends it: key in x-api-key, body passed through. */
@@ -61,7 +61,30 @@ public class ModelDoorController {
             @RequestHeader(value = "anthropic-version", required = false) String version,
             @RequestHeader(value = "anthropic-beta", required = false) String beta,
             @RequestBody(required = false) String body) {
-        DoorRequests.DoorReply reply = door.anthropicMessages(key, body, version, beta);
+        return reply(door.anthropicMessages(key, body, version, beta));
+    }
+
+    /**
+     * OpenAI Chat Completions (#309) — also what an OpenAI-compatible local model
+     * server speaks. The worker's door key arrives as the SDK sends any key, a
+     * Bearer token; the security filter chain leaves Bearer tokens on /modelDoor
+     * to the door, because they are door keys, not login tokens.
+     */
+    @PostMapping(value = ApiConstants.BASE_PATH + "/modelDoor/openai/v1/chat/completions",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> openAiChat(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestBody(required = false) String body) {
+        return reply(door.openAiChat(authorization, body));
+    }
+
+    @GetMapping(value = {ApiConstants.BASE_PATH + "/modelDoor/openai/v1/models",
+            ApiConstants.BASE_PATH + "/modelDoor/openai/v1/models/**"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> openAiModels() {
+        return reply(door.modelsNotServed(true));
+    }
+
+    private static ResponseEntity<String> reply(DoorRequests.DoorReply reply) {
         return ResponseEntity.status(reply.status()).contentType(MediaType.APPLICATION_JSON).body(reply.body());
     }
 }
