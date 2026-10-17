@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -42,6 +43,14 @@ public class ModelDoorController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void revoke(@PathVariable String id) {
         door.revoke(id);
+    }
+
+    /** The SDK may probe for its model's context window; the door lists nothing, and says so. */
+    @GetMapping(value = {ApiConstants.BASE_PATH + "/modelDoor/anthropic/v1/models",
+            ApiConstants.BASE_PATH + "/modelDoor/anthropic/v1/models/**"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> models() {
+        DoorRequests.DoorReply reply = door.modelsNotServed();
+        return ResponseEntity.status(reply.status()).contentType(MediaType.APPLICATION_JSON).body(reply.body());
     }
 
     /** Anthropic Messages, as the worker's SDK sends it: key in x-api-key, body passed through. */

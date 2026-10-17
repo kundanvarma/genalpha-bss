@@ -24,6 +24,12 @@ public interface AiAuditRepository extends JpaRepository<AiAudit, String> {
             + "WHERE a.tenantId = :tenantId AND a.createdAt >= :since")
     long sumCostSince(@Param("tenantId") String tenantId, @Param("since") OffsetDateTime since);
 
+    /** What the tenant's digital WORKERS spent through the model door since a moment —
+     * the rows with a worker as their actor (#283). */
+    @Query("SELECT COALESCE(SUM(a.costMicros), 0) FROM AiAudit a "
+            + "WHERE a.tenantId = :tenantId AND a.actorId IS NOT NULL AND a.createdAt >= :since")
+    long sumWorkerCostSince(@Param("tenantId") String tenantId, @Param("since") OffsetDateTime since);
+
     /** The agent-action trail: turns that DID something, newest first. */
     List<AiAudit> findTop50ByTenantIdAndActionIsNotNullOrderByCreatedAtDesc(String tenantId);
 

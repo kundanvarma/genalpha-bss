@@ -25,8 +25,8 @@ import java.util.Map;
  * SETS the budget and the kill-switch here too. Tenant-isolated by RLS:
  * a tenant sees and sets only its own.
  *
- * (Budget-setting is gated `ai:use` for the demo; a production deployment
- * would separate an `ai:admin` authority — the seam is the matcher.)
+ * Reading it takes `ai:use`; SETTING it — the tenant's ceiling, the workers'
+ * ceiling (#283), the kill-switch, the crew ceiling — takes `ai:admin`.
  */
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH + "/governance")
@@ -69,6 +69,14 @@ public class GovernanceController {
         out.put("remainingMicros", ceiling <= 0 ? -1 : Math.max(0, ceiling - spent));
         out.put("unlimited", ceiling <= 0);
         out.put("maxWorkers", budget == null ? 0 : budget.getMaxWorkers());
+        // the WORKERS' own ceiling (#283): measured through the model door, also inside spentMicros
+        int workerWindow = budget == null ? 720 : budget.getWorkerWindowHours();
+        long workerCeiling = budget == null ? 0 : budget.getWorkerBudgetMicros();
+        long workerSpent = audits.sumWorkerCostSince(tenant, OffsetDateTime.now().minusHours(workerWindow));
+        out.put("workerBudgetMicros", workerCeiling);
+        out.put("workerWindowHours", workerWindow);
+        out.put("workerSpentMicros", workerSpent);
+        out.put("workerRemainingMicros", workerCeiling <= 0 ? -1 : Math.max(0, workerCeiling - workerSpent));
         out.put("actions", audits
                 .findTop50ByTenantIdAndActionIsNotNullOrderByCreatedAtDesc(tenant)
                 .stream().map(this::actionRow).toList());
@@ -77,7 +85,8 @@ public class GovernanceController {
 
     /** Set (or update) this tenant's spend ceiling and kill-switch. */
     /** The spend ceiling and kill-switch, every field optional: absent means unchanged. */
-    public record BudgetRequest(Long budgetMicros, Integer windowHours, Boolean enabled, Integer maxWorkers) { }
+    public record BudgetRequest(Long budgetMicros, Integer windowHours, Boolean enabled, Integer maxWorkers,
+            Long workerBudgetMicros, Integer workerWindowHours) { }
 
     @PostMapping("/budget")
     public ResponseEntity<Map<String, Object>> setBudget(@RequestBody BudgetRequest body) {
@@ -96,6 +105,13 @@ public class GovernanceController {
         if (body.maxWorkers() != null) {
             // the crew ceiling: surge staffing never grows past it (0 = unlimited)
             budget.setMaxWorkers(body.maxWorkers());
+        }
+        if (body.workerBudgetMicros() != null) {
+            // the workers' own ceiling: the model door refuses past it (0 = none)
+            budget.setWorkerBudgetMicros(Math.max(0, body.workerBudgetMicros()));
+        }
+        if (body.workerWindowHours() != null) {
+            budget.setWorkerWindowHours(Math.max(1, body.workerWindowHours()));
         }
         budget.setLastUpdate(OffsetDateTime.now());
         budgets.save(budget);

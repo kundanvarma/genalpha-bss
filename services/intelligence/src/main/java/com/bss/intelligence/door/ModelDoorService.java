@@ -2,6 +2,8 @@ package com.bss.intelligence.door;
 
 import com.bss.intelligence.audit.AiAudit;
 import com.bss.intelligence.audit.AiAuditRepository;
+import com.bss.intelligence.audit.AiBudget;
+import com.bss.intelligence.audit.AiBudgetRepository;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.exception.NotFoundException;
 import com.bss.intelligence.security.TenantContext;
@@ -9,6 +11,7 @@ import com.bss.intelligence.security.TenantRegistry;
 import com.bss.intelligence.security.TenantScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -21,8 +24,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -33,10 +39,14 @@ import java.util.UUID;
  * forwards the call with the key the BSS holds, then records it from the
  * provider's OWN token counts, attributed to the worker.
  *
- * v0 (ticket 1): one Anthropic Messages call, forwarded as-is, metered and
- * ledgered. Guardrails (ceiling, kill-switch, model allowlist, no streaming)
- * and redaction land in the next tickets; until redaction does, the ledger
- * row says the exposure was RAW, because it was — and it keeps no content.
+ * Guardrails (ticket 2): the kill-switch, the tenant's ceiling and the
+ * workers' own ceiling refuse with 402 and billing wording — the status and the
+ * words a worker's SDK treats as a hard wall, so the shift ENDS instead of
+ * retrying into it. Only the tenant's worker model (and the provider's small
+ * side-call model) is served, and streaming is refused in words the SDK reads
+ * as "stream not supported", so it falls back to a plain call. Every refusal is
+ * a ledger row too. Redaction lands next; until it does, the ledger row says the
+ * exposure was RAW, because it was — and it keeps no content.
  */
 @Service
 public class ModelDoorService {
@@ -49,6 +59,8 @@ public class ModelDoorService {
 
     private final WorkerDoorKeyRepository keys;
     private final AiAuditRepository audits;
+    private final AiBudgetRepository budgets;
+    private final Set<String> anthropicSideModels;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final DoorPricing pricing;
@@ -56,10 +68,17 @@ public class ModelDoorService {
     private final ObjectMapper json;
     private final SecureRandom random = new SecureRandom();
 
-    public ModelDoorService(WorkerDoorKeyRepository keys, AiAuditRepository audits, TenantRegistry tenants,
-            TenantScope tenantScope, DoorPricing pricing, RestClient.Builder http, ObjectMapper json) {
+    public ModelDoorService(WorkerDoorKeyRepository keys, AiAuditRepository audits, AiBudgetRepository budgets,
+            TenantRegistry tenants, TenantScope tenantScope, DoorPricing pricing, RestClient.Builder http,
+            ObjectMapper json,
+            // the small model a provider's agent framework uses for its own side calls
+            // (titles, compression) — served beside the tenant's worker model, and metered
+            @Value("${bss.ai.door-side-models.anthropic:claude-haiku-4-5-20251001}") String anthropicSideModels) {
         this.keys = keys;
         this.audits = audits;
+        this.budgets = budgets;
+        this.anthropicSideModels = new LinkedHashSet<>(Arrays.stream(anthropicSideModels.split(","))
+                .map(String::trim).filter(m -> !m.isEmpty()).toList());
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.pricing = pricing;
@@ -124,6 +143,10 @@ public class ModelDoorService {
                         "this tenant has no worker model key configured — the operator sets worker-ai-api-key");
             }
             String model = requestedModel(body);
+            Optional<DoorRequests.DoorReply> refused = guard(key, tenant, body, model);
+            if (refused.isPresent()) {
+                return refused.get();
+            }
             long started = System.nanoTime();
             DoorRequests.DoorReply reply;
             try {
@@ -140,6 +163,67 @@ public class ModelDoorService {
                     elapsedMs(started), summary(reply.body()));
             return reply;
         }
+    }
+
+    /**
+     * The door's guardrails, in order: the kill-switch, the tenant's ceiling, the
+     * workers' own ceiling, then the request itself (no streaming, a served model).
+     * A refusal is a ledger row and a reply in the provider's own error shape.
+     */
+    private Optional<DoorRequests.DoorReply> guard(WorkerDoorKey key, TenantRegistry.TenantEntry tenant,
+            String body, String model) {
+        AiBudget budget = budgets.findByTenantId(key.getTenantId()).orElse(null);
+        OffsetDateTime now = OffsetDateTime.now();
+        if (budget != null && !budget.isEnabled()) {
+            return refuse(key, model, "refused-disabled", 402, "billing_error",
+                    "AI is switched off for this tenant (kill-switch) — billing hard limit: no worker model calls"
+                            + " until an operator switches it back on");
+        }
+        if (budget != null && budget.getBudgetMicros() > 0
+                && audits.sumCostSince(key.getTenantId(), now.minusHours(budget.getWindowHours()))
+                        >= budget.getBudgetMicros()) {
+            return refuse(key, model, "refused-budget", 402, "billing_error",
+                    "this tenant's AI spend ceiling is reached — billing hard limit for this window");
+        }
+        if (budget != null && budget.getWorkerBudgetMicros() > 0
+                && audits.sumWorkerCostSince(key.getTenantId(), now.minusHours(budget.getWorkerWindowHours()))
+                        >= budget.getWorkerBudgetMicros()) {
+            return refuse(key, model, "refused-worker-budget", 402, "billing_error",
+                    "the workers' spend ceiling is reached — billing hard limit for this window");
+        }
+        if (requestsStream(body)) {
+            // the SDK falls back to a plain call on an error naming "stream" and "not supported"
+            return refuse(key, model, "refused-stream", 400, "invalid_request_error",
+                    "streaming is not supported at the model door — send the request without stream");
+        }
+        Set<String> served = new LinkedHashSet<>(anthropicSideModels);
+        if (tenant.getWorkerAiModel() != null && !tenant.getWorkerAiModel().isBlank()) {
+            served.add(tenant.getWorkerAiModel().trim());
+        }
+        if (model == null || !served.contains(model)) {
+            return refuse(key, model, "refused-model", 400, "invalid_request_error",
+                    "model '" + model + "' is not this tenant's worker model — the door serves " + served);
+        }
+        return Optional.empty();
+    }
+
+    private Optional<DoorRequests.DoorReply> refuse(WorkerDoorKey key, String model, String outcome, int status,
+            String type, String message) {
+        ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, outcome, 0, message);
+        return Optional.of(anthropicError(status, type, message));
+    }
+
+    private boolean requestsStream(String body) {
+        try {
+            return json.readTree(body == null ? "{}" : body).path("stream").asBoolean(false);
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** The provider's model listing is not served here: a worker learns its model from its config. */
+    public DoorRequests.DoorReply modelsNotServed() {
+        return anthropicError(404, "not_found_error", "the model door does not list models");
     }
 
     private DoorRequests.DoorReply forward(TenantRegistry.TenantEntry tenant, String body, String version, String beta) {
