@@ -448,11 +448,22 @@ const TOOLS = [
       + 'completing wrongly — escalations are counted, not punished.',
     inputSchema: {
       type: 'object',
-      properties: { taskId: { type: 'string' }, reason: { type: 'string' } },
+      properties: {
+        taskId: { type: 'string' },
+        reason: { type: 'string' },
+        // giving up costs tokens too (#287): the API took this, but the tool dropped it,
+        // so most of a worker's spend — it escalates most of what it touches — went unrecorded
+        selfReported: {
+          type: 'object',
+          properties: {
+            tokens: { type: 'number' }, costMicros: { type: 'number' }, model: { type: 'string' },
+          },
+        },
+      },
       required: ['taskId', 'reason'],
     },
     run: (a) => workerApi('POST', `/ai/v1/workforce/tasks/${encodeURIComponent(a.taskId)}/escalate`,
-      { reason: a.reason }),
+      { reason: a.reason, selfReported: a.selfReported }),
   },
   {
     name: 'care_ticket_get',
@@ -496,7 +507,9 @@ const TOOLS = [
     description: 'File a HIGH-BLAST-RADIUS action (refund, cease, erasure, credit) for human '
       + 'approval. Nothing executes now: the action is stored as data, a human approves it on '
       + 'the Workforce dashboard, and it runs under THEIR token. Always prefer this over '
-      + 'guessing — a filed approval is a good shift, not a failed one.',
+      + 'guessing — a filed approval is a good shift, not a failed one. The path must name the '
+      + 'exact resource (which payment, which bill) from something you READ; if you have not '
+      + 'read it, do not invent it — escalate the task instead and say what is missing.',
     inputSchema: {
       type: 'object',
       properties: {
