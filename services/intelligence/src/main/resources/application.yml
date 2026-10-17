@@ -114,6 +114,12 @@ bss:
         output-per-mtok: 5000000
         cache-write-per-mtok: 1250000
         cache-read-per-mtok: 100000
+      # the same model by its alias — a tenant may name either
+      claude-haiku-4-5:
+        input-per-mtok: 1000000
+        output-per-mtok: 5000000
+        cache-write-per-mtok: 1250000
+        cache-read-per-mtok: 100000
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   tenants:
     default-tenant: genalpha
