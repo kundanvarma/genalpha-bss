@@ -54,12 +54,19 @@ class ModelDoorApiTest {
             server.createContext("/v1/messages", exchange -> {
                 SEEN_KEY.set(exchange.getRequestHeaders().getFirst("x-api-key"));
                 SEEN_BODY.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-                byte[] reply = """
+                // a model that USES what it was given: it echoes a placeholder it saw back in its
+                // text and in a tool call — the door must turn both back into the real value
+                java.util.regex.Matcher seen = java.util.regex.Pattern.compile("<[a-z]+#\\d+>")
+                        .matcher(SEEN_BODY.get());
+                String echo = seen.find() ? seen.group() : "nothing";
+                byte[] reply = ("""
                         {"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-4-5-20251001",
-                         "content":[{"type":"text","text":"done"}],"stop_reason":"end_turn",
+                         "content":[{"type":"text","text":"done ECHO"},
+                                    {"type":"tool_use","id":"toolu_1","name":"send_mail","input":{"to":"ECHO"}}],
+                         "stop_reason":"end_turn",
                          "usage":{"input_tokens":100,"output_tokens":20,
                                   "cache_creation_input_tokens":0,"cache_read_input_tokens":1000}}
-                        """.getBytes(StandardCharsets.UTF_8);
+                        """).replace("ECHO", echo).getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().add("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, reply.length);
                 try (OutputStream out = exchange.getResponseBody()) {
@@ -145,7 +152,7 @@ class ModelDoorApiTest {
         mockMvc.perform(post("/ai/v1/modelDoor/anthropic/v1/messages")
                         .header("x-api-key", key).contentType(MediaType.APPLICATION_JSON).content(CALL))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].text").value("done"));
+                .andExpect(jsonPath("$.content[0].text").value("done nothing"));
 
         // the provider saw the TENANT's key — the worker's key never left the BSS
         assertThat(SEEN_KEY.get()).isEqualTo("tenant-provider-key");
@@ -164,9 +171,10 @@ class ModelDoorApiTest {
         // haiku-4-5 rates: 100×$1 + 20×$5 + 1000×$0.10 per million = 300 micro-dollars
         assertThat(row.getCostMicros()).isEqualTo(300L);
         assertThat(row.getResourceRef()).doesNotContain("price=default");
-        // no content is kept until redaction lands at the door
+        // no content is kept, and the call left redacted (this tenant did not opt into raw exposure)
         assertThat(row.getPrompt()).doesNotContain("close ticket 42");
-        assertThat(row.getExposure()).isEqualTo("raw");
+        assertThat(row.getExposure()).isEqualTo("raw-redacted");
+        assertThat(row.getRawExposure()).isFalse();
     }
 
     @Test
@@ -277,5 +285,47 @@ class ModelDoorApiTest {
         mockMvc.perform(get("/ai/v1/modelDoor/anthropic/v1/models"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.type").value("not_found_error"));
+    }
+
+    /* ------------------------------------------------ redaction (#308) */
+
+    @Test
+    void customerDataLeavesRedactedAndComesBackRealEvenInsideToolCalls() throws Exception {
+        String key = issueKey("door-redact").split("\\|")[0];
+        String call = """
+                {"model":"claude-haiku-4-5-20251001","max_tokens":64,
+                 "system":"You are a care worker.",
+                 "messages":[
+                   {"role":"user","content":[{"type":"text","text":"Work the queue."}]},
+                   {"role":"assistant","content":[
+                     {"type":"thinking","thinking":"I should read ticket 7.","signature":"sig-abc"},
+                     {"type":"tool_use","id":"toolu_0","name":"care_ticket_get","input":{"id":"t-7"}}]},
+                   {"role":"user","content":[
+                     {"type":"tool_result","tool_use_id":"toolu_0",
+                      "content":"Customer paula@family.example says the router is red. Call her on +47 912 34 567."}]}
+                 ]}
+                """;
+        MvcResult answered = mockMvc.perform(post("/ai/v1/modelDoor/anthropic/v1/messages")
+                        .header("x-api-key", key).contentType(MediaType.APPLICATION_JSON).content(call))
+                .andExpect(status().isOk()).andReturn();
+
+        // OUT: the provider saw placeholders, never the customer's address or number
+        String sent = SEEN_BODY.get();
+        assertThat(sent).doesNotContain("paula@family.example").doesNotContain("912 34 567")
+                .contains("<email#1>");
+        // the signed thinking block and the ids went out exactly as they came in
+        assertThat(sent).contains("\"signature\":\"sig-abc\"").contains("I should read ticket 7.")
+                .contains("\"toolu_0\"").contains("\"t-7\"");
+
+        // BACK: the worker holds the real value — in the text AND in the tool call it will run
+        JsonNode reply = json.readTree(answered.getResponse().getContentAsString());
+        assertThat(reply.path("content").get(0).path("text").asString()).isEqualTo("done paula@family.example");
+        assertThat(reply.path("content").get(1).path("input").path("to").asString())
+                .isEqualTo("paula@family.example");
+
+        AiAudit row = audits.findAll().stream()
+                .filter(a -> "door-redact".equals(a.getActorName())).findFirst().orElseThrow();
+        assertThat(row.getExposure()).isEqualTo("raw-redacted");
+        assertThat(row.getRedactedFields()).isGreaterThanOrEqualTo(2);
     }
 }
