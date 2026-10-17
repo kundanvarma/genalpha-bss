@@ -56,6 +56,14 @@ the door cannot serve gets no worker at all: there is no direct path left.
   toward the tenant's overall AI ceiling, so the operator's one total stays true,
   but a busy crew can never spend the copilots' share.
 
+**Which tenants have workers.**
+- genalpha and taranga workers use **the same key as the copilots** (`AI_API_KEY`), unless
+  they are given their own (`WORKER_AI_API_KEY`, `WORKER_AI_API_KEY_TARANGA`, each with its
+  provider and base URL). The key goes to the intelligence component only; the worker
+  controller and the workers never see it.
+- nova's worker brain is the mock model, for the suites.
+- A tenant with no worker key at all is refused at the door (503, nothing sent).
+
 Copilots and workers choose their models independently: the copilots follow the
 tenant's `ai-*` settings, the workers its `worker-ai-*` settings.
 
@@ -85,7 +93,7 @@ and ledger.
   each priced at Haiku's listed rate. The setting was then put back.
   `model_door_test.js` proves the OpenAI face through the gateway: it reads a Bearer door
   key as a door key, and it refuses an Anthropic tenant before anything is sent.
-- `ModelDoorApiTest` (11 tests) and `ModelDoorOpenAiTest` (4). Each guarantee was seen to fail
+- `ModelDoorApiTest` (11 tests), `ModelDoorOpenAiTest` (4) and `DoorPriceListTest` (1). Each guarantee was seen to fail
   when broken on purpose.
 
 ## Honest limits
@@ -94,9 +102,16 @@ and ledger.
   OpenAI's Chat Completions (which OpenAI-compatible servers and several providers'
   compatibility endpoints also speak). A tenant on any other API — OpenAI's newer
   Responses API, or a provider's own native one — gets no worker, by design.
-- **Only Anthropic models have listed prices.** An OpenAI model is charged at the default
-  rate, and its ledger row says `price=default`, until its rates are added to the
-  configuration.
+- **Listed prices are a snapshot.** Haiku and OpenAI's three current models
+  (`gpt-6-astra`, `gpt-6.1-sol`, `gpt-6-luna`) are listed at the Standard-tier rates their
+  providers published on 17 October 2026. Two things are not modelled:
+  - OpenAI charges more past its long-context threshold; such calls are charged here at
+    the short-context rate, so they are under-counted.
+  - Chat Completions reports no cache-write tokens, so a write is counted as plain input.
+
+  Any other model is charged at the default rate and its ledger row says `price=default`.
+  A model name containing a dot must be bracketed in the price list
+  (`"[gpt-6.1-sol]"`), or it silently falls to the default; `DoorPriceListTest` guards that.
 - **Each face has its own small-model list.** A worker's side calls are served only for
   models configured for its face; the OpenAI face has none by default. The worker image
   turns off the one side call it would make.
@@ -118,6 +133,10 @@ and ledger.
 - **The ledger keeps no content** for worker calls — only cost, model, outcome and how
   many values were redacted. That is a privacy choice, and it means the ledger cannot
   answer "what did the worker say".
+- **One key, two budgets' worth of spend.** With the copilots' key shared, the provider's
+  invoice no longer separates worker spend from copilot spend; the ledger does. Taranga is
+  publicly reachable on the hosted box, so its workers can spend that key once the
+  controller runs there; set its worker spend ceiling first.
 - **Surge auto-hiring is unchanged** and spends real money: with a backlog and no crew
   ceiling it starts bench workers on its own. The door now measures and caps that
   spend; whether surge should be on by default is a separate decision.

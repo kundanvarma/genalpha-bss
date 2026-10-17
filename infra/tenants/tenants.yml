@@ -788,6 +788,15 @@ bss:
         # Redacted by default like every other tenant; an operator who wants raw
         # context sets AI_RAW_EXPOSURE_TARANGA=true and the ledger row says so.
         ai-raw-exposure: ${AI_RAW_EXPOSURE_TARANGA:false}
+        # The workforce brain, through the MODEL DOOR (#283). The fleet hands the
+        # intelligence component the copilots' AI key here unless the workers are
+        # given their own (WORKER_AI_API_KEY_TARANGA); with no key at all a hired
+        # worker is refused at the door (503, nothing sent). The key never reaches
+        # a worker container; the worker gets only its own door key.
+        worker-ai-provider: ${WORKER_AI_PROVIDER_TARANGA:anthropic}
+        worker-ai-base-url: ${WORKER_AI_BASE_URL_TARANGA:}
+        worker-ai-api-key: ${WORKER_AI_API_KEY_TARANGA:}
+        worker-ai-model: ${WORKER_AI_MODEL_TARANGA:claude-haiku-4-5-20251001}
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
