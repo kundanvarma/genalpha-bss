@@ -34,7 +34,10 @@ packaged runtime that makes hire = start and fire = stop.*
    credentials block. Capabilities arrive by opt-in package, never by
    default — the story we sell stays true.
 2. **The operator owns the brain's credential** — but per Kundan's
-   requirement it is LIVE CONFIG, not a deployment bake:
+   requirement it is LIVE CONFIG, not a deployment bake. (Since 2026-10-17
+   that credential lives in the intelligence component's **model door**,
+   never in the controller or a worker container: the worker gets a door key
+   of its own — [model-door.md](model-door.md).)
 
 ## On-the-fly LLM config (the requirement)
 
