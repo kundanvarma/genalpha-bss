@@ -29,7 +29,10 @@ http.createServer((req, res) => {
         const chat = JSON.parse(body || '{}');
         const model = chat.model || 'unknown';
         const system = String(chat.system || '');
-        requests.push({ model, api: 'anthropic', task: system.slice(0, 60), at: new Date().toISOString() });
+        // the KEY it was called with: the model door (#283) must present the tenant's
+        // provider key, never the worker's own door key
+        requests.push({ model, api: 'anthropic', task: system.slice(0, 60), key: req.headers['x-api-key'] || null,
+          at: new Date().toISOString() });
         let text;
         if (system.includes('product copilot')) {
           text = JSON.stringify({ kind: 'question',
@@ -38,7 +41,12 @@ http.createServer((req, res) => {
         } else {
           text = `SUBJECT: [${model}] An offer picked for you\nBODY: [${model}] Answered over the anthropic dialect.`;
         }
-        json(200, { content: [{ type: 'text', text }] });
+        // usage, as a real provider reports it — deterministic (a quarter of the bytes),
+        // so a suite can check the ledger recorded exactly what the provider said
+        const usage = { input_tokens: Math.ceil(body.length / 4), output_tokens: Math.ceil(text.length / 4),
+          cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        json(200, { id: `msg_mock_${requests.length}`, type: 'message', role: 'assistant', model,
+          content: [{ type: 'text', text }], stop_reason: 'end_turn', usage });
       } catch {
         json(400, { error: 'unparseable' });
       }

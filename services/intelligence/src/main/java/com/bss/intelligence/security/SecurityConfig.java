@@ -98,6 +98,13 @@ public class SecurityConfig {
                         // is readable by staff too; filing an approval is the
                         // WORKER's act, deciding one is STAFF's — and the KPI
                         // scoreboard is the operations manager's view (ai:use)
+                        // the model door (#283): the worker's model calls carry the WORKER's
+                        // door key, not a token — the door resolves it (tenant included),
+                        // so Spring sees the path as anonymous. Issuing and revoking those
+                        // keys is a governance act: the controller does it at hire and fire.
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/modelDoor/**").permitAll()
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys/**").hasAuthority("ai:admin")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys").hasAuthority("ai:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/tasks/**").hasAuthority("workforce:use")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/ledger").hasAnyAuthority("workforce:use", "ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/workforce/approvals").hasAuthority("workforce:use")

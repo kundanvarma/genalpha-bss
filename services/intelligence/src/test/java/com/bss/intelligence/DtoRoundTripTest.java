@@ -216,9 +216,14 @@ class DtoRoundTripTest {
     @Test
     void auditView_newColumnsRideAtTheEnd() throws Exception {
         AuditController.AiAuditView v = new AuditController.AiAuditView("a", "ticket-reply", "stub", "stub-1",
-                "p", "r", "2026-09-22T10:00:00Z", 12, 24, "ok", null, 2, false);
+                "p", "r", "2026-09-22T10:00:00Z", 12, 24, "ok", null, 2, false, null);
         assertEquals("{\"id\":\"a\",\"useCase\":\"ticket-reply\",\"provider\":\"stub\",\"model\":\"stub-1\",\"prompt\":\"p\","
                 + "\"response\":\"r\",\"createdAt\":\"2026-09-22T10:00:00Z\",\"tokens\":12,\"costMicros\":24,\"outcome\":\"ok\","
-                + "\"action\":null,\"redactedFields\":2,\"rawExposure\":false}", json.writeValueAsString(v));
+                + "\"action\":null,\"redactedFields\":2,\"rawExposure\":false,\"actor\":null}", json.writeValueAsString(v));
+        // a worker's call through the model door names the worker (#283)
+        AuditController.AiAuditView worker = new AuditController.AiAuditView("b", "workforce:care", "anthropic",
+                "claude-haiku-4-5-20251001", "p", "r", "2026-10-17T10:00:00Z", 1120, 300, "ok", null, 0, true,
+                "worker-care-nora@bss.local");
+        assertEquals(true, json.writeValueAsString(worker).endsWith(",\"actor\":\"worker-care-nora@bss.local\"}"));
     }
 }

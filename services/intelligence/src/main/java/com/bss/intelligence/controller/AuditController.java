@@ -41,10 +41,12 @@ public class AuditController {
     /** One ledger row as the audit page reads it: previews, cost, outcome,
      * and whether the provider saw the prompt raw. */
     @JsonPropertyOrder({"id", "useCase", "provider", "model", "prompt", "response", "createdAt",
-            "tokens", "costMicros", "outcome", "action", "redactedFields", "rawExposure"})
+            "tokens", "costMicros", "outcome", "action", "redactedFields", "rawExposure", "actor"})
     public record AiAuditView(String id, String useCase, String provider, String model,
             String prompt, String response, String createdAt, long tokens, long costMicros,
-            String outcome, String action, int redactedFields, boolean rawExposure) {
+            String outcome, String action, int redactedFields, boolean rawExposure,
+            // who made the call: a digital worker's badge through the model door (#283); null for copilots
+            String actor) {
     }
 
     private static AiAuditView view(AiAudit a) {
@@ -56,7 +58,7 @@ public class AuditController {
                 a.getCostMicros() == null ? 0 : a.getCostMicros(),
                 a.getOutcome(), a.getAction(),
                 a.getRedactedFields() == null ? 0 : a.getRedactedFields(),
-                Boolean.TRUE.equals(a.getRawExposure()));
+                Boolean.TRUE.equals(a.getRawExposure()), a.getActorName());
     }
 
     private static String preview(String s) {
