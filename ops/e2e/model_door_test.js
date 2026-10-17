@@ -1,4 +1,4 @@
-/* The model door, ticket 1 (#283): a digital worker's model call goes through
+/* The model door (#283, tickets 1-2): a digital worker's model call goes through
  * the BSS, and the BSS measures it.
  *
  * Before the door, a worker held the tenant's provider key and called the
@@ -12,7 +12,11 @@
  *   3. the ledger records the call from the PROVIDER's own token counts,
  *      priced at the model's listed rates, with the worker as its actor —
  *      no self-report involved
- *   4. an unknown key and a revoked key are refused in the provider's own
+ *   4. the guardrails (#307): the workers' own spend ceiling and the
+ *      kill-switch refuse with 402 and billing words (the SDK's hard wall, so a
+ *      shift ends instead of retrying); only the tenant's worker models are
+ *      served; streaming is refused in words the SDK falls back on
+ *   5. an unknown key and a revoked key are refused in the provider's own
  *      error shape, so a worker's SDK reads a door refusal like a provider's
  *
  * Tenant: nova, whose worker brain defaults to the fleet's mock LLM (no key,
@@ -89,7 +93,46 @@ const door = (key, body) => call('POST', DOOR, null, body, { 'x-api-key': key, '
   if (/Close ticket/.test(row.prompt || '')) fail('the ledger kept the prompt content — it must not, before redaction lands');
   console.log(`OK the ledger recorded the provider's own counts (${row.tokens} tokens), priced at haiku's rates (${row.costMicros} µ$), the worker as actor — no self-report involved`);
 
-  /* ---------- 4. refusals in the provider's own shape ---------- */
+  /* ---------- 4. the guardrails ---------- */
+  const budget = (b) => call('POST', `${API}/ai/v1/governance/budget`, admin, b);
+  const spent = async () => (await call('GET', `${API}/ai/v1/governance`, admin)).json?.workerSpentMicros ?? 0;
+  try {
+    // a ceiling one micro-dollar above what workers have spent: one more call fits, then the wall
+    const set = await budget({ workerBudgetMicros: (await spent()) + 1 });
+    if (set.status !== 200) fail(`setting the workers' ceiling: ${set.status} ${set.text.slice(0, 160)}`);
+    const fits = await door(key, body);
+    if (fits.status !== 200) fail(`the call under the ceiling: ${fits.status} ${fits.text.slice(0, 160)}`);
+    const wall = await fetch(DOOR, { method: 'POST', body: JSON.stringify(body),
+      headers: { 'x-api-key': key, 'Content-Type': 'application/json' } });
+    const wallBody = await wall.json().catch(() => ({}));
+    if (wall.status !== 402) fail(`past the workers' ceiling the door answered ${wall.status}, not 402`);
+    if (!/billing hard limit/.test(wallBody.error?.message || '')) fail(`the ceiling's words: "${wallBody.error?.message}"`);
+    if (wall.headers.get('retry-after')) fail('a ceiling refusal carried Retry-After — the SDK would retry into the wall');
+    const gov = (await call('GET', `${API}/ai/v1/governance`, admin)).json;
+    console.log(`OK past the workers' ceiling the door answered 402 "billing hard limit", no Retry-After — the shift ends (${gov.workerSpentMicros} of ${gov.workerBudgetMicros} µ$)`);
+    await budget({ workerBudgetMicros: 0, enabled: false });
+    const killed = await door(key, body);
+    if (killed.status !== 402 || !/kill-switch/.test(killed.json?.error?.message || '')) {
+      fail(`with the kill-switch off: ${killed.status} ${killed.text.slice(0, 160)}`);
+    }
+    console.log('OK the tenant\'s kill-switch stops its workers too (402)');
+  } finally {
+    await budget({ workerBudgetMicros: 0, enabled: true });
+  }
+  const pricey = await door(key, { ...body, model: 'claude-opus-not-this-tenants' });
+  if (pricey.status !== 400 || pricey.json?.error?.type !== 'invalid_request_error') {
+    fail(`a model that is not the tenant's worker model: ${pricey.status} ${pricey.text.slice(0, 160)}`);
+  }
+  const streamed = await door(key, { ...body, stream: true });
+  const why = streamed.json?.error?.message || '';
+  if (streamed.status !== 400 || !/stream/.test(why) || !/not supported/.test(why)) {
+    fail(`a streaming request: ${streamed.status} "${why}"`);
+  }
+  const models = await call('GET', `${API}/ai/v1/modelDoor/anthropic/v1/models`);
+  if (models.status !== 404) fail(`the model list answered ${models.status}`);
+  console.log('OK only the tenant\'s worker models are served (400); streaming is refused as "not supported" so the SDK falls back; the model list is not served (404)');
+
+  /* ---------- 5. refusals in the provider's own shape ---------- */
   const stranger = await door('bssw_not-a-real-key', body);
   if (stranger.status !== 401 || stranger.json?.error?.type !== 'authentication_error') {
     fail(`an unknown key: ${stranger.status} ${stranger.text.slice(0, 160)}`);

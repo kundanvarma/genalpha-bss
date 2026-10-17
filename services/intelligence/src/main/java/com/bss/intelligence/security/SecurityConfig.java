@@ -102,7 +102,7 @@ public class SecurityConfig {
                         // door key, not a token — the door resolves it (tenant included),
                         // so Spring sees the path as anonymous. Issuing and revoking those
                         // keys is a governance act: the controller does it at hire and fire.
-                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/modelDoor/**").permitAll()
+                        .requestMatchers(ApiConstants.BASE_PATH + "/modelDoor/**").permitAll()
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys/**").hasAuthority("ai:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys").hasAuthority("ai:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/tasks/**").hasAuthority("workforce:use")
