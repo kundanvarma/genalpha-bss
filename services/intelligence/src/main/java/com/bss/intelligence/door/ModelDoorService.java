@@ -9,6 +9,8 @@ import com.bss.intelligence.exception.NotFoundException;
 import com.bss.intelligence.security.TenantContext;
 import com.bss.intelligence.security.TenantRegistry;
 import com.bss.intelligence.security.TenantScope;
+import com.bss.intelligence.service.Redaction;
+import com.bss.intelligence.service.Redactor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -45,8 +47,12 @@ import java.util.UUID;
  * retrying into it. Only the tenant's worker model (and the provider's small
  * side-call model) is served, and streaming is refused in words the SDK reads
  * as "stream not supported", so it falls back to a plain call. Every refusal is
- * a ledger row too. Redaction lands next; until it does, the ledger row says the
- * exposure was RAW, because it was — and it keeps no content.
+ * a ledger row too.
+ *
+ * Redaction (ticket 3): the call is redacted on the way out and restored on the
+ * way back (see DoorRedaction) with the same redactor every other model call in
+ * the BSS uses, unless the tenant opted into raw exposure — and the ledger row
+ * says which, and how many values were replaced. It still keeps no content.
  */
 @Service
 public class ModelDoorService {
@@ -64,13 +70,14 @@ public class ModelDoorService {
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final DoorPricing pricing;
+    private final Redactor redactor;
     private final RestClient.Builder http;
     private final ObjectMapper json;
     private final SecureRandom random = new SecureRandom();
 
     public ModelDoorService(WorkerDoorKeyRepository keys, AiAuditRepository audits, AiBudgetRepository budgets,
-            TenantRegistry tenants, TenantScope tenantScope, DoorPricing pricing, RestClient.Builder http,
-            ObjectMapper json,
+            TenantRegistry tenants, TenantScope tenantScope, DoorPricing pricing, Redactor redactor,
+            RestClient.Builder http, ObjectMapper json,
             // the small model a provider's agent framework uses for its own side calls
             // (titles, compression) — served beside the tenant's worker model, and metered
             @Value("${bss.ai.door-side-models.anthropic:claude-haiku-4-5-20251001}") String anthropicSideModels) {
@@ -82,6 +89,7 @@ public class ModelDoorService {
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.pricing = pricing;
+        this.redactor = redactor;
         this.http = http;
         this.json = json;
     }
@@ -147,20 +155,36 @@ public class ModelDoorService {
             if (refused.isPresent()) {
                 return refused.get();
             }
+            // redact on the way out, unless the tenant opted into raw exposure
+            boolean raw = tenant.isAiRawExposure();
+            Redaction map = redactor.begin();
+            String outbound = body;
+            if (!raw) {
+                JsonNode tree = json.readTree(body == null ? "{}" : body);
+                DoorRedaction.redactRequest(tree, redactor, map);
+                outbound = tree.toString();
+            }
+            Exposure exposure = new Exposure(raw ? "raw" : "raw-redacted", raw, map.count());
             long started = System.nanoTime();
             DoorRequests.DoorReply reply;
             try {
-                reply = forward(tenant, body, version, beta);
+                reply = forward(tenant, outbound, version, beta);
             } catch (RuntimeException e) {
                 log.warn("model door: upstream call failed for {}: {}", key.getBadge(), e.getMessage());
                 ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, "upstream-error",
-                        elapsedMs(started), "no response");
+                        elapsedMs(started), "no response", exposure);
                 return anthropicError(502, "api_error", "the worker model provider could not be reached");
             }
             DoorPricing.Usage usage = usageOf(reply.body());
             DoorPricing.Priced priced = pricing.price(model, usage);
             ledger(key, model, usage, priced, reply.status() < 300 ? "ok" : "http-" + reply.status(),
-                    elapsedMs(started), summary(reply.body()));
+                    elapsedMs(started), summary(reply.body()), exposure);
+            // and restore on the way back, so the worker only ever holds real values
+            if (!raw && map.count() > 0 && reply.status() < 300) {
+                JsonNode answer = json.readTree(reply.body());
+                DoorRedaction.restoreResponse(answer, map);
+                reply = new DoorRequests.DoorReply(reply.status(), answer.toString());
+            }
             return reply;
         }
     }
@@ -209,7 +233,7 @@ public class ModelDoorService {
 
     private Optional<DoorRequests.DoorReply> refuse(WorkerDoorKey key, String model, String outcome, int status,
             String type, String message) {
-        ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, outcome, 0, message);
+        ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, outcome, 0, message, Exposure.NOTHING_SENT);
         return Optional.of(anthropicError(status, type, message));
     }
 
@@ -257,17 +281,23 @@ public class ModelDoorService {
 
     /**
      * One ledger row per call, the worker as its actor. No prompt or response
-     * CONTENT is kept — only its shape — because until redaction lands at the
-     * door, that content is raw customer text.
+     * CONTENT is kept — only its shape: a worker's call is a whole conversation
+     * of customer text, and the ledger does not need it to say what it cost.
      */
+    /** What left on a call: its exposure class, whether it was the tenant's raw opt-in, how many values were replaced. */
+    private record Exposure(String exposureClass, boolean raw, int redactedFields) {
+        static final Exposure NOTHING_SENT = new Exposure("none", false, 0);
+    }
+
     private void ledger(WorkerDoorKey key, String model, DoorPricing.Usage usage, DoorPricing.Priced priced,
-            String outcome, int latencyMs, String responseShape) {
+            String outcome, int latencyMs, String responseShape, Exposure exposure) {
         try {
             AiAudit row = new AiAudit();
             row.setId(UUID.randomUUID().toString());
             row.setTenantId(key.getTenantId());
-            row.setExposure("raw");
-            row.setRawExposure(true);
+            row.setExposure(exposure.exposureClass());
+            row.setRawExposure(exposure.raw());
+            row.setRedactedFields(exposure.redactedFields());
             row.setUseCase("workforce:" + (key.getJob() == null ? "worker" : key.getJob()));
             row.setProvider(ANTHROPIC);
             row.setModel(model);

@@ -1,4 +1,4 @@
-/* The model door (#283, tickets 1-2): a digital worker's model call goes through
+/* The model door (#283, tickets 1-3): a digital worker's model call goes through
  * the BSS, and the BSS measures it.
  *
  * Before the door, a worker held the tenant's provider key and called the
@@ -16,7 +16,9 @@
  *      kill-switch refuse with 402 and billing words (the SDK's hard wall, so a
  *      shift ends instead of retrying); only the tenant's worker models are
  *      served; streaming is refused in words the SDK falls back on
- *   5. an unknown key and a revoked key are refused in the provider's own
+ *   5. redaction (#308): customer data in a tool result reaches the provider
+ *      as placeholders, never as the customer's address or number
+ *   6. an unknown key and a revoked key are refused in the provider's own
  *      error shape, so a worker's SDK reads a door refusal like a provider's
  *
  * Tenant: nova, whose worker brain defaults to the fleet's mock LLM (no key,
@@ -132,7 +134,27 @@ const door = (key, body) => call('POST', DOOR, null, body, { 'x-api-key': key, '
   if (models.status !== 404) fail(`the model list answered ${models.status}`);
   console.log('OK only the tenant\'s worker models are served (400); streaming is refused as "not supported" so the SDK falls back; the model list is not served (404)');
 
-  /* ---------- 5. refusals in the provider's own shape ---------- */
+  /* ---------- 5. redacted before it leaves ---------- */
+  const withCustomer = { model: 'claude-haiku-4-5-20251001', max_tokens: 64, messages: [
+    { role: 'user', content: [{ type: 'text', text: `Work ticket ${run}.` }] },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_1', name: 'care_ticket_get', input: { id: `t-${run}` } }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1',
+      content: `Customer paula${run}@family.example reports a red router light; call her on +47 912 34 567.` }] },
+  ] };
+  const redacted = await door(key, withCustomer);
+  if (redacted.status !== 200) fail(`a call carrying customer data: ${redacted.status} ${redacted.text.slice(0, 160)}`);
+  const sent = (await (await fetch(`${MOCK}/requests`)).json()).filter((r) => r.api === 'anthropic').pop();
+  if (!sent?.said) fail('the provider recorded nothing it was sent');
+  if (sent.said.includes(`paula${run}@family.example`) || sent.said.includes('912 34 567')) {
+    fail(`the provider received customer data in clear: "${sent.said.slice(0, 200)}"`);
+  }
+  if (!/<email#\d+>/.test(sent.said)) fail(`the provider did not receive a placeholder: "${sent.said.slice(0, 200)}"`);
+  const rrow = ((await call('GET', `${API}/ai/v1/audit`, admin)).json || [])
+    .filter((a) => a.actor === badge).find((a) => a.redactedFields > 0);
+  if (!rrow || rrow.rawExposure) fail('the ledger does not record a redacted call for the worker');
+  console.log(`OK customer data left as placeholders ("${sent.said.match(/<email#\d+>/)[0]}"), never in clear — the ledger counts ${rrow.redactedFields} redacted value(s)`);
+
+  /* ---------- 6. refusals in the provider's own shape ---------- */
   const stranger = await door('bssw_not-a-real-key', body);
   if (stranger.status !== 401 || stranger.json?.error?.type !== 'authentication_error') {
     fail(`an unknown key: ${stranger.status} ${stranger.text.slice(0, 160)}`);

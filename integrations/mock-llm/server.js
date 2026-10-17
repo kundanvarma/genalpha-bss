@@ -31,8 +31,12 @@ http.createServer((req, res) => {
         const system = String(chat.system || '');
         // the KEY it was called with: the model door (#283) must present the tenant's
         // provider key, never the worker's own door key
+        // and an excerpt of the conversation it was SENT — the model door redacts customer
+        // data before it leaves, and a suite proves it here, on the provider's side
+        const said = (chat.messages || []).map((m) => (typeof m.content === 'string' ? m.content
+          : (m.content || []).map((b) => b.text || (typeof b.content === 'string' ? b.content : '')).join(' '))).join(' | ');
         requests.push({ model, api: 'anthropic', task: system.slice(0, 60), key: req.headers['x-api-key'] || null,
-          at: new Date().toISOString() });
+          said: said.slice(0, 400), at: new Date().toISOString() });
         let text;
         if (system.includes('product copilot')) {
           text = JSON.stringify({ kind: 'question',
