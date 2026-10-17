@@ -211,6 +211,24 @@ public class TenantRegistry {
         public String getAiApiKeySmart() { return aiApiKeySmart; }
         public void setAiApiKeySmart(String v) { this.aiApiKeySmart = v; }
 
+        /** The digital workforce's brain (#283). The worker-controller used to
+         * read these and hand the key to the worker; now the MODEL DOOR reads
+         * them and the key never leaves this component. Independent of ai-*:
+         * copilots and workers may run on different providers. */
+        private String workerAiProvider;
+        private String workerAiBaseUrl;
+        private String workerAiApiKey;
+        private String workerAiModel;
+
+        public String getWorkerAiProvider() { return workerAiProvider; }
+        public void setWorkerAiProvider(String v) { this.workerAiProvider = v; }
+        public String getWorkerAiBaseUrl() { return workerAiBaseUrl; }
+        public void setWorkerAiBaseUrl(String v) { this.workerAiBaseUrl = v; }
+        public String getWorkerAiApiKey() { return workerAiApiKey; }
+        public void setWorkerAiApiKey(String v) { this.workerAiApiKey = v; }
+        public String getWorkerAiModel() { return workerAiModel; }
+        public void setWorkerAiModel(String v) { this.workerAiModel = v; }
+
         /** T-P3 gate: may this tenant's AI use-cases send RAW customer data
          * to a remote model? Opt-in, never assumed. */
         private boolean aiRawExposure;

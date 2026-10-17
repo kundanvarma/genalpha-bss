@@ -753,6 +753,13 @@ services:
     # 224m heap + 128m metaspace above; 1g catches a runaway, not a busy day.
     mem_limit: 1g
     environment:
+      # the digital workforce's brain (#283): the model door reads the tenant's
+      # worker-ai-* fields, and the defaults resolve from these — the provider key
+      # lives here, inside the BSS, and never in a worker container
+      WORKER_AI_PROVIDER: ${WORKER_AI_PROVIDER:-anthropic}
+      WORKER_AI_BASE_URL: ${WORKER_AI_BASE_URL:-}
+      WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-}
+      WORKER_AI_MODEL: ${WORKER_AI_MODEL:-claude-haiku-4-5-20251001}
       LEGACY_TICKET_BASE_URL: http://mock-legacy:8080
       # the product advisor's sources
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -2689,7 +2696,8 @@ services:
       BSS_TOKEN_URL: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       WORKER_IMAGE: bss-hermes-worker:dev
       # WORKER_NETWORK unset: the controller detects its own network at runtime
-      WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-}
+      # no provider key here any more (#283): the model door inside intelligence holds
+      # it, and a worker gets only its own door key, issued at hire
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./infra/tenants:/config:ro

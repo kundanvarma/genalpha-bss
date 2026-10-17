@@ -34,6 +34,7 @@ public class WorkforceKpiService {
     private final WorkforceApprovalRepository approvals;
     private final WorkforceService workforce;
     private final com.bss.intelligence.audit.AiBudgetRepository budgets;
+    private final com.bss.intelligence.audit.AiAuditRepository audits;
     private final BssApiClient bss;
     private final TenantScope tenantScope;
     private final long baselineTicketMinutes;
@@ -42,6 +43,7 @@ public class WorkforceKpiService {
 
     public WorkforceKpiService(WorkforceTaskRepository tasks, WorkforceApprovalRepository approvals,
             WorkforceService workforce, com.bss.intelligence.audit.AiBudgetRepository budgets,
+            com.bss.intelligence.audit.AiAuditRepository audits,
             BssApiClient bss, TenantScope tenantScope,
             @Value("${bss.workforce.baseline-minutes-ticket:12}") long baselineTicketMinutes,
             @Value("${bss.workforce.baseline-minutes-cash:8}") long baselineCashMinutes,
@@ -50,6 +52,7 @@ public class WorkforceKpiService {
         this.approvals = approvals;
         this.workforce = workforce;
         this.budgets = budgets;
+        this.audits = audits;
         this.bss = bss;
         this.tenantScope = tenantScope;
         this.baselineTicketMinutes = baselineTicketMinutes;
@@ -178,13 +181,22 @@ public class WorkforceKpiService {
         // it holds a live lease right now, and its own numbers.
         Map<String, long[]> byType = new TreeMap<>(); // workers, workingNow, completed, escalated
         List<WorkforceKpis.WorkerRow> workers = new java.util.ArrayList<>();
+        // what each worker's model calls cost, MEASURED at the model door (#283) — keyed by
+        // the same user id the leases carry, so it lands on the worker's own row
+        Map<String, Long> measuredByWorker = new java.util.HashMap<>();
+        long measuredTotal = 0;
+        for (Object[] r : audits.sumCostByWorker(tenant)) {
+            long micros = ((Number) r[1]).longValue();
+            measuredByWorker.put((String) r[0], micros);
+            measuredTotal += micros;
+        }
         for (String who : workerKinds.keySet()) {
             long[] v = byWorker.getOrDefault(who, new long[5]);
             String type = typeOf(workerKinds.get(who));
             boolean working = workerOnTask.getOrDefault(who, false);
             workers.add(new WorkforceKpis.WorkerRow(who, workerNames.getOrDefault(who, who), type,
                     workerKinds.get(who), working, workerLastActive.get(who), v[0], v[1],
-                    v[3] == 0 ? null : v[2] / v[3], v[4]));
+                    v[3] == 0 ? null : v[2] / v[3], v[4], measuredByWorker.getOrDefault(who, 0L)));
             long[] tRow = byType.computeIfAbsent(type, x -> new long[4]);
             tRow[0]++;
             tRow[1] += working ? 1 : 0;
@@ -218,7 +230,10 @@ public class WorkforceKpiService {
                 workerOnTask.values().stream().filter(Boolean::booleanValue).count(),
                 new WorkforceKpis.Approvals(pending, approved, refused,
                         decisionCount == 0 ? 0 : decisionSecondsSum / decisionCount),
-                staffing());
+                staffing(),
+                measuredTotal,
+                "measured at the model door from the provider's own token counts, at listed per-model rates"
+                        + " — micro-dollars; workers that predate the door are not in it");
     }
 
     /**
@@ -239,7 +254,8 @@ public class WorkforceKpiService {
                 : backlog > surgeOpenPerWorker * active;
         return new WorkforceKpis.Staffing(backlog, active, openPerWorker, surge, surgeOpenPerWorker,
                 maxWorkers, "surge = backlog exceeds threshold × active workers"
-                        + " (or any backlog with zero workers); the ceiling caps the crew regardless");
+                        + " (or any backlog with zero workers); the ceiling caps the crew regardless",
+                budget == null ? 0 : budget.getWorkerBudgetMicros());
     }
 
     /** A worker's type is what it WORKS, from the ledger: tickets → care,

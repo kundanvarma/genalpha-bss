@@ -17,7 +17,7 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 40 ODA components speaking TMF Open APIs natively
-- 262 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
+- 263 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
 - Accessibility enforced in CI: axe-core runs the full WCAG 2.2 AA ruleset across every channel at zero violations — the storefront scan is a pull-request gate (`.github/workflows/browser-proof.yml`), all five channels run in the proof run, and each tenant's brand colour is auto-shaded to stay legible — accessibility that can't silently rot between releases
 - Best-of-breed growth & journey orchestration: onboarding-triggered journeys with named stages, reusable localized message templates, multi-channel delivery (in-app/email/SMS/push), saved rule-tree audiences, a full node graph (message · wait · wait-for-event · decision · exit), a visual canvas with live per-node counts, AI-drafted journeys (governed + audited), and real-time next-best-action arbitration with an explainable decision log — governed by default (consent, frequency caps, quiet hours, holdout-measured lift). **[Step-by-step operator guide →](docs/growth-guide.md)**
 - A **BSS-native CDP** — no reverse-ETL, no second database: audiences are built from the operational event bus you already run (a completed order, a new bill, a loyalty-tier change *is* the trait), across four populations (customers · consent-gated prospects · B2B organizations · anonymous visitors for retargeting). One connector activates the same audience to **Meta *and* Google** (SHA-256 hashed, DNC-filtered, async), inbound **social care** turns negative/support DMs into TMF621 trouble tickets over the bus, and a **portfolio attribution** report shows holdout-measured lift and **incremental** revenue across every campaign and journey — with a hard honesty rule: no control group, no lift claimed. **[Step-by-step martech guide →](docs/martech-guide.md)**
@@ -38,9 +38,9 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 
 
 <details>
-<summary><b>Every feature is verified end-to-end in a real browser</b> — 262 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — 263 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
 
-**Every feature is verified end-to-end in a real browser** — 262 Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — 263 Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -162,7 +162,10 @@ workers and copilots alike; refunds/cease/erasure only ever become **approval re
 human executes with their own token — the worker can never approve its own ask; and the
 **Workforce dashboard** shows the shift honestly: deflection, handle time, the REOPEN RATE
 (the metric a vendor would hide), minutes-saved labeled `estimate: true` beside its baselines,
-and self-reported model cost labeled as the worker's own word; suite #65 proves the whole
+and the workers' AI cost **measured** at the **model door** — a worker calls its model through
+the BSS with its own key, never the provider's, and each call is capped by a worker spend ceiling,
+redacted and ledgered from the provider's own token counts (the self-reported figure stays beside
+it; [docs/model-door.md](docs/model-door.md), `model_door_test.js`); suite #65 proves the whole
 employment — hire, shift, refusal to fake, the gate, the firing — plus a browser leg where one
 dashboard click refunds under the human's token; day-1 package in
 [integrations/hermes-worker](integrations/hermes-worker/README.md), design in

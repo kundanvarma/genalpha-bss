@@ -199,6 +199,14 @@ bss:
         # the process is redacted; the caller still sees real values, because
         # the placeholders are reversed on the way back.
         ai-raw-exposure: false
+        # The workforce brain, through the MODEL DOOR (#283). Nova is the
+        # tenant the door's suite proves on, so its worker model defaults to the
+        # fleet's mock LLM — no key, no network. Point these at a real provider
+        # to run real workers here; the key stays inside the intelligence component.
+        worker-ai-provider: ${WORKER_AI_PROVIDER_NOVA:anthropic}
+        worker-ai-base-url: ${WORKER_AI_BASE_URL_NOVA:http://mock-llm:8080}
+        worker-ai-api-key: ${WORKER_AI_API_KEY_NOVA:mock-llm-takes-any-key}
+        worker-ai-model: ${WORKER_AI_MODEL_NOVA:claude-haiku-4-5-20251001}
       - id: chilimobil
         issuer: ${OIDC_ISSUER_URI_CHILIMOBIL:http://localhost:8085/realms/chilimobil}
         jwks-uri: http://keycloak:8080/realms/chilimobil/protocol/openid-connect/certs

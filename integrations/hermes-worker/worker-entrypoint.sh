@@ -8,6 +8,11 @@
 #               WORKER_AI_PROVIDER, WORKER_AI_MODEL        (the brain)
 # Optional:     WORKER_AI_BASE_URL, WORKER_AI_API_KEY,
 #               BSS_GATEWAY_URL, BSS_TOKEN_URL,
+#
+# THE MODEL DOOR (#283): the controller sets WORKER_AI_BASE_URL to the BSS's
+# model door and WORKER_AI_API_KEY to this worker's OWN door key — never the
+# tenant's provider key, which stays inside the BSS. The door meters, caps and
+# redacts every call; it does not stream, so neither does the worker.
 #               WORK_INTERVAL_SECONDS (default 900), WORKER_JOB (care|back-office|generalist)
 set -euo pipefail
 
@@ -22,11 +27,27 @@ INTERVAL="${WORK_INTERVAL_SECONDS:-900}"
 JOB="${WORKER_JOB:-care}"
 
 mkdir -p /root/.hermes
+# An OpenAI-API brain (#309) runs as the runtime's generic "custom" endpoint: the
+# base URL comes from this file, the key from BSS_DOOR_KEY — a name no other client
+# in the runtime reads, so the door key goes to the door and nowhere else.
+HERMES_PROVIDER="$WORKER_AI_PROVIDER"
+OPENAI_API=false
+case "$WORKER_AI_PROVIDER" in
+  openai|openai-compatible) HERMES_PROVIDER=custom; OPENAI_API=true ;;
+esac
 cat > /root/.hermes/config.yaml <<CFG
 model:
   default: "${WORKER_AI_MODEL}"
-  provider: "${WORKER_AI_PROVIDER}"
+  provider: "${HERMES_PROVIDER}"
 $( [ -n "${WORKER_AI_BASE_URL:-}" ] && echo "  base_url: \"${WORKER_AI_BASE_URL}\"" )
+$( [ "$OPENAI_API" = true ] && printf '  api_mode: "chat_completions"\n  key_env: "BSS_DOOR_KEY"' )
+  # the model door answers plain calls only (and refuses a stream in the words
+  # the SDK falls back on — this just saves the round trip)
+  streaming: false
+auxiliary:
+  # nobody reads a one-shot shift's session title; it would be a paid side call
+  title_generation:
+    enabled: false
 tool_loop_guardrails:
   hard_stop_enabled: true
 mcp_servers:
@@ -47,12 +68,17 @@ CFG
 if [ -n "${WORKER_AI_API_KEY:-}" ]; then
   # both the .env file and the process env: the runtime's credential lookup
   # has moved between releases, cover every door it may knock on
-  case "$WORKER_AI_PROVIDER" in
-    anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
-               export ANTHROPIC_API_KEY="${WORKER_AI_API_KEY}" ;;
-    *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env
-               export OPENAI_API_KEY="${WORKER_AI_API_KEY}" ;;
-  esac
+  if [ "$OPENAI_API" = true ]; then
+    echo "BSS_DOOR_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
+    export BSS_DOOR_KEY="${WORKER_AI_API_KEY}"
+  else
+    case "$WORKER_AI_PROVIDER" in
+      anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
+                 export ANTHROPIC_API_KEY="${WORKER_AI_API_KEY}" ;;
+      *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env
+                 export OPENAI_API_KEY="${WORKER_AI_API_KEY}" ;;
+    esac
+  fi
   chmod 600 /root/.hermes/.env
 fi
 

@@ -49,7 +49,7 @@ anything bigger**, and reports its shifts — all visible on the console's
 | Hire / fire | console → Staff → grant/revoke `digital-worker` (or `hire-worker.sh`) |
 | Stop everything now | console → AI governance kill-switch (stops copilots AND workers) |
 | Big actions | Workforce tab → approvals: the human's click IS the write, under the human's token |
-| The scoreboard | Workforce tab: completed, escalated, deflection, handle time, **reopen rate**, minutes saved (labeled estimate), self-reported cost (labeled) |
+| The scoreboard | Workforce tab: completed, escalated, deflection, handle time, **reopen rate**, minutes saved (labeled estimate), AI cost **measured** at the model door, with the self-reported cost beside it |
 
 ## Field notes from the first live run (2026-07-23, Hermes v0.19.0)
 
@@ -93,9 +93,14 @@ eat it).
 
 ## Honest notes
 
-- The worker brings its **own LLM** — its model costs do not pass through
-  the BSS AI control plane; the dashboard shows them as the worker's
-  self-reported word, labeled as such.
+- The worker calls its model **through the BSS's model door** (since
+  2026-10-17, [docs/model-door.md](../../docs/model-door.md)): the controller
+  gives it the door's address and a key of its own, never the provider key.
+  Its calls are measured from the provider's own token counts, capped by the
+  worker spend ceiling and redacted. The self-reported figure stays on the
+  dashboard beside the measured one. A worker started by hand with
+  `hire-worker.sh` outside the controller still brings its own key — and is
+  then outside all of that.
 - `hire-worker.sh` grants exactly the `digital-worker` bundle: workforce
   queue + tickets + interactions + AR reads + the apply-payment act.
   No payment:write, no catalog:write, no admin — big actions go through

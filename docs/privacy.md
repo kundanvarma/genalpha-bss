@@ -90,8 +90,10 @@ untested region is an untested backup at continental scale.
 ## What reaches an AI model today — stated plainly
 
 Personal data is redacted before any model call (since 2026-09-22). The
-intelligence component's `AiGovernor` is the one door, and every prompt
-that leaves the process goes through its `Redactor` first: email
+intelligence component has two governed paths to a model and both use the
+same `Redactor`: `AiGovernor` for the BSS's own copilots, and the **model
+door** for digital workers (since 2026-10-17, [model-door.md](model-door.md)).
+Every prompt that leaves the process goes through the `Redactor` first: email
 addresses, phone numbers, IBANs and bank accounts, SIM ICCIDs, IMEIs, card
 numbers, national identity numbers (Norwegian fødselsnummer and Nordic
 personnummer shapes, plus generic 9–12-digit ids) and labelled address
@@ -121,6 +123,19 @@ redacted, and the twelfth was `taranga` — the one tenant that is publicly
 reachable on the hosted box *and* wired to a real model key. Corrected
 2026-09-23, along with the tenant. The ledger (`ai_audit`) keeps the redacted prompt and
 response either way and records `redactedFields`.
+
+**Digital workers were the exception until 2026-10-17.** A worker (the
+Hermes agent) held the tenant's provider key and called the model directly,
+so its prompts — customer ticket text, read through the BSS's own tools —
+left **unredacted**, unmetered and outside every budget, while this section
+said every prompt was redacted. The model door closes that: a worker now
+holds only its own door key, and its calls are redacted on the way out (the
+system prompt, message text, tool results and earlier tool-call arguments)
+and restored on the way back, including inside the tool calls it makes.
+Two differences from the copilot path, stated so nobody reads more into it:
+the door keeps **no** prompt or response content in the ledger, only what a
+call cost and how many values were replaced; and a signed *thinking* block
+passes untouched, because the provider refuses one that was altered.
 
 **Retention runs on two clocks** (since 2026-09-23, `AiRetentionSweep`),
 because the rows are not alike. A *redacted* row holds placeholders, not

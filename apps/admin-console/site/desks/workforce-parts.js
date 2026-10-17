@@ -42,7 +42,42 @@ function workforceControls(staffing) {
     if (res.ok) renderWorkforce();
   });
   ceilRow.append(ceilInput, ceilSave);
-  ceilBox.append(ceilHead, ceilRow, ceilNote);
+  // the workers' own SPEND ceiling (#283): the model door refuses their calls past it
+  const spendHead = document.createElement('b');
+  spendHead.textContent = 'Worker spend ceiling (USD)';
+  spendHead.style.cssText = 'display:block;margin-top:0.8rem';
+  const spendRow = document.createElement('div');
+  spendRow.style.cssText = 'display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem';
+  const spendInput = document.createElement('input');
+  spendInput.type = 'number';
+  spendInput.min = '0';
+  spendInput.step = '0.01';
+  spendInput.value = ((staffing.workerBudgetMicros || 0) / 1e6).toString();
+  spendInput.dataset.testid = 'wf-spend-input';
+  spendInput.style.width = '6rem';
+  const spendSave = document.createElement('button');
+  spendSave.textContent = 'Save';
+  spendSave.dataset.testid = 'wf-spend-save';
+  const spendNote = document.createElement('div');
+  spendNote.style.cssText = 'font-size:0.8rem;color:var(--dim,#777);margin-top:0.35rem';
+  spendNote.textContent = '0 = none · measured at the model door; past it a worker is refused and its shift ends'
+    + ' · it also counts toward the tenant\'s AI ceiling';
+  spendSave.addEventListener('click', async () => {
+    spendSave.disabled = true;
+    const micros = Math.max(0, Math.round((Number(spendInput.value) || 0) * 1e6));
+    const res = await authFetch('/ai/v1/governance/budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workerBudgetMicros: micros }),
+    });
+    spendSave.disabled = false;
+    spendNote.textContent = res.ok
+      ? (micros ? `Saved — workers stop at $${(micros / 1e6).toFixed(2)}` : 'Saved — no worker spend ceiling')
+      : 'Could not save: ' + res.status;
+    if (res.ok) renderWorkforce();
+  });
+  spendRow.append(spendInput, spendSave);
+  ceilBox.append(ceilHead, ceilRow, ceilNote, spendHead, spendRow, spendNote);
 
   const hireBox = document.createElement('div');
   hireBox.style.cssText = 'flex:2 1 22rem;padding:0.8rem 1rem;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fafafa)';
