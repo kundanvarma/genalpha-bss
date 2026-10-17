@@ -98,6 +98,13 @@ public class SecurityConfig {
                         // is readable by staff too; filing an approval is the
                         // WORKER's act, deciding one is STAFF's — and the KPI
                         // scoreboard is the operations manager's view (ai:use)
+                        // the model door (#283): the worker's model calls carry the WORKER's
+                        // door key, not a token — the door resolves it (tenant included),
+                        // so Spring sees the path as anonymous. Issuing and revoking those
+                        // keys is a governance act: the controller does it at hire and fire.
+                        .requestMatchers(ApiConstants.BASE_PATH + "/modelDoor/**").permitAll()
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys/**").hasAuthority("ai:admin")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/doorKeys").hasAuthority("ai:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/tasks/**").hasAuthority("workforce:use")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/ledger").hasAnyAuthority("workforce:use", "ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/workforce/approvals").hasAuthority("workforce:use")
@@ -116,8 +123,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(doorKeysAreNotLoginTokens())
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
         return http.build();
+    }
+
+    /**
+     * The model door (#283) is anonymous to Spring and authenticates its own
+     * callers: a digital worker presents its door key where a provider key goes,
+     * and an OpenAI-API SDK sends any key as a Bearer token. Without this, the
+     * resource server would read that door key as a login token, fail to decode
+     * it, and refuse the call before the door ever saw it. Everywhere else a
+     * Bearer token is read exactly as before.
+     */
+    private static org.springframework.security.oauth2.server.resource.web.BearerTokenResolver doorKeysAreNotLoginTokens() {
+        org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver standard =
+                new org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver();
+        String door = ApiConstants.BASE_PATH + "/modelDoor/";
+        return request -> request.getRequestURI().startsWith(door) ? null : standard.resolve(request);
     }
 
     /**

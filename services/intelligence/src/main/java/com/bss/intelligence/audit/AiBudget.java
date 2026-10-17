@@ -40,6 +40,14 @@ public class AiBudget {
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
+    /** The WORKERS' own ceiling (#283), in micro-dollars over their own window
+     * (0 = none). Worker spend still counts toward budget_micros as well. */
+    @Column(name = "worker_budget_micros", nullable = false)
+    private long workerBudgetMicros;
+
+    @Column(name = "worker_window_hours", nullable = false)
+    private int workerWindowHours = 720;
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public long getBudgetMicros() { return budgetMicros; }
@@ -50,6 +58,10 @@ public class AiBudget {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public int getMaxWorkers() { return maxWorkers; }
     public void setMaxWorkers(int v) { this.maxWorkers = v; }
+    public long getWorkerBudgetMicros() { return workerBudgetMicros; }
+    public void setWorkerBudgetMicros(long v) { this.workerBudgetMicros = v; }
+    public int getWorkerWindowHours() { return workerWindowHours; }
+    public void setWorkerWindowHours(int v) { this.workerWindowHours = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
 }

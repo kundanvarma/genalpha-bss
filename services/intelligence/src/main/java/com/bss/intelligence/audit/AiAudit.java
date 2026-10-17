@@ -83,10 +83,23 @@ public class AiAudit {
     @Column(name = "redacted_fields")
     private Integer redactedFields;
 
+    /** who made the call: a digital worker's user id through the model door;
+     * null for the BSS's own copilots, whose use case already says what they were */
+    @Column(name = "actor_id", length = 64)
+    private String actorId;
+
+    /** the worker's badge, as the Workforce page names it */
+    @Column(name = "actor_name", length = 128)
+    private String actorName;
+
     public Boolean getRawExposure() { return rawExposure; }
     public void setRawExposure(Boolean v) { this.rawExposure = v; }
     public Integer getRedactedFields() { return redactedFields; }
     public void setRedactedFields(Integer v) { this.redactedFields = v; }
+    public String getActorId() { return actorId; }
+    public void setActorId(String v) { this.actorId = v; }
+    public String getActorName() { return actorName; }
+    public void setActorName(String v) { this.actorName = v; }
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }

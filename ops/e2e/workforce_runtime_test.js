@@ -1,7 +1,9 @@
 /* The closed loop — workers fully created and controlled by the BSS. Suite #66.
  *
- * Needs: docker compose --profile workforce up -d worker-controller
- *        (and WORKER_AI_API_KEY exported so hired workers have a brain).
+ * Needs: docker compose --profile workforce up -d worker-controller, and
+ *        WORKER_AI_API_KEY exported for INTELLIGENCE (recreate it): since the
+ *        model door (#283) the provider key lives there, not in the controller
+ *        or the workers. A real key means a real shift — and real spend.
  *
  *  - a stranger cannot command the controller (403 — the BSS's verdict)
  *  - HIRE IS START: one authenticated POST → badge minted + container
@@ -11,6 +13,10 @@
  *    controller ROLLS the workers → the container's env carries the new
  *    model, no BSS restart (leases made the roll free)
  *  - FIRE IS STOP: one DELETE → badge revoked AND container gone
+ *  - THE MODEL DOOR (#283): the worker holds only its own door key and the
+ *    door's address — never the provider key; its real shift is MEASURED in the
+ *    AI ledger with the worker as actor; a rolling restart re-keys it (the old
+ *    key is refused); firing revokes the key FIRST (the fired key is refused)
  *  - the dashboard's Hire goes through the controller when deployed
  *    ("Hired AND started", no credentials block)
  */
@@ -22,6 +28,23 @@ const API = 'http://localhost:8080';
 const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
 const TENANTS = `${__dirname}/../../infra/tenants/tenants.yml`;
 const run = Date.now();
+// the door has a face per model API (#309): the worker's own base URL says which it was given
+const FACES = { '/ai/v1/modelDoor/anthropic': 'anthropic', '/ai/v1/modelDoor/openai/v1': 'openai' };
+let face = 'anthropic';
+const envOf = (container) => execFileSync('docker',
+  ['inspect', container, '--format', '{{range .Config.Env}}{{println .}}{{end}}'], { encoding: 'utf8' });
+const envVar = (env, name) => (env.split('\n').find((l) => l.startsWith(`${name}=`)) || '').slice(name.length + 1);
+/* a DEAD key must be refused before any model is called — so this never costs a real call */
+async function doorRefuses(key) {
+  const r = face === 'openai'
+    ? await fetch(`${API}/ai/v1/modelDoor/openai/v1/chat/completions`, { method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', messages: [{ role: 'user', content: 'ping' }] }) })
+    : await fetch(`${API}/ai/v1/modelDoor/anthropic/v1/messages`, { method: 'POST',
+      headers: { 'x-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }) });
+  return r.status === 401;
+}
 const fail = (m) => { throw new Error(m); };
 
 async function token(u, p) {
@@ -71,6 +94,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!listed.body.some((w) => w.name === container)) fail('the started worker is not listed');
   console.log(`OK HIRE IS START: one POST minted ${badge} and started ${container} — no`
     + ' credentials displayed, the badge went straight into the container env');
+  const hiredEnv = envOf(container);
+  const doorKey = envVar(hiredEnv, 'WORKER_AI_API_KEY');
+  const base = envVar(hiredEnv, 'WORKER_AI_BASE_URL');
+  const facePath = Object.keys(FACES).find((p) => base.endsWith(p));
+  if (!facePath) fail(`the worker is not pointed at the model door: "${base}"`);
+  face = FACES[facePath];
+  if (!doorKey.startsWith('bssw_') || /sk-ant/.test(hiredEnv)) {
+    fail('the worker container holds something other than its own door key');
+  }
+  console.log(`OK THE DOOR: the worker holds its own door key and the door's ${face} address — the provider key never entered its container`);
 
   // its first shift lands on the ledger (verified at the source, as always)
   let mine = null;
@@ -82,6 +115,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!mine) fail('the hired worker never worked (no ledger row)');
   console.log(`OK THE SHIFT IS REAL: ${badge} is on the ledger — [${mine.status}]`
     + ` ${(mine.outcome || mine.summary || '').slice(0, 60)}`);
+  // ...and what it cost is MEASURED by the BSS, not reported by the worker
+  let spend = [];
+  for (let i = 0; i < 30 && !spend.length; i++) {
+    spend = ((await call('GET', '/ai/v1/audit', staff)).body || [])
+      .filter((a) => a.actor === badge && a.outcome === 'ok' && a.tokens > 0);
+    if (!spend.length) await sleep(5000);
+  }
+  if (!spend.length) fail('the worker\'s model calls are not in the AI ledger — the door did not measure the shift');
+  const micros = spend.reduce((t, a) => t + a.costMicros, 0);
+  const tokensUsed = spend.reduce((t, a) => t + a.tokens, 0);
+  if (spend.some((a) => a.rawExposure)) fail('a worker call left unredacted on a tenant without the raw opt-in');
+  console.log(`OK MEASURED: ${spend.length} model call(s) of that shift are in the AI ledger, from the provider's own`
+    + ` counts — ${tokensUsed} tokens, ${micros} µ$ — the worker as actor, redacted on the way out`);
 
   /* ---------- 3. the live brain swap ---------- */
   const yml = fs.readFileSync(TENANTS, 'utf8');
@@ -89,6 +135,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     'worker-ai-model: ${WORKER_AI_MODEL_SWAP:claude-haiku-4-5}');
   if (swapped === yml) fail('could not find worker-ai-model line to swap');
   fs.writeFileSync(TENANTS, swapped);
+  let rolledKey = null;
   try {
     let rolled = false;
     for (let i = 0; i < 12 && !rolled; i++) {
@@ -106,6 +153,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       } catch { /* container mid-roll */ }
     }
     if (!rolled) fail('the controller never rolled the worker onto the new brain');
+    rolledKey = envVar(envOf(container), 'WORKER_AI_API_KEY');
+    if (!rolledKey.startsWith('bssw_') || rolledKey === doorKey) fail('the roll did not re-key the worker');
+    let oldRefused = false;
+    for (let i = 0; i < 6 && !oldRefused; i++) { oldRefused = await doorRefuses(doorKey); if (!oldRefused) await sleep(2000); }
+    if (!oldRefused) fail('the pre-roll door key still opens the door');
+    console.log('OK RE-KEYED: the roll issued a fresh door key and revoked the old one — the old key is refused');
     console.log('OK LIVE BRAIN SWAP: one edit to worker-ai-model in tenants.yml and the controller'
       + ' ROLLED the running worker onto the new model — no BSS restart, no manual steps;'
       + ' the lease design made the roll free');
@@ -119,7 +172,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(2000);
   const after = await call('GET', '/workforce-runtime/workers', staff);
   if (after.body.some((w) => w.name === container)) fail('the fired worker is still listed');
-  console.log('OK FIRE IS STOP: one DELETE revoked the badge AND removed the container');
+  if (fired.body?.doorKeyRevoked !== true) fail(`firing did not revoke the door key: ${fired.text.slice(0, 200)}`);
+  // the key the worker held when it was fired — only the firing can have killed it
+  if (!(await doorRefuses(rolledKey))) fail('the fired worker\'s door key still opens the door');
+  console.log('OK FIRE IS STOP: one DELETE revoked the door key FIRST (the fired key is refused), then the badge, and removed the container');
 
   /* ---------- 5. the dashboard goes through the controller ---------- */
   const browser = await chromium.launch();

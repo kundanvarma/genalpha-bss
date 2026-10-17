@@ -39,6 +39,11 @@ of the product.
    **self-reported by the worker** (fields on task completion) and labeled
    as such; the control plane remains authoritative only for calls made
    through OUR governed endpoints.
+   **Superseded 2026-10-17:** a worker now calls its model through the BSS's
+   **model door** with a key of its own; its calls are measured from the
+   provider's own token counts, capped by a worker spend ceiling and
+   redacted — see [model-door.md](model-door.md). The self-reported figure
+   stays on the dashboard beside the measured one.
 2. Hermes's own docs are thin on operator oversight — which is exactly the
    gap this package fills and sells: the BSS-side ledger and dashboard ARE
    the observability the agent framework doesn't ship.

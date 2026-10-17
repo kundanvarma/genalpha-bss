@@ -29,7 +29,14 @@ http.createServer((req, res) => {
         const chat = JSON.parse(body || '{}');
         const model = chat.model || 'unknown';
         const system = String(chat.system || '');
-        requests.push({ model, api: 'anthropic', task: system.slice(0, 60), at: new Date().toISOString() });
+        // the KEY it was called with: the model door (#283) must present the tenant's
+        // provider key, never the worker's own door key
+        // and an excerpt of the conversation it was SENT — the model door redacts customer
+        // data before it leaves, and a suite proves it here, on the provider's side
+        const said = (chat.messages || []).map((m) => (typeof m.content === 'string' ? m.content
+          : (m.content || []).map((b) => b.text || (typeof b.content === 'string' ? b.content : '')).join(' '))).join(' | ');
+        requests.push({ model, api: 'anthropic', task: system.slice(0, 60), key: req.headers['x-api-key'] || null,
+          said: said.slice(0, 400), at: new Date().toISOString() });
         let text;
         if (system.includes('product copilot')) {
           text = JSON.stringify({ kind: 'question',
@@ -38,7 +45,12 @@ http.createServer((req, res) => {
         } else {
           text = `SUBJECT: [${model}] An offer picked for you\nBODY: [${model}] Answered over the anthropic dialect.`;
         }
-        json(200, { content: [{ type: 'text', text }] });
+        // usage, as a real provider reports it — deterministic (a quarter of the bytes),
+        // so a suite can check the ledger recorded exactly what the provider said
+        const usage = { input_tokens: Math.ceil(body.length / 4), output_tokens: Math.ceil(text.length / 4),
+          cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        json(200, { id: `msg_mock_${requests.length}`, type: 'message', role: 'assistant', model,
+          content: [{ type: 'text', text }], stop_reason: 'end_turn', usage });
       } catch {
         json(400, { error: 'unparseable' });
       }
@@ -54,7 +66,14 @@ http.createServer((req, res) => {
         const chat = JSON.parse(body || '{}');
         const model = chat.model || 'unknown';
         const system = (chat.messages || []).find((m) => m.role === 'system')?.content || '';
-        requests.push({ model, api: 'openai', task: system.slice(0, 60), at: new Date().toISOString() });
+        // the key and an excerpt of what it was sent, as on the anthropic dialect: the model
+        // door's OpenAI face (#309) is proved on the provider's side the same way
+        const said = (chat.messages || []).map((m) => (typeof m.content === 'string' ? m.content
+          : (m.content || []).map((p) => p.text || '').join(' '))).join(' | ');
+        const auth = req.headers.authorization || '';
+        requests.push({ model, api: 'openai', task: system.slice(0, 60),
+          key: auth.startsWith('Bearer ') ? auth.slice(7) : null, said: said.slice(0, 400),
+          at: new Date().toISOString() });
         let content;
         if (system.includes('product copilot')) {
           content = JSON.stringify({ kind: 'question',
@@ -64,7 +83,11 @@ http.createServer((req, res) => {
           content = `SUBJECT: [${model}] An offer picked for you\nBODY: [${model}] This tier-routed`
             + ' answer came from the model the task deserved.';
         }
-        json(200, { choices: [{ message: { role: 'assistant', content } }] });
+        // usage as OpenAI reports it: the cached part of the prompt sits INSIDE prompt_tokens
+        const usage = { prompt_tokens: Math.ceil(body.length / 4), completion_tokens: Math.ceil(content.length / 4),
+          prompt_tokens_details: { cached_tokens: 0 } };
+        json(200, { id: `chatcmpl_mock_${requests.length}`, object: 'chat.completion', model,
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content } }], usage });
       } catch {
         json(400, { error: 'unparseable' });
       }

@@ -55,8 +55,11 @@ async function renderWorkforce() {
     card('Reopen rate', kpis.reopen ? Math.round(kpis.reopen.rate * 100) + '%' : '—',
       kpis.reopen && kpis.reopen.definition, 'wf-kpi-reopen'),
     card('Minutes saved (est.)', mins.minutes, mins.definition, 'wf-kpi-saved'),
-    card('Self-reported cost', ((kpis.selfReportedCostMicros || 0) / 1e6).toFixed(4) + ' ' + tenantCurrency(),
-      kpis.selfReportedCostLabel),
+    // MEASURED at the model door (#283) — the figure; the workers' own word stays beside it
+    card('AI cost — measured', '$' + ((kpis.measuredCostMicros || 0) / 1e6).toFixed(4),
+      kpis.measuredCostLabel, 'wf-kpi-measured'),
+    card('AI cost — self-reported', ((kpis.selfReportedCostMicros || 0) / 1e6).toFixed(4) + ' ' + tenantCurrency(),
+      kpis.selfReportedCostLabel, 'wf-kpi-self-reported'),
     card('Approvals pending', kpis.approvals ? kpis.approvals.pending : 0, null, 'wf-kpi-pending'),
   );
 
@@ -106,7 +109,8 @@ async function renderWorkforce() {
     nums.style.cssText = 'color:var(--dim,#777)';
     nums.textContent = `${w.completed} done · ${w.escalated} esc`
       + (w.avgHandleSeconds != null ? ` · ${w.avgHandleSeconds}s avg` : '')
-      + ` · ${((w.selfReportedCostMicros || 0) / 1e6).toFixed(4)} ${tenantCurrency()} (self-rep.)`
+      + ` · $${((w.measuredCostMicros || 0) / 1e6).toFixed(4)} measured`
+      + ` · ${((w.selfReportedCostMicros || 0) / 1e6).toFixed(4)} ${tenantCurrency()} self-reported`
       + (w.lastActiveAt ? ` · last ${new Date(w.lastActiveAt).toLocaleTimeString()}` : '');
     row.append(dot, who, nums);
     crewBox.append(row);

@@ -103,6 +103,23 @@ bss:
     base-url: ${AI_BASE_URL:}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:}
+  ai:
+    # The model door's price list (#283): micro-dollars per MILLION tokens, the
+    # way providers publish them — input and output apart, prompt-cache writes
+    # and reads at their own rates. A model that is not listed is charged at
+    # the default per-1k rate, and its ledger row says "price=default".
+    door-prices:
+      claude-haiku-4-5-20251001:
+        input-per-mtok: 1000000
+        output-per-mtok: 5000000
+        cache-write-per-mtok: 1250000
+        cache-read-per-mtok: 100000
+      # the same model by its alias — a tenant may name either
+      claude-haiku-4-5:
+        input-per-mtok: 1000000
+        output-per-mtok: 5000000
+        cache-write-per-mtok: 1250000
+        cache-read-per-mtok: 100000
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   tenants:
     default-tenant: genalpha
