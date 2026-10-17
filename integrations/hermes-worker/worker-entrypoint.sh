@@ -27,11 +27,20 @@ INTERVAL="${WORK_INTERVAL_SECONDS:-900}"
 JOB="${WORKER_JOB:-care}"
 
 mkdir -p /root/.hermes
+# An OpenAI-API brain (#309) runs as the runtime's generic "custom" endpoint: the
+# base URL comes from this file, the key from BSS_DOOR_KEY — a name no other client
+# in the runtime reads, so the door key goes to the door and nowhere else.
+HERMES_PROVIDER="$WORKER_AI_PROVIDER"
+OPENAI_API=false
+case "$WORKER_AI_PROVIDER" in
+  openai|openai-compatible) HERMES_PROVIDER=custom; OPENAI_API=true ;;
+esac
 cat > /root/.hermes/config.yaml <<CFG
 model:
   default: "${WORKER_AI_MODEL}"
-  provider: "${WORKER_AI_PROVIDER}"
+  provider: "${HERMES_PROVIDER}"
 $( [ -n "${WORKER_AI_BASE_URL:-}" ] && echo "  base_url: \"${WORKER_AI_BASE_URL}\"" )
+$( [ "$OPENAI_API" = true ] && printf '  api_mode: "chat_completions"\n  key_env: "BSS_DOOR_KEY"' )
   # the model door answers plain calls only (and refuses a stream in the words
   # the SDK falls back on — this just saves the round trip)
   streaming: false
@@ -59,12 +68,17 @@ CFG
 if [ -n "${WORKER_AI_API_KEY:-}" ]; then
   # both the .env file and the process env: the runtime's credential lookup
   # has moved between releases, cover every door it may knock on
-  case "$WORKER_AI_PROVIDER" in
-    anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
-               export ANTHROPIC_API_KEY="${WORKER_AI_API_KEY}" ;;
-    *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env
-               export OPENAI_API_KEY="${WORKER_AI_API_KEY}" ;;
-  esac
+  if [ "$OPENAI_API" = true ]; then
+    echo "BSS_DOOR_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
+    export BSS_DOOR_KEY="${WORKER_AI_API_KEY}"
+  else
+    case "$WORKER_AI_PROVIDER" in
+      anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
+                 export ANTHROPIC_API_KEY="${WORKER_AI_API_KEY}" ;;
+      *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env
+                 export OPENAI_API_KEY="${WORKER_AI_API_KEY}" ;;
+    esac
+  fi
   chmod 600 /root/.hermes/.env
 fi
 

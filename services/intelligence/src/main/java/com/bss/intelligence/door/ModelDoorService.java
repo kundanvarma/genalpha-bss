@@ -27,8 +27,10 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -59,14 +61,11 @@ public class ModelDoorService {
 
     private static final Logger log = LoggerFactory.getLogger(ModelDoorService.class);
     private static final String KEY_PREFIX = "bssw_";  // never sk-ant- / eyJ / cc-: those switch Hermes into Claude-login mode
-    private static final String ANTHROPIC = "anthropic";
-    private static final String ANTHROPIC_VERSION = "2023-06-01";
-    private static final String ANTHROPIC_BASE = "https://api.anthropic.com";
 
     private final WorkerDoorKeyRepository keys;
     private final AiAuditRepository audits;
     private final AiBudgetRepository budgets;
-    private final Set<String> anthropicSideModels;
+    private final Map<String, Set<String>> sideModels;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final DoorPricing pricing;
@@ -80,12 +79,12 @@ public class ModelDoorService {
             RestClient.Builder http, ObjectMapper json,
             // the small model a provider's agent framework uses for its own side calls
             // (titles, compression) — served beside the tenant's worker model, and metered
-            @Value("${bss.ai.door-side-models.anthropic:claude-haiku-4-5-20251001}") String anthropicSideModels) {
+            @Value("${bss.ai.door-side-models.anthropic:claude-haiku-4-5-20251001}") String anthropicSideModels,
+            @Value("${bss.ai.door-side-models.openai:}") String openAiSideModels) {
         this.keys = keys;
         this.audits = audits;
         this.budgets = budgets;
-        this.anthropicSideModels = new LinkedHashSet<>(Arrays.stream(anthropicSideModels.split(","))
-                .map(String::trim).filter(m -> !m.isEmpty()).toList());
+        this.sideModels = Map.of("anthropic", modelSet(anthropicSideModels), "openai", modelSet(openAiSideModels));
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.pricing = pricing;
@@ -129,29 +128,54 @@ public class ModelDoorService {
 
     /* ---------------------------------------------------------------- door */
 
-    /**
-     * One Anthropic Messages call through the door. The presented key decides the
-     * tenant — never a header — and the answer is the provider's, verbatim.
-     */
+    static final DoorProtocol ANTHROPIC_DOOR = new AnthropicProtocol();
+    static final DoorProtocol OPENAI_DOOR = new OpenAiProtocol();
+
+    /** Anthropic Messages, as the worker's SDK sends it. */
     public DoorRequests.DoorReply anthropicMessages(String presentedKey, String body, String version, String beta) {
+        Map<String, String> passthrough = new HashMap<>();
+        if (version != null) {
+            passthrough.put("anthropic-version", version);
+        }
+        if (beta != null) {
+            passthrough.put("anthropic-beta", beta);
+        }
+        return call(ANTHROPIC_DOOR, presentedKey, body, passthrough);
+    }
+
+    /** OpenAI Chat Completions (#309): the worker's key arrives as a Bearer token. */
+    public DoorRequests.DoorReply openAiChat(String authorization, String body) {
+        String key = authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)
+                ? authorization.substring(7).trim() : null;
+        return call(OPENAI_DOOR, key, body, Map.of());
+    }
+
+    /**
+     * One call through the door, in the given provider's API. The presented key
+     * decides the tenant — never a header — and the answer is the provider's,
+     * with the placeholders reversed.
+     */
+    DoorRequests.DoorReply call(DoorProtocol protocol, String presentedKey, String body,
+            Map<String, String> passthrough) {
         Optional<WorkerDoorKey> found = lookup(presentedKey);
         if (found.isEmpty()) {
-            return anthropicError(401, "authentication_error",
+            return error(protocol, 401, DoorProtocol.Refusal.AUTH,
                     "unknown or revoked worker key — a worker calls its model through the door with the key it was hired with");
         }
         WorkerDoorKey key = found.get();
         try (TenantContext ignored = TenantContext.actAs(key.getTenantId())) {
             TenantRegistry.TenantEntry tenant = tenants.byId(key.getTenantId());
-            if (tenant == null || !ANTHROPIC.equalsIgnoreCase(nullToEmpty(tenant.getWorkerAiProvider()))) {
-                return anthropicError(400, "invalid_request_error",
-                        "this tenant's worker model is not served at the Anthropic door");
+            if (tenant == null || !protocol.serves(nullToEmpty(tenant.getWorkerAiProvider()))) {
+                return error(protocol, 400, DoorProtocol.Refusal.INVALID,
+                        "this tenant's worker model (" + (tenant == null ? "none" : tenant.getWorkerAiProvider())
+                                + ") is not served at the " + protocol.name() + " door");
             }
             if (nullToEmpty(tenant.getWorkerAiApiKey()).isBlank()) {
-                return anthropicError(503, "api_error",
+                return error(protocol, 503, DoorProtocol.Refusal.UNAVAILABLE,
                         "this tenant has no worker model key configured — the operator sets worker-ai-api-key");
             }
             String model = requestedModel(body);
-            Optional<DoorRequests.DoorReply> refused = guard(key, tenant, body, model);
+            Optional<DoorRequests.DoorReply> refused = guard(protocol, key, tenant, body, model);
             if (refused.isPresent()) {
                 return refused.get();
             }
@@ -161,28 +185,29 @@ public class ModelDoorService {
             String outbound = body;
             if (!raw) {
                 JsonNode tree = json.readTree(body == null ? "{}" : body);
-                DoorRedaction.redactRequest(tree, redactor, map);
+                protocol.redact(tree, redactor, map);
                 outbound = tree.toString();
             }
             Exposure exposure = new Exposure(raw ? "raw" : "raw-redacted", raw, map.count());
             long started = System.nanoTime();
             DoorRequests.DoorReply reply;
             try {
-                reply = forward(tenant, outbound, version, beta);
+                reply = forward(protocol, tenant, outbound, passthrough);
             } catch (RuntimeException e) {
                 log.warn("model door: upstream call failed for {}: {}", key.getBadge(), e.getMessage());
-                ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, "upstream-error",
+                ledger(protocol, key, model, new DoorPricing.Usage(0, 0, 0, 0), null, "upstream-error",
                         elapsedMs(started), "no response", exposure);
-                return anthropicError(502, "api_error", "the worker model provider could not be reached");
+                return error(protocol, 502, DoorProtocol.Refusal.UPSTREAM, "the worker model provider could not be reached");
             }
-            DoorPricing.Usage usage = usageOf(reply.body());
+            JsonNode answer = readOrNull(reply.body());
+            DoorPricing.Usage usage = answer == null ? new DoorPricing.Usage(0, 0, 0, 0) : protocol.usage(answer);
             DoorPricing.Priced priced = pricing.price(model, usage);
-            ledger(key, model, usage, priced, reply.status() < 300 ? "ok" : "http-" + reply.status(),
-                    elapsedMs(started), summary(reply.body()), exposure);
+            ledger(protocol, key, model, usage, priced, reply.status() < 300 ? "ok" : "http-" + reply.status(),
+                    elapsedMs(started), answer == null ? "unreadable provider response" : cap(protocol.summary(answer)),
+                    exposure);
             // and restore on the way back, so the worker only ever holds real values
-            if (!raw && map.count() > 0 && reply.status() < 300) {
-                JsonNode answer = json.readTree(reply.body());
-                DoorRedaction.restoreResponse(answer, map);
+            if (!raw && map.count() > 0 && reply.status() < 300 && answer != null) {
+                protocol.restore(answer, map);
                 reply = new DoorRequests.DoorReply(reply.status(), answer.toString());
             }
             return reply;
@@ -194,47 +219,47 @@ public class ModelDoorService {
      * workers' own ceiling, then the request itself (no streaming, a served model).
      * A refusal is a ledger row and a reply in the provider's own error shape.
      */
-    private Optional<DoorRequests.DoorReply> guard(WorkerDoorKey key, TenantRegistry.TenantEntry tenant,
-            String body, String model) {
+    private Optional<DoorRequests.DoorReply> guard(DoorProtocol protocol, WorkerDoorKey key,
+            TenantRegistry.TenantEntry tenant, String body, String model) {
         AiBudget budget = budgets.findByTenantId(key.getTenantId()).orElse(null);
         OffsetDateTime now = OffsetDateTime.now();
         if (budget != null && !budget.isEnabled()) {
-            return refuse(key, model, "refused-disabled", 402, "billing_error",
+            return refuse(protocol, key, model, "refused-disabled", 402, DoorProtocol.Refusal.BILLING,
                     "AI is switched off for this tenant (kill-switch) — billing hard limit: no worker model calls"
                             + " until an operator switches it back on");
         }
         if (budget != null && budget.getBudgetMicros() > 0
                 && audits.sumCostSince(key.getTenantId(), now.minusHours(budget.getWindowHours()))
                         >= budget.getBudgetMicros()) {
-            return refuse(key, model, "refused-budget", 402, "billing_error",
+            return refuse(protocol, key, model, "refused-budget", 402, DoorProtocol.Refusal.BILLING,
                     "this tenant's AI spend ceiling is reached — billing hard limit for this window");
         }
         if (budget != null && budget.getWorkerBudgetMicros() > 0
                 && audits.sumWorkerCostSince(key.getTenantId(), now.minusHours(budget.getWorkerWindowHours()))
                         >= budget.getWorkerBudgetMicros()) {
-            return refuse(key, model, "refused-worker-budget", 402, "billing_error",
+            return refuse(protocol, key, model, "refused-worker-budget", 402, DoorProtocol.Refusal.BILLING,
                     "the workers' spend ceiling is reached — billing hard limit for this window");
         }
         if (requestsStream(body)) {
             // the SDK falls back to a plain call on an error naming "stream" and "not supported"
-            return refuse(key, model, "refused-stream", 400, "invalid_request_error",
+            return refuse(protocol, key, model, "refused-stream", 400, DoorProtocol.Refusal.INVALID,
                     "streaming is not supported at the model door — send the request without stream");
         }
-        Set<String> served = new LinkedHashSet<>(anthropicSideModels);
+        Set<String> served = new LinkedHashSet<>(sideModels.getOrDefault(protocol.name(), Set.of()));
         if (tenant.getWorkerAiModel() != null && !tenant.getWorkerAiModel().isBlank()) {
             served.add(tenant.getWorkerAiModel().trim());
         }
         if (model == null || !served.contains(model)) {
-            return refuse(key, model, "refused-model", 400, "invalid_request_error",
+            return refuse(protocol, key, model, "refused-model", 400, DoorProtocol.Refusal.INVALID,
                     "model '" + model + "' is not this tenant's worker model — the door serves " + served);
         }
         return Optional.empty();
     }
 
-    private Optional<DoorRequests.DoorReply> refuse(WorkerDoorKey key, String model, String outcome, int status,
-            String type, String message) {
-        ledger(key, model, new DoorPricing.Usage(0, 0, 0, 0), null, outcome, 0, message, Exposure.NOTHING_SENT);
-        return Optional.of(anthropicError(status, type, message));
+    private Optional<DoorRequests.DoorReply> refuse(DoorProtocol protocol, WorkerDoorKey key, String model,
+            String outcome, int status, DoorProtocol.Refusal kind, String message) {
+        ledger(protocol, key, model, new DoorPricing.Usage(0, 0, 0, 0), null, outcome, 0, message, Exposure.NOTHING_SENT);
+        return Optional.of(error(protocol, status, kind, message));
     }
 
     private boolean requestsStream(String body) {
@@ -246,22 +271,19 @@ public class ModelDoorService {
     }
 
     /** The provider's model listing is not served here: a worker learns its model from its config. */
-    public DoorRequests.DoorReply modelsNotServed() {
-        return anthropicError(404, "not_found_error", "the model door does not list models");
+    public DoorRequests.DoorReply modelsNotServed(boolean openAi) {
+        return error(openAi ? OPENAI_DOOR : ANTHROPIC_DOOR, 404, DoorProtocol.Refusal.NOT_FOUND,
+                "the model door does not list models");
     }
 
-    private DoorRequests.DoorReply forward(TenantRegistry.TenantEntry tenant, String body, String version, String beta) {
-        String base = nullToEmpty(tenant.getWorkerAiBaseUrl()).isBlank() ? ANTHROPIC_BASE : tenant.getWorkerAiBaseUrl();
+    private DoorRequests.DoorReply forward(DoorProtocol protocol, TenantRegistry.TenantEntry tenant, String body,
+            Map<String, String> passthrough) {
+        String base = nullToEmpty(tenant.getWorkerAiBaseUrl()).isBlank() ? protocol.defaultBase()
+                : tenant.getWorkerAiBaseUrl();
         return http.baseUrl(base.replaceAll("/+$", "")).build()
-                .post().uri("/v1/messages")
+                .post().uri(protocol.path())
                 .contentType(MediaType.APPLICATION_JSON)
-                .headers(h -> {
-                    h.set("x-api-key", tenant.getWorkerAiApiKey());
-                    h.set("anthropic-version", version == null || version.isBlank() ? ANTHROPIC_VERSION : version);
-                    if (beta != null && !beta.isBlank()) {
-                        h.set("anthropic-beta", beta);
-                    }
-                })
+                .headers(h -> protocol.authenticate(h, tenant.getWorkerAiApiKey(), passthrough))
                 .body(body == null ? "" : body)
                 .exchange((req, res) -> new DoorRequests.DoorReply(res.getStatusCode().value(),
                         new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8)));
@@ -289,8 +311,8 @@ public class ModelDoorService {
         static final Exposure NOTHING_SENT = new Exposure("none", false, 0);
     }
 
-    private void ledger(WorkerDoorKey key, String model, DoorPricing.Usage usage, DoorPricing.Priced priced,
-            String outcome, int latencyMs, String responseShape, Exposure exposure) {
+    private void ledger(DoorProtocol protocol, WorkerDoorKey key, String model, DoorPricing.Usage usage,
+            DoorPricing.Priced priced, String outcome, int latencyMs, String responseShape, Exposure exposure) {
         try {
             AiAudit row = new AiAudit();
             row.setId(UUID.randomUUID().toString());
@@ -299,7 +321,7 @@ public class ModelDoorService {
             row.setRawExposure(exposure.raw());
             row.setRedactedFields(exposure.redactedFields());
             row.setUseCase("workforce:" + (key.getJob() == null ? "worker" : key.getJob()));
-            row.setProvider(ANTHROPIC);
+            row.setProvider(protocol.name());
             row.setModel(model);
             row.setPrompt("worker model call through the door — content not retained");
             row.setResponse(responseShape);
@@ -319,16 +341,6 @@ public class ModelDoorService {
         }
     }
 
-    private DoorPricing.Usage usageOf(String responseBody) {
-        try {
-            JsonNode usage = json.readTree(responseBody).path("usage");
-            return new DoorPricing.Usage(usage.path("input_tokens").asLong(0), usage.path("output_tokens").asLong(0),
-                    usage.path("cache_creation_input_tokens").asLong(0), usage.path("cache_read_input_tokens").asLong(0));
-        } catch (RuntimeException e) {
-            return new DoorPricing.Usage(0, 0, 0, 0);
-        }
-    }
-
     private String requestedModel(String body) {
         try {
             JsonNode model = json.readTree(body == null ? "{}" : body).path("model");
@@ -338,25 +350,20 @@ public class ModelDoorService {
         }
     }
 
-    /** The shape of an answer, never its text: stop reason and block types. */
-    private String summary(String responseBody) {
+    private DoorRequests.DoorReply error(DoorProtocol protocol, int status, DoorProtocol.Refusal kind, String message) {
+        return new DoorRequests.DoorReply(status, protocol.error(json, kind, message));
+    }
+
+    private JsonNode readOrNull(String body) {
         try {
-            JsonNode root = json.readTree(responseBody);
-            StringBuilder s = new StringBuilder("stop=").append(root.path("stop_reason").asString(""));
-            for (JsonNode block : root.path("content")) {
-                s.append(' ').append(block.path("type").asString(""));
-            }
-            return s.length() > 4000 ? s.substring(0, 4000) : s.toString();
+            return json.readTree(body);
         } catch (RuntimeException e) {
-            return "unreadable provider response";
+            return null;
         }
     }
 
-    /** Anthropic's own error shape, so the worker's SDK reads a door refusal like a provider's. */
-    private DoorRequests.DoorReply anthropicError(int status, String type, String message) {
-        String body = json.createObjectNode().put("type", "error")
-                .set("error", json.createObjectNode().put("type", type).put("message", message)).toString();
-        return new DoorRequests.DoorReply(status, body);
+    private static String cap(String s) {
+        return s.length() > 4000 ? s.substring(0, 4000) : s;
     }
 
     static String sha256(String value) {
@@ -370,6 +377,11 @@ public class ModelDoorService {
 
     private static int elapsedMs(long startedNanos) {
         return (int) ((System.nanoTime() - startedNanos) / 1_000_000L);
+    }
+
+    private static Set<String> modelSet(String commaSeparated) {
+        return new LinkedHashSet<>(Arrays.stream(commaSeparated.split(","))
+                .map(String::trim).filter(m -> !m.isEmpty()).toList());
     }
 
     private static String nullToEmpty(String s) {

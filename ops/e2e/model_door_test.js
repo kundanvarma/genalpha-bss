@@ -19,7 +19,9 @@
  *   5. redaction (#308): customer data in a tool result reaches the provider
  *      as placeholders, never as the customer's address or number
  *   6. an unknown key and a revoked key are refused in the provider's own
- *      error shape, so a worker's SDK reads a door refusal like a provider's
+ *      error shape, so a worker's SDK reads a door refusal like a provider's;
+ *      the OpenAI face (#309) takes its key as a Bearer token and serves only
+ *      tenants whose worker brain speaks the OpenAI API
  *   7. the Workforce page (#311): "AI cost — measured" shows what the door
  *      recorded, and the worker spend ceiling is set from the page
  *
@@ -162,6 +164,22 @@ const door = (key, body) => call('POST', DOOR, null, body, { 'x-api-key': key, '
   if (stranger.status !== 401 || stranger.json?.error?.type !== 'authentication_error') {
     fail(`an unknown key: ${stranger.status} ${stranger.text.slice(0, 160)}`);
   }
+  // the OpenAI face (#309): its key arrives as a Bearer token, which must reach the
+  // door as a door key — not be read as a login token on the way — and nova, an
+  // Anthropic tenant, is not served there; both answers in OpenAI's own shape
+  const OPENAI_DOOR = `${API}/ai/v1/modelDoor/openai/v1/chat/completions`;
+  const chat = { model: 'claude-haiku-4-5-20251001', messages: [{ role: 'user', content: `Ticket ${run}.` }] };
+  const oaStranger = await call('POST', OPENAI_DOOR, 'bssw_not-a-real-key', chat);
+  if (oaStranger.status !== 401 || oaStranger.json?.error?.code !== 'invalid_api_key') {
+    fail(`an unknown key at the OpenAI door: ${oaStranger.status} ${oaStranger.text.slice(0, 160)}`);
+  }
+  const before = (await (await fetch(`${MOCK}/requests`)).json()).length;
+  const wrongDoor = await call('POST', OPENAI_DOOR, key, chat);
+  if (wrongDoor.status !== 400 || !/not served/.test(wrongDoor.json?.error?.message || '')) {
+    fail(`an Anthropic tenant's worker at the OpenAI door: ${wrongDoor.status} ${wrongDoor.text.slice(0, 160)}`);
+  }
+  if ((await (await fetch(`${MOCK}/requests`)).json()).length !== before) fail('a refused call still reached the provider');
+  console.log('OK the OpenAI face reads a Bearer door key as a door key (401 invalid_api_key for a stranger) and serves only OpenAI-API tenants (400, nothing sent)');
   const revoked = await call('DELETE', `${API}/ai/v1/workforce/doorKeys/${issued.json.id}`, admin);
   if (revoked.status !== 204) fail(`revoking the key: ${revoked.status}`);
   const fired = await door(key, body);

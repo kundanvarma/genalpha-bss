@@ -1,6 +1,6 @@
 # The model door — what a digital worker's AI costs, measured
 
-*Arc #283, built 2026-10-17 (tickets #306, #307, #308, #310, #311).*
+*Arc #283, built 2026-10-17 (tickets #306, #307, #308, #309, #310, #311).*
 
 ## The problem it solves
 
@@ -59,6 +59,14 @@ the door cannot serve gets no worker at all: there is no direct path left.
 Copilots and workers choose their models independently: the copilots follow the
 tenant's `ai-*` settings, the workers its `worker-ai-*` settings.
 
+**Two model APIs.** The door has two faces: Anthropic's Messages API, and OpenAI's
+Chat Completions, which OpenAI and any OpenAI-compatible endpoint speak, such as a local
+model server or a provider's own compatibility endpoint. A tenant whose
+`worker-ai-provider` is `anthropic` is served on the first; one on `openai` or
+`openai-compatible` on the second. Each face is served only to its own tenants. Behind
+both faces the door does the same work: the same keys, ceilings, redaction, measuring
+and ledger.
+
 ## Proof
 
 - `ops/e2e/model_door_test.js` (tenant nova, on the fleet's mock model): a worker key
@@ -71,13 +79,27 @@ tenant's `ai-*` settings, the workers its `worker-ai-*` settings.
   worker holds only its door key; its real shift is **measured** in the ledger; a
   restart re-keys it; firing revokes the key first. `agentic_workforce_test.js` (#65)
   passes the same checks before and after the change.
-- `ModelDoorApiTest` (11 tests), each guarantee seen to fail when broken on purpose.
+- The OpenAI face, on 17 October, with the real Anthropic key: genalpha's worker brain was
+  pointed at Anthropic's OpenAI-compatible endpoint for one run of #66, and a real Hermes
+  worker made its shift through `/openai/v1`. The ledger has 14 calls, all reading `openai`,
+  each priced at Haiku's listed rate. The setting was then put back.
+  `model_door_test.js` proves the OpenAI face through the gateway: it reads a Bearer door
+  key as a door key, and it refuses an Anthropic tenant before anything is sent.
+- `ModelDoorApiTest` (11 tests) and `ModelDoorOpenAiTest` (4). Each guarantee was seen to fail
+  when broken on purpose.
 
 ## Honest limits
 
-- **Anthropic only, for now.** The door speaks Anthropic's API. A worker on OpenAI or an
-  OpenAI-compatible local model needs the second adapter (#309); until it lands such
-  a tenant gets no worker, by design.
+- **Two model APIs, not every one.** The door speaks Anthropic's Messages API and
+  OpenAI's Chat Completions (which OpenAI-compatible servers and several providers'
+  compatibility endpoints also speak). A tenant on any other API — OpenAI's newer
+  Responses API, or a provider's own native one — gets no worker, by design.
+- **Only Anthropic models have listed prices.** An OpenAI model is charged at the default
+  rate, and its ledger row says `price=default`, until its rates are added to the
+  configuration.
+- **Each face has its own small-model list.** A worker's side calls are served only for
+  models configured for its face; the OpenAI face has none by default. The worker image
+  turns off the one side call it would make.
 - **No streaming.** The door answers whole responses; workers are configured not to
   stream. A worker is not a person watching text appear, so nothing is lost, but it
   is a limit.

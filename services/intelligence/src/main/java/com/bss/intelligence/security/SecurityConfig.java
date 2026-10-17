@@ -123,8 +123,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(doorKeysAreNotLoginTokens())
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
         return http.build();
+    }
+
+    /**
+     * The model door (#283) is anonymous to Spring and authenticates its own
+     * callers: a digital worker presents its door key where a provider key goes,
+     * and an OpenAI-API SDK sends any key as a Bearer token. Without this, the
+     * resource server would read that door key as a login token, fail to decode
+     * it, and refuse the call before the door ever saw it. Everywhere else a
+     * Bearer token is read exactly as before.
+     */
+    private static org.springframework.security.oauth2.server.resource.web.BearerTokenResolver doorKeysAreNotLoginTokens() {
+        org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver standard =
+                new org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver();
+        String door = ApiConstants.BASE_PATH + "/modelDoor/";
+        return request -> request.getRequestURI().startsWith(door) ? null : standard.resolve(request);
     }
 
     /**

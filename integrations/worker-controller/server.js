@@ -90,7 +90,9 @@ function brain() {
 const DOOR_URL = (process.env.BSS_MODEL_DOOR_URL || `${GATEWAY}/ai/v1/modelDoor`).replace(/\/+$/, '');
 // Hermes accepts a custom Anthropic base URL only when its path ENDS in /anthropic;
 // anything else and it calls api.anthropic.com directly, past the door, in silence
-const DOOR_PATHS = { anthropic: '/anthropic' };
+// (#309) and an OpenAI-API brain — OpenAI itself or any compatible endpoint — gets
+// the door's Chat Completions face; the worker image runs it as a custom endpoint
+const DOOR_PATHS = { anthropic: '/anthropic', openai: '/openai/v1', 'openai-compatible': '/openai/v1' };
 function doorFor(provider) {
   const path = DOOR_PATHS[String(provider || '').toLowerCase()];
   return path ? DOOR_URL + path : null;
