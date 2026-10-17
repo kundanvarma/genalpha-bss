@@ -149,6 +149,7 @@ intelligence "/swagger-ui.html"
 intelligence "/swagger-ui/**"
 intelligence "/v3/api-docs/**"
 intelligence ApiConstants.BASE_PATH+"/careChat/guest/**"
+intelligence ApiConstants.BASE_PATH+"/modelDoor/**"
 
 # ---- knowledge ----   (infrastructure only)
 knowledge ApiConstants.BASE_PATH+"/publicArticle"
