@@ -8,6 +8,11 @@
 #               WORKER_AI_PROVIDER, WORKER_AI_MODEL        (the brain)
 # Optional:     WORKER_AI_BASE_URL, WORKER_AI_API_KEY,
 #               BSS_GATEWAY_URL, BSS_TOKEN_URL,
+#
+# THE MODEL DOOR (#283): the controller sets WORKER_AI_BASE_URL to the BSS's
+# model door and WORKER_AI_API_KEY to this worker's OWN door key — never the
+# tenant's provider key, which stays inside the BSS. The door meters, caps and
+# redacts every call; it does not stream, so neither does the worker.
 #               WORK_INTERVAL_SECONDS (default 900), WORKER_JOB (care|back-office|generalist)
 set -euo pipefail
 
@@ -27,6 +32,13 @@ model:
   default: "${WORKER_AI_MODEL}"
   provider: "${WORKER_AI_PROVIDER}"
 $( [ -n "${WORKER_AI_BASE_URL:-}" ] && echo "  base_url: \"${WORKER_AI_BASE_URL}\"" )
+  # the model door answers plain calls only (and refuses a stream in the words
+  # the SDK falls back on — this just saves the round trip)
+  streaming: false
+auxiliary:
+  # nobody reads a one-shot shift's session title; it would be a paid side call
+  title_generation:
+    enabled: false
 tool_loop_guardrails:
   hard_stop_enabled: true
 mcp_servers:
