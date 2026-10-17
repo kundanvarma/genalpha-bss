@@ -758,8 +758,15 @@ services:
       # lives here, inside the BSS, and never in a worker container
       WORKER_AI_PROVIDER: ${WORKER_AI_PROVIDER:-anthropic}
       WORKER_AI_BASE_URL: ${WORKER_AI_BASE_URL:-}
-      WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-}
+      # the same key the copilots use unless the workers are given their own —
+      # set WORKER_AI_API_KEY (and its provider/base URL) to run them elsewhere
+      WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-${AI_API_KEY:-}}
       WORKER_AI_MODEL: ${WORKER_AI_MODEL:-claude-haiku-4-5-20251001}
+      # taranga's, the same way, and by default the same key
+      WORKER_AI_PROVIDER_TARANGA: ${WORKER_AI_PROVIDER_TARANGA:-anthropic}
+      WORKER_AI_BASE_URL_TARANGA: ${WORKER_AI_BASE_URL_TARANGA:-}
+      WORKER_AI_API_KEY_TARANGA: ${WORKER_AI_API_KEY_TARANGA:-${AI_API_KEY:-}}
+      WORKER_AI_MODEL_TARANGA: ${WORKER_AI_MODEL_TARANGA:-claude-haiku-4-5-20251001}
       LEGACY_TICKET_BASE_URL: http://mock-legacy:8080
       # the product advisor's sources
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -2698,6 +2705,12 @@ services:
       # WORKER_NETWORK unset: the controller detects its own network at runtime
       # no provider key here any more (#283): the model door inside intelligence holds
       # it, and a worker gets only its own door key, issued at hire
+      # ...but the same provider and model intelligence sees: the controller picks
+      # the door's face from the provider, and the two must not disagree
+      WORKER_AI_PROVIDER: ${WORKER_AI_PROVIDER:-anthropic}
+      WORKER_AI_MODEL: ${WORKER_AI_MODEL:-claude-haiku-4-5-20251001}
+      WORKER_AI_PROVIDER_TARANGA: ${WORKER_AI_PROVIDER_TARANGA:-anthropic}
+      WORKER_AI_MODEL_TARANGA: ${WORKER_AI_MODEL_TARANGA:-claude-haiku-4-5-20251001}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./infra/tenants:/config:ro

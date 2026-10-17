@@ -120,6 +120,24 @@ bss:
         output-per-mtok: 5000000
         cache-write-per-mtok: 1250000
         cache-read-per-mtok: 100000
+      # OpenAI (#309's face), Standard tier, short context, as published at
+      # developers.openai.com/api/docs/pricing on 2026-10-17. Long-context calls
+      # cost more there and are charged at these rates here (docs/model-door.md).
+      gpt-6-astra:
+        input-per-mtok: 10000000
+        output-per-mtok: 50000000
+        cache-write-per-mtok: 12500000
+        cache-read-per-mtok: 1000000
+      "[gpt-6.1-sol]":
+        input-per-mtok: 2000000
+        output-per-mtok: 10000000
+        cache-write-per-mtok: 2500000
+        cache-read-per-mtok: 100000
+      gpt-6-luna:
+        input-per-mtok: 100000
+        output-per-mtok: 500000
+        cache-write-per-mtok: 125000
+        cache-read-per-mtok: 10000
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   tenants:
     default-tenant: genalpha
