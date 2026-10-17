@@ -162,7 +162,10 @@ workers and copilots alike; refunds/cease/erasure only ever become **approval re
 human executes with their own token — the worker can never approve its own ask; and the
 **Workforce dashboard** shows the shift honestly: deflection, handle time, the REOPEN RATE
 (the metric a vendor would hide), minutes-saved labeled `estimate: true` beside its baselines,
-and self-reported model cost labeled as the worker's own word; suite #65 proves the whole
+and the workers' AI cost **measured** at the **model door** — a worker calls its model through
+the BSS with its own key, never the provider's, and each call is capped by a worker spend ceiling,
+redacted and ledgered from the provider's own token counts (the self-reported figure stays beside
+it; [docs/model-door.md](docs/model-door.md), `model_door_test.js`); suite #65 proves the whole
 employment — hire, shift, refusal to fake, the gate, the firing — plus a browser leg where one
 dashboard click refunds under the human's token; day-1 package in
 [integrations/hermes-worker](integrations/hermes-worker/README.md), design in

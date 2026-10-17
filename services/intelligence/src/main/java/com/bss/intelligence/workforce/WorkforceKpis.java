@@ -14,7 +14,7 @@ import java.util.Set;
  */
 @JsonPropertyOrder({"asOf", "completed", "escalated", "deflectionRate", "avgHandleSeconds", "reopen",
         "selfReportedCostMicros", "selfReportedCostLabel", "humanMinutesSaved", "byKind", "workers",
-        "workerTypes", "workingNow", "approvals", "staffing"})
+        "workerTypes", "workingNow", "approvals", "staffing", "measuredCostMicros", "measuredCostLabel"})
 public record WorkforceKpis(
         String asOf,
         long completed,
@@ -31,7 +31,11 @@ public record WorkforceKpis(
         Map<String, WorkerTypeRow> workerTypes,
         long workingNow,
         Approvals approvals,
-        Staffing staffing) {
+        Staffing staffing,
+        // MEASURED (#283): what the workers' model calls cost, as the model door recorded
+        // them from the provider's own token counts — micro-dollars, the provider's currency
+        long measuredCostMicros,
+        String measuredCostLabel) {
 
     /**
      * HOW MUCH OF THE COST FIGURE IS ACTUALLY MEASURED.
@@ -66,10 +70,10 @@ public record WorkforceKpis(
     /** One worker on the crew: its type derived from what it works, whether
      * it holds a live lease right now, and its own numbers. */
     @JsonPropertyOrder({"worker", "workerName", "type", "kinds", "workingNow", "lastActiveAt",
-            "completed", "escalated", "avgHandleSeconds", "selfReportedCostMicros"})
+            "completed", "escalated", "avgHandleSeconds", "selfReportedCostMicros", "measuredCostMicros"})
     public record WorkerRow(String worker, String workerName, String type, Set<String> kinds,
             boolean workingNow, OffsetDateTime lastActiveAt, long completed, long escalated,
-            Long avgHandleSeconds, long selfReportedCostMicros) {
+            Long avgHandleSeconds, long selfReportedCostMicros, long measuredCostMicros) {
     }
 
     @JsonPropertyOrder({"workers", "workingNow", "completed", "escalated", "deflectionRate"})
@@ -84,8 +88,10 @@ public record WorkforceKpis(
     /** The staffing signal: backlog depth over active workers against the
      * operator's surge threshold; the ceiling rides along. */
     @JsonPropertyOrder({"backlogDepth", "activeWorkers", "openPerActiveWorker", "surge",
-            "surgeThresholdOpenPerWorker", "maxWorkers", "definition"})
+            "surgeThresholdOpenPerWorker", "maxWorkers", "definition", "workerBudgetMicros"})
     public record Staffing(long backlogDepth, long activeWorkers, Double openPerActiveWorker,
-            boolean surge, long surgeThresholdOpenPerWorker, int maxWorkers, String definition) {
+            boolean surge, long surgeThresholdOpenPerWorker, int maxWorkers, String definition,
+            // the workers' own spend ceiling at the model door (#283), micro-dollars; 0 = none
+            long workerBudgetMicros) {
     }
 }

@@ -1,4 +1,4 @@
-/* The model door (#283, tickets 1-3): a digital worker's model call goes through
+/* The model door (#283): a digital worker's model call goes through
  * the BSS, and the BSS measures it.
  *
  * Before the door, a worker held the tenant's provider key and called the
@@ -20,10 +20,13 @@
  *      as placeholders, never as the customer's address or number
  *   6. an unknown key and a revoked key are refused in the provider's own
  *      error shape, so a worker's SDK reads a door refusal like a provider's
+ *   7. the Workforce page (#311): "AI cost — measured" shows what the door
+ *      recorded, and the worker spend ceiling is set from the page
  *
  * Tenant: nova, whose worker brain defaults to the fleet's mock LLM (no key,
  * no network). The mock reports deterministic usage and the key it was sent.
  */
+const { chromium } = require('playwright');
 const API = 'http://localhost:8080';
 const MOCK = 'http://localhost:8127';
 const DOOR = `${API}/ai/v1/modelDoor/anthropic/v1/messages`;
@@ -164,6 +167,40 @@ const door = (key, body) => call('POST', DOOR, null, body, { 'x-api-key': key, '
   const fired = await door(key, body);
   if (fired.status !== 401) fail(`a revoked key still opened the door: ${fired.status}`);
   console.log('OK an unknown key and a revoked key are refused (401, the provider\'s own error shape) — firing a worker shuts its door');
+
+  /* ---------- 7. the Workforce page shows it, and sets the ceiling ---------- */
+  const kpis = (await call('GET', `${API}/ai/v1/workforce/kpis`, admin)).json;
+  if (!(kpis?.measuredCostMicros > 0)) fail(`the workforce KPIs carry no measured cost: ${JSON.stringify(kpis).slice(0, 160)}`);
+  const browser = await chromium.launch();
+  try {
+    const page = await (await browser.newContext({ viewport: { width: 1500, height: 950 } })).newPage();
+    await page.goto('http://console.nova.localhost:8080/console/');
+    await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+    await page.fill('input[name="username"]', 'demo');
+    await page.fill('input[name="password"]', 'demo');
+    await page.click('input[type="submit"], button[type="submit"]');
+    await page.waitForSelector('#main:not([hidden])', { timeout: 25000 });
+    await page.getByText('AI & AUTOMATION', { exact: false }).first().click();
+    await page.getByText('AI Workforce', { exact: true }).first().click();
+    const tile = page.locator('[data-testid=wf-kpi-measured]');
+    await tile.waitFor({ timeout: 20000 });
+    const shown = (await tile.innerText()).replace(/\s+/g, ' ');
+    const expected = '$' + (kpis.measuredCostMicros / 1e6).toFixed(4);
+    if (!shown.includes(expected)) fail(`the measured tile reads "${shown}", the door recorded ${expected}`);
+    if (!(await page.locator('[data-testid=wf-kpi-self-reported]').count())) fail('the self-reported figure is gone from beside the measured one');
+    await page.fill('[data-testid=wf-spend-input]', '0.25');
+    await page.click('[data-testid=wf-spend-save]');
+    let saved = 0;
+    for (let i = 0; i < 10 && saved !== 250000; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      saved = (await call('GET', `${API}/ai/v1/governance`, admin)).json?.workerBudgetMicros;
+    }
+    if (saved !== 250000) fail(`the page's worker ceiling did not reach governance (${saved})`);
+    console.log(`OK the Workforce page shows "AI cost — measured" ${expected} with the self-reported figure beside it, and its worker spend ceiling ($0.25) reached governance`);
+  } finally {
+    await browser.close();
+    await call('POST', `${API}/ai/v1/governance/budget`, admin, { workerBudgetMicros: 0 });
+  }
 
   console.log('PASS model_door_test — a worker\'s model call is measured by the BSS, not reported by the worker');
 })().catch((e) => fail(e && e.stack || e));
