@@ -15,6 +15,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+# the staff login (#323): the hosted box rotates the published one, and its .env
+# carries the new password; the laptop keeps demo/demo
+STAFF_USER = os.environ.get("SEED_USER", "demo")
+STAFF_PASS = os.environ.get("SEED_PASS") or os.environ.get("DEMO_STAFF_PASSWORD") or "demo"
+
 KEYCLOAK = "http://localhost:8085/realms/taranga/protocol/openid-connect/token"
 API = "http://localhost:8080/tmf-api/productCatalogManagement/v4"
 USAGE = "http://localhost:8080/tmf-api/usageManagement/v4"
@@ -33,7 +38,7 @@ BRAND = "#4A4AC3"  # the wave in the Taranga logo
 
 def token():
     data = urllib.parse.urlencode({"grant_type": "password", "client_id": "bss-demo",
-                                   "username": "demo", "password": "demo"}).encode()
+                                   "username": STAFF_USER, "password": STAFF_PASS}).encode()
     with urllib.request.urlopen(urllib.request.Request(KEYCLOAK, data=data)) as r:
         return json.load(r)["access_token"]
 

@@ -60,10 +60,22 @@ Public doors when done:
 
 | Host | What | Login |
 |---|---|---|
-| `shop.taranga.no` | Taranga storefront | `mira@taranga.example` / `mira` |
-| `console.taranga.no`, `csr.taranga.no`, `biz.taranga.no` | staff desks | `demo` / `demo` (+ the console gate if set) |
-| `shop-enet.taranga.no` … `console-enet.taranga.no` | ENet tenant | see `docs/demo-script.md` personas |
+| `shop.taranga.no` | Taranga storefront | `mira@taranga.example` / *from the sheet* |
+| `console.taranga.no`, `csr.taranga.no`, `biz.taranga.no` | staff desks | `demo` / *from the sheet* (+ the console gate if set) |
+| `shop-enet.taranga.no` … `console-enet.taranga.no` | ENet tenant | `docs/demo-script.md` personas / *from the sheet* |
 | `id.taranga.no` | Keycloak | master admin password is in `/opt/taranga/bss/.env` |
+
+**The box has no published login (#323).** The repo's demo passwords (`demo`/`demo`,
+`mira`/`mira`, …) work on a laptop only. After the seeds, the install gives every
+such login a generated password and writes them to `~/taranga-demo-logins.txt` on the
+box (owner-only) — the staff login `demo` has one password in every realm. Fetch it
+with `scp` and keep it private; nothing else holds it. The same staff password is
+`DEMO_STAFF_PASSWORD` in `/opt/taranga/bss/.env`, which the worker controller,
+`ops/onboard-tenant.sh` and the install seeds read. Re-running the install does not
+rotate again; `ROTATE_LOGINS=force` does (and writes a new sheet). Re-running a seed
+by hand: `set -a; . ./.env; set +a` first — `seed_taranga` and `seed_enet_history`
+also sign in once as a persona (olav, devi) and would need that persona's password
+from the sheet.
 
 Redirect payments (Klarna, Vipps, PayPal, MMG) use the demo PSP mocks; their hosted approve pages are served on `pay-klarna.<domain>`, `pay-vipps.<domain>`, `pay-paypal.<domain>`, `pay-mmg.<domain>` (the wildcard DNS record covers them; Caddy fetches the certificates).
 

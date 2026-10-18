@@ -153,6 +153,12 @@ if os.path.isfile(doc_path) and os.path.isfile(bf_path):
         if said not in doc:
             problems.append(f"{doc_path} does not say \"{said}\" — {why} in the settings and the doc disagree")
 
+# the hosted box has no published login (#323): its installer rotates them, and a
+# re-run of the installer must not silently skip that step
+install = open("ops/cloud/aws-demo/install.sh").read() if os.path.isfile("ops/cloud/aws-demo/install.sh") else ""
+if "rotate-logins.py" not in install:
+    problems.append("ops/cloud/aws-demo/install.sh no longer rotates the published demo logins — the box would accept demo/demo")
+
 for f in sorted(glob.glob("infra/keycloak/*-realm.json")):
     if json.load(open(f)).get("passwordPolicy"):
         problems.append(f"{f} carries a passwordPolicy: with its short demo passwords Keycloak refuses the whole realm")

@@ -217,6 +217,21 @@ as_user "cd '$APP_DIR' && bash ops/cloud/aws-demo/kc-admin-converge.sh" || {
   exit 1
 }
 
+# ---------- 6a. no published login on the box (#323) ----------
+# The realm fixtures publish demo/demo and the personas' passwords; strangers can
+# reach this box. Every such login gets a generated password, written to a sheet
+# outside the checkout (owner-only); the staff login's one password goes into
+# .env as DEMO_STAFF_PASSWORD for the box's machines. Runs AFTER the seeds (which
+# sign in as staff, and once as a persona). Idempotent: an existing sheet means
+# rotated already — ROTATE_LOGINS=force rotates again.
+SHEET="$HOME_DIR/taranga-demo-logins.txt"
+log "published logins rotated (sheet: $SHEET)"
+as_user "cd '$APP_DIR' && set -a && . ./.env && set +a && python3 ops/cloud/aws-demo/rotate-logins.py \
+  --sheet '$SHEET' --env-file .env ${ROTATE_LOGINS:+--force}" || {
+  echo "FATAL: the published demo logins could not be rotated — the box would accept demo/demo." >&2
+  exit 1
+}
+
 # ---------- 6b. boot hook: after a stop/start, shed to the demo slice on its own ----------
 # Docker restarts the FULL fleet on boot (restart policies); on a 32 GB box that
 # sits at the memory ceiling. This oneshot waits for Keycloak, then runs the same

@@ -29,7 +29,7 @@ CUR = "GYD"
 def token():
     data = urllib.parse.urlencode({
         "grant_type": "password", "client_id": "bss-demo",
-        "username": "demo", "password": "demo",
+        "username": STAFF_USER, "password": STAFF_PASS,
     }).encode()
     with urllib.request.urlopen(urllib.request.Request(KEYCLOAK, data=data)) as r:
         return json.load(r)["access_token"]
@@ -323,6 +323,11 @@ if not req("GET", f"{STOCK}/productStock?productOfferingId={bb['id']}"):
 
 # ---- the brand: ENet's own logo (public asset) as the tenant's brand document ----
 import base64, os
+
+# the staff login (#323): the hosted box rotates the published one, and its .env
+# carries the new password; the laptop keeps demo/demo
+STAFF_USER = os.environ.get("SEED_USER", "demo")
+STAFF_PASS = os.environ.get("SEED_PASS") or os.environ.get("DEMO_STAFF_PASSWORD") or "demo"
 DOC = "http://localhost:8080/tmf-api/documentManagement/v4"
 docs = req("GET", f"{DOC}/document")
 if not any(d.get("name") == "ENet-logo" for d in docs):

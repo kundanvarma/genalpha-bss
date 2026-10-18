@@ -10,10 +10,16 @@ an ENet Rewards loyalty program in Guyana dollars.
 Needs the marketing slice UP: campaign, insight (+ communication, loyalty).
 Idempotent — safe to re-run. PITCH MATERIAL, NOT REPO CANON.
 """
+import os
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# the staff login (#323): the hosted box rotates the published one, and its .env
+# carries the new password; the laptop keeps demo/demo
+STAFF_USER = os.environ.get("SEED_USER", "demo")
+STAFF_PASS = os.environ.get("SEED_PASS") or os.environ.get("DEMO_STAFF_PASSWORD") or "demo"
 
 KC = "http://localhost:8085/realms/enet/protocol/openid-connect/token"
 API = "http://localhost:8080"
@@ -26,7 +32,7 @@ CATALOG = f"{API}/tmf-api/productCatalogManagement/v4"
 
 def token():
     data = urllib.parse.urlencode({"grant_type": "password", "client_id": "bss-demo",
-                                   "username": "demo", "password": "demo"}).encode()
+                                   "username": STAFF_USER, "password": STAFF_PASS}).encode()
     with urllib.request.urlopen(urllib.request.Request(KC, data=data)) as r:
         return json.load(r)["access_token"]
 
