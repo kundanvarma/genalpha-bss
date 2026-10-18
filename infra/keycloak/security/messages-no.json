@@ -3,5 +3,7 @@
   "invalidPasswordMaxLengthMessage": "Passordet er lengre enn {0} tegn — velg et kortere.",
   "invalidPasswordNotUsernameMessage": "Passordet kan ikke være brukernavnet eller e-postadressen din — velg noe bare du vet.",
   "invalidPasswordNotEmailMessage": "Passordet kan ikke være e-postadressen din — velg noe bare du vet.",
-  "invalidPasswordBlacklistedMessage": "Det er et av de mest brukte passordene — velg en setning som bare er din."
+  "invalidPasswordBlacklistedMessage": "Det er et av de mest brukte passordene — velg en setning som bare er din.",
+  "invalidUserMessage": "Feil e-post eller passord. Etter flere forsøk på rad tar innloggingen en pause i noen minutter og åpner seg så av seg selv.",
+  "accountTemporarilyDisabledMessage": "Feil e-post eller passord. Etter flere forsøk på rad tar innloggingen en pause i noen minutter og åpner seg så av seg selv."
 }

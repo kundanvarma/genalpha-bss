@@ -13,6 +13,10 @@
  *   4. existing logins still sign in (a policy is checked when a password is set)
  *   5. "temporary" means temporary (#322): a handed-over password must be replaced at
  *      the first browser sign-in, and a digital worker (machine sign-in) is exempt
+ *   6. guessing is throttled (#326): every realm reports the lockout settings; five wrong
+ *      guesses pause even the right password, the page says the pause lifts by itself
+ *      (the same words as any failed sign-in — a locked account is not revealed), and
+ *      after the wait the right password signs in again
  *
  * Tenant: genalpha (realm bss) for the registration, through the shop.
  */
@@ -187,6 +191,47 @@ function sameRules(rules, realm) {
   if (!(await token(ctx, 'bss', badge, made3.handed))) fail('a digital worker\'s badge still waits for a browser password change — its shifts could never sign in');
   console.log('OK WORKERS EXEMPT: granting the digital-worker role through the BSS lifted the change, so the badge signs in by machine');
   for (const id of [made2.id, made3.id]) await ctx.delete(`${KC}/admin/realms/bss/users/${id}`, { headers: A });
+
+  /* ---------- 6. guessing is throttled (#326) ---------- */
+  const BF = JSON.parse(fs.readFileSync(path.join(SECURITY, 'brute-force.json'), 'utf8'));
+  for (const realm of [...realms, OP]) {
+    const r = await (await ctx.get(`${KC}/admin/realms/${realm}`, { headers: { Authorization: `Bearer ${adm}` } })).json();
+    for (const k of ['bruteForceProtected', 'permanentLockout', 'failureFactor', 'waitIncrementSeconds', 'maxFailureWaitSeconds']) {
+      if (r[k] !== BF[k]) fail(`realm ${realm} has ${k}=${r[k]}, the settings declare ${BF[k]}`);
+    }
+  }
+  const AH = { Authorization: `Bearer ${adm}`, 'Content-Type': 'application/json' };
+  const guessed = `pw-guessed-${run}@family.example`;
+  const right = 'the right words for this account';
+  const mk = await ctx.post(`${KC}/admin/realms/bss/users`, { headers: AH, data: {
+    username: guessed, email: guessed, enabled: true, emailVerified: true, firstName: 'Gus', lastName: `Guessed${run}`,
+    credentials: [{ type: 'password', value: right, temporary: false }] } });
+  if (mk.status() !== 201) fail(`could not make the guessed login: ${mk.status()}`);
+  const guessedId = mk.headers().location.split('/').pop();
+  for (let i = 1; i <= BF.failureFactor; i++) {
+    await token(ctx, 'bss', guessed, `a wrong guess number ${i}`);
+    await new Promise((r) => setTimeout(r, BF.quickLoginCheckMilliSeconds + 300));   // a person's pace, not a burst
+  }
+  if (await token(ctx, 'bss', guessed, right)) fail(`after ${BF.failureFactor} wrong guesses the RIGHT password still signed in — nothing throttles guessing`);
+  // the person's page: the same words as any failed sign-in (a locked account is not revealed),
+  // and those words say the pause lifts by itself
+  const b3 = await chromium.launch();
+  const p3 = await (await b3.newContext()).newPage();
+  await p3.goto(SHOP);
+  await p3.click('.who >> text=Sign in');
+  await p3.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await p3.fill('input[name="username"]', guessed);
+  await p3.fill('input[name="password"]', right);
+  await p3.click('input[type="submit"], button[type="submit"]');
+  await p3.waitForTimeout(1500);
+  const paused = (await p3.locator('body').innerText()).replace(/\s+/g, ' ');
+  await b3.close();
+  if (!paused.includes(MESSAGES.en.invalidUserMessage)) fail(`a paused sign-in did not say it opens again by itself: "${paused.slice(0, 240)}"`);
+  console.log(`OK THROTTLED: ${BF.failureFactor} wrong guesses paused the account — even the right password waits — and the page says "${MESSAGES.en.invalidUserMessage}"`);
+  await new Promise((r) => setTimeout(r, (BF.waitIncrementSeconds + 3) * 1000));
+  if (!(await token(ctx, 'bss', guessed, right))) fail(`the pause did not lift by itself after ${BF.waitIncrementSeconds}s`);
+  console.log(`OK LIFTS BY ITSELF: after ${BF.waitIncrementSeconds}s the right password signs in again — no one had to unlock it`);
+  await ctx.delete(`${KC}/admin/realms/bss/users/${guessedId}`, { headers: AH });
 
   await ctx.delete(`${KC}/admin/realms/${OP}`, { headers: { Authorization: `Bearer ${adm}` } });
   console.log('PASS password_policy_test — every tenant\'s sign-in follows the length rules of NIST SP 800-63B, in plain words');
