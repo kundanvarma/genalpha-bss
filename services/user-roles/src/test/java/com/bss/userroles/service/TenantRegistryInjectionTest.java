@@ -72,7 +72,7 @@ bss:
         given(tenants.byId("acme")).willReturn(mock(TenantRegistry.TenantEntry.class));
 
         onboarding = new TenantOnboardingService(RestClient.builder(),
-                "http://localhost:8085", "", "admin", "admin",
+                "http://localhost:8085", "", "admin", "admin", "",
                 "infra/keycloak/nova-realm.json", registry.toString(),
                 "http://localhost:8081", "http://localhost:8113", "http://localhost:8083",
                 "http://localhost:8097", "http://localhost:8086", "http://localhost:8104",
@@ -84,7 +84,7 @@ bss:
     /** The same service, told what the fleet will actually see as an issuer. */
     private TenantOnboardingService withIssuerBase(String base) {
         return new TenantOnboardingService(RestClient.builder(),
-                "http://localhost:8085", base, "admin", "admin",
+                "http://localhost:8085", base, "admin", "admin", "",
                 "infra/keycloak/nova-realm.json", registry.toString(),
                 "http://localhost:8081", "http://localhost:8113", "http://localhost:8083",
                 "http://localhost:8097", "http://localhost:8086", "http://localhost:8104",

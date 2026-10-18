@@ -16,7 +16,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -46,6 +49,26 @@ class UserRolesApiTest {
 
     private static RequestPostProcessor adminOf(String issuer) {
         return jwt().jwt(j -> j.issuer(issuer)).authorities(new SimpleGrantedAuthority("roles:admin"));
+    }
+
+    /** #321: a handed-out password can be read aloud and passes a 15-character policy. */
+    @Test
+    void aCreatedLoginGetsAReadableGeneratedPasswordLongEnoughForTheStandard() throws Exception {
+        org.mockito.ArgumentCaptor<String> sent = org.mockito.ArgumentCaptor.forClass(String.class);
+        given(idp.createUser(eq("genalpha"), eq("kid@family.example"), anyString(), anyString(), sent.capture()))
+                .willReturn("u-kid");
+        String body = mockMvc.perform(post(BASE + "/user").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"kid@family.example\",\"givenName\":\"Kid\",\"familyName\":\"Family\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String handedOut = com.jayway.jsonpath.JsonPath.read(body, "$.temporaryPassword");
+        // the same password goes to the identity provider and, once, to the caller
+        assertThat(handedOut).isEqualTo(sent.getValue());
+        // four groups of four, no look-alikes (0/o, 1/l/i): 19 characters
+        assertThat(handedOut).matches("[a-hjkmnp-z2-9]{4}(-[a-hjkmnp-z2-9]{4}){3}").hasSizeGreaterThanOrEqualTo(15);
+        // and not the same twice
+        assertThat(com.bss.userroles.service.Passwords.generate()).isNotEqualTo(com.bss.userroles.service.Passwords.generate());
     }
 
     @Test

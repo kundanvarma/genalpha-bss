@@ -57,10 +57,15 @@ public class TenantOnboardingService {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern SAFE_ID = Pattern.compile("[a-z][a-z0-9]{2,20}");
     private static final SecureRandom RANDOM = new SecureRandom();
-    /** The template's staff login is re-minted, never imported: same
-     * username and dev password, a credential of this realm's own making. */
+    /** The template's staff login is re-minted, never imported: a credential
+     * of this realm's own making (#321) — generated unless the deployment
+     * names one (the laptop demo fleet does, in docker-compose). */
     private static final String STAFF_USERNAME = "demo";
-    private static final String STAFF_PASSWORD = "demo";
+    /** Onboarding's OWN way in to a realm as staff: a machine login whose
+     * password is reset to a fresh generated one before every use, through the
+     * master-admin rights onboarding already holds, and never kept. So no
+     * realm needs a published staff password for onboarding to work. */
+    static final String MACHINE_USERNAME = "bss-onboarding";
 
     private final RestClient rest;
     private final String keycloakBase;
@@ -68,6 +73,7 @@ public class TenantOnboardingService {
     private final String issuerBase;
     private final String adminUser;
     private final String adminPassword;
+    private final String staffPassword;
     private final String templatePath;
     private final String tenantsFile;
     private final String catalogBase;
@@ -90,6 +96,9 @@ public class TenantOnboardingService {
             @Value("${bss.onboarding.issuer-base:}") String issuerBase,
             @Value("${bss.onboarding.admin-user:admin}") String adminUser,
             @Value("${bss.onboarding.admin-password:admin}") String adminPassword,
+            // the first staff login's password: empty = generated per operator (the
+            // product default); the laptop demo fleet names one in docker-compose
+            @Value("${bss.onboarding.staff-password:}") String staffPassword,
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
@@ -108,6 +117,7 @@ public class TenantOnboardingService {
         this.issuerBase = issuerBase == null ? "" : issuerBase.trim().replaceAll("/+$", "");
         this.adminUser = adminUser;
         this.adminPassword = adminPassword;
+        this.staffPassword = staffPassword == null ? "" : staffPassword;
         this.templatePath = templatePath;
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
@@ -166,7 +176,7 @@ public class TenantOnboardingService {
         // client's own service account is re-granted the scopes the
         // template recorded for it, and a fresh staff login is minted.
         applyServiceAccountRoles(adminToken, id);
-        mintStaffUser(adminToken, id);
+        String handOver = mintStaffUser(adminToken, id);
 
         // the realm was replaced: any cached machine token for it is now a lie
         idp.evictTokens(id);
@@ -178,7 +188,8 @@ public class TenantOnboardingService {
         seedCatalog(id, name, currency);
         long seconds = (System.currentTimeMillis() - t0) / 1000;
         log.info("operator '{}' ({}) is LIVE in {}s — no restart, no rebuild", name, id, seconds);
-        return new OnboardReceipt(id, name, locale, currency, "shop." + id + ".localhost", seconds);
+        return new OnboardReceipt(id, name, locale, currency, "shop." + id + ".localhost", seconds,
+                STAFF_USERNAME, handOver);
     }
 
     /**
@@ -519,13 +530,23 @@ public class TenantOnboardingService {
     }
 
     /**
-     * The operator's first staff login, MINTED for this realm — same
-     * username and dev password the fleet expects, a credential this
-     * realm made rather than one inherited with another tenant's hash.
+     * The operator's first staff login, MINTED for this realm — a credential
+     * this realm made rather than one inherited with another tenant's hash.
+     * Its password is generated unless the deployment names one, and is
+     * returned for the receipt: shown once, never logged (#321).
      * Goes through partialImport because the admin user endpoint and the
      * realm import disagree about {@code registrationEmailAsUsername}.
      */
-    private void mintStaffUser(String adminToken, String id) throws Exception {
+    private String mintStaffUser(String adminToken, String id) throws Exception {
+        String password = staffPassword.isBlank() ? Passwords.generate() : staffPassword;
+        importUser(adminToken, id, STAFF_USERNAME, "demo@bss.local", "Demo", "User",
+                templateStaffRoles(), password, "OVERWRITE");
+        log.info("realm '{}': staff login minted", id);
+        return password;
+    }
+
+    /** The template staff login's realm roles — what the operator's first staff, and onboarding itself, hold. */
+    private ArrayNode templateStaffRoles() throws Exception {
         ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
         ArrayNode roles = JSON.createArrayNode();
         for (JsonNode u : template.withArray("users")) {
@@ -535,25 +556,106 @@ public class TenantOnboardingService {
                 }
             }
         }
-        ObjectNode staff = JSON.createObjectNode();
-        staff.put("username", STAFF_USERNAME);
-        staff.put("enabled", true);
-        staff.put("email", "demo@bss.local");
-        staff.put("emailVerified", true);
-        staff.put("firstName", "Demo");
-        staff.put("lastName", "User");
-        staff.set("requiredActions", JSON.createArrayNode());
+        return roles;
+    }
+
+    /**
+     * One login through partialImport. Unlike the other admin calls here a
+     * failure is NOT swallowed: a password the realm's policy refuses must
+     * stop onboarding with the reason, not leave a realm with no staff.
+     */
+    private void importUser(String adminToken, String id, String username, String email, String first, String last,
+            ArrayNode realmRoles, String password, String ifExists) {
+        ObjectNode user = JSON.createObjectNode();
+        user.put("username", username);
+        user.put("enabled", true);
+        user.put("email", email);
+        user.put("emailVerified", true);
+        user.put("firstName", first);
+        user.put("lastName", last);
+        user.set("requiredActions", JSON.createArrayNode());
         ObjectNode credential = JSON.createObjectNode();
         credential.put("type", "password");
-        credential.put("value", STAFF_PASSWORD);
+        credential.put("value", password);
         credential.put("temporary", false);
-        staff.set("credentials", JSON.createArrayNode().add(credential));
-        staff.set("realmRoles", roles);
+        user.set("credentials", JSON.createArrayNode().add(credential));
+        user.set("realmRoles", realmRoles);
         ObjectNode body = JSON.createObjectNode();
-        body.put("ifResourceExists", "OVERWRITE");
-        body.set("users", JSON.createArrayNode().add(staff));
-        adminPost(adminToken, "/admin/realms/" + id + "/partialImport", body);
-        log.info("realm '{}': staff login minted with {} roles", id, roles.size());
+        body.put("ifResourceExists", ifExists);
+        body.set("users", JSON.createArrayNode().add(user));
+        rest.post().uri(keycloakBase + "/admin/realms/" + id + "/partialImport")
+                .header("Authorization", "Bearer " + adminToken)
+                .header("Content-Type", "application/json")
+                .body(body).retrieve().toBodilessEntity();
+    }
+
+    /**
+     * A staff token for any realm onboarding works in — the source of a clone
+     * as much as a realm it just made. The machine login is created on first
+     * use with the realm's own staff authority (the realm's {@code demo} login's
+     * roles where it exists, else the template's, limited to roles the realm
+     * has), and its password is set to a fresh generated one immediately before
+     * this one sign-in. Nothing is stored; the next call sets another.
+     */
+    private String staffToken(String realm) {
+        String adminToken = masterAdminToken();
+        String base = "/admin/realms/" + realm;
+        try {
+            String userId = userIdOf(adminToken, realm, MACHINE_USERNAME);
+            if (userId == null) {
+                importUser(adminToken, realm, MACHINE_USERNAME, MACHINE_USERNAME + "@bss.local", "BSS", "Onboarding",
+                        staffRolesOf(adminToken, realm), Passwords.generate(), "SKIP");
+                userId = userIdOf(adminToken, realm, MACHINE_USERNAME);
+            }
+            String password = Passwords.generate();
+            ObjectNode credential = JSON.createObjectNode();
+            credential.put("type", "password");
+            credential.put("value", password);
+            credential.put("temporary", false);
+            rest.put().uri(keycloakBase + base + "/users/" + userId + "/reset-password")
+                    .header("Authorization", "Bearer " + adminToken)
+                    .header("Content-Type", "application/json")
+                    .body(credential).retrieve().toBodilessEntity();
+            Map<String, Object> tokenRes = rest.post()
+                    .uri(keycloakBase + "/realms/" + realm + "/protocol/openid-connect/token")
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .body("grant_type=password&client_id=bss-demo&username=" + MACHINE_USERNAME
+                            + "&password=" + java.net.URLEncoder.encode(password, java.nio.charset.StandardCharsets.UTF_8))
+                    .retrieve().body(Map.class);
+            return String.valueOf(tokenRes.get("access_token"));
+        } catch (Exception e) {
+            throw new IllegalStateException("onboarding could not sign in to realm '" + realm + "' as staff: "
+                    + e.getMessage(), e);
+        }
+    }
+
+    private String userIdOf(String adminToken, String realm, String username) {
+        JsonNode found = adminGet(adminToken, "/admin/realms/" + realm + "/users?exact=true&username=" + username);
+        return found != null && !found.isEmpty() ? found.get(0).path("id").asString(null) : null;
+    }
+
+    /** The realm's own staff authority: its demo login's realm roles, else the template's that the realm has. */
+    private ArrayNode staffRolesOf(String adminToken, String realm) throws Exception {
+        Map<String, JsonNode> realmRoles = rolesByName(adminToken, realm, "/roles");
+        ArrayNode roles = JSON.createArrayNode();
+        String demoId = userIdOf(adminToken, realm, STAFF_USERNAME);
+        JsonNode mapped = demoId == null ? null
+                : adminGet(adminToken, "/admin/realms/" + realm + "/users/" + demoId + "/role-mappings/realm");
+        if (mapped != null && !mapped.isEmpty()) {
+            for (JsonNode r : mapped) {
+                String name = r.path("name").asString();
+                if (!name.startsWith("default-roles")) {
+                    roles.add(name);
+                }
+            }
+            return roles;
+        }
+        for (JsonNode r : templateStaffRoles()) {
+            if (realmRoles.containsKey(r.asString())) {
+                roles.add(r.asString());
+            }
+        }
+        return roles;
     }
 
     private Map<String, JsonNode> rolesByName(String adminToken, String id, String path) {
@@ -1163,15 +1265,6 @@ public class TenantOnboardingService {
         }
     }
 
-    private String staffToken(String realm) {
-        Map<String, Object> tokenRes = rest.post()
-                .uri(keycloakBase + "/realms/" + realm + "/protocol/openid-connect/token")
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .body("grant_type=password&client_id=bss-demo&username=demo&password=demo")
-                .retrieve().body(Map.class);
-        return String.valueOf(tokenRes.get("access_token"));
-    }
-
     private java.util.List<Map<String, Object>> fetchAll(String base, String path, String token) {
         java.util.List<Map<String, Object>> all = new java.util.ArrayList<>();
         for (int offset = 0; offset < 5000; offset += 100) {
@@ -1323,12 +1416,7 @@ public class TenantOnboardingService {
     }
 
     private void seedCatalog(String id, String name, String currency) {
-        Map<String, Object> tokenRes = rest.post()
-                .uri(keycloakBase + "/realms/" + id + "/protocol/openid-connect/token")
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .body("grant_type=password&client_id=bss-demo&username=demo&password=demo")
-                .retrieve().body(Map.class);
-        String staff = String.valueOf(tokenRes.get("access_token"));
+        String staff = staffToken(id);
         // the RUNNING fleet adopts the newborn within one refresh interval —
         // wait for the catalog to honor her first token before seeding
         for (int i = 0; i < 30; i++) {
