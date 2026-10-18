@@ -2,5 +2,6 @@
   "invalidPasswordMinLengthMessage": "Bruk minst {0} tegn — en kort setning med vanlige ord fungerer fint, ingen spesialtegn trengs.",
   "invalidPasswordMaxLengthMessage": "Passordet er lengre enn {0} tegn — velg et kortere.",
   "invalidPasswordNotUsernameMessage": "Passordet kan ikke være brukernavnet eller e-postadressen din — velg noe bare du vet.",
-  "invalidPasswordNotEmailMessage": "Passordet kan ikke være e-postadressen din — velg noe bare du vet."
+  "invalidPasswordNotEmailMessage": "Passordet kan ikke være e-postadressen din — velg noe bare du vet.",
+  "invalidPasswordBlacklistedMessage": "Det er et av de mest brukte passordene — velg en setning som bare er din."
 }

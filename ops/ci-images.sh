@@ -64,7 +64,9 @@ for name, svc in sorted((cfg.get("services") or {}).items()):
     else:
         ctx, dockerfile = build, "Dockerfile"
     ctx = os.path.relpath(ctx, cwd)
-    if not (ctx.startswith("services/") or ctx.startswith("apps/")):
+    # the identity server is core, not a stand-in: since #325 the fleet runs its own
+    # Keycloak image (stock plus the common-password list), so it is built here too
+    if not (ctx.startswith("services/") or ctx.startswith("apps/") or ctx == "infra/keycloak"):
         continue                      # integrations/* are stand-ins, see above
     rows.append((name, ctx, dockerfile))
     by_name[name] = ctx
