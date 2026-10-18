@@ -25,7 +25,9 @@ async function token(ctx, realm, client, user, pass) {
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
 
   await ctx.post(`${API}/onboarding/v1/operator`, { headers: H(host),
-    data: { id: OP, name: 'Import Probe', locale: 'en', currency: 'EUR' } });
+    data: { id: OP, name: 'Import Probe', locale: 'en', currency: 'EUR' },
+    // onboarding waits for the fleet to adopt the newborn before seeding it — seen at 48s
+    timeout: 180000 });
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {
     await sleep(3000);
@@ -51,11 +53,15 @@ async function token(ctx, realm, client, user, pass) {
   // registry refresh tick — a first-seconds import can 401 downstream, so
   // retry the import (it is idempotent: alreadyPresent rows re-classify)
   let report = null;
+  // a hand-over password is shown ONCE, in the report of the attempt that made the
+  // login: a retry reports the same customer as alreadyPresent, without it — keep it
+  const handedOver = {};
   for (let attempt = 1; attempt <= 4; attempt++) {
     const res = await ctx.post(`${API}/onboarding/v1/operator/${OP}/importBase`,
       { headers: H(host), data: { rows }, timeout: 240000 });
     if (res.status() !== 201) fail('import refused: ' + res.status() + ' ' + (await res.text()).slice(0, 200));
     report = await res.json();
+    for (const c of report.customers || []) if (c.temporaryPassword) handedOver[c.externalRef] = c;
     const settled = (report.imported + report.alreadyPresent) === 2 && report.offeringMissing === 1;
     if (settled) break;
     const auth401 = JSON.stringify(report.exceptions || {}).includes('401');
@@ -67,10 +73,9 @@ async function token(ctx, realm, client, user, pass) {
   }
   if (report.exceptions.offeringMissing[0].externalRef !== 'LEG-003') fail('missing row misattributed');
   if (report.readyForCutover !== false) fail('the cutover flag must be honest with exceptions open');
-  const astrid = report.customers.find((c) => c.externalRef === 'LEG-001');
-  const astridCarried = JSON.stringify(report.exceptions?.alreadyPresent || []).includes('LEG-001');
-  if (!astridCarried && (!astrid || !astrid.temporaryPassword)) {
-    fail('no handover credential for LEG-001');
+  const astrid = handedOver['LEG-001'];
+  if (!astrid || !astrid.temporaryPassword) {
+    fail('no handover credential for LEG-001 in any attempt\'s report');
   }
   console.log('OK IMPORTED: 2 customers landed with logins + products + numbers; the missing '
     + 'offering is an exception BY NAME and the cutover flag stays honest');

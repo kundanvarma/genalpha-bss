@@ -33,7 +33,9 @@ async function token(ctx, realm, client, user, pass) {
 
   /* ---------- a fresh operator, born uniform ---------- */
   const born = await (await ctx.post(`${API}/onboarding/v1/operator`, { headers: H(host),
-    data: { id: OP, name: `Parity Probe`, locale: 'en', currency: 'EUR' } })).json();
+    data: { id: OP, name: `Parity Probe`, locale: 'en', currency: 'EUR' },
+    // onboarding waits for the fleet to adopt the newborn before seeding it — seen at 48s
+    timeout: 180000 })).json();
   if (born.id !== OP) fail('operator not minted: ' + JSON.stringify(born));
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {

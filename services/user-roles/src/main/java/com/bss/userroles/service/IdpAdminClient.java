@@ -26,10 +26,19 @@ public interface IdpAdminClient {
 
     /**
      * Create a login in the tenant's realm and return its IdP-assigned id
-     * (the future token subject). The password is set non-temporary so the
-     * person can sign in straight away through any channel.
+     * (the future token subject). A {@code temporary} password must be
+     * replaced by the person at their first sign-in in the browser (#322):
+     * a password someone else has seen is theirs only once they replace it.
      */
-    String createUser(String tenantId, String email, String firstName, String lastName, String password);
+    String createUser(String tenantId, String email, String firstName, String lastName, String password,
+            boolean temporary);
+
+    /**
+     * Lift the "choose your own password" requirement from a login. Used when a
+     * login becomes a digital worker's badge: a worker signs in by machine and
+     * cannot answer a browser prompt, so its password is never temporary.
+     */
+    void clearPasswordChange(String tenantId, String userId);
 
     List<IdpRole> userRoles(String tenantId, String userId);
 

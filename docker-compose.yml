@@ -1312,6 +1312,11 @@ services:
       # meets the 15-character policy (#324). Unset in the product, where each
       # operator's is generated and shown once in the onboarding receipt (#321)
       BSS_ONBOARDING_STAFF_PASSWORD: ${ONBOARDING_STAFF_PASSWORD:-demo-staff-sign-in}
+      # DEMO OPT-OUT (#322): a handed-out password is temporary in the product (the
+      # person must choose their own at the first browser sign-in). The laptop's
+      # suites sign in BY MACHINE to the logins they create, which a pending
+      # "choose your password" would refuse — so the demo fleet turns it off.
+      BSS_IDENTITY_TEMPORARY_PASSWORDS: "false"
       # the realm security rules (#320) a NEW realm gets the moment it is made
       BSS_ONBOARDING_SECURITY_DIR: /realm-template/security
       BSS_ONBOARDING_REALM_TEMPLATE: /realm-template/nova-realm.json
