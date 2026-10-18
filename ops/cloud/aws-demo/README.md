@@ -65,6 +65,15 @@ Public doors when done:
 | `shop-enet.taranga.no` … `console-enet.taranga.no` | ENet tenant | `docs/demo-script.md` personas / *from the sheet* |
 | `id.taranga.no` | Keycloak | master admin password is in `/opt/taranga/bss/.env` |
 
+**Account mail (#328).** Verify-email and reset-password mail leaves as
+`notifications@taranga.no` through the operator's Microsoft 365, with an app token — no
+mailbox password anywhere. The app's tenant, client and secret are one SecureString
+parameter, `/taranga/demo/m365-mail` (eu-north-1, demo account). **Once**, from a founder's
+laptop: `ops/cloud/aws-demo/box-role.sh --apply` gives the box a role that may read that
+parameter and nothing else (without `--apply` it only shows what it would do). The install
+then sets every realm's mail and turns email verification on; without the role it warns
+and carries on with no account mail.
+
 **The box has no published login (#323).** The repo's demo passwords (`demo`/`demo`,
 `mira`/`mira`, …) work on a laptop only. After the seeds, the install gives every
 such login a generated password and writes them to `~/taranga-demo-logins.txt` on the

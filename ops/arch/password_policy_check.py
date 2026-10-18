@@ -156,6 +156,13 @@ if os.path.isfile(doc_path) and os.path.isfile(bf_path):
 # the hosted box has no published login (#323): its installer rotates them, and a
 # re-run of the installer must not silently skip that step
 install = open("ops/cloud/aws-demo/install.sh").read() if os.path.isfile("ops/cloud/aws-demo/install.sh") else ""
+if "box-mail.py" not in install:
+    problems.append("ops/cloud/aws-demo/install.sh no longer sets the box's account mail (#328)")
+if 'chmod 600 "$CONF"' not in install:
+    problems.append("ops/cloud/aws-demo/install.sh no longer locks the box config file (gate password, AI key) to its owner")
+gen = open("ops/cloud/aws-demo/gen-override.py").read() if os.path.isfile("ops/cloud/aws-demo/gen-override.py") else ""
+if '"keycloak-converge"' not in gen or '"KC_SMTP_HOST": ""' not in gen:
+    problems.append("gen-override.py does not stop the converge step pointing the box's mail at Mailpit — it would undo #328 on every start")
 if "rotate-logins.py" not in install:
     problems.append("ops/cloud/aws-demo/install.sh no longer rotates the published demo logins — the box would accept demo/demo")
 

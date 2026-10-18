@@ -43,6 +43,11 @@ for name, svc in base["services"].items():
             "KC_HTTP_ENABLED": "true",
         }}
         continue
+    if name == "keycloak-converge":
+        # the box's account mail is Microsoft 365, set by box-mail.py (#328); the
+        # laptop default (Mailpit) must not overwrite it on every start
+        out["services"][name] = {"environment": {"KC_SMTP_HOST": ""}}
+        continue
     if not wants_issuer(svc):
         continue
     env = {"OIDC_ISSUER_URI": f"{issuer_base}/bss"}
