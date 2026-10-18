@@ -112,10 +112,22 @@ async function token(ctx, realm, user, pass) {
   const login = await userRes.json();
   const astrid = await token(ctx, 'aurora', email, login.temporaryPassword);
   if (!astrid) fail('astrid got no token from the new realm');
-  const orderRes = await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
-    headers: H(astrid), data: { productOrderItem: [{ action: 'add',
-      productOffering: { id: offers[0].id, name: offers[0].name } }] } });
-  if (orderRes.status() >= 400) fail('astrid\'s order was refused: ' + orderRes.status());
+  // Ordering adopts the re-made realm (new keys, new machine secret) on ITS refresh,
+  // which can trail the catalog's by seconds: an order in that window is answered
+  // "party-account is unreachable" (502). Wait for that adoption, within one minute,
+  // and say how long it took — anything else, or longer, still fails.
+  let orderRes = null;
+  const orderStart = Date.now();
+  for (let i = 0; i < 20; i++) {
+    orderRes = await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+      headers: H(astrid), data: { productOrderItem: [{ action: 'add',
+        productOffering: { id: offers[0].id, name: offers[0].name } }] } });
+    if (orderRes.status() !== 502) break;
+    await sleep(3000);
+  }
+  if (orderRes.status() >= 400) fail('astrid\'s order was refused: ' + orderRes.status() + ' ' + (await orderRes.text()).slice(0, 160));
+  const adoptedAfter = Math.round((Date.now() - orderStart) / 1000);
+  if (adoptedAfter > 0) console.log(`  (ordering adopted the new realm ${adoptedAfter}s after the catalog did)`);
   let line = null;
   for (let i = 0; i < 50 && !line; i++) {
     await sleep(3000);
