@@ -72,12 +72,12 @@ async function freshCustomer(tag) {
   const admin = await adminToken(KCB);
   const uname = `e2e-${tag}-${Date.now()}@example.com`;
   const userId = await createRealmUser(KCB, admin,
-    { username: uname, firstName: 'Bundle', lastName: 'Tester', password: 'Passw0rd!' });
+    { username: uname, firstName: 'Bundle', lastName: 'Tester', password: 'calm otters swim at dawn' });
   const tok = (await form(`${KCB}/realms/bss/protocol/openid-connect/token`,
-    { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
+    { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'calm otters swim at dawn' })).access_token;
   const person = await call('POST', '/tmf-api/party/v4/individual', tok,
     { givenName: 'Bundle', familyName: 'Tester' });
-  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId,
+  Object.assign(fixture, { uname, pass: 'calm otters swim at dawn', userId,
     partyId: (person.body || {}).id });
   return tok;
 }

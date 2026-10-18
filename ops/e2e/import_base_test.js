@@ -4,6 +4,7 @@
  * idempotent (alreadyPresent, nothing created); the imported customer can
  * actually SIGN IN and sees their own number. */
 const { request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
 const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
@@ -28,7 +29,7 @@ async function token(ctx, realm, client, user, pass) {
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {
     await sleep(3000);
-    staff = await token(ctx, OP, 'bss-demo', 'demo', 'demo').catch(() => null);
+    staff = await token(ctx, OP, 'bss-demo', 'demo', ONBOARDED_STAFF_PASSWORD).catch(() => null);
   }
   if (!staff) fail('no staff token from the fresh realm');
   console.log(`OK operator '${OP}' minted (the onboard seed gives it a small catalog)`);

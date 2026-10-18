@@ -51,8 +51,8 @@ async function staffToken(request, realm) {
   await page.fill('input[name="firstName"]', 'Nia');
   await page.fill('input[name="lastName"]', 'Nova');
   await page.fill('input[name="email"]', `nia.${run}@nova.example`);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('OK Nova customer self-registered through the nova realm');

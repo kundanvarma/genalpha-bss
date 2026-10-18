@@ -73,11 +73,11 @@ async function freshCustomer() {
   const admin = await adminToken(KCB);
   const uname = `e2e-cfs-${run}@example.com`;
   const userId = await createRealmUser(KCB, admin,
-    { username: uname, firstName: 'Cfs', lastName: 'Tester', password: 'Passw0rd!' });
-  const tok = (await form(KC, { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
+    { username: uname, firstName: 'Cfs', lastName: 'Tester', password: 'calm otters swim at dawn' });
+  const tok = (await form(KC, { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'calm otters swim at dawn' })).access_token;
   const person = await call('POST', '/tmf-api/party/v4/individual', tok,
     { givenName: 'Cfs', familyName: 'Tester' });
-  Object.assign(fixture, { uname, pass: 'Passw0rd!', userId,
+  Object.assign(fixture, { uname, pass: 'calm otters swim at dawn', userId,
     partyId: (person.body || {}).id });
   return tok;
 }

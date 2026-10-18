@@ -12,6 +12,7 @@
  *  - and only the HOST operator mints: nova's admin is refused
  */
 const { chromium, request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -68,7 +69,7 @@ async function token(ctx, realm, user, pass) {
   let offers = [];
   for (let i = 0; i < 40 && !offers.length; i++) {
     await sleep(3000);
-    auroraStaff = await token(ctx, 'aurora', 'demo', 'demo');
+    auroraStaff = await token(ctx, 'aurora', 'demo', ONBOARDED_STAFF_PASSWORD);
     if (!auroraStaff) continue;
     const res = await ctx.get(
       `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,

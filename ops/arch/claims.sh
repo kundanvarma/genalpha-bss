@@ -113,6 +113,23 @@ elif [ "$tenants_rc" -ne 0 ]; then
 fi
 rm -f "$tenants_err"
 
+# ------------------------------------------------------- password-policy ----
+# "Passwords follow NIST SP 800-63B" (#320) is only true while the one policy file
+# keeps the standard's rules (15+ characters, 64+ allowed, no composition rules,
+# no expiry) AND something applies it to every realm on every start.
+pw_err=$(mktemp)
+pw_out=$(python3 ops/arch/password_policy_check.py 2>"$pw_err")
+pw_rc=$?
+if ! printf '%s' "$pw_out" | grep -q '^password-policy: '; then
+  sed 's/^/         /' "$pw_err" >&2
+  fail "the password policy check did not run" "no sentinel line on stdout — see above"
+elif [ "$pw_rc" -ne 0 ]; then
+  printf '%s\n' "$pw_out" | sed 's/^/         /' >&2
+  fail "the password policy no longer keeps the standard's promise" \
+       "fix infra/keycloak/security/password-policy or what applies it"
+fi
+rm -f "$pw_err"
+
 # -------------------------------------------------------- receipt-store ----
 # insight's decision_log IS the durable store for governed-action receipts: the
 # ontology publishes each executed action as a DecisionRecordedEvent and

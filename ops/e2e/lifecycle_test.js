@@ -13,6 +13,7 @@
  *    PREVIEW badge; guests never see it
  */
 const { chromium, request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
 const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
@@ -41,7 +42,7 @@ async function token(ctx, realm, client, user, pass) {
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {
     await sleep(3000);
-    staff = await token(ctx, OP, 'bss-demo', 'demo', 'demo').catch(() => null);
+    staff = await token(ctx, OP, 'bss-demo', 'demo', ONBOARDED_STAFF_PASSWORD).catch(() => null);
   }
   if (!staff) fail('no staff token from fresh realm');
   const mkCust = async () => {
@@ -148,7 +149,7 @@ async function token(ctx, realm, client, user, pass) {
   await page.waitForTimeout(2500);
   if (await page.locator('input[name="username"]').count()) {
     await page.fill('input[name="username"]', 'demo');
-    await page.fill('input[name="password"]', 'demo');
+    await page.fill('input[name="password"]', ONBOARDED_STAFF_PASSWORD);
     await page.click('input[type="submit"], button[type="submit"]');
     await page.waitForTimeout(3500);
   }

@@ -18,8 +18,8 @@ async function register(page, email, first, last) {
   await page.fill('input[name="firstName"]', first);
   await page.fill('input[name="lastName"]', last);
   await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
 }

@@ -71,8 +71,8 @@ const run = Date.now();
   await page.fill('input[name="firstName"]', 'Gina');
   await page.fill('input[name="lastName"]', 'Guest');
   await page.fill('input[name="email"]', `gina-${run}@example.com`);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
 
   // 4. Card details never survive a redirect: the resume returns to the cart,

@@ -9,6 +9,7 @@
  *    behaves exactly as before
  */
 const { request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 
@@ -22,7 +23,7 @@ async function token(ctx, realm, user, pass) {
   const ctx = await request.newContext();
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
-  const aurora = await token(ctx, 'aurora', 'demo', 'demo');
+  const aurora = await onboardedStaffToken((pw) => token(ctx, 'aurora', 'demo', pw));
   if (!aurora) fail('no aurora staff token — run operator_form_test first (aurora must exist)');
 
   /* ---------- 1. volume work rides the CHEAP model ---------- */

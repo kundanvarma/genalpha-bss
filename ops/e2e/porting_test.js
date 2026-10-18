@@ -84,7 +84,7 @@ async function staffToken(request) {
   await page.waitForSelector('input[name="email"]');
   await page.fill('input[name="firstName"]', 'Keep'); await page.fill('input[name="lastName"]', 'Number');
   await page.fill('input[name="email"]', `keepnum-${run2}@example.com`);
-  await page.fill('input[name="password"]', 'Passw0rd!'); await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn'); await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.hero', { timeout: 30000 });
   await page.click('.nav >> text=Shop'); // signed in, the landing is Home — the shelf is under Shop

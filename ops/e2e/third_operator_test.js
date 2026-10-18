@@ -12,6 +12,7 @@
  */
 const { execSync } = require('child_process');
 const { request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -34,7 +35,7 @@ async function token(ctx, realm, user, pass) {
   execSync('bash ops/onboard-tenant.sh fjord "Fjord Mobil" da DKK "#1B6CA8"',
     { cwd: `${__dirname}/../..`, stdio: 'inherit', timeout: 600000 });
 
-  const staff = await token(ctx, 'fjord', 'demo', 'demo');
+  const staff = await onboardedStaffToken((pw) => token(ctx, 'fjord', 'demo', pw));
   if (!staff) fail('no staff token from the fjord realm');
   const offers = await (await ctx.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,

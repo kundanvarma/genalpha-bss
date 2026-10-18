@@ -88,6 +88,27 @@ services:
       - ./infra/keycloak/enet-realm.json:/opt/keycloak/data/import/enet-realm.json:ro
       - ./infra/keycloak/taranga-realm.json:/opt/keycloak/data/import/taranga-realm.json:ro
 
+  # Every realm's sign-in rules (#320), converged from infra/keycloak/security/
+  # on every `up`: a one-shot run of Keycloak's own admin CLI from the same
+  # image, so no extra image. The realm files cannot carry the rules (a file with
+  # a policy and short demo passwords is refused whole), and a policy added
+  # afterwards keeps every existing password working.
+  keycloak-converge:
+    image: quay.io/keycloak/keycloak:26.3
+    container_name: bss-keycloak-converge
+    depends_on: [keycloak]
+    restart: "no"
+    mem_limit: 256m
+    entrypoint: ["bash", "/converge/converge.sh"]
+    environment:
+      KC_URL: http://keycloak:8080
+      KC_ADMIN_USER: admin
+      KC_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      JAVA_OPTS: "-Xmx96m"
+    volumes:
+      - ./ops/keycloak/converge.sh:/converge/converge.sh:ro
+      - ./infra/keycloak/security:/security:ro
+
   product-catalog:
     build: ./services/product-catalog
     container_name: bss-product-catalog
@@ -1287,9 +1308,12 @@ services:
       BSS_ONBOARDING_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       # DEMO OPT-IN: an onboarded operator's first staff login gets this password
       # instead of a generated one, so the laptop suites can sign in to tenants
-      # other suites onboarded. Unset in the product, where each operator's is
-      # generated and shown once in the onboarding receipt (#321)
-      BSS_ONBOARDING_STAFF_PASSWORD: ${ONBOARDING_STAFF_PASSWORD:-demo}
+      # other suites onboarded (ops/e2e/kc_admin.js ONBOARDED_STAFF_PASSWORD). It
+      # meets the 15-character policy (#324). Unset in the product, where each
+      # operator's is generated and shown once in the onboarding receipt (#321)
+      BSS_ONBOARDING_STAFF_PASSWORD: ${ONBOARDING_STAFF_PASSWORD:-demo-staff-sign-in}
+      # the realm security rules (#320) a NEW realm gets the moment it is made
+      BSS_ONBOARDING_SECURITY_DIR: /realm-template/security
       BSS_ONBOARDING_REALM_TEMPLATE: /realm-template/nova-realm.json
       BSS_ONBOARDING_TENANTS_FILE: /config/tenants.yml
       CATALOG_BASE_URL: http://product-catalog:8080
