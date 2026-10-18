@@ -1285,6 +1285,11 @@ services:
       BSS_ONBOARDING_KEYCLOAK_BASE: http://keycloak:8080
       BSS_ONBOARDING_ADMIN_USER: admin
       BSS_ONBOARDING_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # DEMO OPT-IN: an onboarded operator's first staff login gets this password
+      # instead of a generated one, so the laptop suites can sign in to tenants
+      # other suites onboarded. Unset in the product, where each operator's is
+      # generated and shown once in the onboarding receipt (#321)
+      BSS_ONBOARDING_STAFF_PASSWORD: ${ONBOARDING_STAFF_PASSWORD:-demo}
       BSS_ONBOARDING_REALM_TEMPLATE: /realm-template/nova-realm.json
       BSS_ONBOARDING_TENANTS_FILE: /config/tenants.yml
       CATALOG_BASE_URL: http://product-catalog:8080

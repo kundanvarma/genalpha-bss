@@ -66,19 +66,13 @@ public class UserRolesService {
         if (givenName == null || familyName == null) {
             throw new BadRequestException("givenName and familyName are required");
         }
-        String password = generatePassword();
+        String password = Passwords.generate();
         String tenantId = tenantScope.currentTenantId();
         String userId = idp.createUser(tenantId, email, givenName, familyName, password);
         idp.grant(tenantId, userId, "customer");
         return UserView.created(userId, email, givenName, familyName, password);
     }
 
-    private static String generatePassword() {
-        // Readable enough to hand over, random enough to be a secret.
-        byte[] bytes = new byte[9];
-        new java.security.SecureRandom().nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
 
     private static String str(String value) {
         if (value == null) return null;
