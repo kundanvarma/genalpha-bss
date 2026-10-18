@@ -2753,6 +2753,9 @@ services:
       BSS_GATEWAY_URL: http://gateway:8080
       BSS_TOKEN_URL: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       WORKER_IMAGE: bss-hermes-worker:dev
+      # the staff login it provisions workers with: demo/demo on the laptop; the
+      # hosted box rotates it and its .env carries DEMO_STAFF_PASSWORD (#323)
+      PROVISIONING_PASSWORD: ${DEMO_STAFF_PASSWORD:-demo}
       # WORKER_NETWORK unset: the controller detects its own network at runtime
       # no provider key here any more (#283): the model door inside intelligence holds
       # it, and a worker gets only its own door key, issued at hire

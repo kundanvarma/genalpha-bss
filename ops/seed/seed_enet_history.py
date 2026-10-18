@@ -9,11 +9,17 @@ fictional; nothing here touches a real network or person. Idempotent — each
 step checks before it acts, so re-runs add nothing.
 Needs the demo slice up; the ticket step is skipped when trouble-ticket is down.
 """
+import os
 import json
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# the staff login (#323): the hosted box rotates the published one, and its .env
+# carries the new password; the laptop keeps demo/demo
+STAFF_USER = os.environ.get("SEED_USER", "demo")
+STAFF_PASS = os.environ.get("SEED_PASS") or os.environ.get("DEMO_STAFF_PASSWORD") or "demo"
 
 API = "http://localhost:8080"
 KC = "http://localhost:8085/realms/enet/protocol/openid-connect/token"
@@ -65,7 +71,7 @@ def wait_line(tok, pred, tries=30):
     return None
 
 
-staff = token("demo", "demo")
+staff = token(STAFF_USER, STAFF_PASS)
 devi = token("devi@enet.example", "devi")
 _, mine = call("GET", f"{PARTY}/individual?limit=1", devi)
 if mine:

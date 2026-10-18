@@ -24,7 +24,8 @@ KEYCLOAK="${KEYCLOAK_BASE:-http://localhost:8085}"
 # the HOST operator mints operators; a hosted one runs only its own
 HOST_REALM="${HOST_REALM:-bss}"
 HOST_USER="${HOST_USER:-demo}"
-HOST_PASSWORD="${HOST_PASSWORD:-demo}"
+# the hosted box rotated the published staff login; its .env carries the new one (#323)
+HOST_PASSWORD="${HOST_PASSWORD:-${DEMO_STAFF_PASSWORD:-demo}}"
 
 echo "== 1/3 host operator: a staff token with roles:admin from realm '$HOST_REALM'"
 TOK=$(curl -sS -X POST "$KEYCLOAK/realms/$HOST_REALM/protocol/openid-connect/token" \
