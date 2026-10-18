@@ -14,7 +14,10 @@
 #   7. front door: Caddy with automatic HTTPS for every public host
 set -euo pipefail
 CONF=/etc/taranga-demo.env
+# it holds the console gate password and the AI key: owner-readable only (#328)
+[ -f "$CONF" ] && chmod 600 "$CONF"
 if [ ! -f "$CONF" ]; then
+  ( umask 077; : > "$CONF" )
   cat > "$CONF" <<EOF
 # ---- Taranga hosted demo configuration (edit, then re-run install.sh) ----
 DEMO_DOMAIN=${DEMO_DOMAIN:-taranga.no}
@@ -90,6 +93,8 @@ if [ -z "$HAVE_JDK" ] || [ "$HAVE_JDK" -lt "$NEED_JDK" ]; then
   log "jdk now $(javac -version 2>&1)"
 fi
 command -v mvn >/dev/null || { log "maven and build tools"; apt-get install -y -qq maven git python3 python3-yaml apache2-utils; }
+# the box reads its Microsoft 365 mail credentials from SSM with its own role (#328)
+python3 -c 'import boto3' 2>/dev/null || apt-get install -y -qq python3-boto3
 if [ ! -f /swapfile ]; then
   log "8 GB swap (headroom for the Maven build)"
   fallocate -l 8G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
@@ -230,6 +235,20 @@ as_user "cd '$APP_DIR' && set -a && . ./.env && set +a && python3 ops/cloud/aws-
   --sheet '$SHEET' --env-file .env ${ROTATE_LOGINS:+--force}" || {
   echo "FATAL: the published demo logins could not be rotated — the box would accept demo/demo." >&2
   exit 1
+}
+
+# ---------- 6a'. account mail from notifications@taranga.no (#328) ----------
+# Keycloak sends verify-email and reset-password mail through the operator's
+# Microsoft 365 with an app token (XOAUTH2) — no mailbox password. The credentials
+# are ONE SecureString parameter, read here with the box's own IAM role
+# (ops/cloud/aws-demo/box-role.sh, run once from a founder's laptop); then email
+# verification is switched on. Without the role the box keeps working, with no
+# account mail — and says so.
+log "account mail via Microsoft 365 (SSM ${MAIL_PARAMETER:-/taranga/demo/m365-mail})"
+as_user "cd '$APP_DIR' && set -a && . ./.env && set +a && python3 ops/cloud/aws-demo/box-mail.py \
+  --parameter '${MAIL_PARAMETER:-/taranga/demo/m365-mail}'" || {
+  echo "WARN: account mail is NOT configured — run ops/cloud/aws-demo/box-role.sh --apply from a" >&2
+  echo "      founder's laptop (the box needs its role), then re-run this install." >&2
 }
 
 # ---------- 6b. boot hook: after a stop/start, shed to the demo slice on its own ----------

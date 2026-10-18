@@ -125,7 +125,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Event backbone + observability (Live Flow) | Kafka outbox + `flow` | ✅ |
 | Let partners SUBSCRIBE to the event stream | TMF688 Event Management | `event-hub` (#38) | ✅ #75 (callback + filter, tenant-walled, delivery ledger w/ backoff retries + dead-letter that keeps its error) |
 | Hardening: tick locks, resumable billing, backups, GDPR, PQC-ready | fleet | ✅ #56–58 |
-| Sign-in that follows NIST SP 800-63B (length, common-password list, temporary hand-overs, lockout, account mail) | Keycloak realms from `infra/keycloak/security/` + `user-roles` | ✅ `password_policy_test` (◐ the hosted box's login rotation and Microsoft 365 mail, #323/#328; staff second factor is the next arc) — [docs/password-security.md](password-security.md) |
+| Sign-in that follows NIST SP 800-63B (length, common-password list, temporary hand-overs, lockout, account mail) | Keycloak realms from `infra/keycloak/security/` + `user-roles` | ✅ `password_policy_test` (the hosted box's login rotation and Microsoft 365 mail are built and proven at the box's next deploy; staff second factor is the next arc) — [docs/password-security.md](password-security.md) |
 
 ## The honest summary for a buying CSP
 

@@ -1,7 +1,7 @@
 # Passwords — every tenant's sign-in follows NIST SP 800-63B
 
-*Arc #320, built 2026-10-18 (tickets #321, #324, #322, #325, #326, #327). The two
-hosted-box tickets, #323 and #328, are not built yet — see Honest limits.*
+*Arc #320, built 2026-10-18 (tickets #321, #324, #322, #325, #326, #327, #323, #328).
+The two hosted-box tickets are proven on the box only at its next deploy — see Honest limits.*
 
 ## The problem it solves
 
@@ -51,7 +51,15 @@ learn which addresses have accounts. Nobody needs to unlock anyone.
 
 **Account mail.** On the laptop, the mail a person needs — verify your email, reset your
 password — is caught by a local mail server (Mailpit, `http://localhost:8025`) instead of
-leaving the machine.
+leaving the machine. On the hosted box it goes out as `notifications@taranga.no` through
+the operator's Microsoft 365: Keycloak signs in to Microsoft with an app token, so no
+person's mailbox password is in the system, and new accounts must verify their address.
+The Microsoft app's credentials are one encrypted parameter in AWS, which the box reads
+with a role allowed to read that parameter and nothing else.
+
+**No published login on the box.** The demo logins the repo publishes (`demo/demo`, the
+personas) work on a laptop only. The box's installer gives each a generated password and
+writes them to a private sheet on the box for the founders.
 
 **Where the rules live.** One folder, `infra/keycloak/security/`, is the source of every
 tenant's rules: the policy, the lockout settings, the common-password list and the words.
@@ -84,11 +92,14 @@ passwords on.
 
 ## Honest limits
 
-- **The hosted box is not done.** Its published demo logins (`demo/demo` and the personas)
-  are still guessable until #323 rotates them, and its account mail — from
-  `notifications@taranga.no` through the operator's Microsoft 365 — waits for #328. Until
-  then the box can enforce the rules but cannot send a verification or reset mail, and its
-  email verification stays off.
+- **The box pieces are proven only on the box.** Rotating its logins and sending its mail
+  were tested here against throwaway realms (and fake Microsoft credentials); a reset mail
+  reaching a founder's inbox is the box deploy's proof, not this repo's. The box needs its
+  mail role attached once (`ops/cloud/aws-demo/box-role.sh --apply`, from a founder's
+  laptop); without it the box works and sends no account mail, and the install says so.
+- **Microsoft's side is the operator's.** Sending as `notifications@taranga.no` needs the
+  app to hold Microsoft's send-as permission for that one mailbox and SMTP sign-in allowed
+  on it; a refused token shows up only when the first mail is sent.
 - **Staff have a single factor.** A second factor for staff — one-time codes or passkeys —
   is the next arc. Customers have no passkeys yet either.
 - **The list is of common passwords, not every breached one.** A password that leaked once
