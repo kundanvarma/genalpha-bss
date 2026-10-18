@@ -38,7 +38,9 @@ async function token(ctx, realm, client, user, pass) {
   const g = (url) => `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}${Math.random()}`;
 
   await ctx.post(`${API}/onboarding/v1/operator`, { headers: H(host),
-    data: { id: OP, name: 'Lifecycle Probe', locale: 'en', currency: 'EUR' } });
+    data: { id: OP, name: 'Lifecycle Probe', locale: 'en', currency: 'EUR' },
+    // onboarding waits for the fleet to adopt the newborn before seeding it — seen at 48s
+    timeout: 180000 });
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {
     await sleep(3000);

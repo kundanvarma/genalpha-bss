@@ -58,19 +58,28 @@ STAFF_PASSWORD=$(echo "$RECEIPT" | python3 -c "import json,sys;print(json.load(s
 echo "== 3/3 fleet: the rest of the components adopt the newborn on their refresh tick"
 # the onboarding service refreshes its own registry immediately; every other
 # component re-reads the shared file within BSS_TENANTS_REFRESH_MS (15s)
+TEMPORARY=""
 for i in $(seq 1 20); do
-  STAFF=$(curl -sS -X POST "$KEYCLOAK/realms/$ID/protocol/openid-connect/token" \
+  ANSWER=$(curl -sS -X POST "$KEYCLOAK/realms/$ID/protocol/openid-connect/token" \
     --data-urlencode grant_type=password --data-urlencode client_id=bss-demo \
-    --data-urlencode "username=$STAFF_USER" --data-urlencode "password=$STAFF_PASSWORD" \
-    | python3 -c "import json,sys;print(json.load(sys.stdin).get('access_token',''))" || true)
+    --data-urlencode "username=$STAFF_USER" --data-urlencode "password=$STAFF_PASSWORD" || true)
+  # where handed-out passwords are temporary (#322 — the product default, and the
+  # box), the first staff login must choose its own password in the browser before
+  # it signs in by machine: the realm is live, its staff simply has not chosen yet
+  if printf '%s' "$ANSWER" | grep -q 'not fully set up'; then TEMPORARY=yes; break; fi
+  STAFF=$(printf '%s' "$ANSWER" | python3 -c "import json,sys;print(json.load(sys.stdin).get('access_token',''))" || true)
   if [ -n "$STAFF" ] && curl -sf -o /dev/null -H "Authorization: Bearer $STAFF" \
       "$GATEWAY/tmf-api/productCatalogManagement/v4/productOffering?limit=1"; then
     break
   fi
   sleep 5
 done
-[ -n "${STAFF:-}" ] || { echo "the newborn realm never issued a staff token"; exit 1; }
-echo "   '$ID' serves its own catalog through the gateway"
+if [ -n "$TEMPORARY" ]; then
+  echo "   '$ID' is live; its first staff login chooses its own password at its first sign-in"
+else
+  [ -n "${STAFF:-}" ] || { echo "the newborn realm never issued a staff token"; exit 1; }
+  echo "   '$ID' serves its own catalog through the gateway"
+fi
 # The read path above only needs the tenant in the registry. The MACHINE
 # path needs its SECRET too, and a re-onboard of an existing id rotates
 # that secret out from under every component's cached registry entry and
@@ -81,6 +90,6 @@ echo "   waiting ${SETTLE}s for every component to re-read the registry"
 sleep "$SETTLE"
 echo ""
 echo "OPERATOR '$NAME' ($ID) IS LIVE — realm, registry, catalog. Storefront host: shop.$ID.localhost"
-echo "Its first staff login, shown this once: $STAFF_USER / $STAFF_PASSWORD"
+echo "Its first staff login, shown this once: $STAFF_USER / $STAFF_PASSWORD${TEMPORARY:+ (temporary — chosen anew at the first sign-in)}"
 echo "Its machine clients answer to a secret generated for THIS operator alone; the value"
 echo "lives in this operator's infra/tenants/tenants.yml block and is printed nowhere."

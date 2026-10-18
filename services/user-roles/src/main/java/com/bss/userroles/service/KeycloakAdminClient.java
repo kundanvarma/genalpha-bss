@@ -74,7 +74,8 @@ public class KeycloakAdminClient implements IdpAdminClient {
     }
 
     @Override
-    public String createUser(String tenantId, String email, String firstName, String lastName, String password) {
+    public String createUser(String tenantId, String email, String firstName, String lastName, String password,
+            boolean temporary) {
         // Realms with registrationEmailAsUsername expect username == email.
         Map<String, Object> user = Map.of(
                 "username", email,
@@ -83,7 +84,7 @@ public class KeycloakAdminClient implements IdpAdminClient {
                 "lastName", lastName,
                 "enabled", true,
                 "emailVerified", true,
-                "credentials", List.of(Map.of("type", "password", "value", password, "temporary", false)));
+                "credentials", List.of(Map.of("type", "password", "value", password, "temporary", temporary)));
         try {
             var response = withFreshTokenOn401(tenantId, () -> rest.post()
                     .uri(adminBase(tenantId) + "/users")
@@ -109,6 +110,18 @@ public class KeycloakAdminClient implements IdpAdminClient {
                 .header("Authorization", "Bearer " + tokenFor(tenantId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(List.of(roleByName(tenantId, roleName)))
+                .retrieve().toBodilessEntity());
+    }
+
+    @Override
+    public void clearPasswordChange(String tenantId, String userId) {
+        // a temporary credential is Keycloak's UPDATE_PASSWORD required action;
+        // with it pending, a password-grant sign-in is refused
+        withFreshTokenOn401(tenantId, () -> rest.put()
+                .uri(adminBase(tenantId) + "/users/" + userId)
+                .header("Authorization", "Bearer " + tokenFor(tenantId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("requiredActions", List.of()))
                 .retrieve().toBodilessEntity());
     }
 

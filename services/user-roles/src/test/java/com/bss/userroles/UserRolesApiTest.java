@@ -55,8 +55,8 @@ class UserRolesApiTest {
     @Test
     void aCreatedLoginGetsAReadableGeneratedPasswordLongEnoughForTheStandard() throws Exception {
         org.mockito.ArgumentCaptor<String> sent = org.mockito.ArgumentCaptor.forClass(String.class);
-        given(idp.createUser(eq("genalpha"), eq("kid@family.example"), anyString(), anyString(), sent.capture()))
-                .willReturn("u-kid");
+        given(idp.createUser(eq("genalpha"), eq("kid@family.example"), anyString(), anyString(), sent.capture(),
+                org.mockito.ArgumentMatchers.anyBoolean())).willReturn("u-kid");
         String body = mockMvc.perform(post(BASE + "/user").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"kid@family.example\",\"givenName\":\"Kid\",\"familyName\":\"Family\"}"))
@@ -69,6 +69,31 @@ class UserRolesApiTest {
         assertThat(handedOut).matches("[a-hjkmnp-z2-9]{4}(-[a-hjkmnp-z2-9]{4}){3}").hasSizeGreaterThanOrEqualTo(15);
         // and not the same twice
         assertThat(com.bss.userroles.service.Passwords.generate()).isNotEqualTo(com.bss.userroles.service.Passwords.generate());
+    }
+
+    /** #322: by default a handed-out password must be replaced at first sign-in. */
+    @Test
+    void aHandedOutPasswordIsTemporaryByDefault() throws Exception {
+        given(idp.createUser(anyString(), anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.anyBoolean())).willReturn("u-person");
+        mockMvc.perform(post(BASE + "/user").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"colleague@acme.example\",\"givenName\":\"Col\",\"familyName\":\"League\"}"))
+                .andExpect(status().isCreated());
+        verify(idp).createUser(eq("genalpha"), eq("colleague@acme.example"), anyString(), anyString(), anyString(),
+                eq(true));
+    }
+
+    /** #322: a digital worker signs in by machine — becoming one lifts the requirement. */
+    @Test
+    void becomingADigitalWorkerLiftsThePasswordChange() throws Exception {
+        given(idp.realmRoles("genalpha")).willReturn(List.of(new IdpRole("r9", "digital-worker", null)));
+        given(idp.userRoles("genalpha", "u-badge")).willReturn(List.of());
+        mockMvc.perform(post(BASE + "/permission").with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"user\": {\"id\": \"u-badge\"}, \"userRole\": {\"name\": \"digital-worker\"}}"))
+                .andExpect(status().isCreated());
+        verify(idp).clearPasswordChange("genalpha", "u-badge");
     }
 
     @Test

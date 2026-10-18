@@ -75,6 +75,7 @@ public class TenantOnboardingService {
     private final String adminPassword;
     private final String staffPassword;
     private final String securityDir;
+    private final boolean temporaryPasswords;
     private final String templatePath;
     private final String tenantsFile;
     private final String catalogBase;
@@ -102,6 +103,8 @@ public class TenantOnboardingService {
             @Value("${bss.onboarding.staff-password:}") String staffPassword,
             // every tenant's sign-in rules (#320): the same files the fleet's converge step applies
             @Value("${bss.onboarding.security-dir:infra/keycloak/security}") String securityDir,
+            // #322: the operator's first staff login is handed over, so it is temporary too
+            @Value("${bss.identity.temporary-passwords:true}") boolean temporaryPasswords,
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
@@ -122,6 +125,7 @@ public class TenantOnboardingService {
         this.adminPassword = adminPassword;
         this.staffPassword = staffPassword == null ? "" : staffPassword;
         this.securityDir = securityDir == null ? "" : securityDir;
+        this.temporaryPasswords = temporaryPasswords;
         this.templatePath = templatePath;
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
@@ -569,7 +573,7 @@ public class TenantOnboardingService {
     private String mintStaffUser(String adminToken, String id) throws Exception {
         String password = staffPassword.isBlank() ? Passwords.generate() : staffPassword;
         importUser(adminToken, id, STAFF_USERNAME, "demo@bss.local", "Demo", "User",
-                templateStaffRoles(), password, "OVERWRITE");
+                templateStaffRoles(), password, "OVERWRITE", temporaryPasswords);
         log.info("realm '{}': staff login minted", id);
         return password;
     }
@@ -594,7 +598,7 @@ public class TenantOnboardingService {
      * stop onboarding with the reason, not leave a realm with no staff.
      */
     private void importUser(String adminToken, String id, String username, String email, String first, String last,
-            ArrayNode realmRoles, String password, String ifExists) {
+            ArrayNode realmRoles, String password, String ifExists, boolean temporary) {
         ObjectNode user = JSON.createObjectNode();
         user.put("username", username);
         user.put("enabled", true);
@@ -602,11 +606,13 @@ public class TenantOnboardingService {
         user.put("emailVerified", true);
         user.put("firstName", first);
         user.put("lastName", last);
-        user.set("requiredActions", JSON.createArrayNode());
+        // a temporary password IS Keycloak's UPDATE_PASSWORD required action
+        user.set("requiredActions", temporary
+                ? JSON.createArrayNode().add("UPDATE_PASSWORD") : JSON.createArrayNode());
         ObjectNode credential = JSON.createObjectNode();
         credential.put("type", "password");
         credential.put("value", password);
-        credential.put("temporary", false);
+        credential.put("temporary", temporary);
         user.set("credentials", JSON.createArrayNode().add(credential));
         user.set("realmRoles", realmRoles);
         ObjectNode body = JSON.createObjectNode();
@@ -633,7 +639,7 @@ public class TenantOnboardingService {
             String userId = userIdOf(adminToken, realm, MACHINE_USERNAME);
             if (userId == null) {
                 importUser(adminToken, realm, MACHINE_USERNAME, MACHINE_USERNAME + "@bss.local", "BSS", "Onboarding",
-                        staffRolesOf(adminToken, realm), Passwords.generate(), "SKIP");
+                        staffRolesOf(adminToken, realm), Passwords.generate(), "SKIP", false);
                 userId = userIdOf(adminToken, realm, MACHINE_USERNAME);
             }
             String password = Passwords.generate();

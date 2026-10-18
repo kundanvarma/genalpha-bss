@@ -10,6 +10,8 @@
  *      email address as the password is refused; a 15+ phrase with spaces and
  *      Norwegian letters is accepted — and then signs in
  *   4. existing logins still sign in (a policy is checked when a password is set)
+ *   5. "temporary" means temporary (#322): a handed-over password must be replaced at
+ *      the first browser sign-in, and a digital worker (machine sign-in) is exempt
  *
  * Tenant: genalpha (realm bss) for the registration, through the shop.
  */
@@ -129,6 +131,52 @@ function sameRules(rules, realm) {
     if (!(await token(ctx, realm, user, pass))) fail(`${user} in ${realm} no longer signs in — the policy must not touch existing passwords`);
   }
   console.log('OK EXISTING LOGINS: demo, paula and mira still sign in — the policy binds a password when it is SET');
+
+  /* ---------- 5. "temporary" means temporary (#322) ---------- */
+  // The laptop fleet opts OUT of temporary passwords for its machine-driven suites, so
+  // the login is made as the product makes it — temporary — through the admin API.
+  const A = { Authorization: `Bearer ${adm}`, 'Content-Type': 'application/json' };
+  const mkTemp = async (who) => {
+    const handed = 'handed over by the family';                    // a password someone else has seen
+    const r = await ctx.post(`${KC}/admin/realms/bss/users`, { headers: A, data: {
+      username: who, email: who, enabled: true, emailVerified: true, firstName: 'Tess', lastName: `Temp${run}`,
+      credentials: [{ type: 'password', value: handed, temporary: true }] } });
+    if (r.status() !== 201) fail(`could not make a temporary login: ${r.status()}`);
+    return { id: r.headers().location.split('/').pop(), handed };
+  };
+  const kid = `pw-kid-${run}@family.example`;
+  const made2 = await mkTemp(kid);
+  if (await token(ctx, 'bss', kid, made2.handed)) fail('a temporary password signed in by machine before the person chose their own');
+  const b2 = await chromium.launch();
+  const p2 = await (await b2.newContext()).newPage();
+  await p2.goto(SHOP);
+  await p2.click('.who >> text=Sign in');
+  await p2.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await p2.fill('input[name="username"]', kid);
+  await p2.fill('input[name="password"]', made2.handed);
+  await p2.click('input[type="submit"], button[type="submit"]');
+  await p2.waitForSelector('input[name="password-new"]', { timeout: 20000 })
+    .catch(async () => fail(`the first sign-in did not ask for a new password: "${(await p2.locator('body').innerText()).slice(0, 200)}"`));
+  const own = 'my own quiet morning words';
+  await p2.fill('input[name="password-new"]', own);
+  await p2.fill('input[name="password-confirm"]', own);
+  await p2.click('input[type="submit"], button[type="submit"]');
+  await p2.waitForSelector('.nav', { timeout: 20000 }).catch(() => fail('choosing a new password did not lead into the shop'));
+  await b2.close();
+  if (!(await token(ctx, 'bss', kid, own))) fail('the password the person chose does not sign in');
+  if (await token(ctx, 'bss', kid, made2.handed)) fail('the handed-over password still works after the person replaced it');
+  console.log('OK TEMPORARY: a handed-over password was refused by machine, the first browser sign-in made the person choose their own, and only that one works now');
+
+  // a digital worker signs in BY MACHINE — becoming one lifts the requirement, through the BSS
+  const badge = `pw-worker-${run}@bss.local`;
+  const made3 = await mkTemp(badge);
+  const hired = await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/permission`, {
+    headers: { Authorization: `Bearer ${staff}`, 'Content-Type': 'application/json' },
+    data: { user: { id: made3.id }, userRole: { name: 'digital-worker' } } });
+  if (hired.status() !== 201) fail(`granting digital-worker: ${hired.status()} ${(await hired.text()).slice(0, 160)}`);
+  if (!(await token(ctx, 'bss', badge, made3.handed))) fail('a digital worker\'s badge still waits for a browser password change — its shifts could never sign in');
+  console.log('OK WORKERS EXEMPT: granting the digital-worker role through the BSS lifted the change, so the badge signs in by machine');
+  for (const id of [made2.id, made3.id]) await ctx.delete(`${KC}/admin/realms/bss/users/${id}`, { headers: A });
 
   await ctx.delete(`${KC}/admin/realms/${OP}`, { headers: { Authorization: `Bearer ${adm}` } });
   console.log('PASS password_policy_test — every tenant\'s sign-in follows the length rules of NIST SP 800-63B, in plain words');

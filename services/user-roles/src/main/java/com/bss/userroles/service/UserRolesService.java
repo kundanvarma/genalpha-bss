@@ -29,10 +29,17 @@ public class UserRolesService {
 
     private final IdpAdminClient idp;
     private final TenantScope tenantScope;
+    /** #322: a handed-out password is the person's only once they replace it.
+     *  On by default; the laptop demo fleet opts out in docker-compose, because
+     *  its suites sign in to the logins they create by machine. */
+    private final boolean temporaryPasswords;
 
-    public UserRolesService(IdpAdminClient idp, TenantScope tenantScope) {
+    public UserRolesService(IdpAdminClient idp, TenantScope tenantScope,
+            @org.springframework.beans.factory.annotation.Value("${bss.identity.temporary-passwords:true}")
+            boolean temporaryPasswords) {
         this.idp = idp;
         this.tenantScope = tenantScope;
+        this.temporaryPasswords = temporaryPasswords;
     }
 
     public List<RoleView> roles() {
@@ -68,7 +75,7 @@ public class UserRolesService {
         }
         String password = Passwords.generate();
         String tenantId = tenantScope.currentTenantId();
-        String userId = idp.createUser(tenantId, email, givenName, familyName, password);
+        String userId = idp.createUser(tenantId, email, givenName, familyName, password, temporaryPasswords);
         idp.grant(tenantId, userId, "customer");
         return UserView.created(userId, email, givenName, familyName, password);
     }
@@ -114,6 +121,10 @@ public class UserRolesService {
                     .map(r -> String.valueOf(r.name()))
                     .filter(n -> n.startsWith("default-roles-") || "customer".equals(n))
                     .forEach(n -> idp.revoke(tenantId, userId, n));
+            // and a worker signs in by machine, so its password is never
+            // temporary (#322): a pending "choose your password" would refuse
+            // every shift's sign-in
+            idp.clearPasswordChange(tenantId, userId);
         }
         return PermissionView.of(userId, roleName);
     }

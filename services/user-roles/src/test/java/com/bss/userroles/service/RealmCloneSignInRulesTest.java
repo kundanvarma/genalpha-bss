@@ -24,7 +24,7 @@ class RealmCloneSignInRulesTest {
 
     private static TenantOnboardingService onboarding(String securityDir) {
         return new TenantOnboardingService(RestClient.builder(),
-                "http://localhost:8085", "", "admin", "admin", "", securityDir,
+                "http://localhost:8085", "", "admin", "admin", "", securityDir, false,
                 "../../infra/keycloak/nova-realm.json", "unused-tenants.yml",
                 "http://localhost:8081", "http://localhost:8113", "http://localhost:8083",
                 "http://localhost:8097", "http://localhost:8086", "http://localhost:8104",

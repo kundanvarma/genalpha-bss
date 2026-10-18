@@ -59,6 +59,9 @@ for name, svc in base["services"].items():
         # appears, catalog and brand correct, and its first customer gets a 401
         # on "Invalid issuer". Issue #264.
         env["BSS_ONBOARDING_ISSUER_BASE"] = issuer_base
+        # the laptop compose opts OUT of temporary passwords for its machine-driven
+        # suites; the hosted box is people, so a handed-out password is temporary (#322)
+        env["BSS_IDENTITY_TEMPORARY_PASSWORDS"] = "true"
     if name == "device-entitlement":
         # phones and the OIDC callback reach the TS.43 door on the public demo host
         env["ENTITLEMENT_PUBLIC_BASE_URL"] = f"https://demo.{domain}"
