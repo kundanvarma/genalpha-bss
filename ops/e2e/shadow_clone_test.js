@@ -36,7 +36,8 @@ async function token(ctx, realm, client, user, pass) {
 
   /* ---------- 1. CLONE genalpha into a sandbox ---------- */
   const cloneRes = await ctx.post(`${API}/onboarding/v1/operator/genalpha/clone`,
-    { headers: H(host), data: { id: SC } });
+    // a clone is a whole onboarding plus a catalog copy; it waits for the fleet to adopt the newborn
+    { headers: H(host), data: { id: SC }, timeout: 180000 });
   if (cloneRes.status() !== 201) fail('clone refused: ' + cloneRes.status()
     + ' ' + (await cloneRes.text()).slice(0, 200));
   const clone = await cloneRes.json();

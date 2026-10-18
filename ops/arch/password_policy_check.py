@@ -142,6 +142,17 @@ if block and "KC_SMTP_HOST" not in block.group(1):
 if "smtpServer.host" not in open("ops/keycloak/converge.sh").read():
     problems.append("converge.sh never sets the realms' mail server")
 
+# the doc's numbers are the settings' numbers (#329): a claim is checked, not typed
+doc_path = "docs/password-security.md"
+if os.path.isfile(doc_path) and os.path.isfile(bf_path):
+    doc = open(doc_path).read()
+    bf = json.load(open(bf_path))
+    for said, why in ((f"at least **{number('length')} characters**", "the minimum length"),
+                      (f"After {bf.get('failureFactor')} wrong tries", "the failures before a pause"),
+                      (f"up to **{int(bf.get('maxFailureWaitSeconds', 0)) // 60} minutes**", "the longest pause")):
+        if said not in doc:
+            problems.append(f"{doc_path} does not say \"{said}\" — {why} in the settings and the doc disagree")
+
 for f in sorted(glob.glob("infra/keycloak/*-realm.json")):
     if json.load(open(f)).get("passwordPolicy"):
         problems.append(f"{f} carries a passwordPolicy: with its short demo passwords Keycloak refuses the whole realm")

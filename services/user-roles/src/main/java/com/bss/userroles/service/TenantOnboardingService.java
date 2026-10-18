@@ -184,7 +184,7 @@ public class TenantOnboardingService {
         // client's own service account is re-granted the scopes the
         // template recorded for it, and a fresh staff login is minted.
         applyServiceAccountRoles(adminToken, id);
-        String handOver = mintStaffUser(adminToken, id);
+        String handOver = mintStaffUser(masterAdminToken(), id);   // a fresh token: the step above can outlast one
 
         // the realm was replaced: any cached machine token for it is now a lie
         idp.evictTokens(id);
@@ -518,10 +518,19 @@ public class TenantOnboardingService {
         ObjectNode template = (ObjectNode) JSON.readTree(Files.readString(Path.of(templatePath)));
         Map<String, JsonNode> realmRoles = rolesByName(adminToken, id, "/roles");
         int bound = 0;
+        long tokenAt = System.nanoTime();
         for (JsonNode u : template.withArray("users")) {
             String clientId = u.path("serviceAccountClientId").asString(null);
             if (clientId == null) {
                 continue;
+            }
+            // the master admin token lives a minute, and under load this loop has
+            // taken longer: every call after the expiry was a swallowed 401, leaving
+            // the newborn's machine clients without their roles (seen 2026-10-18).
+            // Renew before it can lapse — not every turn: each token is a password check
+            if (System.nanoTime() - tokenAt > java.util.concurrent.TimeUnit.SECONDS.toNanos(40)) {
+                adminToken = masterAdminToken();
+                tokenAt = System.nanoTime();
             }
             String clientUuid = clientUuid(adminToken, id, clientId);
             if (clientUuid == null) {

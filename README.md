@@ -103,7 +103,11 @@ bookkeeping categories are retained WITH their named legal basis, the profile an
 place, the login dies scrubbed at the IdP, and every erasure leaves an immutable audit row;
 retention as TickGuard-guarded clocks; PCI scope verified-then-claimed — the vault holds
 `pspToken/lastFour`, never a PAN; suite #58, the whole story in
-[docs/privacy.md](docs/privacy.md)), **post-quantum readiness — *ready*, never "proof"** (the
+[docs/privacy.md](docs/privacy.md)), **sign-in that follows NIST SP 800-63B** (every tenant: 15+
+characters with no digit-or-symbol rules and no forced expiry, the NCSC's 100k most-breached
+passwords refused, handed-out passwords replaced at the first sign-in — digital workers exempt —
+and guessing paused for minutes, never locked for good, all in plain words on the sign-in page;
+[docs/password-security.md](docs/password-security.md), `password_policy_test.js`), **post-quantum readiness — *ready*, never "proof"** (the
 BSS is crypto-agile by construction: identity, transport and payment crypto all live behind
 seams, so migrating is swapping what a seam points at, not a rewrite; today SIM secrets are
 AES-256-GCM at rest, PKCE is SHA-256, and a hybrid **X25519MLKEM768** TLS key exchange —
