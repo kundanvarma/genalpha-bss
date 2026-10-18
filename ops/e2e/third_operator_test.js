@@ -12,7 +12,7 @@
  */
 const { execSync } = require('child_process');
 const { request } = require('playwright');
-const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
+const { onboardedStaffToken } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 const run = Date.now();

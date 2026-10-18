@@ -13,7 +13,7 @@
  *    PREVIEW badge; guests never see it
  */
 const { chromium, request } = require('playwright');
-const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
+const { ONBOARDED_STAFF_PASSWORD } = require('./onboarded_staff');
 const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';

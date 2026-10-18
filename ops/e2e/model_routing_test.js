@@ -9,7 +9,7 @@
  *    behaves exactly as before
  */
 const { request } = require('playwright');
-const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
+const { onboardedStaffToken } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 

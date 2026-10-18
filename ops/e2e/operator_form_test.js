@@ -12,7 +12,7 @@
  *  - and only the HOST operator mints: nova's admin is refused
  */
 const { chromium, request } = require('playwright');
-const { ONBOARDED_STAFF_PASSWORD, onboardedStaffToken } = require('./onboarded_staff');
+const { ONBOARDED_STAFF_PASSWORD } = require('./onboarded_staff');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
