@@ -7,7 +7,8 @@
  *      (not what a file says), and the plain-language words for it in en and no
  *   2. a FRESHLY ONBOARDED tenant carries it from its first minute
  *   3. registering with a 14-character password is refused in plain words; the
- *      email address as the password is refused; a 15+ phrase with spaces and
+ *      email address as the password is refused; a common password (NCSC top 100k,
+ *      or a brand word in any case) is refused (#325); a 15+ phrase with spaces and
  *      Norwegian letters is accepted — and then signs in
  *   4. existing logins still sign in (a policy is checked when a password is set)
  *   5. "temporary" means temporary (#322): a handed-over password must be replaced at
@@ -118,6 +119,15 @@ function sameRules(rules, realm) {
   const answer = notMe.find((m) => page3.includes(m));
   if (!answer) fail(`the email address was not refused in plain words: "${page3.slice(0, 300)}"`);
   console.log(`OK NOT THE EMAIL: the email address is refused as a password — "${answer}"`);
+
+  // #325: whole-password check against the most common passwords (NCSC top 100k) and
+  // the tenants' brand words — case does not save a common password
+  const common = MESSAGES.en.invalidPasswordBlacklistedMessage;
+  for (const pw of ['password123456789', 'TarangaPassword1']) {
+    await attempt(pw);
+    if (!(await shown()).includes(common)) fail(`the common password "${pw}" was not refused in plain words: "${(await shown()).slice(0, 300)}"`);
+  }
+  console.log(`OK COMMON: "password123456789" (NCSC list) and "TarangaPassword1" (a brand word, any case) are refused — "${common}"`);
 
   const phrase = 'blåbær på fjellet i sol';                  // 23 characters: spaces, å and æ, no digits, no symbols
   await attempt(phrase);

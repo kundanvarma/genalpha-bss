@@ -86,7 +86,8 @@ print(" ".join(sorted(seen)))' "$SERVICES"
 # can build exactly what it is about to start, and nothing else.
 if [ "$TIER" = "build-list" ]; then
   for s in $(resolve_closure); do
-    case "$s" in postgres|kafka|redis|keycloak|keycloak-converge|minio|azurite) continue ;; esac
+    # keycloak is BUILT since #325 (stock plus the common-password list)
+    case "$s" in postgres|kafka|redis|keycloak-converge|minio|azurite) continue ;; esac
     printf '%s ' "$s"
   done
   echo

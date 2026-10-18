@@ -47,7 +47,8 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.3
+    # stock Keycloak plus the common-password list the realms' policy refuses (#325)
+    build: ./infra/keycloak
     container_name: bss-keycloak
     restart: unless-stopped
     # Never the first thing the OOM killer takes: an app can restart in

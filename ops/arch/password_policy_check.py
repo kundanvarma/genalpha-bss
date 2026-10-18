@@ -95,6 +95,18 @@ converge = open("ops/keycloak/converge.sh").read()
 if "password-policy" not in converge or "passwordPolicy" not in converge:
     problems.append("converge.sh does not apply the password-policy file")
 
+# a blocklist the policy names must be IN the image Keycloak runs, or setting the
+# policy fails on every realm (#325)
+m = re.search(r"passwordBlacklist\((.+?)\)", policy)
+if m:
+    name = m.group(1)
+    dockerfile = open("infra/keycloak/Dockerfile").read() if os.path.isfile("infra/keycloak/Dockerfile") else ""
+    if f"password-blacklists/{name}" not in dockerfile:
+        problems.append(f"the policy names blocklist '{name}' but infra/keycloak/Dockerfile does not build it into password-blacklists/")
+    kc = re.search(r"^  keycloak:\n((?:    .*\n)+)", compose, re.M)
+    if not kc or "build: ./infra/keycloak" not in kc.group(1):
+        problems.append("the keycloak service does not run the image built from infra/keycloak — the blocklist would be missing")
+
 for f in sorted(glob.glob("infra/keycloak/*-realm.json")):
     if json.load(open(f)).get("passwordPolicy"):
         problems.append(f"{f} carries a passwordPolicy: with its short demo passwords Keycloak refuses the whole realm")

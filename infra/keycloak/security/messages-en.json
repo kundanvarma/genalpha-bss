@@ -2,5 +2,6 @@
   "invalidPasswordMinLengthMessage": "Use at least {0} characters — a short phrase of ordinary words works well, no symbols needed.",
   "invalidPasswordMaxLengthMessage": "That password is longer than {0} characters — please use a shorter one.",
   "invalidPasswordNotUsernameMessage": "Your password can’t be your username or email address — choose something only you know.",
-  "invalidPasswordNotEmailMessage": "Your password can’t be your email address — choose something only you know."
+  "invalidPasswordNotEmailMessage": "Your password can’t be your email address — choose something only you know.",
+  "invalidPasswordBlacklistedMessage": "That’s one of the most commonly used passwords — choose a phrase that’s yours alone."
 }

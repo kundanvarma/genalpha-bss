@@ -11,5 +11,8 @@ password working (both probed, see #320).
   is the customer's only factor), 128 allowed, not the username or email; no
   composition rules and no expiry, which the standard forbids. The claims gate
   refuses a policy that breaks those rules.
+- `blocklist/` — the common passwords refused whole (`passwordBlacklist`, #325): the
+  NCSC top 100k plus the tenants' brand words. Built into the fleet's own Keycloak
+  image by `infra/keycloak/Dockerfile`; provenance and licence in `blocklist/SOURCE.md`.
 - `messages-<locale>.json` — the plain-language words Keycloak's stock pages
   show for each rule, per realm locale (en, no).
