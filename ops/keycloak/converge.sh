@@ -23,10 +23,12 @@ realms=$("$ADM" get realms --config "$CFG" --fields realm --format csv --noquote
 n=0
 for r in $realms; do
   "$ADM" update "realms/$r" --config "$CFG" -s "passwordPolicy=$POLICY"
+  # guessing is throttled (#326): temporary lockout, never permanent
+  "$ADM" update "realms/$r" --config "$CFG" -f "$SEC/brute-force.json"
   for f in "$SEC"/messages-*.json; do
     locale=$(basename "$f" .json); locale=${locale#messages-}
     "$ADM" create "realms/$r/localization/$locale" --config "$CFG" -f "$f" >/dev/null
   done
   n=$((n + 1))
 done
-echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"
+echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", lockout from brute-force.json, messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"

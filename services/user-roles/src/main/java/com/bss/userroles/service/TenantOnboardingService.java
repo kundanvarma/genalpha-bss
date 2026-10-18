@@ -465,6 +465,14 @@ public class TenantOnboardingService {
             return;
         }
         realm.put("passwordPolicy", Files.readString(policy).trim());
+        // guessing is throttled from the first minute too (#326): the lockout settings
+        Path bruteForce = dir.resolve("brute-force.json");
+        if (Files.isRegularFile(bruteForce)) {
+            JsonNode lockout = JSON.readTree(Files.readString(bruteForce));
+            for (var field : lockout.properties()) {
+                realm.set(field.getKey(), field.getValue());
+            }
+        }
         ObjectNode texts = JSON.createObjectNode();
         try (var files = Files.list(dir)) {
             for (Path f : files.filter(x -> x.getFileName().toString().matches("messages-[a-z]+\\.json")).toList()) {

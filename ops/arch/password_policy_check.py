@@ -107,6 +107,32 @@ if m:
     if not kc or "build: ./infra/keycloak" not in kc.group(1):
         problems.append("the keycloak service does not run the image built from infra/keycloak — the blocklist would be missing")
 
+# guessing is throttled (#326) — temporary lockout only: permanent lockout hands
+# anyone who knows an address a way to lock that customer out for good
+bf_path = os.path.join(SEC, "brute-force.json")
+if not os.path.isfile(bf_path):
+    problems.append("no brute-force.json: nothing throttles password guessing")
+else:
+    bf = json.load(open(bf_path))
+    if bf.get("bruteForceProtected") is not True:
+        problems.append("brute-force.json: bruteForceProtected must be true")
+    if bf.get("permanentLockout") is not False or bf.get("maxTemporaryLockouts", 0) != 0:
+        problems.append("brute-force.json: lockout must be temporary only (permanentLockout false, maxTemporaryLockouts 0)")
+    if not (1 <= int(bf.get("failureFactor", 0)) <= 10):
+        problems.append(f"brute-force.json: failureFactor {bf.get('failureFactor')} — lock after 1..10 failures")
+    if not (0 < int(bf.get("maxFailureWaitSeconds", 0)) <= 900):
+        problems.append(f"brute-force.json: maxFailureWaitSeconds {bf.get('maxFailureWaitSeconds')} — the wait is capped at 15 minutes")
+    if '"$SEC/brute-force.json"' not in open("ops/keycloak/converge.sh").read():
+        problems.append("converge.sh does not apply brute-force.json")
+for f in message_files:
+    w = json.load(open(f))
+    if not (w.get("invalidUserMessage") or "").strip():
+        problems.append(f"{os.path.basename(f)} has no plain words for a failed (or paused) sign-in (invalidUserMessage)")
+    # a paused account must read EXACTLY like any failed sign-in, or the page tells a
+    # guesser which addresses have accounts (Keycloak's own default keeps them equal)
+    if w.get("accountTemporarilyDisabledMessage") != w.get("invalidUserMessage"):
+        problems.append(f"{os.path.basename(f)}: accountTemporarilyDisabledMessage differs from invalidUserMessage — a locked account would be revealed")
+
 for f in sorted(glob.glob("infra/keycloak/*-realm.json")):
     if json.load(open(f)).get("passwordPolicy"):
         problems.append(f"{f} carries a passwordPolicy: with its short demo passwords Keycloak refuses the whole realm")

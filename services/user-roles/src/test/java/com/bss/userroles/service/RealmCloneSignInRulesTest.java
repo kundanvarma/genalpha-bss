@@ -41,6 +41,10 @@ class RealmCloneSignInRulesTest {
             assertThat(realm.path("localizationTexts").path(locale).path("invalidPasswordMinLengthMessage").asString())
                     .as(locale).isNotBlank().contains("{0}");
         }
+        // and guessing is throttled from the first minute (#326): temporary lockout only
+        assertThat(realm.path("bruteForceProtected").asBoolean()).isTrue();
+        assertThat(realm.path("permanentLockout").asBoolean()).isFalse();
+        assertThat(realm.path("failureFactor").asInt()).isEqualTo(5);
         // and still no template user travels with it
         assertThat(realm.path("users").size()).isZero();
     }
