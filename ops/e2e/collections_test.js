@@ -146,12 +146,12 @@ async function moneyState(tok, partyId) {
     await page.fill('input[name="firstName"]', 'Kolla');
     await page.fill('input[name="lastName"]', 'Debitor');
     await page.fill('input[name="email"]', email);
-    await page.fill('input[name="password"]', 'Passw0rd!');
-    await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+    await page.fill('input[name="password"]', 'calm otters swim at dawn');
+    await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
     await page.click('input[type="submit"], button[type="submit"]');
     await page.waitForURL('**/shop/**', { timeout: 25000 }).catch(() => {});
     await browser.close();
-    const kolla = await token(email, 'Passw0rd!');
+    const kolla = await token(email, 'calm otters swim at dawn');
     const kollaId = sub(kolla);
 
     // PAYDAY ALIGNMENT AGAINST PRORATION: the run charges each plan only

@@ -74,6 +74,7 @@ public class TenantOnboardingService {
     private final String adminUser;
     private final String adminPassword;
     private final String staffPassword;
+    private final String securityDir;
     private final String templatePath;
     private final String tenantsFile;
     private final String catalogBase;
@@ -99,6 +100,8 @@ public class TenantOnboardingService {
             // the first staff login's password: empty = generated per operator (the
             // product default); the laptop demo fleet names one in docker-compose
             @Value("${bss.onboarding.staff-password:}") String staffPassword,
+            // every tenant's sign-in rules (#320): the same files the fleet's converge step applies
+            @Value("${bss.onboarding.security-dir:infra/keycloak/security}") String securityDir,
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
@@ -118,6 +121,7 @@ public class TenantOnboardingService {
         this.adminUser = adminUser;
         this.adminPassword = adminPassword;
         this.staffPassword = staffPassword == null ? "" : staffPassword;
+        this.securityDir = securityDir == null ? "" : securityDir;
         this.templatePath = templatePath;
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
@@ -436,10 +440,35 @@ public class TenantOnboardingService {
             }
         }
         realm.set("users", JSON.createArrayNode());
+        applySignInRules(realm);
         stripIds(realm);
         String json = JSON.writeValueAsString(realm);
         assertNoInheritedCredentials(realm, machineSecret);
         return json;
+    }
+
+    /**
+     * A new tenant's sign-in follows the rules from its first minute (#320): the
+     * password policy and the plain-language messages for it, from the same files
+     * the fleet's converge step applies to every existing realm. Set in the realm
+     * create call itself — the clone carries no users, so nothing can fail the policy.
+     */
+    void applySignInRules(ObjectNode realm) throws Exception {
+        Path dir = Path.of(securityDir);
+        Path policy = dir.resolve("password-policy");
+        if (!Files.isRegularFile(policy)) {
+            log.warn("no realm security settings at {} — the new realm gets the template's sign-in rules", dir);
+            return;
+        }
+        realm.put("passwordPolicy", Files.readString(policy).trim());
+        ObjectNode texts = JSON.createObjectNode();
+        try (var files = Files.list(dir)) {
+            for (Path f : files.filter(x -> x.getFileName().toString().matches("messages-[a-z]+\\.json")).toList()) {
+                String locale = f.getFileName().toString().replaceAll("^messages-|\\.json$", "");
+                texts.set(locale, JSON.readTree(Files.readString(f)));
+            }
+        }
+        realm.set("localizationTexts", texts);
     }
 
     /** The invariant both onboarding paths owe the threat model: a clone

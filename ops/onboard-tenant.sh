@@ -49,13 +49,19 @@ except Exception:
 if not r.get('id'):
     print('   onboarding refused: ' + json.dumps(r)[:400]); sys.exit(1)
 print(f\"   realm, registry block and starter catalog for '{r['id']}' in {r.get('seconds', '?')}s\")"
+# its first staff login (#321): generated per operator, or the demo fleet's named
+# one — handed over HERE, once; the BSS keeps no copy
+STAFF_USER=$(echo "$RECEIPT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('staffUsername') or 'demo')")
+STAFF_PASSWORD=$(echo "$RECEIPT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('staffPassword') or '')")
+[ -n "$STAFF_PASSWORD" ] || { echo "   the receipt carried no staff login — is user-roles older than #321?"; exit 1; }
 
 echo "== 3/3 fleet: the rest of the components adopt the newborn on their refresh tick"
 # the onboarding service refreshes its own registry immediately; every other
 # component re-reads the shared file within BSS_TENANTS_REFRESH_MS (15s)
 for i in $(seq 1 20); do
   STAFF=$(curl -sS -X POST "$KEYCLOAK/realms/$ID/protocol/openid-connect/token" \
-    -d "grant_type=password&client_id=bss-demo&username=demo&password=demo" \
+    --data-urlencode grant_type=password --data-urlencode client_id=bss-demo \
+    --data-urlencode "username=$STAFF_USER" --data-urlencode "password=$STAFF_PASSWORD" \
     | python3 -c "import json,sys;print(json.load(sys.stdin).get('access_token',''))" || true)
   if [ -n "$STAFF" ] && curl -sf -o /dev/null -H "Authorization: Bearer $STAFF" \
       "$GATEWAY/tmf-api/productCatalogManagement/v4/productOffering?limit=1"; then
@@ -75,5 +81,6 @@ echo "   waiting ${SETTLE}s for every component to re-read the registry"
 sleep "$SETTLE"
 echo ""
 echo "OPERATOR '$NAME' ($ID) IS LIVE — realm, registry, catalog. Storefront host: shop.$ID.localhost"
+echo "Its first staff login, shown this once: $STAFF_USER / $STAFF_PASSWORD"
 echo "Its machine clients answer to a secret generated for THIS operator alone; the value"
 echo "lives in this operator's infra/tenants/tenants.yml block and is printed nowhere."

@@ -20,8 +20,8 @@ async function register(page, email, first, last) {
   await page.fill('input[name="firstName"]', first);
   await page.fill('input[name="lastName"]', last);
   await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
 }
@@ -284,7 +284,7 @@ async function apiCall(page, method, path, token, body) {
   // Carl's browser token is also past KC's 5-min TTL by now — mint a fresh one
   const carl2 = (await (await ctx.request.post(KC, { form: {
     grant_type: 'password', client_id: 'bss-biz',
-    username: `carl-${run}@example.com`, password: 'Passw0rd!' } })).json()).access_token;
+    username: `carl-${run}@example.com`, password: 'calm otters swim at dawn' } })).json()).access_token;
   const ingest = await ctx.request.post(`${API}/tmf-api/usageManagement/v4/usage`, { headers: H2, data: {
     // a minute in the past: host/container clock skew must never push the
     // record beyond the report's now() window

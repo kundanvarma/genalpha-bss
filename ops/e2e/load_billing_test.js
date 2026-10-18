@@ -4,6 +4,7 @@
  * says so. Parties are direct rows (no logins — billing needs ids, not
  * passwords); products ride the inventory API in parallel batches. */
 const { request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD } = require('./onboarded_staff');
 const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
@@ -31,7 +32,7 @@ async function token(ctx, realm, client, user, pass) {
     data: { id: OP, name: 'Load Probe', locale: 'en', currency: 'EUR' } });
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) { await sleep(3000);
-    staff = await token(ctx, OP, 'bss-demo', 'demo', 'demo').catch(() => null); }
+    staff = await token(ctx, OP, 'bss-demo', 'demo', ONBOARDED_STAFF_PASSWORD).catch(() => null); }
   if (!staff) fail('no staff token');
   const offerings = await (await ctx.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=10`, { headers: H(staff) })).json();

@@ -5,6 +5,7 @@
  * its face; the sandbox dies with its realm.
  */
 const { request } = require('playwright');
+const { ONBOARDED_STAFF_PASSWORD } = require('./onboarded_staff');
 const { masterTokenForm } = require('./kc_admin');
 
 const API = 'http://localhost:8080';
@@ -41,7 +42,7 @@ const run = Date.now();
 
   // the sandbox is real and walled: its bills exist, its emails cannot leave
   const stok = (await (await ctx.post(`http://localhost:8085/realms/${report.sandboxId}/protocol/openid-connect/token`,
-    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: ONBOARDED_STAFF_PASSWORD } })).json()).access_token;
   const bills = await (await ctx.get(`${API}/tmf-api/customerBillManagement/v4/customerBill?limit=100`,
     { headers: { Authorization: 'Bearer ' + stok } })).json();
   if (!Array.isArray(bills) || !bills.length) fail('the quarter left no bills to walk through');

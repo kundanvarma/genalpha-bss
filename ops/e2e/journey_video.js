@@ -227,8 +227,8 @@ async function shopTab(page, labelRe) {
   await glideType(page, page.locator('input[name="firstName"]'), 'Mia');
   await glideType(page, page.locator('input[name="lastName"]'), FAMILY);
   await glideType(page, page.locator('input[name="email"]'), EMAIL);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('· SCENE1-registered');
@@ -402,7 +402,7 @@ async function shopTab(page, labelRe) {
   await page.waitForSelector('input[name="username"]', { timeout: 20000 });
   await lens(page);
   await glideType(page, page.locator('input[name="username"]'), EMAIL);
-  await page.fill('input[name="password"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
   await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('· SCENE4-back-signed-in');

@@ -111,8 +111,8 @@ async function token(request) {
   await page.fill('input[name="firstName"]', 'Pricia');
   await page.fill('input[name="lastName"]', `Preview${run}`);
   await page.fill('input[name="email"]', `pricia-${run}@example.com`);
-  await page.fill('input[name="password"]', 'Passw0rd!');
-  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.fill('input[name="password"]', 'calm otters swim at dawn');
+  await page.fill('input[name="password-confirm"]', 'calm otters swim at dawn');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
   await page.click(`text=${plain.name}`);
