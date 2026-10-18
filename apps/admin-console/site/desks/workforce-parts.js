@@ -5,6 +5,14 @@
 // govern — the crew ceiling (surge staffing never grows past it) and
 // hiring (mint a badge for a chosen job; ACTIVATING the worker is the
 // runtime's act — the instructions say exactly how).
+/* A worker in words, never its key: the controller mints a badge as
+ * worker-<job>-<name>-<stamp>@…, and the page says "nora · care worker". A badge
+ * of any other shape (a person, an older worker) shows as it is. */
+function workerLabel(id) {
+  const m = /^worker-(care|back-office|generalist)-(.+)-\d{6,}@/.exec(id || '');
+  return m ? `${m[2]} · ${m[1].replace('-', ' ')} worker` : (id || '');
+}
+
 function workforceControls(staffing) {
   const controls = document.createElement('div');
   controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.7rem;margin:0.4rem 0 0.4rem';
@@ -130,8 +138,9 @@ function workforceControls(staffing) {
         hireOut.style.color = 'inherit';
         const done = document.createElement('div');
         done.dataset.testid = 'wf-hired-started';
-        done.textContent = `Hired AND started: ${started.badge} (container ${started.container}, `
-          + `${started.job}). It will appear on the crew after its first claim. Fire = the ✖ on its row.`;
+        done.textContent = `Hired and started: ${workerLabel(started.badge)} — no credentials to `
+          + 'handle. It appears on the crew after its first claim; fire it with the ✖ on its row.';
+        done.title = started.badge; // the badge itself, on hover
         hireOut.append(done);
         setTimeout(renderWorkforce, 4000);
         return;

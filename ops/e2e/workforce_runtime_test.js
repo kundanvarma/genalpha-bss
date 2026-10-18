@@ -18,7 +18,7 @@
  *    AI ledger with the worker as actor; a rolling restart re-keys it (the old
  *    key is refused); firing revokes the key FIRST (the fired key is refused)
  *  - the dashboard's Hire goes through the controller when deployed
- *    ("Hired AND started", no credentials block)
+ *    ("Hired and started", no credentials block)
  */
 const { execFileSync } = require('child_process');
 const fs = require('fs');
@@ -198,7 +198,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (await page.locator('[data-testid=wf-hired-creds]').count()) {
       fail('credentials were displayed despite the controller being deployed');
     }
-    console.log('OK DASHBOARD: Hire went through the controller — "Hired AND started", zero'
+    console.log('OK DASHBOARD: Hire went through the controller — "Hired and started", zero'
       + ' credentials on screen. The closed loop is a single click.');
     // tidy: fire the UI-hired worker
     const workers = (await call('GET', '/workforce-runtime/workers', staff)).body;

@@ -60,6 +60,10 @@ const TENANTS_FILE = process.env.BSS_TENANTS_FILE || '/config/tenants.yml';
 const TENANT = process.env.BSS_TENANT || 'genalpha';
 const LABEL = 'bss.workforce.worker';
 const SURGE_POLL_MS = Number(process.env.SURGE_POLL_MS || 60000);
+// surge staffing on by default (unchanged); SURGE_STAFFING=off stops it hiring or
+// releasing bench workers whatever the crew ceiling says — the surge SIGNAL itself
+// (the BSS's backlog-over-capacity flag) is untouched
+const SURGE_STAFFING = process.env.SURGE_STAFFING !== 'off';
 const CONFIG_POLL_MS = Number(process.env.CONFIG_POLL_MS || 15000);
 
 /* ---------- the brain: worker-ai-* from the live registry ---------- */
@@ -283,7 +287,7 @@ setInterval(() => {
 
 /* ---------- surge: scale bench workers under the ceiling ---------- */
 setInterval(() => serially(async () => {
-  if (rolling) return;   // a crew mid-roll is short by design — never staff against it
+  if (rolling || !SURGE_STAFFING) return;   // a crew mid-roll is short by design — never staff against it
   try {
     const staff = await staffToken();
     const kpis = await bss('GET', '/ai/v1/workforce/kpis', staff);

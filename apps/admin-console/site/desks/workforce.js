@@ -45,7 +45,7 @@ async function renderWorkforce() {
   const staffing = kpis.staffing || {};
   cards.append(
     card('Working now', kpis.workingNow, 'workers holding a live task lease', 'wf-kpi-working'),
-    card('Backlog' + (staffing.surge ? ' — SURGE' : ''), staffing.backlogDepth,
+    card('Backlog' + (staffing.surge ? ' — over capacity' : ''), staffing.backlogDepth,
       staffing.definition, 'wf-kpi-backlog'),
     card('Tasks completed', kpis.completed, null, 'wf-kpi-completed'),
     card('Escalated to humans', kpis.escalated, 'escalations are counted, not punished', 'wf-kpi-escalated'),
@@ -103,7 +103,8 @@ async function renderWorkforce() {
     dot.style.color = w.workingNow ? '#2e9e5b' : 'var(--dim,#999)';
     const who = document.createElement('span');
     who.style.flex = '1';
-    who.textContent = `${w.workerName || w.worker} — ${w.type}`;
+    const named = w.workerName || w.worker;
+    who.textContent = workerLabel(named) === named ? `${named} — ${w.type}` : workerLabel(named);
     who.title = w.worker; // the stable subject id, on hover
     const nums = document.createElement('span');
     nums.style.cssText = 'color:var(--dim,#777)';
@@ -139,7 +140,7 @@ async function renderWorkforce() {
     title.textContent = `${a.action} — ${a.method} ${a.path}`;
     const why = document.createElement('div');
     why.style.cssText = 'font-size:0.85rem;color:var(--dim,#777)';
-    why.textContent = `${a.reason} · asked by ${a.requestedByName || a.requestedBy}`;
+    why.textContent = `${a.reason} · asked by ${workerLabel(a.requestedByName || a.requestedBy)}`;
     info.append(title, why);
     const ok = document.createElement('button');
     ok.textContent = 'Approve';
@@ -175,7 +176,7 @@ async function renderWorkforce() {
     const row = document.createElement('div');
     row.dataset.testid = 'wf-ledger-row';
     row.style.cssText = 'padding:0.45rem 0.8rem;border-bottom:1px solid var(--line,#eee);font-size:0.9rem';
-    row.textContent = `[${t.status}] ${t.kind} · ${t.summary || t.subjectRef} · ${t.claimedByName || t.claimedBy || ''}`
+    row.textContent = `[${t.status}] ${t.kind} · ${t.summary || t.subjectRef} · ${workerLabel(t.claimedByName || t.claimedBy || '')}`
       + (t.outcome ? ` → ${t.outcome}` : '');
     ledgerBox.append(row);
   }
