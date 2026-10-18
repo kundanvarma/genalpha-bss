@@ -133,6 +133,15 @@ for f in message_files:
     if w.get("accountTemporarilyDisabledMessage") != w.get("invalidUserMessage"):
         problems.append(f"{os.path.basename(f)}: accountTemporarilyDisabledMessage differs from invalidUserMessage — a locked account would be revealed")
 
+# account mail (#327): the laptop's stand-in mail server exists and the converge
+# step points the realms at it; a fleet that names none would send no reset mail
+if not re.search(r"^  mailpit:\n(?:    .*\n)*?    image: axllent/mailpit:v[0-9.]+\n", compose, re.M):
+    problems.append("docker-compose.yml has no pinned mailpit service: the laptop's account mail has nowhere to go")
+if block and "KC_SMTP_HOST" not in block.group(1):
+    problems.append("keycloak-converge is not told where account mail goes (KC_SMTP_HOST)")
+if "smtpServer.host" not in open("ops/keycloak/converge.sh").read():
+    problems.append("converge.sh never sets the realms' mail server")
+
 for f in sorted(glob.glob("infra/keycloak/*-realm.json")):
     if json.load(open(f)).get("passwordPolicy"):
         problems.append(f"{f} carries a passwordPolicy: with its short demo passwords Keycloak refuses the whole realm")

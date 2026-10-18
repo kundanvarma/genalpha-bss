@@ -94,6 +94,18 @@ services:
   # image, so no extra image. The realm files cannot carry the rules (a file with
   # a policy and short demo passwords is refused whole), and a policy added
   # afterwards keeps every existing password working.
+  # The laptop's stand-in mail server (#327): Keycloak's account mail — verify your
+  # email, reset your password — is caught here instead of leaving the machine.
+  # Read it at http://localhost:8025 (the suites use its API). The box points the
+  # realms at the operator's real mail instead (#328).
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    container_name: bss-mailpit
+    restart: unless-stopped
+    mem_limit: 128m
+    ports:
+      - "8025:8025"
+
   keycloak-converge:
     image: quay.io/keycloak/keycloak:26.3
     container_name: bss-keycloak-converge
@@ -106,6 +118,10 @@ services:
       KC_ADMIN_USER: admin
       KC_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       JAVA_OPTS: "-Xmx96m"
+      # where every realm's account mail goes (#327): the laptop's Mailpit; empty = none
+      KC_SMTP_HOST: ${KC_SMTP_HOST:-mailpit}
+      KC_SMTP_PORT: ${KC_SMTP_PORT:-1025}
+      KC_SMTP_FROM: ${KC_SMTP_FROM:-notifications@bss.local}
     volumes:
       - ./ops/keycloak/converge.sh:/converge/converge.sh:ro
       - ./infra/keycloak/security:/security:ro
