@@ -10,11 +10,12 @@ ADM=/opt/keycloak/bin/kcadm.sh
 CFG=/tmp/kcadm.config
 POLICY=$(tr -d '\n' < "$SEC/password-policy")
 
+login() {
+  "$ADM" config credentials --config "$CFG" --server "$KC_URL" --realm master \
+    --user "${KC_ADMIN_USER:-admin}" --password "${KC_ADMIN_PASSWORD:-admin}" >/dev/null 2>&1
+}
 for i in $(seq 1 60); do
-  if "$ADM" config credentials --config "$CFG" --server "$KC_URL" --realm master \
-       --user "${KC_ADMIN_USER:-admin}" --password "${KC_ADMIN_PASSWORD:-admin}" >/dev/null 2>&1; then
-    break
-  fi
+  login && break
   [ "$i" = 60 ] && { echo "[converge] keycloak never answered at $KC_URL" >&2; exit 1; }
   sleep 5
 done
@@ -22,13 +23,24 @@ done
 realms=$("$ADM" get realms --config "$CFG" --fields realm --format csv --noquotes | grep -v '^master$')
 n=0
 for r in $realms; do
+  # the master admin token lives a minute; a fleet with many realms outlasts it
+  login || { echo "[converge] lost the admin session at realm $r" >&2; exit 1; }
   "$ADM" update "realms/$r" --config "$CFG" -s "passwordPolicy=$POLICY"
   # guessing is throttled (#326): temporary lockout, never permanent
   "$ADM" update "realms/$r" --config "$CFG" -f "$SEC/brute-force.json"
+  # account mail (#327): where verify-email and reset-password mail goes. Set only
+  # when the fleet names a mail server — the laptop's Mailpit; the box its own (#328)
+  if [ -n "${KC_SMTP_HOST:-}" ]; then
+    "$ADM" update "realms/$r" --config "$CFG" \
+      -s "smtpServer.host=$KC_SMTP_HOST" -s "smtpServer.port=${KC_SMTP_PORT:-25}" \
+      -s "smtpServer.from=${KC_SMTP_FROM:-notifications@bss.local}" \
+      -s "smtpServer.fromDisplayName=$r" -s 'smtpServer.auth=false' \
+      -s 'smtpServer.ssl=false' -s 'smtpServer.starttls=false'
+  fi
   for f in "$SEC"/messages-*.json; do
     locale=$(basename "$f" .json); locale=${locale#messages-}
     "$ADM" create "realms/$r/localization/$locale" --config "$CFG" -f "$f" >/dev/null
   done
   n=$((n + 1))
 done
-echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", lockout from brute-force.json, messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"
+echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", lockout from brute-force.json, mail via ${KC_SMTP_HOST:-nowhere}, messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"

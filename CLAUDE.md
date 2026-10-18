@@ -39,7 +39,7 @@ DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLE
 ```
 
   `api.version` must be a JVM system property — the `DOCKER_API_VERSION` env var is ignored and the client negotiates 1.32, which Colima refuses. Ryuk (the reaper) cannot start here, and without it disabled every test is "skipped: Docker is not available", which reads exactly like a pass.
-- Gateway `http://localhost:8080`, Keycloak `http://localhost:8085` realm `bss`; staff `demo/demo`, product `pat@bss.local/pat`, customer `paula@family.example/paula`.
+- Gateway `http://localhost:8080`, Keycloak `http://localhost:8085` realm `bss` (account mail — verify email, reset password — lands in Mailpit, `http://localhost:8025`); staff `demo/demo`, product `pat@bss.local/pat`, customer `paula@family.example/paula`.
 - `docker compose build -q` hides failures: check the `Built` line or the container's created time.
 - **A full Docker VM disk leaves the tag on the OLD image and still exits 0.** Seen 6 Oct 2026: `no space left on device` partway through a 31-image build, after which `billing` and `gateway` still carried Boot 3 jars while the command reported success. The image's `CreatedAt` is no help — it read 11 days old on a tag that had just been rebuilt. Verify by CONTENT (`docker run --rm --entrypoint sh bss-java-<x> -c 'ls /app/BOOT-INF/lib | grep spring-boot-'`) or by comparing `docker image inspect --format '{{.Id}}'` before and after. `docker builder prune -af` is the space: the build cache was 18.7GB of a 19GB VM disk.
 - Flyway "more than one migration with version N" = stale `target/` → `mvn clean`, and remember the two migration folders share numbers.

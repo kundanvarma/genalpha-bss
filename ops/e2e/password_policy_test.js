@@ -17,6 +17,10 @@
  *      guesses pause even the right password, the page says the pause lifts by itself
  *      (the same words as any failed sign-in — a locked account is not revealed), and
  *      after the wait the right password signs in again
+ *   7. account mail works on the laptop (#327): the converge step points every realm at
+ *      Mailpit; on the probe tenant, with verification switched on for the leg, the
+ *      verification mail's link verifies the address and the reset mail's link sets a
+ *      new password that signs in (the old one no longer does)
  *
  * Tenant: genalpha (realm bss) for the registration, through the shop.
  */
@@ -66,7 +70,7 @@ function sameRules(rules, realm) {
 
 (async () => {
   const ctx = await request.newContext();
-  const adm = await admin(ctx);
+  let adm = await admin(ctx);
 
   /* ---------- 1. every realm, read back live ---------- */
   const realms = (await (await ctx.get(`${KC}/admin/realms`, { headers: { Authorization: `Bearer ${adm}` } })).json())
@@ -229,9 +233,84 @@ function sameRules(rules, realm) {
   if (!paused.includes(MESSAGES.en.invalidUserMessage)) fail(`a paused sign-in did not say it opens again by itself: "${paused.slice(0, 240)}"`);
   console.log(`OK THROTTLED: ${BF.failureFactor} wrong guesses paused the account — even the right password waits — and the page says "${MESSAGES.en.invalidUserMessage}"`);
   await new Promise((r) => setTimeout(r, (BF.waitIncrementSeconds + 3) * 1000));
+  // the master admin token lives a minute and this wait outlasts it
+  adm = await admin(ctx);
+  AH.Authorization = `Bearer ${adm}`;
   if (!(await token(ctx, 'bss', guessed, right))) fail(`the pause did not lift by itself after ${BF.waitIncrementSeconds}s`);
   console.log(`OK LIFTS BY ITSELF: after ${BF.waitIncrementSeconds}s the right password signs in again — no one had to unlock it`);
   await ctx.delete(`${KC}/admin/realms/bss/users/${guessedId}`, { headers: AH });
+
+  /* ---------- 7. account mail works on the laptop (#327) ---------- */
+  const MAILPIT = 'http://localhost:8025';
+  const bssRealm = await (await ctx.get(`${KC}/admin/realms/bss`, { headers: { Authorization: `Bearer ${adm}` } })).json();
+  if ((bssRealm.smtpServer || {}).host !== 'mailpit') fail(`the converge step did not point the realms' mail at Mailpit: ${JSON.stringify(bssRealm.smtpServer)}`);
+  if (bssRealm.verifyEmail) fail('the laptop demo fleet must keep email verification OFF (its self-registration suites)');
+  // the probe tenant switches verification ON for this leg only, with the fleet's mail settings
+  const AO = { Authorization: `Bearer ${adm}`, 'Content-Type': 'application/json' };
+  await ctx.put(`${KC}/admin/realms/${OP}`, { headers: AO, data: { verifyEmail: true, smtpServer: bssRealm.smtpServer } });
+  const mailTo = async (to, since) => {
+    for (let i = 0; i < 30; i++) {
+      const list = await (await ctx.get(`${MAILPIT}/api/v1/search?query=${encodeURIComponent(`to:"${to}"`)}`)).json();
+      const fresh = (list.messages || []).filter((m) => Date.parse(m.Created) >= since);
+      if (fresh.length) return (await ctx.get(`${MAILPIT}/api/v1/message/${fresh[0].ID}`)).json();
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return null;
+  };
+  const linkIn = (msg) => ((msg.Text || '') + ' ' + (msg.HTML || '')).match(/https?:\/\/[^\s"'<>]+login-actions\/action-token\?[^\s"'<>]+/)?.[0]?.replace(/&amp;/g, '&');
+  const shopOP = `http://shop.${OP}.localhost:8080/shop/`;
+  const newcomer = `pw-mail-${run}@family.example`;
+  const firstWords = 'a first set of fine words';
+  const b4 = await chromium.launch();
+  const p4 = await (await b4.newContext()).newPage();
+  await p4.goto(shopOP);
+  await p4.getByText(/Sign in|Logg inn/).first().click();
+  await p4.waitForSelector('a[href*="registration"]', { timeout: 20000 });
+  await p4.click('a[href*="registration"]');
+  await p4.waitForSelector('input[name="email"]');
+  const sentAt = Date.now() - 2000;
+  await p4.fill('input[name="email"]', newcomer);
+  await p4.fill('input[name="firstName"]', 'Mai');
+  await p4.fill('input[name="lastName"]', `Mail${run}`);
+  await p4.fill('input[name="password"]', firstWords);
+  await p4.fill('input[name="password-confirm"]', firstWords);
+  await p4.click('input[type="submit"], button[type="submit"]');
+  const verify = await mailTo(newcomer, sentAt);
+  if (!verify) fail('no verification mail reached Mailpit for the new account');
+  const vlink = linkIn(verify);
+  if (!vlink) fail(`the verification mail carries no link: "${(verify.Text || '').slice(0, 200)}"`);
+  await p4.goto(vlink);
+  await p4.waitForTimeout(2500);
+  const users = await (await ctx.get(`${KC}/admin/realms/${OP}/users?exact=true&username=${encodeURIComponent(newcomer)}`, { headers: AO })).json();
+  if (!users[0] || !users[0].emailVerified) fail('following the verification link did not verify the address');
+  console.log(`OK VERIFY EMAIL: registering on ${OP}'s shop sent "${verify.Subject}" to Mailpit, and its link verified the address`);
+
+  // forgot password: a mail, a link, a new password that signs in
+  const fresh2 = await (await b4.newContext()).newPage();
+  await fresh2.goto(shopOP);
+  await fresh2.getByText(/Sign in|Logg inn/).first().click();
+  await fresh2.waitForSelector('a[href*="reset-credentials"]', { timeout: 20000 });
+  await fresh2.click('a[href*="reset-credentials"]');
+  await fresh2.waitForSelector('input[name="username"]');
+  const askedAt = Date.now() - 2000;
+  await fresh2.fill('input[name="username"]', newcomer);
+  await fresh2.click('input[type="submit"], button[type="submit"]');
+  const reset = await mailTo(newcomer, askedAt);
+  if (!reset) fail('no reset-password mail reached Mailpit');
+  const rlink = linkIn(reset);
+  if (!rlink) fail(`the reset mail carries no link: "${(reset.Text || '').slice(0, 200)}"`);
+  await fresh2.goto(rlink);
+  await fresh2.waitForSelector('input[name="password-new"]', { timeout: 20000 })
+    .catch(async () => fail(`the reset link did not ask for a new password: "${(await fresh2.locator('body').innerText()).slice(0, 200)}"`));
+  const newWords = 'a second set of better words';
+  await fresh2.fill('input[name="password-new"]', newWords);
+  await fresh2.fill('input[name="password-confirm"]', newWords);
+  await fresh2.click('input[type="submit"], button[type="submit"]');
+  await fresh2.waitForTimeout(2500);
+  await b4.close();
+  if (!(await token(ctx, OP, newcomer, newWords))) fail('the password set through the reset mail does not sign in');
+  if (await token(ctx, OP, newcomer, firstWords)) fail('the old password still works after the reset');
+  console.log(`OK FORGOT PASSWORD: "${reset.Subject}" reached Mailpit, its link set a new password that signs in, and the old one no longer does`);
 
   await ctx.delete(`${KC}/admin/realms/${OP}`, { headers: { Authorization: `Bearer ${adm}` } });
   console.log('PASS password_policy_test — every tenant\'s sign-in follows the length rules of NIST SP 800-63B, in plain words');
