@@ -39,6 +39,9 @@ public class ProductOfferingMapper {
         dto.setChoicesGranted(entity.getChoicesGranted());
         dto.setChoiceCost(entity.getChoiceCost());
         dto.setChoiceHoldMonths(entity.getChoiceHoldMonths());
+        dto.setChoicePartner(entity.getChoicePartner());
+        dto.setChoicePartnerTerms(entity.getChoicePartnerTerms());
+        dto.setChoiceWholesaleCost(entity.getChoiceWholesaleCost());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setCategory(readJsonObjectList(entity.getCategoryJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
@@ -71,6 +74,9 @@ public class ProductOfferingMapper {
         entity.setChoicesGranted(dto.getChoicesGranted());
         entity.setChoiceCost(dto.getChoiceCost());
         entity.setChoiceHoldMonths(dto.getChoiceHoldMonths());
+        entity.setChoicePartner(dto.getChoicePartner());
+        entity.setChoicePartnerTerms(dto.getChoicePartnerTerms());
+        entity.setChoiceWholesaleCost(dto.getChoiceWholesaleCost());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         entity.setCategoryJson(writeJsonObjectList(dto.getCategory()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
@@ -118,6 +124,15 @@ public class ProductOfferingMapper {
         }
         if (patch.getChoiceHoldMonths() != null) {
             entity.setChoiceHoldMonths(patch.getChoiceHoldMonths());
+        }
+        if (patch.getChoicePartner() != null) {
+            entity.setChoicePartner(patch.getChoicePartner());
+        }
+        if (patch.getChoicePartnerTerms() != null) {
+            entity.setChoicePartnerTerms(patch.getChoicePartnerTerms());
+        }
+        if (patch.getChoiceWholesaleCost() != null) {
+            entity.setChoiceWholesaleCost(patch.getChoiceWholesaleCost());
         }
         if (patch.getBundledProductOffering() != null) {
             entity.setBundledProductOfferingJson(writeJsonObjectList(patch.getBundledProductOffering()));

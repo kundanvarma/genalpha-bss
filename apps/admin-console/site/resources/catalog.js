@@ -60,6 +60,7 @@ const RESOURCES = [
   // The shelves, authored at last (#155) — a React island, per ADR-0022.
   { path: 'category', base: API_BASE, title: 'Categories', island: 'category',
     readOnly: true, noCreate: true, fields: [], columns: [] },
+  { path: 'choices', base: API_BASE, title: 'Benefit Choices', island: 'choices', readOnly: true, noCreate: true, fields: [], columns: [] }, // #359
   {
     path: 'productSpecification',
     serverSearch: true, // the box searches the catalogue, not this page (#160)

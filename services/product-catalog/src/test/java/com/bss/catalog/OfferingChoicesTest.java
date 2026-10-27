@@ -65,4 +65,22 @@ class OfferingChoicesTest {
                         .content("{\"name\": \"Debt plan\", \"choicesGranted\": -1}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void aBenefitsPartner_terms_andWholesaleCost_roundTrip_andACostIsNeverNegative() throws Exception {
+        mockMvc.perform(post(BASE).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Lydbok+ Kids", "choiceCost": 1, "choicePartner": "Lydbok+",
+                                 "choicePartnerTerms": "https://partner.example/terms", "choiceWholesaleCost": 4.50}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.choicePartner").value("Lydbok+"))
+                .andExpect(jsonPath("$.choicePartnerTerms").value("https://partner.example/terms"))
+                .andExpect(jsonPath("$.choiceWholesaleCost").value(4.5));
+        mockMvc.perform(post(BASE).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Paid to take\", \"choiceCost\": 1, \"choiceWholesaleCost\": -1}"))
+                .andExpect(status().isBadRequest());
+    }
 }
