@@ -13,6 +13,7 @@ public class ServiceOrder {
 
     public static final String IN_PROGRESS = "inProgress";
     public static final String COMPLETED = "completed";
+    public static final String FAILED = "failed";
 
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;

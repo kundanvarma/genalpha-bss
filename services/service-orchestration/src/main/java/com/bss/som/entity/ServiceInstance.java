@@ -13,6 +13,8 @@ import java.time.OffsetDateTime;
 public class ServiceInstance {
 
     public static final String ACTIVE = "active";
+    /** TMF638: exists, not (yet) in service — a partner activation still waiting, or refused. */
+    public static final String INACTIVE = "inactive";
     public static final String SUSPENDED = "suspended";
     public static final String TERMINATED = "terminated";
 

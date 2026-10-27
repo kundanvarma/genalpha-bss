@@ -97,7 +97,7 @@ class ProductEndingTest {
 
             assertThat(services.findByIdAndTenantId(s.getId(), TENANT).orElseThrow().getState())
                     .isEqualTo(ServiceInstance.TERMINATED);
-            verify(partners, times(1)).deactivate("SS-ABCD-EFGH", "cust-end");
+            verify(partners, times(1)).deactivate(TENANT, s.getId(), "SS-ABCD-EFGH", "cust-end");
             // the code left with the service; it never landed on the number shelf
             assertThat(assignments.findByTenantIdAndServiceId(TENANT, s.getId())).isEmpty();
             assertThat(quarantine.findAll()).noneMatch(q -> "SS-ABCD-EFGH".equals(q.getNumber()));
@@ -113,7 +113,7 @@ class ProductEndingTest {
 
             assertThat(services.findByIdAndTenantId(s.getId(), TENANT).orElseThrow().getState())
                     .isEqualTo("active");
-            verify(partners, never()).deactivate(anyString(), anyString());
+            verify(partners, never()).deactivate(anyString(), anyString(), anyString(), anyString());
         }
     }
 }
