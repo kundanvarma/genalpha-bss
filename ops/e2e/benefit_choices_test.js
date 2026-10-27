@@ -68,7 +68,11 @@ const orderOf = (o) => ({
   const ctx = await request.newContext();
   const offers = await (await ctx.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active`)).json();
-  const by = (n) => offers.find((o) => o.name === n) || fail(`missing offering ${n} — run ops/seed/seed_choices.py`);
+  const by = (n) => {
+    const o = offers.find((x) => x.name === n);
+    if (!o) fail(`missing offering ${n} — run ops/seed/seed_choices.py`);
+    return o;
+  };
   const plan = by('GenAlpha Mobile Unlimited 5G');
   const stream = by('StreamCo Standard');
   const audio = by('Lydbok+ Audiobooks');
@@ -200,7 +204,8 @@ const orderOf = (o) => ({
   };
   const settled = async (what, check, ms = 45000) => {
     for (let w = 0; w < ms; w += 1500) { const v = await check(); if (v) return v; await sleep(1500); }
-    return fail(`${what} never happened`);
+    fail(`${what} never happened`);
+    return null;
   };
   await setMode(null);
   pool = await poolOf();
@@ -219,7 +224,8 @@ const orderOf = (o) => ({
 
   // A7 — swap StreamCo for Lydbok+ while the partner confirms LATE: the old stays until the new is active
   await setMode({ [audio.name]: 'late' });
-  const old1 = await productFor(stream.name) || fail('no StreamCo product to swap');
+  const old1 = await productFor(stream.name);
+  if (!old1) fail('no StreamCo product to swap');
   const swap1 = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
     { id: '1', action: 'delete', product: { id: old1.id } },
     { id: '2', action: 'add', quantity: 1, productOffering: { id: audio.id, name: audio.name } }] });
@@ -235,7 +241,8 @@ const orderOf = (o) => ({
 
   // A7 — a swap whose new benefit the partner REFUSES: the old stays, the hold comes back
   await setMode({ [stream.name]: 'refuse' });
-  const old2 = await productFor(audio.name) || fail('no Lydbok+ product to swap');
+  const old2 = await productFor(audio.name);
+  if (!old2) fail('no Lydbok+ product to swap');
   const swap2 = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
     { id: '1', action: 'delete', product: { id: old2.id } },
     { id: '2', action: 'add', quantity: 1, productOffering: { id: stream.id, name: stream.name } }] });

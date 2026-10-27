@@ -60,7 +60,8 @@ const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/j
       if (v) return v;
       await sleep(1500);
     }
-    return fail(`${what} never happened within ${ms / 1000}s`);
+    fail(`${what} never happened within ${ms / 1000}s`);
+    return null;
   }
   const partnerSaw = async (serviceId) => (await (await ctx.get(`${PARTNER}/activations/${serviceId}`)).json());
 
