@@ -617,6 +617,48 @@ const orderOf = (o) => ({
   const onSale = await (await ctx.get(`${CAT}/productOffering/${draft.id}`, { headers: H(henrik) })).json();
   if (!['Launched', 'Active'].includes(onSale.lifecycleStatus) || onSale.choiceCost !== 1) fail('the approver launch did not put the benefit on sale: ' + JSON.stringify(onSale).slice(0, 200));
   await gov(draft.id, 'unlaunch', henrik, { note: 'test cleanup' });
+
+  /* ---- the demo tenant (#362): Taranga calls them Picks, sells in NOK, holds nothing (Norway) ---- */
+  const tStaff = await tTok('demo', 'demo');
+  const emailT = `pia-${run}@example.com`;
+  const madeT = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(tStaff), data: { email: emailT, givenName: 'Pia', familyName: `Picks${run}` } })).json();
+  const pia = await tTok(emailT, madeT.temporaryPassword);
+  const PH = { ...H(pia), 'X-Channel': 'web' };
+  const tOffers = await (await ctx.get(`${CAT}/productOffering?limit=100&lifecycleStatus=Active`, { headers: H(pia) })).json();
+  const tPlan = tOffers.find((o) => o.name === 'Taranga Mobile Unlimited 5G');
+  const tStream = tOffers.find((o) => o.name === 'StreamCo Standard');
+  if (!tPlan || tPlan.choicesGranted !== 2 || !tStream || tStream.choicePartner !== 'StreamCo') {
+    fail('Taranga is not seeded — run ops/seed/seed_choices_taranga.py');
+  }
+  const piaPool = async () => (await (await ctx.get(`${CHOICES}/pool`, { headers: PH })).json());
+  const first0 = await piaPool();
+  if (!first0.offered || first0.label !== 'Picks') fail('Taranga should offer Choices under its own word, Picks: ' + JSON.stringify(first0));
+  await ctx.post(ORDERS, { headers: PH, data: { productOrderItem: [add(tPlan)] } });
+  await settled('Pia\'s plan granting 2 Picks', async () => (await piaPool()).granted === 2);
+  await ctx.post(ORDERS, { headers: PH, data: { productOrderItem: [add(tStream)] } });
+  const piaPicked = await settled('Pia\'s pick going active', async () => {
+    const p = await piaPool(); return p.allocations.some((a) => a.offeringName === tStream.name && a.state === 'committed') ? p : null; });
+  if (piaPicked.allocations.some((a) => a.heldUntil)) fail('a Norwegian tenant held a Pick: ' + JSON.stringify(piaPicked.allocations));
+  const tBill = await (await ctx.get(`${CHOICES}/partnerCost?period=${month}`, { headers: H(tStaff) })).json();
+  if (tBill.currency !== 'NOK' || !(tBill.lines || []).some((l) => l.partner === 'StreamCo' && l.amount >= 45)) {
+    fail('Taranga\'s partner cost should be in NOK and owe StreamCo: ' + JSON.stringify(tBill).slice(0, 300));
+  }
+  // and Pia's own Home, on Taranga's shop, says it in Taranga's word
+  const tPage = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  global.shotPage = tPage;
+  await tPage.goto('http://shop.taranga.localhost:8080/shop/');
+  await tPage.click('.who >> text=Sign in');
+  await tPage.fill('input[name="username"]', emailT);
+  await tPage.fill('input[name="password"]', madeT.temporaryPassword);
+  await tPage.click('input[type="submit"], button[type="submit"]');
+  await tPage.waitForSelector('.nav', { timeout: 20000 });
+  const tLine = tPage.locator('[data-testid=attention-choices]');
+  await tLine.waitFor({ timeout: 20000 });
+  if (!(await tLine.innerText()).includes('You have 1 of your Picks left')) fail('Taranga\'s Home should say Picks: ' + await tLine.innerText());
+  await tPage.waitForFunction(() => !/Reading/.test(document.querySelector('[data-testid=home-health]')?.textContent || 'Reading'), null, { timeout: 30000 }).catch(() => {});
+  await tPage.screenshot({ path: `${SHOTS}/benefit_choices_taranga_home.png`, fullPage: true });
+  console.log(`OK Taranga: "${first0.label}" — the plan granted 2, ${tStream.name} picked with no hold (Norway), StreamCo owed in ${tBill.currency}, and Home says "You have 1 of your Picks left"`);
   console.log(`OK governance: a Taranga benefit was "${draft.lifecycleStatus}" until an approver launched it (${onSale.lifecycleStatus}); the manager could not approve her own; unlaunched after`);
 
   await browser.close();
