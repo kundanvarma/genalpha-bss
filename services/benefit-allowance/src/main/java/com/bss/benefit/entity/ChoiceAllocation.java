@@ -53,6 +53,14 @@ public class ChoiceAllocation {
     @Column(name = "ended_at")
     private OffsetDateTime endedAt;
 
+    /** The benefit's own hold, as picked (a snapshot: a later catalog change does not rewrite it). */
+    @Column(name = "hold_months")
+    private Integer holdMonths;
+
+    /** Until when the Choice is held: release and swap are refused before it. */
+    @Column(name = "held_until")
+    private OffsetDateTime heldUntil;
+
     public String getTenantId() {
         return tenantId;
     }
@@ -155,5 +163,21 @@ public class ChoiceAllocation {
 
     public void setEndedAt(OffsetDateTime endedAt) {
         this.endedAt = endedAt;
+    }
+
+    public Integer getHoldMonths() {
+        return holdMonths;
+    }
+
+    public void setHoldMonths(Integer holdMonths) {
+        this.holdMonths = holdMonths;
+    }
+
+    public OffsetDateTime getHeldUntil() {
+        return heldUntil;
+    }
+
+    public void setHeldUntil(OffsetDateTime heldUntil) {
+        this.heldUntil = heldUntil;
     }
 }

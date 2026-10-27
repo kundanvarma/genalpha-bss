@@ -230,4 +230,64 @@ class ChoiceLedgerApiTest {
                                 """.formatted(mine)))
                 .andExpect(status().isConflict());
     }
+
+    private void pickHeld(RequestPostProcessor as, String owner, String orderId, int months) throws Exception {
+        mockMvc.perform(post(BASE + "/hold").with(as).contentType(MediaType.APPLICATION_JSON).content("""
+                {"ownerPartyId": "%s", "orderId": "%s", "orderItemId": "1", "offeringId": "po-phone",
+                 "offeringName": "Phone offer (12 months)", "cost": 1, "holdMonths": %d}
+                """.formatted(owner, orderId, months))).andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/" + orderId + "/settle").with(as).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerPartyId\": \"" + owner + "\"}")).andExpect(status().isOk());
+    }
+
+    @Test
+    void aHoldStartsWhenTheBenefitIsInUse_andTheLawCapsIt() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 2);
+        pickHeld(ordering(), owner, "ord-h12", 12);
+        pickHeld(ordering(), owner, "ord-h36", 36);   // asks for more than the law allows
+        String today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString();
+        mockMvc.perform(get(BASE + "/pool").with(customer(owner)))
+                .andExpect(jsonPath("$.allocations[?(@.orderId=='ord-h12')].heldUntil").value(
+                        java.time.LocalDate.parse(today).plusMonths(12).toString()))
+                .andExpect(jsonPath("$.allocations[?(@.orderId=='ord-h36')].heldUntil").value(
+                        java.time.LocalDate.parse(today).plusMonths(24).toString()));
+    }
+
+    @Test
+    void inNorway_noHoldApplies_untilTheLawIsAnswered() throws Exception {
+        RequestPostProcessor norway = jwt().jwt(j -> j.issuer("https://idp.tenant-a.test/realms/bss"))
+                .authorities(new SimpleGrantedAuthority("benefit:write"));
+        String owner = "cust-" + UUID.randomUUID();
+        mockMvc.perform(post(BASE + "/order/plan-no/settle").with(norway).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"ownerPartyId": "%s", "grants": [{"orderItemId": "1", "offeringId": "po-plan",
+                         "offeringName": "Mobil Max", "choices": 1}]}
+                        """.formatted(owner))).andExpect(status().isOk());
+        pickHeld(norway, owner, "ord-no", 12);
+        mockMvc.perform(get(BASE + "/pool").param("ownerPartyId", owner).with(norway))
+                .andExpect(jsonPath("$.allocations[0].heldUntil").doesNotExist());
+    }
+
+    @Test
+    void aPlanChange_regrants_andAnEndedPlanGrantsNothing() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        mockMvc.perform(post(BASE + "/order/plan-r/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"ownerPartyId": "%s", "grants": [{"orderItemId": "1", "offeringId": "po-big",
+                         "offeringName": "Mobile Unlimited", "choices": 2}]}
+                        """.formatted(owner))).andExpect(status().isOk());
+        mockMvc.perform(post(BASE + "/order/change-1/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "regrants": [{"orderId": "plan-r", "orderItemId": "1",
+                                 "offeringId": "po-small", "offeringName": "Mobile 60 GB", "choices": 1}]}
+                                """.formatted(owner)))
+                .andExpect(jsonPath("$.granted").value(1))
+                .andExpect(jsonPath("$.grants[0].offeringName").value("Mobile 60 GB"));
+        mockMvc.perform(post(BASE + "/order/cease-1/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "regrants": [{"orderId": "plan-r", "orderItemId": "1", "choices": 0}]}
+                                """.formatted(owner)))
+                .andExpect(jsonPath("$.granted").value(0));
+    }
 }

@@ -25,12 +25,21 @@ public final class ChoiceRequests {
      */
     public record Hold(@NotBlank String ownerPartyId, @NotBlank String orderId, @NotBlank String orderItemId,
             @NotBlank String offeringId, @NotBlank String offeringName, @Min(1) int cost,
-            List<@Valid Source> replaces) {
+            List<@Valid Source> replaces, @Min(0) Integer holdMonths) {
 
         public Hold(String ownerPartyId, String orderId, String orderItemId, String offeringId, String offeringName,
                 int cost) {
-            this(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost, List.of());
+            this(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost, List.of(), null);
         }
+    }
+
+    /**
+     * A plan item's Choices change as the order completes (#357): a plan change
+     * to another offering, or the plan ending ({@code choices} 0). The grant is
+     * named by the order item that bought the plan.
+     */
+    public record Regrant(@NotBlank String orderId, @NotBlank String orderItemId, String offeringId,
+            String offeringName, @Min(0) int choices) {
     }
 
     /** An allocation by the order item that made it (the inventory product's lineage). */
@@ -47,10 +56,11 @@ public final class ChoiceRequests {
     }
 
     /** The order completed: commit what it held, add what it granted, end what it ended. */
-    public record Settle(@NotBlank String ownerPartyId, List<@Valid Grant> grants, List<@Valid Ending> endings) {
+    public record Settle(@NotBlank String ownerPartyId, List<@Valid Grant> grants, List<@Valid Ending> endings,
+            List<@Valid Regrant> regrants) {
 
         public Settle(String ownerPartyId, List<Grant> grants) {
-            this(ownerPartyId, grants, List.of());
+            this(ownerPartyId, grants, List.of(), List.of());
         }
     }
 }

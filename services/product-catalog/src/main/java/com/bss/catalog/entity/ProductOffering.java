@@ -93,6 +93,10 @@ public class ProductOffering {
     @Column(name = "choice_cost")
     private Integer choiceCost;
 
+    /** Months a picked benefit holds its Choice (null: no hold). */
+    @Column(name = "choice_hold_months")
+    private Integer choiceHoldMonths;
+
     /** JSON array of child offering references, echoed verbatim. */
     @Column(name = "bundled_product_offering", length = 4000)
     private String bundledProductOfferingJson;
@@ -189,6 +193,14 @@ public class ProductOffering {
 
     public void setChoicesGranted(Integer choicesGranted) {
         this.choicesGranted = choicesGranted;
+    }
+
+    public Integer getChoiceHoldMonths() {
+        return choiceHoldMonths;
+    }
+
+    public void setChoiceHoldMonths(Integer choiceHoldMonths) {
+        this.choiceHoldMonths = choiceHoldMonths;
     }
 
     public Integer getChoiceCost() {

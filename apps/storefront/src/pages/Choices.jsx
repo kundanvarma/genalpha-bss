@@ -111,7 +111,8 @@ export default function Choices() {
             <div key={a.id} className="row" data-testid="choice-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '4px 0', flexWrap: 'wrap' }}>
               <span style={{ flex: 1 }}>{a.offeringName}</span>
               <span className="muted" data-testid="choice-state">{a.state === 'held' ? t('Activating…') : t('Active')}</span>
-              {a.state === 'committed' && productOf(a) && (
+              {a.heldUntil && <span className="muted" data-testid="held-until">{t('Held until')} {a.heldUntil}</span>}
+              {a.state === 'committed' && !a.heldUntil && productOf(a) && (
                 <>
                   <select data-testid="swap-for" aria-label={`${t('Swap')} ${a.offeringName}`} disabled={busy !== null} value=""
                     onChange={(e) => { const to = (benefits || []).find((b) => b.id === e.target.value); if (to) act(a.id, () => swapBenefit(productOf(a).id, to), `${t('Swapping')} ${a.offeringName} → ${to.name}. ${a.offeringName} ${t('stays active until')} ${to.name} ${t('is.')}`); }}>

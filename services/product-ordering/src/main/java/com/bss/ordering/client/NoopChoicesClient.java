@@ -12,17 +12,18 @@ public class NoopChoicesClient implements ChoicesClient {
 
     @Override
     public HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces) {
+            String offeringName, int cost, List<Source> replaces, Integer holdMonths) {
         return HoldOutcome.held();
     }
 
     @Override
-    public void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings) {
+    public void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings,
+            List<Regrant> regrants) {
     }
 
     @Override
-    public Swaps swaps(String ownerPartyId) {
-        return new Swaps(0, null);
+    public Pool pool(String ownerPartyId) {
+        return new Pool(0, 0, List.of(), List.of(), 0, null);
     }
 
     @Override
