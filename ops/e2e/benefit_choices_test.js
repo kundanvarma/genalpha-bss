@@ -518,7 +518,8 @@ const orderOf = (o) => ({
   const gov = (id, door, tok, body) => ctx.post(`${CAT}/productOffering/${id}/governance/${door}`, { headers: H(tok), data: body || {} });
   const selfApprove = await gov(draft.id, 'approve', sigrid, {});
   if (selfApprove.ok()) fail('the product manager approved her own benefit');
-  const launched = await (await gov(draft.id, 'launch', henrik, { force: true, note: 'benefit approved' })).json();
+  const launched = await gov(draft.id, 'launch', henrik, { force: true, note: 'benefit approved' });
+  if (!launched.ok()) fail('the approver could not launch the benefit: ' + launched.status());
   const onSale = await (await ctx.get(`${CAT}/productOffering/${draft.id}`, { headers: H(henrik) })).json();
   if (!['Launched', 'Active'].includes(onSale.lifecycleStatus) || onSale.choiceCost !== 1) fail('the approver launch did not put the benefit on sale: ' + JSON.stringify(onSale).slice(0, 200));
   await gov(draft.id, 'unlaunch', henrik, { note: 'test cleanup' });
