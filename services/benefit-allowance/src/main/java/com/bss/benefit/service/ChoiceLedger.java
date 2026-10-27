@@ -136,7 +136,8 @@ public class ChoiceLedger {
             allocations.save(a);
             events.publish("ChoicePickedEvent", "choiceAllocation", allocationView(a));
         }
-        if (request.grants() != null) {
+        // grants were asked for only when there is a pool to put them in (lockOrCreate above)
+        if (pool != null && request.grants() != null) {
             for (ChoiceRequests.Grant g : request.grants()) {
                 if (grants.findByTenantIdAndOrderIdAndOrderItemId(tenant, orderId, g.orderItemId()).isPresent()) {
                     continue;   // the completion arrived twice; the plan granted once
