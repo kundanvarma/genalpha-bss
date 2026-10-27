@@ -129,6 +129,7 @@
     "composite": true,
     "composites": {
      "realm": [
+      "benefit:read",
       "catalog:read",
       "ordering:read",
       "ordering:write",
@@ -940,6 +941,7 @@
     }
    ],
    "realmRoles": [
+    "benefit:read",
     "catalog:read",
     "catalog:write",
     "ordering:read",

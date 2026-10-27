@@ -120,7 +120,7 @@ const grepSources = (dir, needle) => {
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
   const carl = await register(page, `onto-${run}@example.com`, 'Onto', 'Upgrader');
-  const pageAll = async (p) => { const all = []; for (let o = 0; ; o += 100) { const r = (await call('GET', `${API}${p}?limit=100&offset=${o}`, staff)).body; if (!Array.isArray(r)) break; all.push(...r); if (r.length < 100) break; } return all; };
+  const pageAll = async (p) => { const all = []; for (let o = 0; ; o += 100) { const r = (await call('GET', `${API}${p}?limit=100&offset=${o}`, staff)).body; if (!Array.isArray(r) || !r.length) break; all.push(...r); } return all; }; // a short page is not the end: rows are filtered after the page is taken (#180)
   const offers = await pageAll('/tmf-api/productCatalogManagement/v4/productOffering');
   const prices = await pageAll('/tmf-api/productCatalogManagement/v4/productOfferingPrice');
   const priceById = Object.fromEntries(prices.map((p) => [p.id, p]));

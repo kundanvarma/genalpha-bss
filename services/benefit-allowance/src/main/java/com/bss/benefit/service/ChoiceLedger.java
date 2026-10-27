@@ -132,6 +132,32 @@ public class ChoiceLedger {
         return view;
     }
 
+    /** A goodwill Choice: one more for the household, named by its reason (#358). */
+    @Transactional
+    public PoolView goodwill(ChoiceRequests.Goodwill request) {
+        String tenant = tenantScope.currentTenantId();
+        if (!offered()) {
+            throw new BadRequestException(label() + " are not offered here");
+        }
+        ChoicePool pool = lockOrCreate(tenant, request.ownerPartyId());
+        ChoiceGrant grant = new ChoiceGrant();
+        grant.setTenantId(tenant);
+        grant.setId(UUID.randomUUID().toString());
+        grant.setPoolId(pool.getId());
+        grant.setOrderId("goodwill-" + grant.getId());
+        grant.setOrderItemId("1");
+        grant.setOfferingId("goodwill");
+        String reason = request.reason().trim();
+        grant.setOfferingName("Goodwill: " + (reason.length() > 200 ? reason.substring(0, 200) : reason));
+        grant.setChoices(1);
+        grant.setState(ACTIVE);
+        grant.setGrantedAt(OffsetDateTime.now());
+        grants.save(grant);
+        events.publish("ChoicesGrantedEvent", "choiceGrant", new PoolView.Source(grant.getOfferingId(),
+                grant.getOfferingName(), 1, grant.getOrderId(), grant.getOrderItemId()));
+        return view(tenant, pool);
+    }
+
     /** The order completed: what it held is now in use for good, and what it bought adds to the pool. */
     @Transactional
     public PoolView settle(String orderId, ChoiceRequests.Settle request) {

@@ -42,6 +42,14 @@ public final class ChoiceRequests {
             String offeringName, @Min(0) int choices) {
     }
 
+    /**
+     * A goodwill Choice (#358): one more Choice for the household, for a reason
+     * a person decided. Reaches the ledger only through the governed action
+     * grantGoodwillChoice — an agent may ask, a human approves.
+     */
+    public record Goodwill(@NotBlank String ownerPartyId, @NotBlank String reason) {
+    }
+
     /** An allocation by the order item that made it (the inventory product's lineage). */
     public record Source(@NotBlank String orderId, @NotBlank String orderItemId) {
     }
