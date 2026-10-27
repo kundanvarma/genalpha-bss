@@ -57,6 +57,18 @@ public class ProductOfferingDto {
     @JsonProperty("choiceHoldMonths")
     private Integer choiceHoldMonths;
 
+    /** House field beside TMF620 (#359): the partner who provides this benefit. */
+    @JsonProperty("choicePartner")
+    private String choicePartner;
+
+    /** House field beside TMF620 (#359): where the partner's own terms are (a link or a short text). */
+    @JsonProperty("choicePartnerTerms")
+    private String choicePartnerTerms;
+
+    /** House field beside TMF620 (#359): what the operator expects to pay the partner a month per active benefit, in the tenant's currency. */
+    @JsonProperty("choiceWholesaleCost")
+    private java.math.BigDecimal choiceWholesaleCost;
+
     @JsonProperty("bundledProductOffering")
     private List<Map<String, Object>> bundledProductOffering;
 
@@ -178,6 +190,30 @@ public class ProductOfferingDto {
 
     public void setChoicesGranted(Integer choicesGranted) {
         this.choicesGranted = choicesGranted;
+    }
+
+    public String getChoicePartner() {
+        return choicePartner;
+    }
+
+    public void setChoicePartner(String choicePartner) {
+        this.choicePartner = choicePartner;
+    }
+
+    public String getChoicePartnerTerms() {
+        return choicePartnerTerms;
+    }
+
+    public void setChoicePartnerTerms(String choicePartnerTerms) {
+        this.choicePartnerTerms = choicePartnerTerms;
+    }
+
+    public java.math.BigDecimal getChoiceWholesaleCost() {
+        return choiceWholesaleCost;
+    }
+
+    public void setChoiceWholesaleCost(java.math.BigDecimal choiceWholesaleCost) {
+        this.choiceWholesaleCost = choiceWholesaleCost;
     }
 
     public Integer getChoiceHoldMonths() {

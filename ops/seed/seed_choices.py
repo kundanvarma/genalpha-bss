@@ -21,13 +21,13 @@ GRANTS = {"GenAlpha Mobile Unlimited 5G": 2, "GenAlpha Mobile 60 GB 5G": 1, "Gen
 BENEFITS = [
     ("StreamCo Standard", "StreamCo Standard Monthly", 9.99,
      "Films and series from StreamCo, picked with one of your Choices. "
-     "Your activation code arrives the moment you pick it.", 0),
+     "Your activation code arrives the moment you pick it.", 0, "StreamCo", 4.00),
     ("Lydbok+ Audiobooks", "Lydbok+ Monthly", 8.99,
-     "Unlimited audiobooks and podcasts from Lydbok+, picked with one of your Choices.", 0),
+     "Unlimited audiobooks and podcasts from Lydbok+, picked with one of your Choices.", 0, "Lydbok+", 3.00),
     # a subsidised device offer HOLDS its Choice (#357): capped by the law of the
     # tenant's country — 24 months in the EU, 0 in Norway until bindingstid is answered
     ("PhoneCo Upgrade Pass", "PhoneCo Upgrade Pass Monthly", 0.01,
-     "Upgrade your phone every year with PhoneCo — it holds one Choice for 12 months.", 12),
+     "Upgrade your phone every year with PhoneCo — it holds one Choice for 12 months.", 12, "PhoneCo", 0.00),
 ]
 
 
@@ -71,20 +71,25 @@ for plan, n in GRANTS.items():
         req("PATCH", f"productOffering/{o['id']}", {"choicesGranted": n})
         print(f"plan: {plan} grants {n} Choice(s)")
 
-for name, price_name, value, description, hold in BENEFITS:
+for name, price_name, value, description, hold, partner, wholesale in BENEFITS:
     if price_name not in prices:
         prices[price_name] = req("POST", "productOfferingPrice", {
             "name": price_name, "priceType": "recurring", "lifecycleStatus": "Active",
             "recurringChargePeriodType": "month", "price": {"unit": "EUR", "value": value}})
     if name in offerings:
         o = offerings[name]
-        if o.get("choiceCost") != 1 or (o.get("choiceHoldMonths") or 0) != hold:
-            req("PATCH", f"productOffering/{o['id']}", {"choiceCost": 1, **({"choiceHoldMonths": hold} if hold else {})})
+        if (o.get("choiceCost") != 1 or (o.get("choiceHoldMonths") or 0) != hold
+                or o.get("choicePartner") != partner or o.get("choiceWholesaleCost") != wholesale):
+            req("PATCH", f"productOffering/{o['id']}", {"choiceCost": 1, "choicePartner": partner,
+                                                        "choiceWholesaleCost": wholesale,
+                                                        **({"choiceHoldMonths": hold} if hold else {})})
         continue
     offerings[name] = req("POST", "productOffering", {
         "name": name, "description": description, "lifecycleStatus": "Active", "isBundle": False,
         "choiceCost": 1,
         **({"choiceHoldMonths": hold} if hold else {}),
+        # the partner sells; the operator pays them this a month per active benefit (#360)
+        "choicePartner": partner, "choiceWholesaleCost": wholesale,
         # the first category decides fulfilment (a partner activation); the second shelves it
         "category": [{"id": cats["Partner services"]["id"], "name": "Partner services", "@referredType": "Category"},
                      {"id": cats["Choices"]["id"], "name": "Choices", "@referredType": "Category"}],

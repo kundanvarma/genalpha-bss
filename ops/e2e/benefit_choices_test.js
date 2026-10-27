@@ -29,6 +29,10 @@
  *   the desk assistant (an agent) picks through the ontology API, receipt and all
  *   an agent's goodwill request is FILED, not granted; a human approver
  *   approves it on the workforce desk and the pool grows by one
+ * Authoring (#359), in the back office:
+ *   a product manager sets what a plan grants and makes a benefit — no JSON —
+ *   and a household picks it; in a governed tenant (Taranga) a new benefit
+ *   waits for an approver, is launched, and can be unlaunched
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -462,8 +466,66 @@ const orderOf = (o) => ({
   const gw = afterGoodwill.grants.find((g) => /Goodwill/.test(g.offeringName));
   console.log(`OK goodwill: the agent's request was filed (${asked.approvalId.slice(0, 8)}…), a human approved it — "${gw.offeringName}", granted ${afterGoodwill.granted}`);
 
+  /* ---- authoring (#359): the back office, no JSON ---- */
+  const bo = await (await browser.newContext({ viewport: { width: 1360, height: 1000 } })).newPage();
+  global.shotPage = bo;
+  await bo.goto(`${API}/console/`);
+  await bo.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await bo.fill('input[name="username"]', 'demo');
+  await bo.fill('input[name="password"]', 'demo');
+  await bo.click('input[type="submit"], button[type="submit"]');
+  await bo.waitForSelector('#username', { timeout: 30000 });
+  await bo.locator('.tab', { hasText: /^Benefit Choices$/ }).first().click();
+  const desk = bo.locator('[data-testid=island-choices]');
+  await desk.locator('[data-testid=choice-plans]').waitFor({ timeout: 30000 });
+  // a plan's grant, set on the desk
+  const planRow = desk.locator('[data-testid=choice-plans] tr[data-plan="GenAlpha Mobile 30GB 5G"]');
+  await planRow.locator('input').fill('1');
+  await planRow.locator('button', { hasText: 'Save' }).click();
+  await desk.locator('[data-testid=choices-said]', { hasText: 'GenAlpha Mobile 30GB 5G now grants 1 Choice per line' }).waitFor({ timeout: 20000 });
+  // a benefit, made on the desk
+  const newName = `PlayCo Arcade ${run}`;
+  const form = desk.locator('[data-testid=benefit-new]');
+  await form.locator('[name=name]').fill(newName);
+  await form.locator('[name=group]').selectOption('AI');
+  await form.locator('[name=partner]').fill('PlayCo');
+  await form.locator('[name=terms]').fill('https://playco.example/terms');
+  await form.locator('[name=wholesale]').fill('3.50');
+  await form.locator('[name=description]').fill('Cloud games from PlayCo, picked with one of your Choices.');
+  await form.locator('button[type=submit]').click();
+  await desk.locator('[data-testid=choices-said]', { hasText: `${newName} is made and on sale` }).waitFor({ timeout: 30000 });
+  if ((await bo.locator('#island-panel textarea').count()) > 0) fail('the authoring desk shows a JSON box');
+  await bo.screenshot({ path: `${SHOTS}/benefit_choices_authoring.png`, fullPage: true });
+  const authored = (await (await ctx.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent(newName)}`)).json())[0];
+  if (!authored || authored.choiceCost !== 1 || authored.choicePartner !== 'PlayCo' || authored.choiceWholesaleCost !== 3.5) {
+    fail('the authored benefit should carry its cost, partner and wholesale cost: ' + JSON.stringify(authored));
+  }
+  // a household picks it — Ingrid has one Choice left
+  await ctx.post(ORDERS, { headers: { ...H(ingrid), 'X-Channel': 'web' }, data: { productOrderItem: [add(authored)] } });
+  await settled('the authored benefit being picked', async () => (await iPool()).allocations
+    .some((a) => a.offeringName === newName && a.state === 'committed'));
+  console.log(`OK authoring: the 30GB plan now grants 1 per line, and "${newName}" was made on the desk (no JSON) and picked by a household`);
+
+  // a governed tenant: Taranga's benefits wait for an approver like any offering
+  const tTok = async (u, pw) => (await (await ctx.post(`${KC}/taranga/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: u, password: pw } })).json()).access_token;
+  const sigrid = await tTok('sigrid@taranga.example', 'sigrid');
+  const henrik = await tTok('henrik@taranga.example', 'henrik');
+  const CAT = `${API}/tmf-api/productCatalogManagement/v4`;
+  const draft = await (await ctx.post(`${CAT}/productOffering`, { headers: H(sigrid), data: {
+    name: `Lydbok+ Familie ${run}`, isBundle: false, choiceCost: 1, choicePartner: 'Lydbok+', choiceWholesaleCost: 4 } })).json();
+  if (draft.lifecycleStatus === 'Active' || draft.lifecycleStatus === 'Launched') fail('a Taranga benefit went on sale without approval: ' + draft.lifecycleStatus);
+  const gov = (id, door, tok, body) => ctx.post(`${CAT}/productOffering/${id}/governance/${door}`, { headers: H(tok), data: body || {} });
+  const selfApprove = await gov(draft.id, 'approve', sigrid, {});
+  if (selfApprove.ok()) fail('the product manager approved her own benefit');
+  const launched = await (await gov(draft.id, 'launch', henrik, { force: true, note: 'benefit approved' })).json();
+  const onSale = await (await ctx.get(`${CAT}/productOffering/${draft.id}`, { headers: H(henrik) })).json();
+  if (!['Launched', 'Active'].includes(onSale.lifecycleStatus) || onSale.choiceCost !== 1) fail('the approver launch did not put the benefit on sale: ' + JSON.stringify(onSale).slice(0, 200));
+  await gov(draft.id, 'unlaunch', henrik, { note: 'test cleanup' });
+  console.log(`OK governance: a Taranga benefit was "${draft.lifecycleStatus}" until an approver launched it (${onSale.lifecycleStatus}); the manager could not approve her own; unlaunched after`);
+
   await browser.close();
-  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held; the care desk, an agent pick with a receipt, and goodwill only by a human.');
+  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held; the care desk, an agent pick with a receipt, and goodwill only by a human; benefits authored with no JSON, under launch governance.');
 })().catch(async (e) => {
   console.error('FAIL:', e.message.split('\n')[0]);
   try { require('fs').mkdirSync(SHOTS, { recursive: true }); await global.shotPage?.screenshot({ path: `${SHOTS}/benefit_choices_FAIL.png`, fullPage: true }); } catch { /* no page to show */ }
