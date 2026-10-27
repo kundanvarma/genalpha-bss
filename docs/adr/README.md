@@ -47,6 +47,7 @@ more deliberate than it was; 0016 says so explicitly.
 | [0024](0024-csrf-is-off-because-there-is-nothing-ambient-to-forge.md) | CSRF is off, deliberately | Nothing ambient to forge: stateless, no cookie auth, bearer token only — so the 39 CodeQL alerts are dismissed against a written decision rather than left to bury real findings. |
 | [0025](0025-an-action-receipt-is-written-before-the-action.md) | A receipt is written before the action | Attempt committed before dispatch or the action is refused; outcome appended as a linked row, never an update. **Accepted, not yet implemented.** |
 | [0026](0026-iot-and-energy-are-deferred-not-labels.md) | `iot` and `energy` are deferred | A family is a promise to provision, not a label; both wait for a named trigger, and the claims gate refuses either in the family set until this is superseded. |
+| [0027](0027-benefit-choices-are-a-ledger-beside-the-order.md) | Benefit Choices are a ledger beside the order | One component counts Choices; the catalog holds the terms, a TMF622 order makes every change, inventory says what is sold; a downgrade below what is in use is refused; points and a marketplace are out. |
 
 ## How to add one
 

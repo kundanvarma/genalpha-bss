@@ -739,6 +739,10 @@ bss:
         timezone: Europe/Oslo
         served-countries: ["NO"]
         country: "NO"
+        # Benefit Choices (#362): Taranga's word for a Choice is a Pick. Holds are
+        # law-as-data and Norway's is 0 until the bindingstid question is answered.
+        choices: true
+        choices-label: Picks
         tagline: Ride the wave
         porting-gateway: nrdb
         support-phone: "+47 21 00 00 00"
