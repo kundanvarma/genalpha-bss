@@ -116,6 +116,38 @@ async function apiCall(page, method, path, token, body) {
   if (!group || group.numberRelOfferUpperLimit !== 3) fail('Family Max VAS group missing');
   console.log('OK Family Max offers the VAS group: pick up to 3 (high-end package story)');
 
+  // #353 — ending a product: Vera ends Netflix with a TMF622 delete item. The
+  // order completes at once, inventory closes the product, the service stops
+  // and the partner is told (the code leaves with the service — it is never
+  // shelved as a "number").
+  const nfProduct = (prods.body || []).find((p) => p.name === 'Netflix Standard');
+  if (!nfProduct) fail('Netflix product missing from inventory');
+  const ending = await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', vera, {
+    productOrderItem: [{ id: '1', action: 'delete', product: { id: nfProduct.id } }],
+  });
+  if (ending.status !== 201) fail('ending order refused: ' + JSON.stringify(ending.body));
+  if (ending.body.state !== 'completed') fail('ending order did not complete at once: ' + ending.body.state);
+  let ended = null;
+  for (let i = 0; i < 20 && !ended; i++) {
+    await page.waitForTimeout(1500);
+    const res = await apiCall(page, 'GET', '/tmf-api/serviceInventory/v4/service', vera);
+    ended = (res.body || []).find?.((s) => s.id === nf.id && s.state === 'terminated');
+  }
+  if (!ended) fail('the Netflix service did not stop after the ending order');
+  if ((ended.serviceCharacteristic || []).some((c) => c.name === 'activationCode')) {
+    fail('the ended service still shows a partner activation code');
+  }
+  const after = await apiCall(page, 'GET', `/tmf-api/productInventory/v4/product/${nfProduct.id}`, vera);
+  if (after.body.status !== 'cancelled' || !after.body.terminationDate) {
+    fail('inventory did not close the product: ' + after.body.status);
+  }
+  const again = await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', vera, {
+    productOrderItem: [{ id: '1', action: 'delete', product: { id: nfProduct.id } }],
+  });
+  if (again.status !== 400) fail('ending an ended product was not refused: ' + again.status);
+  console.log('OK ending: delete order completed, service stopped with the partner, product closed; a second ending is refused —',
+    again.body.message);
+
   await browser.close();
   console.log('\nALL VAS CHECKS PASSED — category-driven fulfilment: entitlement, feature, billing-only.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

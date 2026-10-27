@@ -184,6 +184,13 @@ public class OrchestrationService {
                 .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
         renameModifiedServices(tenant, modifies, owner);
         items.removeAll(modifies);
+        // Endings (action=delete) stop the service the product names — and a
+        // partner service stops with the partner. Idempotent: an ended service
+        // is passed by, so the create and the completed event may both arrive.
+        List<Map<String, Object>> deletes = items.stream()
+                .filter(i -> "delete".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
+        endDeletedServices(tenant, deletes, owner, productOrderId);
+        items.removeAll(deletes);
         if (items.isEmpty()) {
             return;
         }
@@ -785,6 +792,35 @@ public class OrchestrationService {
     }
 
     /**
+     * A delete item carries the service that realises the product being ended
+     * (ordering completes it from inventory), so the right service stops even
+     * when a customer has several of the same. Owner is checked as for a plan
+     * change: a mismatching id is skipped, never ended.
+     */
+    private void endDeletedServices(String tenant, List<Map<String, Object>> deletes, String owner,
+            String productOrderId) {
+        for (Map<String, Object> item : deletes) {
+            String serviceId = item.get("product") instanceof Map<?, ?> p
+                    && p.get("realizingService") instanceof List<?> rs && !rs.isEmpty()
+                    ? idOf(rs.get(0)) : null;
+            if (serviceId == null) {
+                // a billing-only product (insurance) has no service to stop
+                continue;
+            }
+            services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
+                if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
+                    log.warn("delete order names service {} owned by another party — not ended",
+                            instance.getId());
+                    return;
+                }
+                if (!ServiceInstance.TERMINATED.equals(instance.getState())) {
+                    terminate(instance, "ended by order " + productOrderId);
+                }
+            });
+        }
+    }
+
+    /**
      * A modify item carries the service it realizes (product.realizingService)
      * so the swap lands on the right line even when a customer has several.
      * Owner is checked against the order's party — a mismatching id is skipped,
@@ -1344,6 +1380,14 @@ public class OrchestrationService {
         String releasedNumber = null;
         for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(
                 instance.getTenantId(), instance.getId())) {
+            if ("partner".equals(a.getPoolId())) {
+                // a partner activation code is a credential, never a number: the
+                // partner is told to stop, and the code leaves with the service
+                // (it must not age on the number shelf and be "re-issued")
+                partners.deactivate(a.getValue(), instance.getOwnerPartyId());
+                assignments.delete(a);
+                continue;
+            }
             releasedNumber = a.getValue();
             assignments.delete(a);
             com.bss.som.entity.NumberQuarantine shelf = new com.bss.som.entity.NumberQuarantine();
