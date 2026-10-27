@@ -36,6 +36,7 @@ public class SecurityConfig {
     private static final String WRITE = "benefit:write";
     private static final String READ = "benefit:read";
     private static final String GOODWILL_APPROVER = "billing:admin";
+    private static final String FINANCE = "billing:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -57,6 +58,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/pool")
                                 .hasAnyAuthority(PartyScope.CUSTOMER_ROLE, READ, WRITE)
+                        // what the operator owes its partners (#360): money, so finance alone
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/partnerCost")
+                                .hasAuthority(FINANCE)
                         // a goodwill Choice (#358): ordering's machine, or the human approver replaying
                         // the governed action (billing:admin — the same goodwill gate as a credit)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/goodwill")

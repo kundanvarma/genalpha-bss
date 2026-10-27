@@ -28,12 +28,13 @@ public class RestChoicesClient implements ChoicesClient {
 
     @Override
     public HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces, Integer holdMonths) {
+            String offeringName, int cost, List<Source> replaces, Terms terms) {
         try {
             restClient.post()
                     .uri(BASE + "/hold")
                     .body(new HoldBody(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost,
-                            replaces == null ? List.of() : replaces, holdMonths))
+                            replaces == null ? List.of() : replaces, terms.holdMonths(), terms.partner(),
+                            terms.wholesaleCost()))
                     .retrieve()
                     .toBodilessEntity();
             return HoldOutcome.held();
@@ -93,7 +94,8 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     private record HoldBody(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces, Integer holdMonths) {
+            String offeringName, int cost, List<Source> replaces, Integer holdMonths, String partner,
+            java.math.BigDecimal wholesaleCost) {
     }
 
     private record SettleBody(String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants) {

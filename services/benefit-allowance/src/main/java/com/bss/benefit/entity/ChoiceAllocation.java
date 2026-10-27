@@ -61,6 +61,13 @@ public class ChoiceAllocation {
     @Column(name = "held_until")
     private OffsetDateTime heldUntil;
 
+    /** Who provides the benefit, and what the operator agreed to pay them a month (snapshotted at the pick). */
+    @Column(name = "partner")
+    private String partner;
+
+    @Column(name = "wholesale_cost")
+    private java.math.BigDecimal wholesaleCost;
+
     public String getTenantId() {
         return tenantId;
     }
@@ -179,5 +186,21 @@ public class ChoiceAllocation {
 
     public void setHeldUntil(OffsetDateTime heldUntil) {
         this.heldUntil = heldUntil;
+    }
+
+    public String getPartner() {
+        return partner;
+    }
+
+    public void setPartner(String partner) {
+        this.partner = partner;
+    }
+
+    public java.math.BigDecimal getWholesaleCost() {
+        return wholesaleCost;
+    }
+
+    public void setWholesaleCost(java.math.BigDecimal wholesaleCost) {
+        this.wholesaleCost = wholesaleCost;
     }
 }

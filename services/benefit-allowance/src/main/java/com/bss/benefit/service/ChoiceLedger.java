@@ -50,16 +50,18 @@ public class ChoiceLedger {
     private final TenantScope tenantScope;
     private final TenantRegistry registry;
     private final DomainEventPublisher events;
+    private final PartnerCosts partnerCosts;
 
     public ChoiceLedger(ChoicePoolRepository pools, ChoiceGrantRepository grants,
             ChoiceAllocationRepository allocations, TenantScope tenantScope, TenantRegistry registry,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, PartnerCosts partnerCosts) {
         this.pools = pools;
         this.grants = grants;
         this.allocations = allocations;
         this.tenantScope = tenantScope;
         this.registry = registry;
         this.events = events;
+        this.partnerCosts = partnerCosts;
     }
 
     /** Whether this tenant offers Choices at all, and the word its screens use for one. */
@@ -123,6 +125,9 @@ public class ChoiceLedger {
         a.setOfferingName(request.offeringName());
         a.setCost(request.cost());
         a.setHoldMonths(request.holdMonths());
+        // what the operator agreed to pay the partner, as the catalog said at the pick (#360)
+        a.setPartner(request.partner());
+        a.setWholesaleCost(request.wholesaleCost());
         a.setState(HELD);
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
@@ -173,6 +178,7 @@ public class ChoiceLedger {
             a.setLastUpdate(OffsetDateTime.now());
             allocations.save(a);
             events.publish("ChoicePickedEvent", "choiceAllocation", allocationView(a));
+            partnerCosts.record(a);   // active now: this month is owed to the partner
         }
         // grants were asked for only when there is a pool to put them in (lockOrCreate above)
         if (pool != null && request.grants() != null) {

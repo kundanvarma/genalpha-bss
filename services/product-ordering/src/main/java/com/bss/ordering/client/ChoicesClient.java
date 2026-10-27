@@ -12,7 +12,18 @@ public interface ChoicesClient {
 
     /** Hold a benefit's cost; in a swap, {@code replaces} names the benefits the same order ends (their Choices count). */
     HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces, Integer holdMonths);
+            String offeringName, int cost, List<Source> replaces, Terms terms);
+
+    /**
+     * What the catalog says about a benefit at the moment it is picked: the
+     * months it is held (null = none), who provides it and what the operator
+     * pays them a month (#360) — the ledger keeps this snapshot, so a later
+     * catalog change never rewrites what was agreed.
+     */
+    record Terms(Integer holdMonths, String partner, java.math.BigDecimal wholesaleCost) {
+
+        public static final Terms NONE = new Terms(null, null, null);
+    }
 
     void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants);
 

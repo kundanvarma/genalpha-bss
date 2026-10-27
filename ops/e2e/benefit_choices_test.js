@@ -33,6 +33,11 @@
  *   a product manager sets what a plan grants and makes a benefit — no JSON —
  *   and a household picks it; in a governed tenant (Taranga) a new benefit
  *   waits for an approver, is launched, and can be unlaunched
+ * Partner cost (#360):
+ *   the picked benefit owes its partner its wholesale price for the month — one
+ *   row and one journal entry, cost of sales against a payable to the partner
+ *   A10. the completion replayed (a duplicate partner callback) adds nothing;
+ *       finance reads the month by partner, a customer cannot
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -480,6 +485,8 @@ const orderOf = (o) => ({
   await desk.locator('[data-testid=choice-plans]').waitFor({ timeout: 30000 });
   // a plan's grant, set on the desk
   const planRow = desk.locator('[data-testid=choice-plans] tr[data-plan="GenAlpha Mobile 30GB 5G"]');
+  // cleared first: a rerun finds it at 1 already, and React fires no change for an equal value
+  await planRow.locator('input').fill('');
   await planRow.locator('input').fill('1');
   await planRow.locator('button', { hasText: 'Save' }).click();
   await desk.locator('[data-testid=choices-said]', { hasText: 'GenAlpha Mobile 30GB 5G now grants 1 Choice per line' }).waitFor({ timeout: 20000 });
@@ -505,6 +512,43 @@ const orderOf = (o) => ({
   await settled('the authored benefit being picked', async () => (await iPool()).allocations
     .some((a) => a.offeringName === newName && a.state === 'committed'));
   console.log(`OK authoring: the 30GB plan now grants 1 per line, and "${newName}" was made on the desk (no JSON) and picked by a household`);
+
+  /* ---- partner cost (#360): what a "free" benefit costs the operator ---- */
+  const finance = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+  const month = new Date().toISOString().slice(0, 7);
+  const costLine = async () => ((await (await ctx.get(`${CHOICES}/partnerCost?period=${month}`, { headers: H(finance) })).json())
+    .lines || []).find((l) => l.offeringName === newName);
+  const first = await costLine();
+  if (!first || first.partner !== 'PlayCo' || first.active !== 1 || first.amount !== 3.5) {
+    fail('the picked benefit should owe PlayCo 3.50 for this month: ' + JSON.stringify(first));
+  }
+  // A10 — the completion replayed (a duplicate partner callback settles the order again): no second row
+  const arcade = (await iPool()).allocations.find((a) => a.offeringName === newName);
+  const ordering = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'client_credentials', client_id: 'bss-ordering', client_secret: 'ordering-secret' } })).json()).access_token;
+  for (let i = 0; i < 2; i++) {
+    const again = await ctx.post(`${CHOICES}/order/${arcade.orderId}/settle`, { headers: H(ordering), data: { ownerPartyId: ingridId } });
+    if (again.status() !== 200) fail('A10: the replayed settle was refused ' + again.status());
+  }
+  const after = await costLine();
+  if (after.active !== 1 || after.amount !== 3.5) fail('A10: a replayed completion recorded the month twice: ' + JSON.stringify(after));
+  if ((await ctx.get(`${CHOICES}/partnerCost`, { headers: H(ingrid) })).status() !== 403) fail('a customer read the partner bill');
+  // the journal books it: cost of sales against a payable to PlayCo, once
+  const booked = await settled('the partner cost on the journal', async () => {
+    const res = await ctx.get(`${API}/revenue/v1/journalEntry?sourceType=partnerCost&limit=200`, { headers: H(finance) });
+    const mine = ((await res.json()) || []).filter((e) => (e.description || '').includes(newName));
+    return mine.length > 0 ? mine : null;
+  });
+  if (booked.length !== 1) fail(`A10: the month was booked ${booked.length} times on the journal`);
+  // and finance reads it in words, partner by partner
+  await bo.evaluate(() => window.consoleGoTo('partnerCost'));
+  const costRow = bo.locator('[data-testid=partner-cost-line]', { hasText: newName });
+  await costRow.waitFor({ timeout: 30000 });
+  if (!/PlayCo/.test(await costRow.innerText())) fail('the finance view should name the partner');
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-/.test(await bo.locator('[data-testid=partner-costs]').innerText())) fail('the finance view shows ids');
+  await bo.screenshot({ path: `${SHOTS}/benefit_choices_partner_costs.png`, fullPage: true });
+  console.log(`OK A10: "${newName}" owes PlayCo 3.50 for ${month} — one row and one journal entry, even with the completion replayed twice; finance reads it by partner, a customer cannot`);
 
   // a governed tenant: Taranga's benefits wait for an approver like any offering
   const tTok = async (u, pw) => (await (await ctx.post(`${KC}/taranga/protocol/openid-connect/token`, { form: {

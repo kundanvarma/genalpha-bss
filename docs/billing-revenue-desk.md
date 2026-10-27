@@ -1,7 +1,7 @@
 # Billing & Revenue
 
-The department used to be called Money, and it exposed the ledger's entities as
-fourteen peer tabs. An operator had to know the internal model before they
+The department used to be called Money, and it exposed the ledger's entities as a
+flat row of peer tabs. An operator had to know the internal model before they
 could find a task — and worse, the same customer looked different in different
 places, because a bill's lateness was read from a raw state plus whatever each
 channel decided about it. An approved ten-day extension did not stop the bill
@@ -97,16 +97,16 @@ made to.
 | **Billing** | Bills · Disputes | money owed, and the money owed that is being argued about |
 | **Payments** | unapplied cash, payments received, reconciliation | money received is its own job, not a tab inside money owed |
 | **Collections** | Cases · Dunning · Risk | money that is late: the case, the ladder behind it, and the score the case aggregates |
-| **Accounting** | Journal · Chart of accounts | what the books say, and what the books are told to say |
+| **Accounting** | Journal · Chart of accounts · Partner costs | what the books say, what the books are told to say, and what the benefits customers picked cost us |
 | **Configuration** | financial changes, bill formats, deliveries, shadow billing | setup, off the daily path |
 
 Four of the six are one screen each, and that screen carries its own areas —
-Configuration's four chips, Accounting's two, the sections on Payments. Those
+Configuration's four chips, Accounting's three, the sections on Payments. Those
 show no second row of navigation, because a choice printed twice, one line
 above itself, is worse than a choice printed once. Billing and Collections are
 genuinely several pages, so those do get a second row.
 
-**Nothing moved house.** Every one of the fourteen pages keeps its path, its
+**Nothing moved house.** Every one of the fifteen pages keeps its path, its
 title and its role gate, so `#/billFormatProfile`, the ⌘K palette and every
 suite that clicks a tab by its text land exactly where they did. One name
 changed, and only in the row: the collection-case list is **Cases** there, so
@@ -280,6 +280,13 @@ controller reconciling a month had to know the data model before they could
 find either. They are one job — what the books say, and what the books are told
 to say — so they are one page with two views.
 
+A third view, **Partner costs**, arrived with Benefit Choices
+(#352): what the operator owes each partner for
+a month, for the benefits customers picked. The benefit ledger records one row
+per active benefit per month, and the Journal books each one as partner benefits
+(cost of sales) against a payable to that partner, so the view and the Journal
+never disagree.
+
 **The journal reads as business events.** A posting is a bill issued, cash
 received, a credit note raised, a handset handed over; it is a row of debits
 and credits only once you ask. So the row leads with the event, and the double
@@ -426,7 +433,7 @@ validator's five refusal rules in ten tests, without a fleet.
 
 `ops/e2e/billing_ia_test.js` (suite #240) proves the shape and the gates with
 real tokens: the six primaries in lifecycle order, each destination's second
-row exactly as the table above says, all fourteen old tabs still opening under
+row exactly as the table above says, every old tab still opening under
 the destination they were re-homed to, finance-staff's Collections carrying
 Cases and Dunning but not Risk (with `riskManagement` answering him 403), and a
 narrow role landing on its own area alone. That last one grants `risk:assess`
@@ -453,7 +460,7 @@ watched going red:
 | four channels, each knowing all eight | the four channel modules named above |
 | no channel computes lateness | no `Date.now()` or bare `new Date()` in any of the four |
 | the six destinations, in lifecycle order | the `groups` of the Billing & Revenue workspace in `nav.js` |
-| fourteen pages under the department | that workspace's `tabs` |
+| fifteen pages under the department | that workspace's `tabs` |
 | `nav.js` is at the front-end ceiling | `wc -l` against `MAX_FE_LINES` in `ops/arch/ratchet.sh` |
 | every suite this document names | the file exists in `ops/e2e/` |
 | every suite number it cites | no higher than the count of tracked suites |
@@ -462,8 +469,8 @@ watched going red:
 | a suite number this document cites | that suite file's own `Suite #N` header |
 
 A count is checked in **every phrasing and every file**, not only where it reads
-most naturally. One fact gets said several ways — "fourteen peer tabs",
-"fourteen old tabs", "fourteen pages" — and the README says the short version of
+most naturally. One fact gets said several ways — "fifteen peer tabs",
+"fifteen old tabs", "fifteen pages" — and the README says the short version of
 the same thing; a phrasing nobody checks is how a stale number survives the fix
 to its neighbour.
 

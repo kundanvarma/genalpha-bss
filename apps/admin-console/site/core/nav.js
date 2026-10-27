@@ -22,7 +22,7 @@ const PER_TAB_GATE = {
   payments: 'billing:admin',
   collections: 'billing:admin',
   journalEntry: 'billing:admin',
-  accountMapping: 'billing:admin',
+  accountMapping: 'billing:admin', partnerCost: 'billing:admin',
   // Configuration is where the chart of accounts is actually changed —
   // the same gate as the rest of the finance desk, and the revenue
   // service refuses every rung without billing:admin underneath.
@@ -186,7 +186,7 @@ const WORKSPACES = [
   // `whole` = the destination IS one screen carrying its own areas, so the row never repeats it.
   { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'dispute',
     'payments', 'remittance/unapplied', 'collections', 'dunning', 'partyRiskAssessment',
-    'journalEntry', 'accountMapping', 'financialConfiguration', 'billFormatProfile',
+    'journalEntry', 'accountMapping', 'partnerCost', 'financialConfiguration', 'billFormatProfile',
     'billDistribution', 'shadowDrift'],
     groups: [
       { label: 'Overview', tabs: ['billingOverview'], whole: true },
@@ -194,7 +194,7 @@ const WORKSPACES = [
       { label: 'Payments', tabs: ['payments', 'remittance/unapplied'], whole: true },
       { label: 'Collections', tabs: ['collections', 'dunning', 'partyRiskAssessment'],
         short: { collections: 'Cases' } },
-      { label: 'Accounting', tabs: ['journalEntry', 'accountMapping'], whole: true },
+      { label: 'Accounting', tabs: ['journalEntry', 'accountMapping', 'partnerCost'], whole: true },
       { label: 'Configuration', tabs: ['financialConfiguration', 'billFormatProfile',
         'billDistribution', 'shadowDrift'], whole: true },
     ] },

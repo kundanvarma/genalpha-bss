@@ -25,11 +25,12 @@ public final class ChoiceRequests {
      */
     public record Hold(@NotBlank String ownerPartyId, @NotBlank String orderId, @NotBlank String orderItemId,
             @NotBlank String offeringId, @NotBlank String offeringName, @Min(1) int cost,
-            List<@Valid Source> replaces, @Min(0) Integer holdMonths) {
+            List<@Valid Source> replaces, @Min(0) Integer holdMonths, String partner,
+            @jakarta.validation.constraints.DecimalMin("0") java.math.BigDecimal wholesaleCost) {
 
         public Hold(String ownerPartyId, String orderId, String orderItemId, String offeringId, String offeringName,
                 int cost) {
-            this(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost, List.of(), null);
+            this(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost, List.of(), null, null, null);
         }
     }
 
