@@ -122,7 +122,7 @@ class OrderSwapTest {
     void aSwap_holdsWithTheChoiceItFrees_andEndsTheOldBenefitOnlyWhenTheNewOneLands() throws Exception {
         String id = swapOrder();
         verify(choices).hold("cust-1", id, "2", "po-audio", "Lydbok+ Audiobooks", 1,
-                List.of(new ChoicesClient.Source("ord-old", "1")), null);
+                List.of(new ChoicesClient.Source("ord-old", "1")), ChoicesClient.Terms.NONE);
         verify(inventoryClient, never()).updateProduct(eq("prod-old"), any());   // not yet
 
         item(id, "2", "completed");

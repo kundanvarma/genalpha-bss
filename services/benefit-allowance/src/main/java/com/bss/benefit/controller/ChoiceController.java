@@ -2,10 +2,12 @@ package com.bss.benefit.controller;
 
 import com.bss.benefit.api.ApiConstants;
 import com.bss.benefit.dto.ChoiceRequests;
+import com.bss.benefit.dto.PartnerCostView;
 import com.bss.benefit.dto.PoolView;
 import com.bss.benefit.exception.BadRequestException;
 import com.bss.benefit.security.PartyScope;
 import com.bss.benefit.service.ChoiceLedger;
+import com.bss.benefit.service.PartnerCosts;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +31,23 @@ public class ChoiceController {
 
     private final ChoiceLedger ledger;
     private final PartyScope partyScope;
+    private final PartnerCosts partnerCosts;
 
-    public ChoiceController(ChoiceLedger ledger, PartyScope partyScope) {
+    public ChoiceController(ChoiceLedger ledger, PartyScope partyScope, PartnerCosts partnerCosts) {
         this.ledger = ledger;
         this.partyScope = partyScope;
+        this.partnerCosts = partnerCosts;
+    }
+
+    /** What the operator owes its partners for a month (YYYY-MM, default this one) — finance only. */
+    @GetMapping("/partnerCost")
+    public PartnerCostView partnerCost(@RequestParam(required = false) String period) {
+        String month = period == null || period.isBlank() ? java.time.YearMonth.now(java.time.ZoneOffset.UTC).toString()
+                : period;
+        if (!month.matches("\\d{4}-(0[1-9]|1[0-2])")) {
+            throw new BadRequestException("the period is a month, like 2026-10");
+        }
+        return partnerCosts.month(month);
     }
 
     @GetMapping("/pool")

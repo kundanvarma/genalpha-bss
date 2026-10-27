@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Chart } from './Chart.jsx';
 import { Journal } from './Journal.jsx';
+import { PartnerCosts } from './PartnerCosts.jsx';
 import { reader } from './api.js';
 
 /* Accounting — the journal and the chart of accounts, one destination.
@@ -15,6 +16,7 @@ import { reader } from './api.js';
 const VIEWS = [
   { key: 'journal', label: 'Journal', goal: 'Goal: every event on the books, and the file the ledger ingests.' },
   { key: 'chart', label: 'Chart of accounts', goal: 'Goal: every kind of money books where finance says it does.' },
+  { key: 'partnerCost', label: 'Partner costs', goal: 'Goal: what the benefits customers picked cost us, partner by partner.' },
 ];
 
 export function Accounting({ authFetch, view: opened }) {
@@ -50,9 +52,9 @@ export function Accounting({ authFetch, view: opened }) {
           </button>
         </p>
       ) : null}
-      {view === 'journal'
-        ? <Journal api={api} />
-        : <Chart api={api} onDrafted={setDrafted} />}
+      {view === 'journal' ? <Journal api={api} /> : null}
+      {view === 'chart' ? <Chart api={api} onDrafted={setDrafted} /> : null}
+      {view === 'partnerCost' ? <PartnerCosts authFetch={authFetch} /> : null}
     </section>
   );
 }

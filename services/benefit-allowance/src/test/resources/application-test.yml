@@ -26,6 +26,7 @@ bss:
         issuer: https://idp.genalpha.test/realms/bss
         choices: true
         choices-label: Choices
+        currency: EUR
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
         # a Norwegian operator offering Choices: holds are 0 there by law-as-data (#357)

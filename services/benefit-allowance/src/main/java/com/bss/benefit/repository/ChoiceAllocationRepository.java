@@ -19,4 +19,6 @@ public interface ChoiceAllocationRepository extends JpaRepository<ChoiceAllocati
 
     long countByTenantIdAndPoolIdAndEndReasonAndEndedAtGreaterThanEqual(String tenantId, String poolId,
             String endReason, java.time.OffsetDateTime since);
+
+    List<ChoiceAllocation> findByTenantIdAndState(String tenantId, String state);
 }

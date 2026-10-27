@@ -71,6 +71,8 @@ public class TenantRegistry {
         private String choicesLabel;
         /** ISO country the tenant sells in (tenants.yml `country`): which statutory pack its holds obey. */
         private String country;
+        /** The tenant's currency (tenants.yml `currency`): what partner costs are counted in. */
+        private String currency;
 
         public String getId() {
             return id;
@@ -126,6 +128,14 @@ public class TenantRegistry {
 
         public void setChoices(boolean choices) {
             this.choices = choices;
+        }
+
+        public String getCurrency() {
+            return currency;
+        }
+
+        public void setCurrency(String currency) {
+            this.currency = currency;
         }
 
         public String getCountry() {

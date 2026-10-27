@@ -54,7 +54,7 @@ class OrderChoices {
         List<ChoicesClient.Source> replaces = endedBenefits(leafItems);
         for (Item b : benefits) {
             ChoicesClient.HoldOutcome outcome = ledger.hold(ownerPartyId, orderId, b.itemId(), b.offeringId(),
-                    b.name(), b.cost() * b.quantity(), replaces, holdMonthsOf(b.offeringId()));
+                    b.name(), b.cost() * b.quantity(), replaces, termsOf(b.offeringId()));
             if (!outcome.ok()) {
                 ledger.release(orderId);
                 throw new ChoicesConflictException(outcome.message());
@@ -250,9 +250,15 @@ class OrderChoices {
         return null;
     }
 
-    private Integer holdMonthsOf(String offeringId) {
-        int months = catalog.findOfferingDetail(offeringId).map(d -> positive(d.get("choiceHoldMonths"))).orElse(0);
-        return months > 0 ? months : null;
+    private ChoicesClient.Terms termsOf(String offeringId) {
+        return catalog.findOfferingDetail(offeringId).map(d -> {
+            int months = positive(d.get("choiceHoldMonths"));
+            Object partner = d.get("choicePartner");
+            Object cost = d.get("choiceWholesaleCost");
+            java.math.BigDecimal wholesale = cost instanceof Number n ? new java.math.BigDecimal(n.toString()) : null;
+            return new ChoicesClient.Terms(months > 0 ? months : null,
+                    partner instanceof String p && !p.isBlank() ? p : null, wholesale);
+        }).orElse(ChoicesClient.Terms.NONE);
     }
 
     /**

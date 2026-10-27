@@ -79,7 +79,8 @@ class OrderChoicesTest {
         given(catalogClient.findOffering("po-stream")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-stream", "StreamCo Standard")));
         given(catalogClient.findOffering("po-plan")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-plan", "Mobile Max")));
         given(catalogClient.findOffering("po-plain")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-plain", "Data Top-up")));
-        given(catalogClient.findOfferingDetail("po-stream")).willReturn(Optional.of(Map.of("id", "po-stream", "name", "StreamCo Standard", "lifecycleStatus", "Launched", "choiceCost", 1)));
+        given(catalogClient.findOfferingDetail("po-stream")).willReturn(Optional.of(Map.of("id", "po-stream", "name", "StreamCo Standard", "lifecycleStatus", "Launched", "choiceCost", 1,
+                "choicePartner", "StreamCo", "choiceWholesaleCost", 4.0)));
         given(catalogClient.findOfferingDetail("po-plan")).willReturn(Optional.of(Map.of("id", "po-plan", "name", "Mobile Max", "lifecycleStatus", "Launched", "choicesGranted", 2)));
         given(catalogClient.findOfferingDetail("po-plain")).willReturn(Optional.of(Map.of("id", "po-plain", "name", "Data Top-up", "lifecycleStatus", "Launched")));
     }
@@ -100,7 +101,9 @@ class OrderChoicesTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String orderId = objectMapper.readTree(body).get("id").asString();
-        verify(choices).hold("cust-1", orderId, "1", "po-stream", "StreamCo Standard", 1, List.of(), null);
+        // the partner and what the operator pays them ride with the hold, as the catalog says today (#360)
+        verify(choices).hold("cust-1", orderId, "1", "po-stream", "StreamCo Standard", 1, List.of(),
+                new ChoicesClient.Terms(null, "StreamCo", new java.math.BigDecimal("4.0")));
     }
 
     @Test

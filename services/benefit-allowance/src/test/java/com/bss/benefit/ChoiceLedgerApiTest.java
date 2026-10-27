@@ -312,4 +312,37 @@ class ChoiceLedgerApiTest {
                         .content("{\"ownerPartyId\": \"" + owner + "\", \"reason\": \"I deserve it\"}"))
                 .andExpect(status().isForbidden());
     }
+
+    @Autowired
+    private com.bss.benefit.service.PartnerCosts partnerCosts;
+
+    @Test
+    void anActiveBenefitCostsItsPartnerOncePerMonth_andOnlyFinanceSeesIt() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        String partner = "PlayCo " + UUID.randomUUID();
+        grant(owner, 2);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "orderId": "ord-cost", "orderItemId": "1", "offeringId": "po-arcade",
+                                 "offeringName": "PlayCo Arcade", "cost": 1, "partner": "%s", "wholesaleCost": 4.00}
+                                """.formatted(owner, partner)))
+                .andExpect(status().isCreated());
+        for (int i = 0; i < 2; i++) {   // the completion arrives twice
+            mockMvc.perform(post(BASE + "/order/ord-cost/settle").with(ordering())
+                    .contentType(MediaType.APPLICATION_JSON).content("{\"ownerPartyId\": \"" + owner + "\"}"))
+                    .andExpect(status().isOk());
+        }
+        partnerCosts.sweep();   // and the month's sweep runs over it too
+
+        RequestPostProcessor finance = jwt().authorities(new SimpleGrantedAuthority("billing:admin"));
+        String month = java.time.YearMonth.now(java.time.ZoneOffset.UTC).toString();
+        mockMvc.perform(get(BASE + "/partnerCost").param("period", month).with(finance))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currency").value("EUR"))
+                .andExpect(jsonPath("$.lines[?(@.partner == '%s')].active".formatted(partner)).value(1))
+                .andExpect(jsonPath("$.lines[?(@.partner == '%s')].amount".formatted(partner)).value(4.0));
+        mockMvc.perform(get(BASE + "/partnerCost").with(customer(owner))).andExpect(status().isForbidden());
+        mockMvc.perform(get(BASE + "/partnerCost").param("period", "October").with(finance))
+                .andExpect(status().isBadRequest());
+    }
 }
