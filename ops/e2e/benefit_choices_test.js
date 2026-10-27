@@ -23,6 +23,12 @@
  *   a held benefit (PhoneCo, 12 months) shows its date and refuses release
  *   A9. a catalog change does not rewrite what a household already picked
  *   a cease ends the newest benefit it can no longer pay for — never the held one
+ * Care desk and governed actions (#358), on a third household:
+ *   a CSR sees the household's Choices in the cockpit and picks one — through
+ *   the governed action pickBenefit, with a receipt
+ *   the desk assistant (an agent) picks through the ontology API, receipt and all
+ *   an agent's goodwill request is FILED, not granted; a human approver
+ *   approves it on the workforce desk and the pool grows by one
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -189,14 +195,19 @@ const orderOf = (o) => ({
   if (peek.allocations?.some((a) => a.offeringName === stream.name)) fail("A8: Dag read Chloe's pool");
   const spend = await ctx.post(`${CHOICES}/hold`, { headers: H(dag), data: { ...hold, orderId: `a8-${run}` } });
   if (spend.status() !== 403) fail('A8: a customer token moved Choices: ' + spend.status());
+  // a token without benefit:read (a machine that never needed it) is refused; staff who hold it may read
+  const loyaltyMachine = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'client_credentials', client_id: 'bss-loyalty', client_secret: 'loyalty-secret' } })).json()).access_token;
+  const machinePeek = await ctx.get(`${CHOICES}/pool?ownerPartyId=${dagId}`, { headers: H(loyaltyMachine) });
+  if (machinePeek.status() !== 403) fail('A8: a token without benefit:read read a pool: ' + machinePeek.status());
   const staffPeek = await ctx.get(`${CHOICES}/pool?ownerPartyId=${dagId}`, { headers: H(staff) });
-  if (staffPeek.status() !== 403) fail('A8: staff without benefit:read read a pool: ' + staffPeek.status());
+  if (staffPeek.status() !== 200) fail('A8: staff with benefit:read could not read a pool: ' + staffPeek.status());
   const nils = (await (await ctx.post(`${KC}/nova/protocol/openid-connect/token`, { form: {
     grant_type: 'password', client_id: 'bss-demo', username: 'nils@nova.example', password: 'nils' } })).json()).access_token;
   if (!nils) fail('A8: could not sign in as the nova persona');
   const novaPool = await (await ctx.get(`${CHOICES}/pool`, { headers: H(nils) })).json();
   if (novaPool.offered !== false || novaPool.granted !== 0) fail('A8: nova does not offer Choices: ' + JSON.stringify(novaPool));
-  console.log("OK A8: a household reads only its own pool, a customer cannot move Choices, staff need benefit:read, and nova (no Choices) says so");
+  console.log("OK A8: a household reads only its own pool, a customer cannot move Choices, only benefit:read may read another household, and nova (no Choices) says so");
 
   /* ---- swap and release (#356) ---- */
   const PARTNER = 'http://localhost:8164';
@@ -385,8 +396,74 @@ const orderOf = (o) => ({
   if (afterCease.allocations[0].offeringName !== phone.name) fail('after the cease only the held PhoneCo should remain');
   console.log(`OK cease: ending the line also ended ${stream.name} in the same order; ${phone.name} (held) stays — ${afterCease.inUse} of ${afterCease.granted} in use`);
 
+  /* ---- care desk and governed actions (#358), on a third household ---- */
+  const staff358 = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+  const emailI = `ingrid-${run}@example.com`;
+  const madeI = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff358), data: { email: emailI, givenName: 'Ingrid', familyName: `Desk${run}` } })).json();
+  const ingrid = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: emailI, password: madeI.temporaryPassword } })).json()).access_token;
+  const ingridId = JSON.parse(Buffer.from(ingrid.split('.')[1], 'base64url')).sub;
+  // the party record the shop makes at first sign-in (TMF632), so the desk can open her
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: { ...H(ingrid), 'X-Channel': 'web' }, data: {
+    givenName: 'Ingrid', familyName: `Desk${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: emailI } }] } });
+  await ctx.post(ORDERS, { headers: { ...H(ingrid), 'X-Channel': 'web' }, data: { productOrderItem: [add(plan)] } });
+  const iPool = async () => (await (await ctx.get(`${CHOICES}/pool?ownerPartyId=${ingridId}`, { headers: H(staff358) })).json());
+  await settled('Ingrid\'s plan granting 2', async () => (await iPool()).granted === 2);
+
+  // a CSR on the desk: sees the Choices in words, picks one through the governed action
+  const csr = await (await browser.newContext({ viewport: { width: 1280, height: 1000 } })).newPage();
+  global.shotPage = csr;
+  await csr.goto(`${API}/csr/`);
+  await csr.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await csr.fill('input[name="username"]', 'agent-anna');
+  await csr.fill('input[name="password"]', 'agent');
+  await csr.click('input[type="submit"], button[type="submit"]');
+  await csr.waitForSelector('.searchbar', { timeout: 20000 });
+  await csr.goto(`${API}/csr/customer/${ingridId}`);
+  await csr.click('[data-testid=area-services]');
+  const panel = csr.locator('[data-testid=csr-choices]');
+  await panel.waitFor({ timeout: 20000 });
+  if (!/2 of 2 left/.test(await panel.innerText())) fail('the desk should say "2 of 2 left": ' + await panel.innerText());
+  await panel.locator('[data-testid=csr-pick]', { hasText: stream.name }).click();
+  const csrSaid = await panel.locator('[data-testid=csr-choices-said]').innerText({ timeout: 20000 });
+  await settled('the desk pick committing', async () => (await iPool()).allocations.some((a) => a.offeringName === stream.name && a.state === 'committed'));
+  await csr.reload();
+  await csr.click('[data-testid=area-services]');
+  await csr.locator('[data-testid=csr-choice-row]', { hasText: stream.name }).waitFor({ timeout: 20000 });
+  if (/[0-9a-f]{8}-[0-9a-f]{4}-/.test(await csr.locator('[data-testid=csr-choices]').innerText())) fail('the desk shows an id');
+  // the whole shelf is on offer, not the first catalog page: the benefits still pickable show
+  await csr.locator('[data-testid=csr-pick]', { hasText: audio.name }).waitFor({ timeout: 20000 });
+  await csr.screenshot({ path: `${SHOTS}/benefit_choices_desk.png`, fullPage: true });
+  console.log(`OK desk: a CSR picked ${stream.name} through pickBenefit — "${csrSaid}"`);
+
+  // the desk assistant (an agent) picks through the ontology API: a receipt names it
+  const anna = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: 'agent-anna', password: 'agent' } })).json()).access_token;
+  const AG = { ...H(anna), 'X-Channel': 'care', 'X-GenAlpha-Agent': 'care-assist' };
+  const agentPick = await ctx.post(`${API}/ontology/v1/actions/pickBenefit/execute`, { headers: AG,
+    data: { customerId: ingridId, benefitOfferingId: audio.id } });
+  const agentReceipt = await agentPick.json();
+  if (agentPick.status() !== 200 || !agentReceipt.decisionId) fail('the agent pick should execute with a receipt: ' + agentPick.status() + ' ' + JSON.stringify(agentReceipt).slice(0, 300));
+  await settled('the agent pick committing', async () => (await iPool()).allocations.some((a) => a.offeringName === audio.name && a.state === 'committed'));
+  console.log(`OK agent: care-assist picked ${audio.name} through the ontology — receipt ${agentReceipt.decisionId.slice(0, 8)}…`);
+
+  // goodwill: the agent ASKS; it is filed, not granted; a human approves it
+  const ask = await ctx.post(`${API}/ontology/v1/actions/grantGoodwillChoice/execute`, { headers: AG,
+    data: { customerId: ingridId, reason: 'outage on 26 October' } });
+  const asked = await ask.json();
+  if (ask.status() !== 202 || !asked.approvalId) fail('an agent\'s goodwill must be filed for approval: ' + ask.status() + ' ' + JSON.stringify(asked).slice(0, 300));
+  if ((await iPool()).granted !== 2) fail('a filed goodwill must not grant anything yet');
+  const approved = await ctx.post(`${API}/ai/v1/workforce/approvals/${asked.approvalId}/approve`, { headers: H(staff358) });
+  if (!approved.ok()) fail('the approver could not approve: ' + approved.status() + ' ' + (await approved.text()).slice(0, 200));
+  const afterGoodwill = await settled('the goodwill Choice', async () => { const p = await iPool(); return p.granted === 3 ? p : null; });
+  const gw = afterGoodwill.grants.find((g) => /Goodwill/.test(g.offeringName));
+  console.log(`OK goodwill: the agent's request was filed (${asked.approvalId.slice(0, 8)}…), a human approved it — "${gw.offeringName}", granted ${afterGoodwill.granted}`);
+
   await browser.close();
-  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held.');
+  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held; the care desk, an agent pick with a receipt, and goodwill only by a human.');
 })().catch(async (e) => {
   console.error('FAIL:', e.message.split('\n')[0]);
   try { require('fs').mkdirSync(SHOTS, { recursive: true }); await global.shotPage?.screenshot({ path: `${SHOTS}/benefit_choices_FAIL.png`, fullPage: true }); } catch { /* no page to show */ }

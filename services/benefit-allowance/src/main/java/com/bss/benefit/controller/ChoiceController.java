@@ -55,6 +55,12 @@ public class ChoiceController {
         return ledger.settle(orderId, request);
     }
 
+    @PostMapping("/goodwill")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PoolView goodwill(@Valid @RequestBody ChoiceRequests.Goodwill request) {
+        return ledger.goodwill(request);
+    }
+
     @PostMapping("/order/{orderId}/release")
     public ReleaseReceipt release(@PathVariable String orderId) {
         return new ReleaseReceipt(orderId, ledger.release(orderId));

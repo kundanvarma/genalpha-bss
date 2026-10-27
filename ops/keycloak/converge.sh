@@ -40,12 +40,35 @@ for r in $realms; do
   # roles a component needs (#354): defined where missing, granted to the machine
   # identity that holds them — never to a person (machine-roles)
   if [ -f "$SEC/machine-roles" ]; then
-    grep -vE '^[[:space:]]*(#|$)' "$SEC/machine-roles" | while read -r role client; do
+    grep -vE '^[[:space:]]*(#|$)' "$SEC/machine-roles" | while read -r role holder; do
       "$ADM" create roles -r "$r" --config "$CFG" -s "name=$role" >/dev/null 2>&1 || true
-      if [ -n "${client:-}" ] && "$ADM" get users -r "$r" --config "$CFG" -q "username=service-account-$client" \
-          --fields id --format csv --noquotes 2>/dev/null | grep -q .; then
-        "$ADM" add-roles -r "$r" --config "$CFG" --uusername "service-account-$client" --rolename "$role"
-      fi
+      case "${holder:-}" in
+        "") ;;
+        composite:*)   # into a composite people hold, where the realm has it
+          if "$ADM" get "roles/${holder#composite:}" -r "$r" --config "$CFG" >/dev/null 2>&1; then
+            "$ADM" add-roles -r "$r" --config "$CFG" --rname "${holder#composite:}" --rolename "$role" \
+              || echo "[converge] $r: could not add $role to ${holder#composite:}" >&2
+          fi ;;
+        user:*)        # to one named user, where the realm has them
+          # the search is fuzzy ("demo" also finds "worker-...-demo-..."): take the user whose
+          # username OR email is exactly the name (a login may be stored as its email address)
+          name="${holder#user:}"
+          # (plain bash: the Keycloak image carries no awk)
+          uid=""
+          while IFS=, read -r id un em; do
+            if [ "$un" = "$name" ] || [ "$em" = "$name" ] || [ "${un%%@*}" = "$name" ]; then uid="$id"; break; fi
+          done < <("$ADM" get users -r "$r" --config "$CFG" -q "search=$name" --fields id,username,email \
+              --format csv --noquotes 2>/dev/null)
+          if [ -n "$uid" ]; then
+            "$ADM" add-roles -r "$r" --config "$CFG" --uid "$uid" --rolename "$role" \
+              || echo "[converge] $r: could not give $role to $name" >&2
+          fi ;;
+        *)             # a machine: the client's service account
+          if "$ADM" get users -r "$r" --config "$CFG" -q "username=service-account-$holder" \
+              --fields id --format csv --noquotes 2>/dev/null | grep -q .; then
+            "$ADM" add-roles -r "$r" --config "$CFG" --uusername "service-account-$holder" --rolename "$role"
+          fi ;;
+      esac
     done
   fi
   for f in "$SEC"/messages-*.json; do

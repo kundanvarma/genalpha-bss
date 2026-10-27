@@ -15,6 +15,8 @@ import { ServicesList, numberOf, primeFulfilmentFamilies } from './customer/Serv
 import { DangerZone } from './customer/DangerZone.jsx';
 import CustomerStrip from './customer/CustomerStrip.jsx';
 import { AddOrUpgrade, UpgradeCard } from './customer/Upgrades.jsx';
+import { FAMILY_ICON, orderLeaves, familyOf, leafGlyph, mergeProductsAndServices } from './customer/orderShape.js';
+import Choices from './customer/Choices.jsx';
 import { Bills, Usage, Agreements, PromoAndPayment, Policies, Pool, AutoTopup, CreditDecisions, accountState, stillOwing } from './customer/Money.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue, authFetch } from '../auth.js';
@@ -38,49 +40,6 @@ const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
 const AREAS = [['overview', 'Overview'], ['services', 'Services'], ['activity', 'Activity'], ['billing', 'Billing & account'], ['more', 'More']];
 const LIVE_ORDER = (o) => !['completed', 'cancelled', 'rejected', 'failed', 'partial'].includes(o.state);
 const CANCELLABLE = (o) => ['acknowledged', 'pending', 'held', 'inProgress', 'assessingCancellation'].includes(o.state);
-
-// A bundle order decomposes into product families — the agent sees the same
-// component tree the customer does, so "why is it in progress" answers itself.
-const FAMILY_ICON = { internet: '🌐', tv: '📺', mobile: '📱', device: '📦', other: '•' };
-function orderLeaves(items, into = []) {
-  for (const it of items || []) {
-    const kids = it.productOrderItem || [];
-    if (kids.length) orderLeaves(kids, into);
-    else if (it.productOffering) into.push(it);
-  }
-  return into;
-}
-function familyOf(item) {
-  if (item.componentType) return item.componentType;
-  const n = (item.productOffering?.name || '').toLowerCase();
-  if (/fiber|fibre|broadband|internet|dsl/.test(n)) return 'internet';
-  if (/\btv\b|stream|sports|entertain|kids tv/.test(n)) return 'tv';
-  if (/mobile|sim|5g|data|gb\b/.test(n)) return 'mobile';
-  if (/iphone|galaxy|pixel|phone|handset|watch/.test(n)) return 'device';
-  return 'other';
-}
-const leafGlyph = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
-
-/** Products are what the customer bought; services are what runs. One row per product, its service beneath it, orphans after. */
-function mergeProductsAndServices(products, services) {
-  const free = [...services];
-  const rows = [];
-  const seen = new Map(); // name -> row, so twenty identical top-ups read as one row ×20
-  for (const p of products) {
-    // the product says which service realises it (TMF637 realizingService); the name match is only the fallback
-    const realized = new Set((p.realizingService || []).map((r) => r.id).filter(Boolean));
-    let i = realized.size ? free.findIndex((sv) => realized.has(sv.id)) : -1;
-    if (i < 0) i = free.findIndex((sv) => (sv.name || '').toLowerCase() === (p.name || '').toLowerCase());
-    const sv = i >= 0 ? free.splice(i, 1)[0] : null;
-    const key = p.name + '|' + (sv ? numberOf(sv) || sv.id : '') + '|' + p.status;
-    if (!sv && seen.has(key)) { seen.get(key).count++; continue; }
-    const row = { product: p, service: sv, count: 1 };
-    rows.push(row);
-    if (!sv) seen.set(key, row);
-  }
-  for (const sv of free) rows.push({ product: null, service: sv, count: 1 });
-  return rows;
-}
 
 export default function Customer360() {
   const { id } = useParams();
@@ -491,6 +450,7 @@ export default function Customer360() {
               <p className="zone-note">What each service is decides what it can do here: a PUK belongs to a SIM, a line check to a line. Two direct actions, the rest under More…, ceasing in the danger zone. A journey that belongs to the customer rather than to one line lives above the list.</p>
               <AddOrUpgrade rows={rows} onOptions={openOptions} onAdd={startOrder} />
               {serviceRows(true)}
+              <Choices id={id} bss={bss} />
               <DangerZone services={activeServices} agreements={agreements} id={id} act={act} />
             </>
           )}

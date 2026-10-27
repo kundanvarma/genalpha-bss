@@ -290,4 +290,26 @@ class ChoiceLedgerApiTest {
                                 """.formatted(owner)))
                 .andExpect(jsonPath("$.granted").value(0));
     }
+
+    @Test
+    void aGoodwillChoice_growsThePoolByOne_withItsReason() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 1);
+        mockMvc.perform(post(BASE + "/goodwill").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ownerPartyId\": \"" + owner + "\", \"reason\": \"outage on 26 October\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.granted").value(2))
+                .andExpect(jsonPath("$.grants[1].offeringName").value("Goodwill: outage on 26 October"));
+        // the human approver (billing:admin) may grant it — but not hold or settle anything
+        mockMvc.perform(post(BASE + "/goodwill").with(jwt().authorities(new SimpleGrantedAuthority("billing:admin")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ownerPartyId\": \"" + owner + "\", \"reason\": \"second outage\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.granted").value(3));
+        mockMvc.perform(post(BASE + "/hold").with(jwt().authorities(new SimpleGrantedAuthority("billing:admin")))
+                        .contentType(MediaType.APPLICATION_JSON).content(holdBody(owner, "ord-approver", "1")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(BASE + "/goodwill").with(customer(owner)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ownerPartyId\": \"" + owner + "\", \"reason\": \"I deserve it\"}"))
+                .andExpect(status().isForbidden());
+    }
 }
