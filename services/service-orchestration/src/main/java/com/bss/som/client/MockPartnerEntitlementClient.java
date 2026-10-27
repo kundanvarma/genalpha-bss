@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
 
-/** Dev partner platform: every activation succeeds with a fresh code. */
+/** Dev partner platform: every activation succeeds with a fresh code; every deactivation is logged. */
 @Component
 @ConditionalOnProperty(name = "bss.partner.platform", havingValue = "mock", matchIfMissing = true)
 public class MockPartnerEntitlementClient implements PartnerEntitlementClient {
@@ -38,5 +38,10 @@ public class MockPartnerEntitlementClient implements PartnerEntitlementClient {
         log.info("mock partner platform: '{}' activated for {} (code {})",
                 offeringName, customerPartyId, code);
         return code.toString();
+    }
+
+    @Override
+    public void deactivate(String activationCode, String customerPartyId) {
+        log.info("mock partner platform: code {} deactivated for {}", activationCode, customerPartyId);
     }
 }

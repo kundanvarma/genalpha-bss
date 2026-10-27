@@ -157,6 +157,11 @@ public class ProductOrderService {
         requireOfferingsAvailable(dto);
         validateBundleComposition(dto);
         validateServiceability(dto);
+        // before the entity is built: a delete item is completed from inventory
+        // (its offering, the service that realises it) so the record and the
+        // event carry the product being ended, not only its id
+        int deletes = validateDeleteItems(dto,
+                partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState(STATE_ACKNOWLEDGED);
         }
@@ -205,7 +210,9 @@ public class ProductOrderService {
             entity.setDescription(((entity.getDescription() == null ? ""
                     : entity.getDescription() + " ") + "[credit-review]").trim());
         }
-        boolean modifyOnly = validateModifyItems(dto, entity.getOwnerPartyId());
+        int modifies = validateModifyItems(dto, entity.getOwnerPartyId());
+        int changes = modifies + deletes;
+        boolean changeOnly = changes > 0 && changes == flattenItemMaps(dto.getProductOrderItem()).size();
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
@@ -213,9 +220,11 @@ public class ProductOrderService {
         // THE OVERLAY SEAM: legacy-federated items hand off to the legacy
         // fulfilment queue — fail-soft, the order stands either way
         legacyHandoff.handoff(id, flattenItemMaps(dto.getProductOrderItem()), entity.getOwnerPartyId());
-        if (modifyOnly) {
-            // A plan change touches no network: same service, same number. It
-            // completes in this transaction so the channel sees it instantly.
+        if (changeOnly) {
+            // A plan change touches no network: same service, same number. An
+            // ending only stops things. Either completes in this transaction so
+            // the channel sees it instantly; the orchestrator winds the service
+            // down off the event.
             return completeNow(entity);
         }
         return created;
@@ -227,15 +236,15 @@ public class ProductOrderService {
      * the product must exist, be active and belong to the ordering customer;
      * the target must be a real non-bundle offering different from the current
      * one; and an unexpired commitment on the current plan blocks the change.
-     * Returns true when the order is modify-only.
+     * Returns how many modify items the order carries.
      */
     @SuppressWarnings("unchecked")
-    private boolean validateModifyItems(ProductOrderDto dto, String ownerPartyId) {
+    private int validateModifyItems(ProductOrderDto dto, String ownerPartyId) {
         List<Map<String, Object>> items = flattenItemMaps(dto.getProductOrderItem());
         List<Map<String, Object>> modifies = items.stream()
                 .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
         if (modifies.isEmpty()) {
-            return false;
+            return 0;
         }
         for (Map<String, Object> item : modifies) {
             String productId = idOf(item.get("product"));
@@ -278,7 +287,60 @@ public class ProductOrderService {
                         String.valueOf(product.get("name")));
             }
         }
-        return modifies.size() == items.size();
+        return modifies.size();
+    }
+
+    /**
+     * Ending a product (TMF622 action=delete): the item names the installed
+     * product it ends. The product must exist, be active and belong to the
+     * ordering customer, and an unexpired commitment on its offering blocks it,
+     * as it blocks a plan change. The item is completed from inventory — its
+     * offering and the service that realises it — so provisioning and the
+     * orchestrator know what to stop. A delete adds nothing: no stock, no
+     * availability check, no new commitment (collectItems skips it).
+     * Returns how many delete items the order carries.
+     */
+    @SuppressWarnings("unchecked")
+    private int validateDeleteItems(ProductOrderDto dto, String ownerPartyId) {
+        List<Map<String, Object>> deletes = flattenItemMaps(dto.getProductOrderItem()).stream()
+                .filter(ProductOrderService::isDelete).toList();
+        for (Map<String, Object> item : deletes) {
+            String productId = idOf(item.get("product"));
+            if (productId == null) {
+                throw new OrderValidationException(
+                        "a delete item must reference the product it ends (product.id)");
+            }
+            Map<String, Object> product = inventoryClient.getProduct(productId)
+                    .orElseThrow(() -> new OrderValidationException(
+                            "product '" + productId + "' not found"));
+            if (!"active".equalsIgnoreCase(String.valueOf(product.get("status")))) {
+                throw new OrderValidationException("'" + product.get("name")
+                        + "' is not active, so there is nothing to end");
+            }
+            String productOwner = customerPartyIn(
+                    (List<Map<String, Object>>) product.get("relatedParty"));
+            if (ownerPartyId == null || !ownerPartyId.equals(productOwner)) {
+                throw new OrderValidationException(
+                        "product '" + productId + "' does not belong to the ordering customer");
+            }
+            requireNoActiveCommitment(ownerPartyId, idOf(product.get("productOffering")),
+                    String.valueOf(product.get("name")));
+            Map<String, Object> ref = new java.util.LinkedHashMap<>();
+            ref.put("id", productId);
+            ref.put("name", product.get("name"));
+            if (product.get("realizingService") != null) {
+                ref.put("realizingService", product.get("realizingService"));
+            }
+            item.put("product", ref);
+            if (product.get("productOffering") != null) {
+                item.put("productOffering", product.get("productOffering"));
+            }
+        }
+        return deletes.size();
+    }
+
+    private static boolean isDelete(Map<String, Object> item) {
+        return "delete".equalsIgnoreCase(String.valueOf(item.get("action")));
     }
 
     /**
@@ -1037,8 +1099,9 @@ public class ProductOrderService {
             return;
         }
         for (Map<String, Object> item : items) {
-            // a fixed bundle component bills through its bundle, never on its own
-            if (Boolean.TRUE.equals(item.get("decomposedComponent"))) {
+            // a fixed bundle component bills through its bundle, never on its own;
+            // an ending adds nothing (no stock, no availability, no commitment)
+            if (Boolean.TRUE.equals(item.get("decomposedComponent")) || isDelete(item)) {
                 continue;
             }
             Object offering = item.get("productOffering");
@@ -1323,7 +1386,7 @@ public class ProductOrderService {
                 continue;
             }
             for (Map<String, Object> item : flattenItemMaps(past.getProductOrderItem())) {
-                if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+                if (!isDelete(item) && item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
                     java.math.BigDecimal one = priceCache.computeIfAbsent(
                             ref.get("id").toString(),
                             oid -> catalogClient.findOfferingDetail(oid)
@@ -1565,6 +1628,16 @@ public class ProductOrderService {
 
         boolean provisioned = false;
         for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
+            if (isDelete(item)) {
+                // an ending: the product record closes the way a ceased service
+                // closes it (inventory's own vocabulary, with the date it ended)
+                Map<String, Object> patch = new java.util.LinkedHashMap<>();
+                patch.put("status", "cancelled");
+                patch.put("terminationDate", OffsetDateTime.now().toString());
+                inventoryClient.updateProduct(idOf(item.get("product")), patch);
+                provisioned = true;
+                continue;
+            }
             if (!(item.get("productOffering") instanceof Map<?, ?> offering) || offering.get("id") == null) {
                 continue;
             }
