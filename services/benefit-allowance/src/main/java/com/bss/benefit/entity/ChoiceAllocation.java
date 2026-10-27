@@ -46,6 +46,13 @@ public class ChoiceAllocation {
     @Column(name = "last_update", nullable = false)
     private OffsetDateTime lastUpdate;
 
+    /** Why it ended: swapped or released (null while held or committed). */
+    @Column(name = "end_reason")
+    private String endReason;
+
+    @Column(name = "ended_at")
+    private OffsetDateTime endedAt;
+
     public String getTenantId() {
         return tenantId;
     }
@@ -132,5 +139,21 @@ public class ChoiceAllocation {
 
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public String getEndReason() {
+        return endReason;
+    }
+
+    public void setEndReason(String endReason) {
+        this.endReason = endReason;
+    }
+
+    public OffsetDateTime getEndedAt() {
+        return endedAt;
+    }
+
+    public void setEndedAt(OffsetDateTime endedAt) {
+        this.endedAt = endedAt;
     }
 }

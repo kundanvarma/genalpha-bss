@@ -19,6 +19,11 @@ import java.util.Optional;
  * 409 when too few are left); completing it settles (commits the holds, adds
  * what its plans grant); cancelling releases. An order with neither a benefit
  * nor a granting plan never calls the ledger.
+ *
+ * <p>Swap and release (#356): an order may also END benefits (TMF622 delete).
+ * Ending a benefit gives its Choice back when the order completes; in the same
+ * order as a new pick that is a SWAP — the new pick may spend the Choice the
+ * ending frees, and the old benefit ends only once the new one is active.
  */
 @Component
 class OrderChoices {
@@ -44,9 +49,10 @@ class OrderChoices {
         if (ownerPartyId == null) {
             throw new OrderValidationException("a benefit is picked for a customer — name the customer");
         }
+        List<ChoicesClient.Source> replaces = endedBenefits(leafItems);
         for (Item b : benefits) {
             ChoicesClient.HoldOutcome outcome = ledger.hold(ownerPartyId, orderId, b.itemId(), b.offeringId(),
-                    b.name(), b.cost() * b.quantity());
+                    b.name(), b.cost() * b.quantity(), replaces);
             if (!outcome.ok()) {
                 ledger.release(orderId);
                 throw new ChoicesConflictException(outcome.message());
@@ -54,16 +60,57 @@ class OrderChoices {
         }
     }
 
-    /** The order completed: what it held is in use for good, and its plans add Choices. */
+    /** The order completed: what it held is in use for good, its plans add Choices, its endings give back. */
     void settle(List<Map<String, Object>> leafItems, String orderId, String ownerPartyId) {
         List<Item> all = items(leafItems);
-        if (ownerPartyId == null || all.stream().noneMatch(i -> i.cost() > 0 || i.grants() > 0)) {
+        List<ChoicesClient.Source> ended = endedBenefits(leafItems);
+        if (ownerPartyId == null || (ended.isEmpty() && all.stream().noneMatch(i -> i.cost() > 0 || i.grants() > 0))) {
             return;
         }
         List<ChoicesClient.Grant> grants = all.stream().filter(i -> i.grants() > 0)
                 .map(i -> new ChoicesClient.Grant(i.itemId(), i.offeringId(), i.name(), i.grants() * i.quantity()))
                 .toList();
-        ledger.settle(orderId, ownerPartyId, grants);
+        boolean swap = all.stream().anyMatch(i -> i.cost() > 0);
+        List<ChoicesClient.Ending> endings = ended.stream()
+                .map(e -> new ChoicesClient.Ending(e.orderId(), e.orderItemId(), swap)).toList();
+        ledger.settle(orderId, ownerPartyId, grants, endings);
+    }
+
+    /** Is this order a swap — does it end a benefit and pick another? (for the swap-limit rule) */
+    boolean isSwap(List<Map<String, Object>> leafItems) {
+        return !endedBenefits(leafItems).isEmpty() && items(leafItems).stream().anyMatch(i -> i.cost() > 0);
+    }
+
+    ChoicesClient.Swaps swaps(String ownerPartyId) {
+        return ledger.swaps(ownerPartyId);
+    }
+
+    /**
+     * The benefits this order ENDS (TMF622 delete items whose offering costs
+     * Choices), each named by the order item that created it — the product's
+     * own lineage, which ordering copied onto the delete item from inventory.
+     */
+    @SuppressWarnings("unchecked")
+    private List<ChoicesClient.Source> endedBenefits(List<Map<String, Object>> leafItems) {
+        List<ChoicesClient.Source> out = new ArrayList<>();
+        for (Map<String, Object> item : leafItems) {
+            if (!"delete".equalsIgnoreCase(String.valueOf(item.get("action")))
+                    || "cancelled".equals(item.get("state"))) {
+                continue;   // not an ending, or a swap's ending that did not happen
+            }
+            Object refId = item.get("productOffering") instanceof Map<?, ?> ref ? ref.get("id") : null;
+            if (refId == null || catalog.findOfferingDetail(refId.toString())
+                    .map(d -> positive(d.get("choiceCost"))).orElse(0) == 0) {
+                continue;
+            }
+            Object lineage = item.get("product") instanceof Map<?, ?> p ? p.get("productOrderItem") : null;
+            if (lineage instanceof List<?> refs && !refs.isEmpty() && refs.get(0) instanceof Map<?, ?> first
+                    && first.get("productOrderId") != null && first.get("orderItemId") != null) {
+                out.add(new ChoicesClient.Source(first.get("productOrderId").toString(),
+                        first.get("orderItemId").toString()));
+            }
+        }
+        return out;
     }
 
     /** The order was cancelled: whatever it held goes back. */

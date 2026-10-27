@@ -343,6 +343,10 @@ public class ProductOrderService {
             if (product.get("realizingService") != null) {
                 ref.put("realizingService", product.get("realizingService"));
             }
+            if (product.get("productOrderItem") != null) {
+                // the product's lineage: which order item made it (how its benefit allocation is named, #356)
+                ref.put("productOrderItem", product.get("productOrderItem"));
+            }
             item.put("product", ref);
             if (product.get("productOffering") != null) {
                 item.put("productOffering", product.get("productOffering"));
@@ -501,6 +505,9 @@ public class ProductOrderService {
         entity.setState(STATE_COMPLETED);
         provision(entity);
         mintCommitments(entity);
+        // an ending of a benefit gives its Choice back (#356)
+        orderChoices.settle(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId(),
+                entity.getOwnerPartyId());
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
         return updated;
@@ -556,6 +563,11 @@ public class ProductOrderService {
         boolean nowComplete = (STATE_COMPLETED.equals(rolled) || STATE_PARTIAL.equals(rolled))
                 && !TERMINAL_STATES.contains(entity.getState());
         boolean nowFailed = STATE_FAILED.equals(rolled) && !TERMINAL_STATES.contains(entity.getState());
+        if (TERMINAL_STATES.contains(rolled) && !TERMINAL_STATES.contains(entity.getState())) {
+            // a swap's endings happen with a full landing, and not otherwise: the old benefit stays
+            setDeleteStates(items, STATE_COMPLETED.equals(rolled) ? STATE_COMPLETED : "cancelled");
+            entity.setProductOrderItemJson(mapper.writeItems(items));
+        }
         entity.setState(rolled);
         if (nowComplete) {
             applyCompletion(entity);
@@ -569,6 +581,18 @@ public class ProductOrderService {
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
         return updated;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setDeleteStates(List<Map<String, Object>> items, String state) {
+        for (Map<String, Object> item : items) {
+            if (isDelete(item)) {
+                item.put("state", state);
+            }
+            if (item.get("productOrderItem") instanceof List<?> kids) {
+                setDeleteStates((List<Map<String, Object>>) kids, state);
+            }
+        }
     }
 
     /** Force every item (incl. children) to one state — used on whole-order completion. */
@@ -649,8 +673,14 @@ public class ProductOrderService {
      * partiallyCompleted; any started -> inProgress; else acknowledged.
      */
     private String rollupState(List<Map<String, Object>> items) {
-        List<String> leaves = new ArrayList<>();
-        collectLeafStates(items, leaves);
+        List<Map<String, Object>> leafItems = new ArrayList<>();
+        collectLeaves(items, leafItems);
+        // A SWAP (#356): the endings in an order that also adds are not a track
+        // of their own — they follow the picks, so the old benefit ends only once
+        // the new one has landed (and not at all if it did not).
+        List<Map<String, Object>> tracked = leafItems.stream().filter(i -> !isDelete(i)).toList();
+        List<String> leaves = (tracked.isEmpty() ? leafItems : tracked).stream()
+                .map(i -> i.get("state") == null ? STATE_ACKNOWLEDGED : String.valueOf(i.get("state"))).toList();
         if (leaves.isEmpty()) {
             return STATE_ACKNOWLEDGED;
         }
@@ -669,16 +699,15 @@ public class ProductOrderService {
     }
 
     @SuppressWarnings("unchecked")
-    private void collectLeafStates(List<Map<String, Object>> items, List<String> into) {
+    private void collectLeaves(List<Map<String, Object>> items, List<Map<String, Object>> into) {
         if (items == null) {
             return;
         }
         for (Map<String, Object> item : items) {
             if (item.get("productOrderItem") instanceof List<?> kids && !kids.isEmpty()) {
-                collectLeafStates((List<Map<String, Object>>) kids, into);
+                collectLeaves((List<Map<String, Object>>) kids, into);
             } else {
-                Object st = item.get("state");
-                into.add(st == null ? STATE_ACKNOWLEDGED : String.valueOf(st));
+                into.add(item);
             }
         }
     }
@@ -1021,6 +1050,18 @@ public class ProductOrderService {
         context.put("maxLineQuantity", maxLineQuantity);
         context.put("totalQuantity", total);
         context.put("lineCount", items.size());
+        // Benefit Choices (#356): a SWAP and how many this household has made this
+        // quarter, so the operator's swap limit is a rule, not code. Read only for
+        // an order that is a swap; the rule's message may name {nextQuarterStarts}.
+        List<Map<String, Object>> leaves = flattenItemMaps(dto.getProductOrderItem());
+        if (ownerPartyId != null && orderChoices.isSwap(leaves)) {
+            com.bss.ordering.client.ChoicesClient.Swaps swaps = orderChoices.swaps(ownerPartyId);
+            context.put("choiceSwap", true);
+            context.put("choiceSwapsThisQuarter", swaps.thisQuarter());
+            if (swaps.nextQuarterStarts() != null) {
+                context.put("nextQuarterStarts", swaps.nextQuarterStarts());
+            }
+        }
         // The delivery place (freg F-P3): home deliveries carry how the address
         // was sourced — registry-verified or typed by hand. Rules read both;
         // an order with nothing shipping has neither var, so such rules
@@ -1661,6 +1702,9 @@ public class ProductOrderService {
         for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
             if (STATE_FAILED.equals(item.get("state"))) {
                 continue;   // the partner refused it, or it failed otherwise: nothing to put in inventory
+            }
+            if (isDelete(item) && "cancelled".equals(item.get("state"))) {
+                continue;   // a swap whose pick did not land: the old benefit stays
             }
             if (isDelete(item)) {
                 // an ending: the product record closes the way a ceased service

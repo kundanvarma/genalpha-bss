@@ -40,6 +40,7 @@ public class ChoiceLedger {
     public static final String HELD = "held";
     public static final String COMMITTED = "committed";
     public static final String RELEASED = "released";
+    public static final String SWAPPED = "swapped";
     private static final Set<String> IN_USE = Set.of(HELD, COMMITTED);
     private static final String ACTIVE = "active";
 
@@ -82,7 +83,8 @@ public class ChoiceLedger {
         String tenant = tenantScope.currentTenantId();
         ChoicePool pool = pools.findByTenantIdAndOwnerPartyId(tenant, ownerPartyId).orElse(null);
         if (pool == null) {
-            return new PoolView(offered(), label(), 0, 0, 0, List.of(), List.of());
+            return new PoolView(offered(), label(), 0, 0, 0, List.of(), List.of(), 0,
+                    nextQuarterStarts().toLocalDate().toString());
         }
         return view(tenant, pool);
     }
@@ -100,7 +102,13 @@ public class ChoiceLedger {
         if (existing != null) {
             return allocationView(existing);    // the same item again: the first answer, not a second spend
         }
-        int left = pool == null ? 0 : left(tenant, pool.getId());
+        // a swap may spend the Choice it frees: the order cannot complete without ending those
+        int freed = pool == null || request.replaces() == null ? 0 : request.replaces().stream()
+                .map(r -> allocations.findByTenantIdAndOrderIdAndOrderItemId(tenant, r.orderId(), r.orderItemId()))
+                .flatMap(java.util.Optional::stream)
+                .filter(a -> a.getPoolId().equals(pool.getId()) && COMMITTED.equals(a.getState()))
+                .mapToInt(ChoiceAllocation::getCost).sum();
+        int left = pool == null ? 0 : left(tenant, pool.getId()) + freed;
         if (pool == null || request.cost() > left) {
             throw new ConflictException(request.offeringName() + " costs " + request.cost() + " of your "
                     + label() + " and you have " + left + " left");
@@ -158,7 +166,36 @@ public class ChoiceLedger {
                         new PoolView.Source(g.offeringId(), g.offeringName(), g.choices()));
             }
         }
+        if (pool != null && request.endings() != null) {
+            for (ChoiceRequests.Ending e : request.endings()) {
+                allocations.findByTenantIdAndOrderIdAndOrderItemId(tenant, e.orderId(), e.orderItemId())
+                        .filter(a -> a.getPoolId().equals(pool.getId()) && COMMITTED.equals(a.getState()))
+                        .ifPresent(a -> end(a, e.swapped() ? SWAPPED : RELEASED));
+            }
+        }
         return pool == null ? pool(request.ownerPartyId()) : view(tenant, pool);
+    }
+
+    /** A benefit leaves the pool: its Choice is free again, and why it left is kept. */
+    private void end(ChoiceAllocation a, String reason) {
+        a.setState(RELEASED);
+        a.setEndReason(reason);
+        a.setEndedAt(OffsetDateTime.now());
+        a.setLastUpdate(OffsetDateTime.now());
+        allocations.save(a);
+        events.publish(SWAPPED.equals(reason) ? "ChoiceSwappedEvent" : "ChoiceReleasedEvent", "choiceAllocation",
+                allocationView(a));
+    }
+
+    /** The quarter this ledger counts swaps in — calendar quarters, UTC. */
+    private static OffsetDateTime quarterStarts() {
+        OffsetDateTime now = OffsetDateTime.now(java.time.ZoneOffset.UTC);
+        int firstMonth = ((now.getMonthValue() - 1) / 3) * 3 + 1;
+        return OffsetDateTime.of(now.getYear(), firstMonth, 1, 0, 0, 0, 0, java.time.ZoneOffset.UTC);
+    }
+
+    private static OffsetDateTime nextQuarterStarts() {
+        return quarterStarts().plusMonths(3);
     }
 
     /** The order was cancelled or failed: what it held goes back to the pool. */
@@ -167,10 +204,7 @@ public class ChoiceLedger {
         String tenant = tenantScope.currentTenantId();
         int released = 0;
         for (ChoiceAllocation a : allocations.findByTenantIdAndOrderIdAndState(tenant, orderId, HELD)) {
-            a.setState(RELEASED);
-            a.setLastUpdate(OffsetDateTime.now());
-            allocations.save(a);
-            events.publish("ChoiceReleasedEvent", "choiceAllocation", allocationView(a));
+            end(a, RELEASED);
             released++;
         }
         return released;
@@ -216,7 +250,10 @@ public class ChoiceLedger {
                 .stream().map(ChoiceLedger::allocationView).toList();
         int granted = sources.stream().mapToInt(PoolView.Source::choices).sum();
         int inUse = taken.stream().mapToInt(PoolView.Allocation::cost).sum();
-        return new PoolView(offered(), label(), granted, inUse, granted - inUse, sources, taken);
+        int swaps = (int) allocations.countByTenantIdAndPoolIdAndEndReasonAndEndedAtGreaterThanEqual(
+                tenant, pool.getId(), SWAPPED, quarterStarts());
+        return new PoolView(offered(), label(), granted, inUse, granted - inUse, sources, taken, swaps,
+                nextQuarterStarts().toLocalDate().toString());
     }
 
     private static PoolView.Allocation allocationView(ChoiceAllocation a) {

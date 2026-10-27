@@ -163,4 +163,71 @@ class ChoiceLedgerApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Choices are not offered here"));
     }
+
+    @Test
+    void aSwapSpendsTheChoiceItFrees_andCountsAsASwap() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 1);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(holdBody(owner, "ord-a", "1"))).andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/ord-a/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerPartyId\": \"" + owner + "\"}")).andExpect(status().isOk());
+        // no Choice left — but the swap order ends ord-a's benefit, so its Choice counts
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "orderId": "ord-b", "orderItemId": "2", "offeringId": "po-audio",
+                                 "offeringName": "Lydbok+ Audiobooks", "cost": 1,
+                                 "replaces": [{"orderId": "ord-a", "orderItemId": "1"}]}
+                                """.formatted(owner)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/ord-b/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "endings": [{"orderId": "ord-a", "orderItemId": "1", "swapped": true}]}
+                                """.formatted(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inUse").value(1))
+                .andExpect(jsonPath("$.left").value(0))
+                .andExpect(jsonPath("$.allocations[0].offeringName").value("Lydbok+ Audiobooks"))
+                .andExpect(jsonPath("$.swapsThisQuarter").value(1));
+    }
+
+    @Test
+    void aReleaseGivesTheChoiceBack_andIsNotASwap() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 1);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(holdBody(owner, "ord-r", "1"))).andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/ord-r/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerPartyId\": \"" + owner + "\"}")).andExpect(status().isOk());
+        mockMvc.perform(post(BASE + "/order/ord-end/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "endings": [{"orderId": "ord-r", "orderItemId": "1", "swapped": false}]}
+                                """.formatted(owner)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inUse").value(0))
+                .andExpect(jsonPath("$.left").value(1))
+                .andExpect(jsonPath("$.swapsThisQuarter").value(0));
+    }
+
+    @Test
+    void aSwapCannotFreeSomeoneElsesChoice() throws Exception {
+        String mine = "cust-" + UUID.randomUUID();
+        String theirs = "cust-" + UUID.randomUUID();
+        grant(theirs, 1);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(holdBody(theirs, "ord-t", "1"))).andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/ord-t/settle").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ownerPartyId\": \"" + theirs + "\"}")).andExpect(status().isOk());
+        grant(mine, 1);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(holdBody(mine, "ord-m1", "1"))).andExpect(status().isCreated());
+        // my pool is full; naming THEIR allocation as "replaced" frees nothing of mine
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "orderId": "ord-m2", "orderItemId": "1", "offeringId": "po-x",
+                                 "offeringName": "StreamCo Standard", "cost": 1,
+                                 "replaces": [{"orderId": "ord-t", "orderItemId": "1"}]}
+                                """.formatted(mine)))
+                .andExpect(status().isConflict());
+    }
 }

@@ -102,7 +102,7 @@ public class PolicyService {
             }
             if ("deny".equalsIgnoreCase(rule.getEffect())) {
                 log.info("policy deny: rule '{}' ({}) matched at domain '{}'", rule.getName(), rule.getId(), d);
-                return Decision.deny(rule);
+                return Decision.deny(rule).filled(context);
             }
             if ("allow".equalsIgnoreCase(rule.getEffect())) {
                 // a matching ALLOW rule is a named permission — launch envelopes
@@ -129,6 +129,29 @@ public class PolicyService {
                     ? "This order is not permitted by a business rule (" + rule.getName() + ")."
                     : rule.getMessage();
             return new Decision(false, rule.getId(), rule.getName(), msg);
+        }
+
+        private static final java.util.regex.Pattern VAR = java.util.regex.Pattern.compile("\\{([A-Za-z][A-Za-z0-9_]*)}");
+
+        /**
+         * The message may name the facts it was decided on — "the next swap is
+         * possible from {nextQuarterStarts}" (#356). A {name} the context carries
+         * as a plain value is filled in; anything else is left as written, so a
+         * rule can never leak a structure or fail on a missing fact.
+         */
+        Decision filled(Map<String, Object> context) {
+            if (message == null || context == null || message.indexOf('{') < 0) {
+                return this;
+            }
+            java.util.regex.Matcher m = VAR.matcher(message);
+            StringBuilder out = new StringBuilder();
+            while (m.find()) {
+                Object v = context.get(m.group(1));
+                boolean plain = v instanceof String || v instanceof Number || v instanceof Boolean;
+                m.appendReplacement(out, java.util.regex.Matcher.quoteReplacement(plain ? String.valueOf(v) : m.group()));
+            }
+            m.appendTail(out);
+            return new Decision(allowed, ruleId, ruleName, out.toString());
         }
 
         public DecisionView view() {

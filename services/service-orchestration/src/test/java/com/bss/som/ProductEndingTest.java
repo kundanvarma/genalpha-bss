@@ -116,4 +116,30 @@ class ProductEndingTest {
             verify(partners, never()).deactivate(anyString(), anyString(), anyString(), anyString());
         }
     }
+
+    @Test
+    void inASwap_theOldBenefitStopsOnlyWhenTheOrderCompletes() {
+        try (TenantContext ignored = TenantContext.actAs(TENANT)) {
+            ServiceInstance old = partnerService("cust-swap", "SS-OLD-0001");
+            String orderId = UUID.randomUUID().toString();
+            java.util.function.Function<String, Map<String, Object>> swap = state -> Map.of(
+                    "id", orderId, "state", state,
+                    "relatedParty", List.of(Map.of("id", "cust-swap", "role", "customer")),
+                    "productOrderItem", List.of(
+                            Map.of("id", "1", "action", "delete",
+                                    "productOffering", Map.of("id", "po-stream", "name", "StreamCo Standard"),
+                                    "product", Map.of("id", "prod-1", "realizingService", List.of(Map.of("id", old.getId())))),
+                            Map.of("id", "2", "action", "add",
+                                    "productOffering", Map.of("id", "po-audio", "name", "Lydbok+ Audiobooks"))));
+            orchestration.orchestrate(swap.apply("acknowledged"));
+            assertThat(services.findByIdAndTenantId(old.getId(), TENANT).orElseThrow().getState())
+                    .as("the old benefit stays while the new one is being activated").isEqualTo("active");
+            verify(partners, never()).deactivate(anyString(), anyString(), anyString(), anyString());
+
+            orchestration.orchestrate(swap.apply("completed"));
+            assertThat(services.findByIdAndTenantId(old.getId(), TENANT).orElseThrow().getState())
+                    .isEqualTo(ServiceInstance.TERMINATED);
+            verify(partners, times(1)).deactivate(TENANT, old.getId(), "SS-OLD-0001", "cust-swap");
+        }
+    }
 }

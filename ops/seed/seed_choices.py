@@ -4,6 +4,8 @@
 - GenAlpha Mobile Unlimited 5G grants 2 Choices; GenAlpha Mobile 60 GB 5G grants 1.
 - Two partner benefits, 1 Choice each, in "Partner services" (so the orchestrator
   activates them with the partner) and "Choices" (so a shelf can find them).
+- The swap limit (#356) as a policy rule, data the operator can change: 3 swaps
+  a quarter; the refusal names the day the next one is possible.
 
 The partner brands are invented on purpose: the repo names no real partner.
 Choices are on for a tenant only where infra/tenants/tenants.yml says so.
@@ -83,4 +85,27 @@ for name, price_name, value, description in BENEFITS:
         "productOfferingPrice": [ref(prices[price_name], "ProductOfferingPrice")]})
     print(f"benefit: {name} (1 Choice)")
 
-print("Choices seeded: two granting plans, two partner benefits.")
+# the swap limit is a rule, not code: ordering hands it the facts, the operator sets the number
+POLICY = "http://localhost:8080/tmf-api/policyManagement/v4"
+SWAP_RULE = "Choices: 3 swaps a quarter"
+
+
+def policy(method, path, body=None):
+    r = urllib.request.Request(f"{POLICY}/{path}",
+                               data=json.dumps(body).encode() if body is not None else None,
+                               headers={"Content-Type": "application/json", "Authorization": f"Bearer {TOKEN}"},
+                               method=method)
+    with urllib.request.urlopen(r) as resp:
+        return json.load(resp)
+
+
+if not any(r.get("name") == SWAP_RULE for r in policy("GET", "policyRule?limit=200") or []):
+    policy("POST", "policyRule", {
+        "name": SWAP_RULE, "domain": "order", "effect": "deny", "priority": 50, "enabled": True,
+        "description": "A household may swap a benefit for another three times a calendar quarter.",
+        "condition": json.dumps({"and": [{"==": [{"var": "choiceSwap"}, True]},
+                                         {">=": [{"var": "choiceSwapsThisQuarter"}, 3]}]}),
+        "message": "You have used this quarter's 3 swaps. The next swap is possible from {nextQuarterStarts}."})
+    print(f"rule: {SWAP_RULE}")
+
+print("Choices seeded: two granting plans, two partner benefits, the swap limit.")

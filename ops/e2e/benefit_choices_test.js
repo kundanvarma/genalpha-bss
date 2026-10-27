@@ -9,6 +9,13 @@
  *   A2. the same order item held twice is the same allocation, spent once
  *   A8. another household reads only its own pool, cannot move Choices, and
  *       a tenant that does not offer Choices says so
+ * Swap and release (#356), against the partner stand-in's switches:
+ *   release on the page gives the Choice back
+ *   A7. a swap keeps the old benefit active until the new one is; a swap whose
+ *       new benefit is refused keeps the old one and gives the hold back
+ *   A4. a refused pick gives its Choice back
+ *   A6. the swap limit (a policy rule: 3 a quarter) refuses the 4th and says
+ *       when the next is possible
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -61,7 +68,11 @@ const orderOf = (o) => ({
   const ctx = await request.newContext();
   const offers = await (await ctx.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active`)).json();
-  const by = (n) => offers.find((o) => o.name === n) || fail(`missing offering ${n} — run ops/seed/seed_choices.py`);
+  const by = (n) => {
+    const o = offers.find((x) => x.name === n);
+    if (!o) fail(`missing offering ${n} — run ops/seed/seed_choices.py`);
+    return o;
+  };
   const plan = by('GenAlpha Mobile Unlimited 5G');
   const stream = by('StreamCo Standard');
   const audio = by('Lydbok+ Audiobooks');
@@ -180,8 +191,102 @@ const orderOf = (o) => ({
   if (novaPool.offered !== false || novaPool.granted !== 0) fail('A8: nova does not offer Choices: ' + JSON.stringify(novaPool));
   console.log("OK A8: a household reads only its own pool, a customer cannot move Choices, staff need benefit:read, and nova (no Choices) says so");
 
+  /* ---- swap and release (#356) ---- */
+  const PARTNER = 'http://localhost:8164';
+  const setMode = async (modes) => { await ctx.delete(`${PARTNER}/switches`); if (modes) await ctx.put(`${PARTNER}/switches`, { data: modes }); };
+  const poolOf = async () => (await call(page, 'GET', `${CHOICES}/pool`, chloe)).body;
+  const productFor = async (name) => {
+    const pool = await poolOf();
+    const a = pool.allocations.find((x) => x.offeringName === name && x.state === 'committed');
+    if (!a) return null;
+    const prods = (await call(page, 'GET', `${API}/tmf-api/productInventory/v4/product?status=active`, chloe)).body || [];
+    return prods.find((p) => (p.productOrderItem || []).some((l) => l.productOrderId === a.orderId)) || null;
+  };
+  const settled = async (what, check, ms = 45000) => {
+    for (let w = 0; w < ms; w += 1500) { const v = await check(); if (v) return v; await sleep(1500); }
+    fail(`${what} never happened`);
+    return null;
+  };
+  await setMode(null);
+  pool = await poolOf();
+  if (pool.inUse !== 2) fail('before swaps both Choices should be in use: ' + JSON.stringify(pool));
+
+  // release, on the page
+  await page.reload();
+  await page.waitForSelector('[data-testid=choice-row]', { timeout: 15000 });
+  await settled('the release button', async () => (await page.locator('[data-testid=choice-row]', { hasText: audio.name })
+    .locator('[data-testid=release-benefit]').count()) > 0, 20000);
+  await page.locator('[data-testid=choice-row]', { hasText: audio.name }).locator('[data-testid=release-benefit]').click();
+  await page.waitForSelector('[data-testid=choices-notice]', { timeout: 15000 });
+  pool = await settled('the release giving the Choice back', async () => { const p = await poolOf(); return p.left === 1 ? p : null; });
+  if (pool.allocations.some((a) => a.offeringName === audio.name)) fail(`${audio.name} is still in use after the release`);
+  console.log(`OK release: ${audio.name} given back on the page — ${pool.left} of ${pool.granted} left`);
+
+  // A7 — swap StreamCo for Lydbok+ while the partner confirms LATE: the old stays until the new is active
+  await setMode({ [audio.name]: 'late' });
+  const old1 = await productFor(stream.name);
+  if (!old1) fail('no StreamCo product to swap');
+  const swap1 = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
+    { id: '1', action: 'delete', product: { id: old1.id } },
+    { id: '2', action: 'add', quantity: 1, productOffering: { id: audio.id, name: audio.name } }] });
+  if (swap1.status !== 201) fail('A7: swap refused: ' + JSON.stringify(swap1.body));
+  await sleep(1500);
+  const mid = (await call(page, 'GET', `${API}/tmf-api/serviceInventory/v4/service`, chloe)).body || [];
+  if (!mid.some((s) => s.name === stream.name && s.state === 'active')) fail('A7: the old benefit stopped before the new one was active');
+  pool = await settled('the late swap landing', async () => { const p = await poolOf();
+    return p.allocations.some((a) => a.offeringName === audio.name && a.state === 'committed')
+      && !p.allocations.some((a) => a.offeringName === stream.name) ? p : null; });
+  if (pool.swapsThisQuarter !== 1 || pool.left !== 1) fail('A7: after one swap: 1 swap, 1 left — ' + JSON.stringify(pool));
+  console.log(`OK A7 swap: ${stream.name} stayed active while ${audio.name} was activating, then ended — swaps this quarter: 1`);
+
+  // A7 — a swap whose new benefit the partner REFUSES: the old stays, the hold comes back
+  await setMode({ [stream.name]: 'refuse' });
+  const old2 = await productFor(audio.name);
+  if (!old2) fail('no Lydbok+ product to swap');
+  const swap2 = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
+    { id: '1', action: 'delete', product: { id: old2.id } },
+    { id: '2', action: 'add', quantity: 1, productOffering: { id: stream.id, name: stream.name } }] });
+  await settled('the refused swap failing', async () =>
+    (await call(page, 'GET', `${ORDERS}/${swap2.body.id}`, chloe)).body.state === 'failed');
+  pool = await poolOf();
+  if (!pool.allocations.some((a) => a.offeringName === audio.name && a.state === 'committed') || pool.left !== 1) {
+    fail('A7: a refused swap must keep the old benefit and give the hold back: ' + JSON.stringify(pool));
+  }
+  if (pool.swapsThisQuarter !== 1) fail('A7: a swap that did not happen counted as a swap');
+  console.log(`OK A7 refused swap: order failed, ${audio.name} kept, the Choice it held came back`);
+
+  // A4 — a plain pick the partner refuses gives its Choice back
+  const refusedPick = await call(page, 'POST', ORDERS, chloe, orderOf(stream));
+  await settled('the refused pick failing', async () =>
+    (await call(page, 'GET', `${ORDERS}/${refusedPick.body.id}`, chloe)).body.state === 'failed');
+  pool = await poolOf();
+  if (pool.left !== 1 || pool.allocations.some((a) => a.offeringName === stream.name)) fail('A4: the refused pick kept its Choice: ' + JSON.stringify(pool));
+  console.log('OK A4: a refused pick gave its Choice back — still 1 left');
+
+  // A6 — the swap limit: two more swaps reach 3; the fourth is refused, with the date
+  await setMode(null);
+  for (const [from, to] of [[audio, stream], [stream, audio]]) {
+    // the pool and inventory are two services: wait for the product the pool's allocation names
+    const p = await settled(`the ${from.name} product`, () => productFor(from.name), 20000);
+    const r = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
+      { id: '1', action: 'delete', product: { id: p.id } },
+      { id: '2', action: 'add', quantity: 1, productOffering: { id: to.id, name: to.name } }] });
+    if (r.status !== 201) fail(`A6: swap ${from.name} → ${to.name} refused early: ` + JSON.stringify(r.body));
+    await settled(`the swap to ${to.name}`, async () => (await poolOf()).allocations
+      .some((a) => a.offeringName === to.name && a.state === 'committed'));
+  }
+  pool = await poolOf();
+  if (pool.swapsThisQuarter !== 3) fail('A6: three swaps should be counted: ' + pool.swapsThisQuarter);
+  const p4 = await settled(`the ${audio.name} product in inventory`, () => productFor(audio.name), 20000);
+  const fourth = await call(page, 'POST', ORDERS, chloe, { productOrderItem: [
+    { id: '1', action: 'delete', product: { id: p4.id } },
+    { id: '2', action: 'add', quantity: 1, productOffering: { id: stream.id, name: stream.name } }] });
+  if (fourth.status === 201) fail('A6: the fourth swap this quarter was accepted');
+  if (!fourth.body.message?.includes(`possible from ${pool.nextQuarterStarts}`)) fail('A6: the refusal should name the date: ' + fourth.body.message);
+  console.log(`OK A6: the 4th swap this quarter refused (${fourth.status}): "${fourth.body.message}"`);
+
   await browser.close();
-  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — a plan grants Choices, a pick holds then commits, never oversold, never spent twice, walls hold.');
+  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, and the swap limit.');
 })().catch(async (e) => {
   console.error('FAIL:', e.message.split('\n')[0]);
   try { require('fs').mkdirSync(SHOTS, { recursive: true }); await global.shotPage?.screenshot({ path: `${SHOTS}/benefit_choices_FAIL.png`, fullPage: true }); } catch { /* no page to show */ }
