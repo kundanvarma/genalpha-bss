@@ -1,0 +1,89 @@
+spring:
+  # Jackson 3 arrived with Spring Boot 4 and flipped two defaults under us, both
+  # visible on the wire: keys would come out alphabetically (@type first, then
+  # a-z) on every TM Forum body, and a sparse payload that omits a primitive
+  # would throw instead of reading as 0/false. Pinned back to what this
+  # component's payloads and DTOs were written against.
+  jackson:
+    mapper:
+      sort-properties-alphabetically: false
+    deserialization:
+      fail-on-null-for-primitives: false
+  # Outbound HTTP has an end. The JDK client waits forever by default, so a
+  # dependency that accepts the connection and then goes quiet holds a request
+  # thread until something kills it.
+  http:
+    client:
+      connect-timeout: 5s
+      read-timeout: 30s
+  application:
+    name: benefit-allowance
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/benefit_allowance}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        max.block.ms: 2000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/migration-{vendor}
+    # Complete standalone connection: migrations run as the OWNING role
+    # (RLS does not bind owners), never through the tenant-aware wrapper.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/benefit_allowance}
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:postgres}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:postgres}}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+bss:
+  events:
+    topic: bss.benefit.events
+  # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
+  # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
+  # leave it empty when the issuer is directly reachable for discovery.
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+      - id: nova
+        issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+
+# LOG INJECTION, CLOSED AT THE SINK. A CR or LF inside a logged VALUE forges a
+# log line, and the fleet ships logs to Loki/Grafana where a forged line is a
+# forged record someone may later read as evidence. Stripping it here rather
+# than at each call site means a new log statement cannot reopen the hole by
+# forgetting a helper. Only %m is wrapped: stack traces need their newlines,
+# and those are ours, not the caller's.
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%15.15t] %-40.40logger{39} : %replace(%m){'[\\r\\n]+', ' '}%n%wEx"

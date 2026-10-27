@@ -85,6 +85,14 @@ public class ProductOffering {
     @Column(name = "requires_verified_identity")
     private Boolean requiresVerifiedIdentity;
 
+    /** Choices a plan grants the household's pool (null: not a granting plan). */
+    @Column(name = "choices_granted")
+    private Integer choicesGranted;
+
+    /** What a benefit costs in Choices (null: not a benefit). */
+    @Column(name = "choice_cost")
+    private Integer choiceCost;
+
     /** JSON array of child offering references, echoed verbatim. */
     @Column(name = "bundled_product_offering", length = 4000)
     private String bundledProductOfferingJson;
@@ -173,6 +181,22 @@ public class ProductOffering {
 
     public void setRequiresVerifiedIdentity(Boolean requiresVerifiedIdentity) {
         this.requiresVerifiedIdentity = requiresVerifiedIdentity;
+    }
+
+    public Integer getChoicesGranted() {
+        return choicesGranted;
+    }
+
+    public void setChoicesGranted(Integer choicesGranted) {
+        this.choicesGranted = choicesGranted;
+    }
+
+    public Integer getChoiceCost() {
+        return choiceCost;
+    }
+
+    public void setChoiceCost(Integer choiceCost) {
+        this.choiceCost = choiceCost;
     }
 
     public void setIsBundle(Boolean isBundle) {

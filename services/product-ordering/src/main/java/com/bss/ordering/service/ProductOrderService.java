@@ -67,6 +67,7 @@ public class ProductOrderService {
     private final com.bss.ordering.client.RiskClient riskClient;
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
     private final com.bss.ordering.credit.CreditDecisionService creditService;
+    private final OrderChoices orderChoices;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
@@ -75,7 +76,7 @@ public class ProductOrderService {
             com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
             com.bss.ordering.client.RiskClient riskClient,
             com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff,
-            com.bss.ordering.credit.CreditDecisionService creditService) {
+            com.bss.ordering.credit.CreditDecisionService creditService, OrderChoices orderChoices) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -94,6 +95,7 @@ public class ProductOrderService {
         this.riskClient = riskClient;
         this.legacyHandoff = legacyHandoff;
         this.creditService = creditService;
+        this.orderChoices = orderChoices;
     }
 
     @Transactional(readOnly = true)
@@ -215,6 +217,13 @@ public class ProductOrderService {
         boolean changeOnly = changes > 0 && changes == flattenItemMaps(dto.getProductOrderItem()).size();
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
+        try {
+            // after stock, so a refusal here gives the stock back too
+            orderChoices.hold(flattenItemMaps(dto.getProductOrderItem()), id, entity.getOwnerPartyId());
+        } catch (RuntimeException refused) {
+            stockClient.release(id);
+            throw refused;
+        }
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
         // THE OVERLAY SEAM: legacy-federated items hand off to the legacy
@@ -501,6 +510,8 @@ public class ProductOrderService {
      */
     private void applyCompletion(ProductOrder entity) {
         provision(entity);
+        orderChoices.settle(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId(),
+                entity.getOwnerPartyId());
         stockClient.consume(entity.getId());
         paymentRefIds(entity).forEach(paymentClient::capture);
         mintCommitments(entity);
@@ -1147,6 +1158,7 @@ public class ProductOrderService {
         }
         if (cancelling) {
             stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
             paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
@@ -1165,6 +1177,7 @@ public class ProductOrderService {
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOrderDto deleted = mapper.toDto(entity);
         stockClient.release(id);
+        orderChoices.release(flattenItemMaps(deleted.getProductOrderItem()), id);
         repository.delete(entity);
         events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
     }
@@ -1436,6 +1449,7 @@ public class ProductOrderService {
         } else {
             entity.setState("cancelled");
             stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
             paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));

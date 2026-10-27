@@ -48,6 +48,13 @@ base-migration "/swagger-ui.html"
 base-migration "/swagger-ui/**"
 base-migration "/v3/api-docs/**"
 
+# ---- benefit-allowance ----   (infrastructure only)
+benefit-allowance "/actuator/health/**"
+benefit-allowance "/actuator/prometheus"
+benefit-allowance "/swagger-ui.html"
+benefit-allowance "/swagger-ui/**"
+benefit-allowance "/v3/api-docs/**"
+
 # ---- billing ----
 billing "/.well-known/genalpha-component.json"
 billing "/actuator/health/**"

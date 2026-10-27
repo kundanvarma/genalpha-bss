@@ -19,6 +19,7 @@
         <module>services/product-ordering</module>
         <module>services/product-inventory</module>
         <module>services/product-stock</module>
+        <module>services/benefit-allowance</module>
         <module>services/payment</module>
         <module>services/billing</module>
         <module>services/qualification</module>

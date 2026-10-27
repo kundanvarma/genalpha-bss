@@ -21,6 +21,8 @@ bss:
     enabled: false
   stock:
     enabled: false
+  choices:
+    enabled: false
   payment:
     enabled: false
   policy:

@@ -266,6 +266,7 @@ public class ProductOfferingService {
     @Transactional
     public ProductOfferingDto create(ProductOfferingDto dto) {
         Channels.requireKnown(dto.getChannel());
+        requirePositiveChoices(dto);
         if (lifecycle.governed()) {
             // L1 governed mode: creation is a DRAFT, launch is a decision
             dto.setLifecycleStatus("In design");
@@ -295,6 +296,7 @@ public class ProductOfferingService {
     @Transactional
     public ProductOfferingDto patch(String id, ProductOfferingDto patch) {
         Channels.requireKnown(patch.getChannel());
+        requirePositiveChoices(patch);
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         String before = entity.getLifecycleStatus();
@@ -327,5 +329,15 @@ public class ProductOfferingService {
         ProductOfferingDto deleted = mapper.toDto(entity);
         repository.delete(entity);
         events.publish("ProductOfferingDeleteEvent", "productOffering", deleted);
+    }
+
+    /** Choices are counted, never owed: a grant or a cost is 1 or more, or absent. */
+    private static void requirePositiveChoices(ProductOfferingDto dto) {
+        if (dto.getChoicesGranted() != null && dto.getChoicesGranted() < 1) {
+            throw new BadRequestException("choicesGranted must be 1 or more (leave it out for a plan that grants none)");
+        }
+        if (dto.getChoiceCost() != null && dto.getChoiceCost() < 1) {
+            throw new BadRequestException("choiceCost must be 1 or more (leave it out for an offering that is not a benefit)");
+        }
     }
 }

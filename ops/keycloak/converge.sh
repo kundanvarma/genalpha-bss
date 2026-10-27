@@ -37,10 +37,21 @@ for r in $realms; do
       -s "smtpServer.fromDisplayName=$r" -s 'smtpServer.auth=false' \
       -s 'smtpServer.ssl=false' -s 'smtpServer.starttls=false'
   fi
+  # roles a component needs (#354): defined where missing, granted to the machine
+  # identity that holds them — never to a person (machine-roles)
+  if [ -f "$SEC/machine-roles" ]; then
+    grep -vE '^[[:space:]]*(#|$)' "$SEC/machine-roles" | while read -r role client; do
+      "$ADM" create roles -r "$r" --config "$CFG" -s "name=$role" >/dev/null 2>&1 || true
+      if [ -n "${client:-}" ] && "$ADM" get users -r "$r" --config "$CFG" -q "username=service-account-$client" \
+          --fields id --format csv --noquotes 2>/dev/null | grep -q .; then
+        "$ADM" add-roles -r "$r" --config "$CFG" --uusername "service-account-$client" --rolename "$role"
+      fi
+    done
+  fi
   for f in "$SEC"/messages-*.json; do
     locale=$(basename "$f" .json); locale=${locale#messages-}
     "$ADM" create "realms/$r/localization/$locale" --config "$CFG" -f "$f" >/dev/null
   done
   n=$((n + 1))
 done
-echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", lockout from brute-force.json, mail via ${KC_SMTP_HOST:-nowhere}, messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"
+echo "[converge] $n realm(s): passwordPolicy=\"$POLICY\", lockout from brute-force.json, mail via ${KC_SMTP_HOST:-nowhere}, machine roles $(grep -cvE '^[[:space:]]*(#|$)' "$SEC/machine-roles" 2>/dev/null || echo 0), messages for $(ls "$SEC"/messages-*.json | sed 's#.*/messages-##; s#\.json##' | tr '\n' ' ')"
