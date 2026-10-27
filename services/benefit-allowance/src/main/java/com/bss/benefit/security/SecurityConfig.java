@@ -1,0 +1,93 @@
+package com.bss.benefit.security;
+
+import com.bss.benefit.api.ApiConstants;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationManagerResolver;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationProvider;
+import org.springframework.security.oauth2.server.resource.authentication.JwtIssuerAuthenticationManagerResolver;
+import org.springframework.security.web.SecurityFilterChain;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * OAuth2 resource server, multi-issuer: each tenant in the registry is a
+ * trusted OIDC issuer with its own (lazily built) decoder; tokens from any
+ * other issuer are rejected before authorization runs. A household's Choices
+ * are its own: a customer token reads its own pool (bound in the controller),
+ * staff read with "benefit:read". Moving Choices — hold, settle, release — is
+ * ordering's machine identity alone ("benefit:write", which no person holds).
+ * Health and the OpenAPI docs stay open for probes and discovery.
+ */
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    private static final String WRITE = "benefit:write";
+    private static final String READ = "benefit:read";
+
+    @Bean
+    SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
+            TenantRegistry tenants) throws Exception {
+        http
+                // OFF ON PURPOSE. A cross-site request forgery works by making the
+                // browser send a request carrying its AMBIENT credentials — a cookie
+                // it attaches by itself. This API has none: the session policy on the
+                // next line is STATELESS, nothing here reads a cookie, and the only
+                // credential is a bearer token a caller must attach deliberately,
+                // which an attacker's page cannot do. Enabling CSRF here would break
+                // every channel and protect nothing. Recorded as ADR 0024, and the
+                // CodeQL alerts are dismissed against that decision rather than left
+                // open to bury real findings.
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
+                                "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/pool")
+                                .hasAnyAuthority(PartyScope.CUSTOMER_ROLE, READ, WRITE)
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
+        return http.build();
+    }
+
+    /**
+     * Issuer -> AuthenticationManager, built on first token per issuer so
+     * startup needs no IdP round-trips. A registered issuer gets a decoder
+     * (explicit backchannel JWKS, or issuer discovery when none is set); an
+     * unregistered issuer resolves to null and the token is rejected.
+     */
+    private AuthenticationManagerResolver<HttpServletRequest> tenantIssuerResolver(
+            TenantRegistry tenants, ClaimAuthoritiesConverter authoritiesConverter) {
+        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
+        jwtConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        Map<String, AuthenticationManager> managers = new ConcurrentHashMap<>();
+        return new JwtIssuerAuthenticationManagerResolver(issuer -> {
+            TenantRegistry.TenantEntry tenant = tenants.byIssuer(issuer);
+            if (tenant == null) {
+                return null;
+            }
+            return managers.computeIfAbsent(issuer, iss -> {
+                NimbusJwtDecoder decoder = (tenant.getJwksUri() == null || tenant.getJwksUri().isBlank()
+                        ? NimbusJwtDecoder.withIssuerLocation(iss)
+                        : NimbusJwtDecoder.withJwkSetUri(tenant.getJwksUri())).build();
+                decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(iss));
+                JwtAuthenticationProvider provider = new JwtAuthenticationProvider(decoder);
+                provider.setJwtAuthenticationConverter(jwtConverter);
+                return provider::authenticate;
+            });
+        });
+    }
+}

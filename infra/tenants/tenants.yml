@@ -10,6 +10,11 @@ bss:
     registry:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        # Benefit Choices (#354): a plan grants Choices, a household spends them
+        # on benefits. Off for every tenant that does not say so; the label is
+        # the word this tenant's screens use for one.
+        choices: true
+        choices-label: Choices
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}

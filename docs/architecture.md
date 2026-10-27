@@ -74,6 +74,7 @@ flowchart TB
         ADDR["geographic-address TMF673"]
         APPT["appointment TMF646"]
         STOCK["product-stock TMF687"]
+        CHOICE["benefit-allowance\n(household Choices: plans grant, benefits spend)"]
         AGR["agreement TMF651"]
         PROMO["promotion TMF671"]
         REC["recommendation TMF680"]
@@ -128,7 +129,7 @@ TMF642/656"]
     WCTL -.->|"hire = start · fire = stop\nrolls workers on worker-ai-* change\nsurge scaling ≤ governance maxWorkers"| WORKERS
     GW --> Party & Core & Revenue & Decisioning & Care
 
-    ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
+    ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & CHOICE & PAY & AGR & PROMO
     CART -.->|"ACP complete: pricing from the feed,\norder + payment on the CALLER'S\ndelegated token (RFC 8693)"| CAT & ORD & PAY
     ORD -.->|policy check / price| POLICY
     BILL -.-> INV & CAT & PAY & USAGE & PROMO & POLICY

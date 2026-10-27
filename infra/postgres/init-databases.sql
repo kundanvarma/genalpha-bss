@@ -14,6 +14,7 @@ CREATE DATABASE product_ordering;
 CREATE DATABASE product_inventory;
 CREATE DATABASE party_account;
 CREATE DATABASE product_stock;
+CREATE DATABASE benefit_allowance;
 CREATE DATABASE payment;
 CREATE DATABASE billing;
 CREATE DATABASE qualification;

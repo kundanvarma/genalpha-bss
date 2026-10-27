@@ -76,7 +76,7 @@ class GatewayRoutingTest {
                 "geo-well-known", "discovery-feed",
                 "acp-product-feed", "acp-checkout", "legacy-estate",
                 "workforce-runtime", "product-catalog", "service-catalog", "resource-catalog", "product-configurator",
-                "som-house", "som-service-activation", "product-ordering", "product-inventory", "party-account", "product-stock", "payment",
+                "som-house", "som-service-activation", "product-ordering", "product-inventory", "party-account", "product-stock", "benefit-allowance", "payment",
                 "billing", "bank-remittance", "distribution-response", "qualification", "appointment",
                 "trouble-ticket", "party-interaction", "communication", "communication-esp", "shopping-cart",
                 "usage", "loyalty", "agreement", "promotion", "campaign", "intelligence", "revenue",

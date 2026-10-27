@@ -6,7 +6,7 @@ import ChatWidget from './ChatWidget.jsx';
 import HelpDrawer from './HelpDrawer.jsx';
 import { t } from './i18n.js';
 import { beginLogin, handleCallback, isCustomer, isSignedIn, signOut, switchAccount, tokenClaims } from './auth.js';
-import { ensureParty, myNotifications, stitchVisitor } from './api.js';
+import { ensureParty, myChoices, myNotifications, stitchVisitor } from './api.js';
 import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from './cart.js';
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
@@ -22,6 +22,7 @@ import Bills from './pages/Bills.jsx';
 import Support from './pages/Support.jsx';
 import Notifications from './pages/Notifications.jsx';
 import Services from './pages/Services.jsx';
+import Choices from './pages/Choices.jsx';
 import Account from './pages/Account.jsx';
 import Devices from './pages/Devices.jsx';
 
@@ -56,6 +57,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);
+  const [choices, setChoices] = useState(null); // the menu shows Choices only where the tenant offers them
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -71,6 +73,7 @@ export default function App() {
     if (state !== 'ready' || !isCustomer()) return;
     myNotifications().then((ms) => setUnread(ms.filter((m) => m.status !== 'read').length)).catch(() => {});
   }, [location.pathname, state]);
+  useEffect(() => { if (state === 'ready' && isCustomer()) myChoices().then(setChoices).catch((e) => console.warn('Choices could not be read; the menu leaves them out:', e.message)); }, [state]);
 
   useEffect(() => {
     (async () => {
@@ -177,7 +180,7 @@ export default function App() {
                   <span className="user">{claims.name || claims.preferred_username || ''}</span>
                 </summary>
                 <div className="menu" role="menu">
-                  {[['/account', t('Account')], ['/orders', t('My orders')], ['/devices', t('My devices')], ['/family', t('Family')]].map(([to, label]) => (
+                  {[['/account', t('Account')], ['/orders', t('My orders')], ['/devices', t('My devices')], ['/family', t('Family')], ...(choices?.offered ? [['/choices', choices.label]] : [])].map(([to, label]) => (
                     <button key={to} className="ghost" role="menuitem" onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); navigate(to); }}>{label}</button>
                   ))}
                   <button className="ghost" role="menuitem" onClick={signOut}>{t('Sign out')}</button>
@@ -209,6 +212,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/choices" element={<Choices />} />
           <Route path="/devices" element={<Devices />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/support" element={<Support />} />

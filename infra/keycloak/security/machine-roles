@@ -1,0 +1,8 @@
+# Realm roles every realm must carry, and the machine identity that holds each.
+# A realm file only seeds a FRESH realm (--import-realm skips existing ones), so
+# a role a new component needs reaches running realms here: ops/keycloak/converge.sh
+# creates the role where it is missing and grants it to the named client's service
+# account where that account exists. One role per line: <role> [<client-id>].
+# A role with no client is defined for people (staff composites) to be given later.
+benefit:read
+benefit:write bss-ordering

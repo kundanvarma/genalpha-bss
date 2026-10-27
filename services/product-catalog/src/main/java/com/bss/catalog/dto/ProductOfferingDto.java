@@ -45,6 +45,14 @@ public class ProductOfferingDto {
     @JsonProperty("requiresVerifiedIdentity")
     private Boolean requiresVerifiedIdentity;
 
+    /** House field beside TMF620 (#354): Choices this plan grants the household. */
+    @JsonProperty("choicesGranted")
+    private Integer choicesGranted;
+
+    /** House field beside TMF620 (#354): what this benefit costs, in Choices. */
+    @JsonProperty("choiceCost")
+    private Integer choiceCost;
+
     @JsonProperty("bundledProductOffering")
     private List<Map<String, Object>> bundledProductOffering;
 
@@ -158,6 +166,22 @@ public class ProductOfferingDto {
 
     public void setRequiresVerifiedIdentity(Boolean requiresVerifiedIdentity) {
         this.requiresVerifiedIdentity = requiresVerifiedIdentity;
+    }
+
+    public Integer getChoicesGranted() {
+        return choicesGranted;
+    }
+
+    public void setChoicesGranted(Integer choicesGranted) {
+        this.choicesGranted = choicesGranted;
+    }
+
+    public Integer getChoiceCost() {
+        return choiceCost;
+    }
+
+    public void setChoiceCost(Integer choiceCost) {
+        this.choiceCost = choiceCost;
     }
 
     public List<Map<String, Object>> getBundledProductOffering() {

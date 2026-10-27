@@ -104,6 +104,10 @@ bss:
       outcomes: ${CREDIT_MOCK_OUTCOMES:frozen-test-identity:frozen}
   stock:
     enabled: ${STOCK_ENABLED:true}
+  # Benefit Choices (#354): only orders carrying a benefit or a plan that grants
+  # Choices ever call the ledger; a catalog without them never does.
+  choices:
+    enabled: ${CHOICES_ENABLED:true}
   payment:
     enabled: ${PAYMENT_ENABLED:true}
   policy:
@@ -113,6 +117,7 @@ bss:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
     stock-base-url: ${STOCK_BASE_URL:http://localhost:8086}
+    choices-base-url: ${CHOICES_BASE_URL:http://localhost:8163}
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}

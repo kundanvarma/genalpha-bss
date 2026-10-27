@@ -36,6 +36,8 @@ public class ProductOfferingMapper {
         dto.setProductSpecification(readRef(entity.getProductSpecificationJson()));
         dto.setIsBundle(entity.getIsBundle());
         dto.setRequiresVerifiedIdentity(entity.getRequiresVerifiedIdentity());
+        dto.setChoicesGranted(entity.getChoicesGranted());
+        dto.setChoiceCost(entity.getChoiceCost());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setCategory(readJsonObjectList(entity.getCategoryJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
@@ -65,6 +67,8 @@ public class ProductOfferingMapper {
         entity.setProductSpecificationJson(writeRef(dto.getProductSpecification()));
         entity.setIsBundle(dto.getIsBundle());
         entity.setRequiresVerifiedIdentity(dto.getRequiresVerifiedIdentity());
+        entity.setChoicesGranted(dto.getChoicesGranted());
+        entity.setChoiceCost(dto.getChoiceCost());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         entity.setCategoryJson(writeJsonObjectList(dto.getCategory()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
@@ -103,6 +107,12 @@ public class ProductOfferingMapper {
         }
         if (patch.getRequiresVerifiedIdentity() != null) {
             entity.setRequiresVerifiedIdentity(patch.getRequiresVerifiedIdentity());
+        }
+        if (patch.getChoicesGranted() != null) {
+            entity.setChoicesGranted(patch.getChoicesGranted());
+        }
+        if (patch.getChoiceCost() != null) {
+            entity.setChoiceCost(patch.getChoiceCost());
         }
         if (patch.getBundledProductOffering() != null) {
             entity.setBundledProductOfferingJson(writeJsonObjectList(patch.getBundledProductOffering()));

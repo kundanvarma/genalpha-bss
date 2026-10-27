@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant, agentic BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **40 composable ODA components**
+A vendor-neutral telecom **Business Support System** built as **41 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **seven channels** (six web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -16,8 +16,8 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 
 **At a glance**
 
-- Catalog → order → activate → bill → cash, complete — 40 ODA components speaking TMF Open APIs natively
-- 264 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
+- Catalog → order → activate → bill → cash, complete — 41 ODA components speaking TMF Open APIs natively
+- 265 end-to-end browser suites; 28 official TM Forum CTKs certified at zero failures, each on the dataset of its day — every published kit that matches a served capability (the scorecard also carries today's grown-dataset status, honestly)
 - Accessibility enforced in CI: axe-core runs the full WCAG 2.2 AA ruleset across every channel at zero violations — the storefront scan is a pull-request gate (`.github/workflows/browser-proof.yml`), all five channels run in the proof run, and each tenant's brand colour is auto-shaded to stay legible — accessibility that can't silently rot between releases
 - Best-of-breed growth & journey orchestration: onboarding-triggered journeys with named stages, reusable localized message templates, multi-channel delivery (in-app/email/SMS/push), saved rule-tree audiences, a full node graph (message · wait · wait-for-event · decision · exit), a visual canvas with live per-node counts, AI-drafted journeys (governed + audited), and real-time next-best-action arbitration with an explainable decision log — governed by default (consent, frequency caps, quiet hours, holdout-measured lift). **[Step-by-step operator guide →](docs/growth-guide.md)**
 - A **BSS-native CDP** — no reverse-ETL, no second database: audiences are built from the operational event bus you already run (a completed order, a new bill, a loyalty-tier change *is* the trait), across four populations (customers · consent-gated prospects · B2B organizations · anonymous visitors for retargeting). One connector activates the same audience to **Meta *and* Google** (SHA-256 hashed, DNC-filtered, async), inbound **social care** turns negative/support DMs into TMF621 trouble tickets over the bus, and a **portfolio attribution** report shows holdout-measured lift and **incremental** revenue across every campaign and journey — with a hard honesty rule: no control group, no lift claimed. **[Step-by-step martech guide →](docs/martech-guide.md)**
@@ -38,9 +38,9 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 
 
 <details>
-<summary><b>Every feature is verified end-to-end in a real browser</b> — 264 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — 265 Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
 
-**Every feature is verified end-to-end in a real browser** — 264 Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — 265 Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -372,6 +372,7 @@ modular mobile app recomposes around what the customer owns:
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
 | product-stock | TMF687 | 8086 | Device shelf: reserve at order, consume at completion |
+| benefit-allowance | house API (Choices) | 8163 | **Benefit Choices** (#352): a plan grants Choices into the household's pool, a benefit costs them. Ordering holds at placement (409 when too few are left — two picks racing for the last one cannot both win), commits at completion, releases on cancel; the order item is the duplicate key. Off unless `tenants.yml` turns it on. Suite `benefit_choices_test.js` |
 | payment | TMF676 | 8087 | Authorize/capture behind a PSP adapter (mock PSP in dev) |
 | billing | TMF678 | 8088 | Billing runs: recurring + usage + discounts on one bill. Also **statutory collections**: a per-account `collectionCase` ladder (remind → warn → restrict → suspend → cure) over a per-tenant `dunningPolicy` floored by a **country statutory pack** (fee gate, fee cap, reminder cap, notice clock, minimum actionable amount — an undercutting policy is refused); nonpayment suspension stops recurring charges, promise-to-pay / dispute / hardship holds pause the ladder, cure auto-reconnects (suite `collections_test.js`). And **consent-driven bill distribution** for the reference geography: e-invoice alias lookup → digital mailbox → print fallback, every send recording the channel actually used, plus direct-debit mandates/claims with OCR settlement coming home through the remittance door (suite `norway_rails_test.js`) |
 | qualification | TMF679 / TMF645 | 8089 | Serviceability: where fiber-class offerings can be delivered, config-as-data (technology + postcode-prefix, longest prefix wins). A check is **never a bare no** — it names the best technology at the address and the ceiling it can reach. Also carries **multi-owner wholesale coverage**: the coverage map holds `accessOwner` + `accessLayer`, so an address resolves to *which owners* serve it at **L2 / L3** — the input the wholesale access-seeker order buys against |
