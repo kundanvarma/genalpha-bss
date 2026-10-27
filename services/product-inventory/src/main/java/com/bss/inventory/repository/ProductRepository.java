@@ -14,6 +14,9 @@ public interface ProductRepository extends JpaRepository<Product, String> {
     /** Lineage first: the product a service realises, by the service's id. */
     Optional<Product> findFirstByTenantIdAndRealizingServiceIdAndStatus(String tenantId, String realizingServiceId, String status);
 
+    /** Does any product, in any state, carry this realising service? (then it is THE product for it) */
+    boolean existsByTenantIdAndRealizingServiceId(String tenantId, String realizingServiceId);
+
     /**
      * Everything a party can SEE: what they own, plus what they PAY for
      * (household/company payer stamp in the related-party JSON). The broad

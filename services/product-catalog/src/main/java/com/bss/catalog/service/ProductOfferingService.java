@@ -336,6 +336,9 @@ public class ProductOfferingService {
         if (dto.getChoicesGranted() != null && dto.getChoicesGranted() < 1) {
             throw new BadRequestException("choicesGranted must be 1 or more (leave it out for a plan that grants none)");
         }
+        if (dto.getChoiceHoldMonths() != null && dto.getChoiceHoldMonths() < 0) {
+            throw new BadRequestException("choiceHoldMonths cannot be negative (0 or absent means no hold)");
+        }
         if (dto.getChoiceCost() != null && dto.getChoiceCost() < 1) {
             throw new BadRequestException("choiceCost must be 1 or more (leave it out for an offering that is not a benefit)");
         }

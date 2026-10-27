@@ -28,5 +28,8 @@ bss:
         choices-label: Choices
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
+        # a Norwegian operator offering Choices: holds are 0 there by law-as-data (#357)
+        choices: true
+        country: "NO"
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss

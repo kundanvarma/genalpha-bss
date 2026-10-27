@@ -93,9 +93,10 @@ class OrderSwapTest {
                 "productOffering", Map.of("id", "po-stream", "name", "StreamCo Standard"),
                 "relatedParty", List.of(Map.of("id", "cust-1", "role", "customer")),
                 "productOrderItem", List.of(Map.of("productOrderId", "ord-old", "orderItemId", "1")))));
-        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any()))
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
                 .willReturn(ChoicesClient.HoldOutcome.held());
-        given(choices.swaps(anyString())).willReturn(new ChoicesClient.Swaps(1, "2027-01-01"));
+        given(choices.pool(anyString())).willReturn(new ChoicesClient.Pool(1, 1, List.of(),
+                List.of(new ChoicesClient.InUse("StreamCo Standard", 1, "committed", "ord-old", "1", null)), 1, "2027-01-01"));
         given(policy.evaluateOrder(any())).willReturn(PolicyClient.Decision.allow());
     }
 
@@ -121,7 +122,7 @@ class OrderSwapTest {
     void aSwap_holdsWithTheChoiceItFrees_andEndsTheOldBenefitOnlyWhenTheNewOneLands() throws Exception {
         String id = swapOrder();
         verify(choices).hold("cust-1", id, "2", "po-audio", "Lydbok+ Audiobooks", 1,
-                List.of(new ChoicesClient.Source("ord-old", "1")));
+                List.of(new ChoicesClient.Source("ord-old", "1")), null);
         verify(inventoryClient, never()).updateProduct(eq("prod-old"), any());   // not yet
 
         item(id, "2", "completed");
@@ -130,7 +131,7 @@ class OrderSwapTest {
         verify(inventoryClient).updateProduct(eq("prod-old"), patch.capture());
         assertThat(patch.getValue()).containsEntry("status", "cancelled");
         verify(choices).settle(eq(id), eq("cust-1"), eq(List.of()),
-                eq(List.of(new ChoicesClient.Ending("ord-old", "1", true))));
+                eq(List.of(new ChoicesClient.Ending("ord-old", "1", true))), eq(List.of()));
     }
 
     @Test
@@ -141,7 +142,7 @@ class OrderSwapTest {
                 .andExpect(jsonPath("$.state").value("failed"))
                 .andExpect(jsonPath("$.productOrderItem[0].state").value("cancelled"));
         verify(inventoryClient, never()).updateProduct(eq("prod-old"), any());
-        verify(choices, never()).settle(anyString(), anyString(), any(), any());
+        verify(choices, never()).settle(anyString(), anyString(), any(), any(), any());
         verify(choices).release(id);
     }
 
@@ -156,7 +157,7 @@ class OrderSwapTest {
                 .andReturn().getResponse().getContentAsString();
         String id = objectMapper.readTree(body).get("id").asString();
         verify(choices).settle(eq(id), eq("cust-1"), eq(List.of()),
-                eq(List.of(new ChoicesClient.Ending("ord-old", "1", false))));
+                eq(List.of(new ChoicesClient.Ending("ord-old", "1", false))), eq(List.of()));
     }
 
     @Test

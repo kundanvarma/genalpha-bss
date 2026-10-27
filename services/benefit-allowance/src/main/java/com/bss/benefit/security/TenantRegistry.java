@@ -69,6 +69,8 @@ public class TenantRegistry {
         private boolean choices;
         /** What this tenant calls a Choice on its screens ("Choices", "Valg"); blank means "Choices". */
         private String choicesLabel;
+        /** ISO country the tenant sells in (tenants.yml `country`): which statutory pack its holds obey. */
+        private String country;
 
         public String getId() {
             return id;
@@ -124,6 +126,14 @@ public class TenantRegistry {
 
         public void setChoices(boolean choices) {
             this.choices = choices;
+        }
+
+        public String getCountry() {
+            return country;
+        }
+
+        public void setCountry(String country) {
+            this.country = country;
         }
 
         public String getChoicesLabel() {

@@ -12,12 +12,12 @@ public interface ChoicesClient {
 
     /** Hold a benefit's cost; in a swap, {@code replaces} names the benefits the same order ends (their Choices count). */
     HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces);
+            String offeringName, int cost, List<Source> replaces, Integer holdMonths);
 
-    void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings);
+    void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants);
 
-    /** The household's swaps this quarter, and when the next quarter starts — for the swap-limit rule. */
-    Swaps swaps(String ownerPartyId);
+    /** The household's pool as ordering's checks need it: totals, what is in use (and held), this quarter's swaps. */
+    Pool pool(String ownerPartyId);
 
     void release(String orderId);
 
@@ -29,7 +29,20 @@ public interface ChoicesClient {
     record Ending(String orderId, String orderItemId, boolean swapped) {
     }
 
-    record Swaps(int thisQuarter, String nextQuarterStarts) {
+    /** A plan item whose Choices change as the order completes (0: the plan ends). */
+    record Regrant(String orderId, String orderItemId, String offeringId, String offeringName, int choices) {
+    }
+
+    record Pool(int granted, int inUse, List<GrantView> grants, List<InUse> allocations, int swapsThisQuarter,
+            String nextQuarterStarts) {
+    }
+
+    /** A plan's grant as the ledger keeps it, named by the order item that bought the plan. */
+    record GrantView(String offeringName, int choices, String orderId, String orderItemId) {
+    }
+
+    /** One benefit in use: what it is, the order item that made it, and until when it is held (null: not held). */
+    record InUse(String offeringName, int cost, String state, String orderId, String orderItemId, String heldUntil) {
     }
 
     /** A plan item of the completing order and the Choices it puts in. */

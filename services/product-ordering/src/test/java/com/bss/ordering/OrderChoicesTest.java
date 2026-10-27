@@ -93,19 +93,19 @@ class OrderChoicesTest {
 
     @Test
     void aBenefitOnTheOrder_holdsItsCost_forTheCustomer() throws Exception {
-        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any()))
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
                 .willReturn(ChoicesClient.HoldOutcome.held());
         String body = mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON)
                         .content(order("po-stream")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String orderId = objectMapper.readTree(body).get("id").asString();
-        verify(choices).hold("cust-1", orderId, "1", "po-stream", "StreamCo Standard", 1, List.of());
+        verify(choices).hold("cust-1", orderId, "1", "po-stream", "StreamCo Standard", 1, List.of(), null);
     }
 
     @Test
     void tooFewChoicesLeft_refusesTheOrderWith409_andHoldsNothing() throws Exception {
-        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any()))
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
                 .willReturn(ChoicesClient.HoldOutcome.refused("StreamCo Standard costs 1 of your Choices and you have 0 left"));
         mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON)
                         .content(order("po-stream")))
@@ -121,13 +121,13 @@ class OrderChoicesTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String orderId = objectMapper.readTree(body).get("id").asString();
-        verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any());
+        verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
 
         mockMvc.perform(patch(BASE + "/" + orderId).with(writeToken()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"state\": \"completed\"}"))
                 .andExpect(status().isOk());
         verify(choices).settle(eq(orderId), eq("cust-1"),
-                eq(List.of(new ChoicesClient.Grant("1", "po-plan", "Mobile Max", 2))), eq(List.of()));
+                eq(List.of(new ChoicesClient.Grant("1", "po-plan", "Mobile Max", 2))), eq(List.of()), eq(List.of()));
     }
 
     @Test
@@ -144,7 +144,7 @@ class OrderChoicesTest {
 
     @Test
     void cancellingAnOrderWithABenefit_releasesWhatItHeld() throws Exception {
-        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any()))
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
                 .willReturn(ChoicesClient.HoldOutcome.held());
         String body = mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON)
                         .content(order("po-stream")))
@@ -154,7 +154,7 @@ class OrderChoicesTest {
         mockMvc.perform(patch(BASE + "/" + orderId).with(writeToken()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"state\": \"cancelled\"}")).andExpect(status().isOk());
         verify(choices).release(orderId);
-        verify(choices, never()).settle(anyString(), anyString(), any(), any());
+        verify(choices, never()).settle(anyString(), anyString(), any(), any(), any());
     }
 
     private static RequestPostProcessor writeToken() {

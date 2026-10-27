@@ -11,11 +11,11 @@ public record PoolView(boolean offered, String label, int granted, int inUse, in
         List<Source> grants, List<Allocation> allocations, int swapsThisQuarter, String nextQuarterStarts) {
 
     /** A plan that put Choices in. */
-    public record Source(String offeringId, String offeringName, int choices) {
+    public record Source(String offeringId, String offeringName, int choices, String orderId, String orderItemId) {
     }
 
     /** A benefit that took Choices out: held while its order runs, committed once it is active. */
     public record Allocation(String id, String offeringId, String offeringName, int cost, String state,
-            String orderId) {
+            String orderId, String orderItemId, String heldUntil) {
     }
 }

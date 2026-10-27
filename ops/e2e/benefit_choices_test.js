@@ -16,6 +16,13 @@
  *   A4. a refused pick gives its Choice back
  *   A6. the swap limit (a policy rule: 3 a quarter) refuses the 4th and says
  *       when the next is possible
+ * Plan lifecycle (#357), on a second household:
+ *   A5. a downgrade below what is in use is refused with the benefits named,
+ *       and goes through after a release
+ *   another plan (a line) adds its Choices
+ *   a held benefit (PhoneCo, 12 months) shows its date and refuses release
+ *   A9. a catalog change does not rewrite what a household already picked
+ *   a cease ends the newest benefit it can no longer pay for — never the held one
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -285,8 +292,101 @@ const orderOf = (o) => ({
   if (!fourth.body.message?.includes(`possible from ${pool.nextQuarterStarts}`)) fail('A6: the refusal should name the date: ' + fourth.body.message);
   console.log(`OK A6: the 4th swap this quarter refused (${fourth.status}): "${fourth.body.message}"`);
 
+  /* ---- plan lifecycle (#357), on a second household ---- */
+  await setMode(null);
+  // a fresh staff token: the one minted at the start may have expired by now
+  const staffNow = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+  const phone = by('PhoneCo Upgrade Pass');
+  const midPlan = by('GenAlpha Mobile 60 GB 5G');
+  const linePlan = by('GenAlpha Mobile 50 GB');   // a line with no commitment, so it may be ceased
+  const emailH = `hedda-${run}@example.com`;
+  const madeH = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staffNow), data: { email: emailH, givenName: 'Hedda', familyName: `Plans${run}` } })).json();
+  const hedda = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: emailH, password: madeH.temporaryPassword } })).json()).access_token;
+  const HH = { ...H(hedda), 'X-Channel': 'web' };
+  const hPool = async () => (await (await ctx.get(`${CHOICES}/pool`, { headers: HH })).json());
+  const hOrder = async (items) => { const r = await ctx.post(ORDERS, { headers: HH, data: { productOrderItem: items } });
+    return { status: r.status(), body: await r.json().catch(() => ({})) }; };
+  const add = (o, id = '1') => ({ id, action: 'add', quantity: 1, productOffering: { id: o.id, name: o.name } });
+  const hProduct = async (name) => ((await (await ctx.get(`${API}/tmf-api/productInventory/v4/product?status=active`,
+    { headers: HH })).json()) || []).find((p) => p.name === name);
+
+  await hOrder([add(plan)]);
+  await settled('Hedda\'s plan granting 2', async () => (await hPool()).granted === 2);
+  await hOrder([add(stream)]);
+  await hOrder([add(audio)]);
+  await settled('both of Hedda\'s picks in use', async () => (await hPool()).allocations.filter((a) => a.state === 'committed').length === 2);
+
+  // A5 — downgrade below what is in use: refused, with the benefits named
+  const bigPlan = await settled('the plan product', () => hProduct(plan.name), 20000);
+  const down = () => hOrder([{ id: '1', action: 'modify', product: { id: bigPlan.id },
+    productOffering: { id: midPlan.id, name: midPlan.name } }]);
+  const refusedDown = await down();
+  if (refusedDown.status !== 409 || !/gives 1 Choice and 2 are in use/.test(refusedDown.body.message || '')) {
+    fail('A5: the downgrade should be refused with the numbers: ' + refusedDown.status + ' ' + JSON.stringify(refusedDown.body));
+  }
+  if (!refusedDown.body.message.includes(stream.name) || !refusedDown.body.message.includes(audio.name)) fail('A5: the refusal should name the benefits');
+  const audioProduct = await settled('the audiobook product', () => hProduct(audio.name), 20000);
+  await hOrder([{ id: '1', action: 'delete', product: { id: audioProduct.id } }]);
+  await settled('the release', async () => (await hPool()).inUse === 1);
+  const okDown = await down();
+  if (okDown.status !== 201) fail('A5: after a release the downgrade should go through: ' + JSON.stringify(okDown.body));
+  const afterDown = await settled('the downgrade re-granting 1', async () => { const p = await hPool(); return p.granted === 1 ? p : null; });
+  console.log(`OK A5: downgrade refused ("${refusedDown.body.message}"), then went through after a release — granted ${afterDown.granted}, from ${afterDown.grants[0].offeringName}`);
+
+  // another plan (a second line) adds its Choices
+  await hOrder([add(linePlan)]);
+  await settled('the second line granting', async () => (await hPool()).granted === 2);
+  console.log('OK a second line on Mobile 50 GB added its Choice — granted 2');
+
+  // a held benefit: PhoneCo holds its Choice 12 months (GenAlpha names no country: the EU cap applies)
+  await hOrder([add(phone)]);
+  const held = await settled('PhoneCo committed with a date', async () =>
+    (await hPool()).allocations.find((a) => a.offeringName === phone.name && a.state === 'committed' && a.heldUntil));
+  const expect = new Date(); expect.setUTCMonth(expect.getUTCMonth() + 12);
+  if (held.heldUntil !== expect.toISOString().slice(0, 10)) fail(`a 12-month hold should end ${expect.toISOString().slice(0, 10)}, says ${held.heldUntil}`);
+  const phoneProduct = await settled('the PhoneCo product', () => hProduct(phone.name), 20000);
+  const early = await hOrder([{ id: '1', action: 'delete', product: { id: phoneProduct.id } }]);
+  if (early.status !== 409 || !early.body.message?.includes(`until ${held.heldUntil}`)) fail('a held benefit was released early: ' + JSON.stringify(early.body));
+  console.log(`OK hold: ${phone.name} held until ${held.heldUntil}; an early release is refused: "${early.body.message}"`);
+  // and the household SEES it: Hedda's own Choices page, signed in through the shop
+  const hPage = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  await hPage.goto(`${API}/shop/`);
+  await hPage.click('.who >> text=Sign in');
+  await hPage.fill('input[name="username"]', emailH);
+  await hPage.fill('input[name="password"]', madeH.temporaryPassword);
+  await hPage.click('input[type="submit"], button[type="submit"]');
+  await hPage.waitForSelector('.nav', { timeout: 20000 });
+  await hPage.goto(`${API}/shop/choices`);
+  const heldRow = hPage.locator('[data-testid=choice-row]', { hasText: phone.name });
+  await heldRow.locator('[data-testid=held-until]').waitFor({ timeout: 20000 });
+  if ((await heldRow.locator('[data-testid=release-benefit]').count()) > 0) fail('a held benefit offers Release on the page');
+  await hPage.screenshot({ path: `${SHOTS}/benefit_choices_held.png`, fullPage: true });
+  console.log(`OK the page says "${await heldRow.locator('[data-testid=held-until]').innerText()}" and offers no Release`);
+
+  // A9 — a catalog change does not rewrite what was picked
+  const catalogUrl = `${API}/tmf-api/productCatalogManagement/v4/productOffering/${stream.id}`;
+  await ctx.patch(catalogUrl, { headers: H(staffNow), data: { choiceCost: 2 } });
+  const stillOne = (await hPool()).allocations.find((a) => a.offeringName === stream.name);
+  await ctx.patch(catalogUrl, { headers: H(staffNow), data: { choiceCost: 1 } });
+  if (stillOne?.cost !== 1) fail('A9: a catalog change rewrote a household\'s pick: ' + JSON.stringify(stillOne));
+  console.log('OK A9: StreamCo re-priced to 2 Choices in the catalog — Hedda\'s pick still costs the 1 she picked it at');
+
+  // a cease: ending the second line leaves 1 Choice for 2 in use → the newest that is not held ends with it
+  const line2 = ((await (await ctx.get(`${API}/tmf-api/productInventory/v4/product?status=active`, { headers: HH })).json()) || [])
+    .find((p) => p.name === linePlan.name);
+  const cease = await hOrder([{ id: '1', action: 'delete', product: { id: line2.id } }]);
+  if (cease.status !== 201) fail('the cease was refused: ' + JSON.stringify(cease.body));
+  const ended = (cease.body.productOrderItem || []).filter((i) => i.action === 'delete').map((i) => i.product?.name);
+  if (!ended.includes(stream.name) || ended.includes(phone.name)) fail('the cease should end StreamCo (newest not held), not PhoneCo: ' + JSON.stringify(ended));
+  const afterCease = await settled('the cease settling', async () => { const p = await hPool(); return p.granted === 1 && p.inUse === 1 ? p : null; });
+  if (afterCease.allocations[0].offeringName !== phone.name) fail('after the cease only the held PhoneCo should remain');
+  console.log(`OK cease: ending the line also ended ${stream.name} in the same order; ${phone.name} (held) stays — ${afterCease.inUse} of ${afterCease.granted} in use`);
+
   await browser.close();
-  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, and the swap limit.');
+  console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held.');
 })().catch(async (e) => {
   console.error('FAIL:', e.message.split('\n')[0]);
   try { require('fs').mkdirSync(SHOTS, { recursive: true }); await global.shotPage?.screenshot({ path: `${SHOTS}/benefit_choices_FAIL.png`, fullPage: true }); } catch { /* no page to show */ }

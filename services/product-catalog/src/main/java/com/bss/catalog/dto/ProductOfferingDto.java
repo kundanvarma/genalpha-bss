@@ -53,6 +53,10 @@ public class ProductOfferingDto {
     @JsonProperty("choiceCost")
     private Integer choiceCost;
 
+    /** House field beside TMF620 (#357): months a picked benefit holds its Choice (a subsidised device offer). */
+    @JsonProperty("choiceHoldMonths")
+    private Integer choiceHoldMonths;
+
     @JsonProperty("bundledProductOffering")
     private List<Map<String, Object>> bundledProductOffering;
 
@@ -174,6 +178,14 @@ public class ProductOfferingDto {
 
     public void setChoicesGranted(Integer choicesGranted) {
         this.choicesGranted = choicesGranted;
+    }
+
+    public Integer getChoiceHoldMonths() {
+        return choiceHoldMonths;
+    }
+
+    public void setChoiceHoldMonths(Integer choiceHoldMonths) {
+        this.choiceHoldMonths = choiceHoldMonths;
     }
 
     public Integer getChoiceCost() {

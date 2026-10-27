@@ -28,12 +28,12 @@ public class RestChoicesClient implements ChoicesClient {
 
     @Override
     public HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces) {
+            String offeringName, int cost, List<Source> replaces, Integer holdMonths) {
         try {
             restClient.post()
                     .uri(BASE + "/hold")
                     .body(new HoldBody(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost,
-                            replaces == null ? List.of() : replaces))
+                            replaces == null ? List.of() : replaces, holdMonths))
                     .retrieve()
                     .toBodilessEntity();
             return HoldOutcome.held();
@@ -49,16 +49,17 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     @Override
-    public void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings) {
-        post("/order/" + orderId + "/settle", new SettleBody(ownerPartyId, grants, endings));
+    public void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings,
+            List<Regrant> regrants) {
+        post("/order/" + orderId + "/settle", new SettleBody(ownerPartyId, grants, endings, regrants));
     }
 
     @Override
-    public Swaps swaps(String ownerPartyId) {
+    public Pool pool(String ownerPartyId) {
         try {
-            PoolCount pool = restClient.get().uri(BASE + "/pool?ownerPartyId={owner}", ownerPartyId)
-                    .retrieve().body(PoolCount.class);
-            return pool == null ? new Swaps(0, null) : new Swaps(pool.swapsThisQuarter(), pool.nextQuarterStarts());
+            Pool pool = restClient.get().uri(BASE + "/pool?ownerPartyId={owner}", ownerPartyId)
+                    .retrieve().body(Pool.class);
+            return pool == null ? new Pool(0, 0, List.of(), List.of(), 0, null) : pool;
         } catch (RestClientException e) {
             throw new DownstreamException("benefit-allowance is unreachable", e);
         }
@@ -92,13 +93,10 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     private record HoldBody(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost, List<Source> replaces) {
+            String offeringName, int cost, List<Source> replaces, Integer holdMonths) {
     }
 
-    private record SettleBody(String ownerPartyId, List<Grant> grants, List<Ending> endings) {
+    private record SettleBody(String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants) {
     }
 
-    /** As much of the pool as the swap-limit rule needs. */
-    private record PoolCount(int swapsThisQuarter, String nextQuarterStarts) {
-    }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Benefit Choices (#354), idempotent: plans that grant Choices, benefits that cost them.
 
-- GenAlpha Mobile Unlimited 5G grants 2 Choices; GenAlpha Mobile 60 GB 5G grants 1.
+- GenAlpha Mobile Unlimited 5G grants 2 Choices; 60 GB 5G and 50 GB grant 1 each.
 - Two partner benefits, 1 Choice each, in "Partner services" (so the orchestrator
   activates them with the partner) and "Choices" (so a shelf can find them).
 - The swap limit (#356) as a policy rule, data the operator can change: 3 swaps
@@ -17,13 +17,17 @@ import urllib.request
 KEYCLOAK = "http://localhost:8085/realms/bss/protocol/openid-connect/token"
 API = "http://localhost:8080/tmf-api/productCatalogManagement/v4"
 
-GRANTS = {"GenAlpha Mobile Unlimited 5G": 2, "GenAlpha Mobile 60 GB 5G": 1}
+GRANTS = {"GenAlpha Mobile Unlimited 5G": 2, "GenAlpha Mobile 60 GB 5G": 1, "GenAlpha Mobile 50 GB": 1}
 BENEFITS = [
     ("StreamCo Standard", "StreamCo Standard Monthly", 9.99,
      "Films and series from StreamCo, picked with one of your Choices. "
-     "Your activation code arrives the moment you pick it."),
+     "Your activation code arrives the moment you pick it.", 0),
     ("Lydbok+ Audiobooks", "Lydbok+ Monthly", 8.99,
-     "Unlimited audiobooks and podcasts from Lydbok+, picked with one of your Choices."),
+     "Unlimited audiobooks and podcasts from Lydbok+, picked with one of your Choices.", 0),
+    # a subsidised device offer HOLDS its Choice (#357): capped by the law of the
+    # tenant's country — 24 months in the EU, 0 in Norway until bindingstid is answered
+    ("PhoneCo Upgrade Pass", "PhoneCo Upgrade Pass Monthly", 0.01,
+     "Upgrade your phone every year with PhoneCo — it holds one Choice for 12 months.", 12),
 ]
 
 
@@ -67,18 +71,20 @@ for plan, n in GRANTS.items():
         req("PATCH", f"productOffering/{o['id']}", {"choicesGranted": n})
         print(f"plan: {plan} grants {n} Choice(s)")
 
-for name, price_name, value, description in BENEFITS:
+for name, price_name, value, description, hold in BENEFITS:
     if price_name not in prices:
         prices[price_name] = req("POST", "productOfferingPrice", {
             "name": price_name, "priceType": "recurring", "lifecycleStatus": "Active",
             "recurringChargePeriodType": "month", "price": {"unit": "EUR", "value": value}})
     if name in offerings:
-        if offerings[name].get("choiceCost") != 1:
-            req("PATCH", f"productOffering/{offerings[name]['id']}", {"choiceCost": 1})
+        o = offerings[name]
+        if o.get("choiceCost") != 1 or (o.get("choiceHoldMonths") or 0) != hold:
+            req("PATCH", f"productOffering/{o['id']}", {"choiceCost": 1, **({"choiceHoldMonths": hold} if hold else {})})
         continue
     offerings[name] = req("POST", "productOffering", {
         "name": name, "description": description, "lifecycleStatus": "Active", "isBundle": False,
         "choiceCost": 1,
+        **({"choiceHoldMonths": hold} if hold else {}),
         # the first category decides fulfilment (a partner activation); the second shelves it
         "category": [{"id": cats["Partner services"]["id"], "name": "Partner services", "@referredType": "Category"},
                      {"id": cats["Choices"]["id"], "name": "Choices", "@referredType": "Category"}],
@@ -108,4 +114,4 @@ if not any(r.get("name") == SWAP_RULE for r in policy("GET", "policyRule?limit=2
         "message": "You have used this quarter's 3 swaps. The next swap is possible from {nextQuarterStarts}."})
     print(f"rule: {SWAP_RULE}")
 
-print("Choices seeded: two granting plans, two partner benefits, the swap limit.")
+print("Choices seeded: three granting plans, three benefits (one held 12 months), the swap limit.")

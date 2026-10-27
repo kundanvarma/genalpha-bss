@@ -38,6 +38,7 @@ public class ProductOfferingMapper {
         dto.setRequiresVerifiedIdentity(entity.getRequiresVerifiedIdentity());
         dto.setChoicesGranted(entity.getChoicesGranted());
         dto.setChoiceCost(entity.getChoiceCost());
+        dto.setChoiceHoldMonths(entity.getChoiceHoldMonths());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setCategory(readJsonObjectList(entity.getCategoryJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
@@ -69,6 +70,7 @@ public class ProductOfferingMapper {
         entity.setRequiresVerifiedIdentity(dto.getRequiresVerifiedIdentity());
         entity.setChoicesGranted(dto.getChoicesGranted());
         entity.setChoiceCost(dto.getChoiceCost());
+        entity.setChoiceHoldMonths(dto.getChoiceHoldMonths());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         entity.setCategoryJson(writeJsonObjectList(dto.getCategory()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
@@ -113,6 +115,9 @@ public class ProductOfferingMapper {
         }
         if (patch.getChoiceCost() != null) {
             entity.setChoiceCost(patch.getChoiceCost());
+        }
+        if (patch.getChoiceHoldMonths() != null) {
+            entity.setChoiceHoldMonths(patch.getChoiceHoldMonths());
         }
         if (patch.getBundledProductOffering() != null) {
             entity.setBundledProductOfferingJson(writeJsonObjectList(patch.getBundledProductOffering()));

@@ -199,7 +199,12 @@ public class ProductService {
     public void closeForTerminatedService(String tenantId, String ownerPartyId, String serviceName, String serviceId) {
         java.util.Optional<Product> byLineage = serviceId == null ? java.util.Optional.empty()
                 : repository.findFirstByTenantIdAndRealizingServiceIdAndStatus(tenantId, serviceId, "active");
-        byLineage.or(() -> repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+        // When a product carries this service (already closed, say, by the order that
+        // ended it), that product IS the answer: falling back to owner + name would
+        // close a DIFFERENT, newer product of the same name — a swap's replacement (#357).
+        boolean lineageKnown = serviceId != null && repository.existsByTenantIdAndRealizingServiceId(tenantId, serviceId);
+        byLineage.or(() -> lineageKnown ? java.util.Optional.empty()
+                : repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
                 tenantId, ownerPartyId, serviceName, "active")).ifPresent(entity -> {
             entity.setStatus("cancelled");
             entity.setTerminationDate(java.time.OffsetDateTime.now());
@@ -226,7 +231,9 @@ public class ProductService {
             String serviceName, String serviceId) {
         java.util.Optional<Product> byLineage = serviceId == null ? java.util.Optional.empty()
                 : repository.findFirstByTenantIdAndRealizingServiceIdAndStatus(tenantId, serviceId, "active");
-        byLineage.or(() -> repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+        boolean lineageKnown = serviceId != null && repository.existsByTenantIdAndRealizingServiceId(tenantId, serviceId);
+        byLineage.or(() -> lineageKnown ? java.util.Optional.empty()
+                : repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
                 tenantId, fromPartyId, serviceName, "active")).ifPresent(entity -> {
             entity.setOwnerPartyId(toPartyId);
             Object parties = readJson(entity.getRelatedPartyJson());

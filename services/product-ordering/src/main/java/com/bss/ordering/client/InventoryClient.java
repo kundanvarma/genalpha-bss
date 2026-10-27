@@ -14,6 +14,9 @@ public interface InventoryClient {
     /** The installed product a modify order changes; empty when unreachable/unknown. */
     java.util.Optional<Map<String, Object>> getProduct(String id);
 
+    /** A customer's active products (TMF637 wire shape) — what a plan cease looks through for the benefits it ends. */
+    List<Map<String, Object>> activeProductsOf(String ownerPartyId);
+
     /** Plan change: repoint an installed product at a new offering. */
     void updateProduct(String id, Map<String, Object> patch);
 

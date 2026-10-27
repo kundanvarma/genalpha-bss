@@ -122,6 +122,7 @@ public class ChoiceLedger {
         a.setOfferingId(request.offeringId());
         a.setOfferingName(request.offeringName());
         a.setCost(request.cost());
+        a.setHoldMonths(request.holdMonths());
         a.setState(HELD);
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
@@ -140,6 +141,9 @@ public class ChoiceLedger {
                 : lockOrCreate(tenant, request.ownerPartyId());
         for (ChoiceAllocation a : allocations.findByTenantIdAndOrderIdAndState(tenant, orderId, HELD)) {
             a.setState(COMMITTED);
+            // the hold starts when the benefit is in use, capped by the law of the tenant's country
+            int months = HoldLaw.effectiveMonths(a.getHoldMonths(), tenant() == null ? null : tenant().getCountry());
+            a.setHeldUntil(months > 0 ? OffsetDateTime.now().plusMonths(months) : null);
             a.setLastUpdate(OffsetDateTime.now());
             allocations.save(a);
             events.publish("ChoicePickedEvent", "choiceAllocation", allocationView(a));
@@ -163,7 +167,14 @@ public class ChoiceLedger {
                 grant.setGrantedAt(OffsetDateTime.now());
                 grants.save(grant);
                 events.publish("ChoicesGrantedEvent", "choiceGrant",
-                        new PoolView.Source(g.offeringId(), g.offeringName(), g.choices()));
+                        new PoolView.Source(g.offeringId(), g.offeringName(), g.choices(), orderId, g.orderItemId()));
+            }
+        }
+        if (pool != null && request.regrants() != null) {
+            for (ChoiceRequests.Regrant r : request.regrants()) {
+                grants.findByTenantIdAndOrderIdAndOrderItemId(tenant, r.orderId(), r.orderItemId())
+                        .filter(g -> g.getPoolId().equals(pool.getId()) && ACTIVE.equals(g.getState()))
+                        .ifPresent(g -> regrant(g, r));
             }
         }
         if (pool != null && request.endings() != null) {
@@ -174,6 +185,25 @@ public class ChoiceLedger {
             }
         }
         return pool == null ? pool(request.ownerPartyId()) : view(tenant, pool);
+    }
+
+    /** A plan changed or ended: its grant now gives what the new plan gives (0 ends it). */
+    private void regrant(ChoiceGrant g, ChoiceRequests.Regrant r) {
+        if (r.choices() == 0) {
+            g.setState("ended");
+            g.setEndedAt(OffsetDateTime.now());
+        } else {
+            g.setChoices(r.choices());
+        }
+        if (r.offeringId() != null) {
+            g.setOfferingId(r.offeringId());
+        }
+        if (r.offeringName() != null) {
+            g.setOfferingName(r.offeringName());
+        }
+        grants.save(g);
+        events.publish("ChoicesRegrantedEvent", "choiceGrant",
+                new PoolView.Source(g.getOfferingId(), g.getOfferingName(), r.choices(), g.getOrderId(), g.getOrderItemId()));
     }
 
     /** A benefit leaves the pool: its Choice is free again, and why it left is kept. */
@@ -243,7 +273,8 @@ public class ChoiceLedger {
 
     private PoolView view(String tenant, ChoicePool pool) {
         List<PoolView.Source> sources = grants.findByTenantIdAndPoolIdAndState(tenant, pool.getId(), ACTIVE)
-                .stream().map(g -> new PoolView.Source(g.getOfferingId(), g.getOfferingName(), g.getChoices()))
+                .stream().map(g -> new PoolView.Source(g.getOfferingId(), g.getOfferingName(), g.getChoices(),
+                        g.getOrderId(), g.getOrderItemId()))
                 .toList();
         List<PoolView.Allocation> taken = allocations
                 .findByTenantIdAndPoolIdAndStateInOrderByCreatedAtAsc(tenant, pool.getId(), IN_USE)
@@ -258,6 +289,7 @@ public class ChoiceLedger {
 
     private static PoolView.Allocation allocationView(ChoiceAllocation a) {
         return new PoolView.Allocation(a.getId(), a.getOfferingId(), a.getOfferingName(), a.getCost(),
-                a.getState(), a.getOrderId());
+                a.getState(), a.getOrderId(), a.getOrderItemId(),
+                a.getHeldUntil() == null ? null : a.getHeldUntil().toLocalDate().toString());
     }
 }

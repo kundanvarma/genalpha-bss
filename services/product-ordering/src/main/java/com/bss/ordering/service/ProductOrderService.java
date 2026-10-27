@@ -216,6 +216,21 @@ public class ProductOrderService {
                     : entity.getDescription() + " ") + "[credit-review]").trim());
         }
         int modifies = validateModifyItems(dto, entity.getOwnerPartyId());
+        // Benefit Choices (#357): held benefits, downgrades below what is in use, and
+        // the benefits a cease must end with it — refused, or added here as endings
+        List<Map<String, Object>> endings = orderChoices.prepare(flattenItemMaps(dto.getProductOrderItem()),
+                entity.getOwnerPartyId());
+        if (!endings.isEmpty()) {
+            List<Map<String, Object>> withEndings = new ArrayList<>(dto.getProductOrderItem());
+            withEndings.addAll(endings);
+            dto.setProductOrderItem(withEndings);
+            deletes += endings.size();
+        }
+        if (modifies > 0 || !endings.isEmpty()) {
+            // the record keeps what the checks above added to the items (a plan's lineage,
+            // a cease's endings): completion reads the record, not this request
+            entity.setProductOrderItemJson(mapper.writeItems(dto.getProductOrderItem()));
+        }
         int changes = modifies + deletes;
         boolean changeOnly = changes > 0 && changes == flattenItemMaps(dto.getProductOrderItem()).size();
         validatePayments(dto, entity.getOwnerPartyId(), id);
@@ -279,6 +294,12 @@ public class ProductOrderService {
             String newOfferingId = idOf(item.get("productOffering"));
             if (newOfferingId == null) {
                 throw new OrderValidationException("a modify item must name the new productOffering");
+            }
+            if (product.get("productOrderItem") != null && item.get("product") instanceof Map<?, ?> named) {
+                // the plan's lineage names the Choices grant a plan change re-grants (#357)
+                Map<String, Object> withLineage = new java.util.LinkedHashMap<>((Map<String, Object>) named);
+                withLineage.put("productOrderItem", product.get("productOrderItem"));
+                item.put("product", withLineage);
             }
             CatalogClient.OfferingRef target = catalogClient.findOffering(newOfferingId)
                     .orElseThrow(() -> new OrderValidationException(
@@ -1055,9 +1076,9 @@ public class ProductOrderService {
         // an order that is a swap; the rule's message may name {nextQuarterStarts}.
         List<Map<String, Object>> leaves = flattenItemMaps(dto.getProductOrderItem());
         if (ownerPartyId != null && orderChoices.isSwap(leaves)) {
-            com.bss.ordering.client.ChoicesClient.Swaps swaps = orderChoices.swaps(ownerPartyId);
+            com.bss.ordering.client.ChoicesClient.Pool swaps = orderChoices.pool(ownerPartyId);
             context.put("choiceSwap", true);
-            context.put("choiceSwapsThisQuarter", swaps.thisQuarter());
+            context.put("choiceSwapsThisQuarter", swaps.swapsThisQuarter());
             if (swaps.nextQuarterStarts() != null) {
                 context.put("nextQuarterStarts", swaps.nextQuarterStarts());
             }
