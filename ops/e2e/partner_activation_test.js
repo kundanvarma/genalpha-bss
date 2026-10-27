@@ -30,7 +30,8 @@ const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/j
     grant_type: 'password', client_id: 'bss-demo', username: u, password: p } })).json()).access_token;
   const staff = await token('demo', 'demo');
   const offers = await (await ctx.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`)).json();
-  const netflix = offers.find((o) => o.name === 'Netflix Standard') || fail('Netflix Standard missing');
+  const netflix = offers.find((o) => o.name === 'Netflix Standard');
+  if (!netflix) fail('Netflix Standard missing');
   const setMode = async (mode) => {
     await ctx.delete(`${PARTNER}/switches`);
     if (mode) await ctx.put(`${PARTNER}/switches`, { data: { 'Netflix Standard': mode } });
