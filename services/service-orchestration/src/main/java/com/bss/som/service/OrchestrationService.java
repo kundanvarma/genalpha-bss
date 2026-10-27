@@ -58,6 +58,7 @@ public class OrchestrationService {
     private final com.bss.som.repository.CommissionEntryRepository commissionEntries;
     private final long commissionWindowMs;
     private final com.bss.som.client.PartnerEntitlementClient partners;
+    private final PartnerActivations partnerActivations;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -89,7 +90,7 @@ public class OrchestrationService {
             com.bss.som.repository.CommissionEntryRepository commissionEntries,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.som.commission-window-ms:1209600000}") long commissionWindowMs,
-            com.bss.som.client.PartnerEntitlementClient partners,
+            com.bss.som.client.PartnerEntitlementClient partners, PartnerActivations partnerActivations,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.client.EntitlementClient entitlement,
@@ -130,6 +131,7 @@ public class OrchestrationService {
         this.commissionEntries = commissionEntries;
         this.commissionWindowMs = commissionWindowMs;
         this.partners = partners;
+        this.partnerActivations = partnerActivations;
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -293,6 +295,20 @@ public class OrchestrationService {
             String id = so.getId();
             String serviceId = outcome.serviceId();
             deferred = outcome.deferred();
+            // a partner service the partner has not confirmed waits; one it refused fails, with its reason
+            var partnerState = partnerActivations.of(tenant, serviceId).map(com.bss.som.entity.PartnerActivation::getState);
+            if (partnerState.filter(com.bss.som.entity.PartnerActivation.REFUSED::equals).isPresent()) {
+                so.setState(ServiceOrder.FAILED);
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                if (itemId != null) {
+                    ordering.updateItemState(productOrderId, itemId, "failed");
+                }
+                continue;
+            }
+            if (partnerState.filter(com.bss.som.entity.PartnerActivation.PENDING::equals).isPresent()) {
+                deferred = true;
+            }
 
             // C4 — a physical item's service order is HELD inProgress until its
             // parcel/install actually lands; only a digital service completes NOW.
@@ -536,17 +552,11 @@ public class OrchestrationService {
         boolean nonLine = partnerService || securityFeature || internet || tv || device;
         String poolType = nonLine ? null : ResourcePool.MSISDN;
         if (partnerService) {
-            // the partner's platform owns the account; we hold the code
-            ResourceAssignment entitlement = new ResourceAssignment();
-            entitlement.setId(UUID.randomUUID().toString());
-            entitlement.setTenantId(tenant);
-            entitlement.setPoolId("partner");
-            entitlement.setValue(partners.activate(name, owner));
-            entitlement.setServiceId(serviceId);
-            entitlement.setOwnerPartyId(owner);
-            entitlement.setAssignedAt(OffsetDateTime.now());
-            assignments.save(entitlement);
-            realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(), entitlement.getValue());
+            // the partner's platform owns the account; we hold the code — once the partner gives it
+            PartnerActivations.Started started = partnerActivations.start(tenant, serviceId, owner, name,
+                    productOrderId, idOf(item));
+            realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(tenant),
+                    started.code() != null ? started.code() : started.state().name().toLowerCase());
         }
         // Keep-your-number: if the customer ported a number in, activate on
         // it and skip the pool draw entirely.
@@ -1384,7 +1394,7 @@ public class OrchestrationService {
                 // a partner activation code is a credential, never a number: the
                 // partner is told to stop, and the code leaves with the service
                 // (it must not age on the number shelf and be "re-issued")
-                partners.deactivate(a.getValue(), instance.getOwnerPartyId());
+                partnerActivations.deactivate(instance, a.getValue());
                 assignments.delete(a);
                 continue;
             }

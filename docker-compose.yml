@@ -2503,6 +2503,17 @@ services:
     ports:
       - "8162:8080"
 
+  # A content partner's activation platform, mocked (#355): the stand-in behind
+  # the partner-entitlement seam's `http` adapter. Answers active / pending /
+  # refused, dedupes on our request key, and carries the failure switches the
+  # suites flip (PUT /switches) — late, timeout, refuse, deactivate-fails.
+  mock-partner:
+    build: ./integrations/mock-partner
+    container_name: bss-mock-partner
+    restart: unless-stopped
+    ports:
+      - "8164:8080"
+
   mock-fsm:
     build: ./integrations/mock-fsm
     container_name: bss-mock-fsm

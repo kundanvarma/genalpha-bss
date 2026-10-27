@@ -88,6 +88,19 @@ public class TenantRegistry {
          * means this operator sells no wholesale access and its doors are shut. */
         private String wholesaleOrderSecret;
 
+        /** The tenant's content-partner platform (tenants.yml `partner-*`, #355):
+         * which adapter activates partner services ({@code mock} = in-process,
+         * instant; {@code http} = the partner REST shape the fleet's stand-in and
+         * real partner gateways expose) and where it lives. Absent = the
+         * deployment-wide default. */
+        private String partnerPlatform;
+        private String partnerBaseUrl;
+
+        public String getPartnerPlatform() { return partnerPlatform; }
+        public void setPartnerPlatform(String v) { this.partnerPlatform = v; }
+        public String getPartnerBaseUrl() { return partnerBaseUrl; }
+        public void setPartnerBaseUrl(String v) { this.partnerBaseUrl = v; }
+
         public String getWholesaleOrderSecret() { return wholesaleOrderSecret; }
         public void setWholesaleOrderSecret(String v) { this.wholesaleOrderSecret = v; }
         public String getOcsProvider() { return ocsProvider; }

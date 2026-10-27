@@ -41,13 +41,16 @@ public class ProductOrderService {
     private static final String STATE_HELD = "held";
     private static final String STATE_ACKNOWLEDGED = "acknowledged";
     private static final String STATE_IN_PROGRESS = "inProgress";
+    // TMF622: nothing the order asked for could be delivered / only some of it was (#355)
+    private static final String STATE_FAILED = "failed";
+    private static final String STATE_PARTIAL = "partial";
     // TMF622: the parent order is partially fulfilled while some items are done
     // and others are still on their own track (a shipped SIM, a pending install).
     private static final String STATE_PARTIALLY_COMPLETED = "partiallyCompleted";
     private static final String TOPUP_CATEGORY = "Top-ups";
-    private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled");
+    private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled", STATE_FAILED, STATE_PARTIAL);
     // Item-level terminal states used by the per-item rollup.
-    private static final Set<String> ITEM_TERMINAL = Set.of(STATE_COMPLETED, "cancelled");
+    private static final Set<String> ITEM_TERMINAL = Set.of(STATE_COMPLETED, "cancelled", STATE_FAILED);
 
     private final ProductOrderRepository repository;
     private final ProductOrderMapper mapper;
@@ -549,10 +552,19 @@ public class ProductOrderService {
         }
         entity.setProductOrderItemJson(mapper.writeItems(items));
         String rolled = rollupState(items);
-        boolean nowComplete = STATE_COMPLETED.equals(rolled) && !STATE_COMPLETED.equals(entity.getState());
+        // completed, or partial: what WAS delivered is provisioned (a failed item never is)
+        boolean nowComplete = (STATE_COMPLETED.equals(rolled) || STATE_PARTIAL.equals(rolled))
+                && !TERMINAL_STATES.contains(entity.getState());
+        boolean nowFailed = STATE_FAILED.equals(rolled) && !TERMINAL_STATES.contains(entity.getState());
         entity.setState(rolled);
         if (nowComplete) {
             applyCompletion(entity);
+        }
+        if (nowFailed) {
+            // nothing was delivered: give back what the order held, as a cancellation does
+            stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
+            paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
@@ -643,7 +655,11 @@ public class ProductOrderService {
             return STATE_ACKNOWLEDGED;
         }
         if (leaves.stream().allMatch(ITEM_TERMINAL::contains)) {
-            return leaves.stream().anyMatch(STATE_COMPLETED::equals) ? STATE_COMPLETED : "cancelled";
+            boolean anyCompleted = leaves.stream().anyMatch(STATE_COMPLETED::equals);
+            if (leaves.stream().anyMatch(STATE_FAILED::equals)) {
+                return anyCompleted ? STATE_PARTIAL : STATE_FAILED;
+            }
+            return anyCompleted ? STATE_COMPLETED : "cancelled";
         }
         if (leaves.stream().anyMatch(STATE_COMPLETED::equals)) {
             return STATE_PARTIALLY_COMPLETED;
@@ -1112,7 +1128,8 @@ public class ProductOrderService {
         for (Map<String, Object> item : items) {
             // a fixed bundle component bills through its bundle, never on its own;
             // an ending adds nothing (no stock, no availability, no commitment)
-            if (Boolean.TRUE.equals(item.get("decomposedComponent")) || isDelete(item)) {
+            if (Boolean.TRUE.equals(item.get("decomposedComponent")) || isDelete(item)
+                    || STATE_FAILED.equals(item.get("state"))) {   // a failed item mints no commitment
                 continue;
             }
             Object offering = item.get("productOffering");
@@ -1642,6 +1659,9 @@ public class ProductOrderService {
 
         boolean provisioned = false;
         for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
+            if (STATE_FAILED.equals(item.get("state"))) {
+                continue;   // the partner refused it, or it failed otherwise: nothing to put in inventory
+            }
             if (isDelete(item)) {
                 // an ending: the product record closes the way a ceased service
                 // closes it (inventory's own vocabulary, with the date it ended)

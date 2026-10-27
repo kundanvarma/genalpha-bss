@@ -15,6 +15,11 @@ bss:
         # the word this tenant's screens use for one.
         choices: true
         choices-label: Choices
+        # Partner services (#355) activate through the partner REST shape — in
+        # the fleet, the mock-partner stand-in; every other tenant keeps the
+        # in-process mock. One deployment, two partner platforms.
+        partner-platform: ${PARTNER_PLATFORM_GENALPHA:http}
+        partner-base-url: ${PARTNER_BASE_URL_GENALPHA:http://mock-partner:8080}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
