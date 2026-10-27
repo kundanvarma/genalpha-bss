@@ -1,5 +1,6 @@
 package com.bss.benefit.service;
 
+import com.bss.benefit.dto.ChoiceEvents;
 import com.bss.benefit.dto.ChoiceRequests;
 import com.bss.benefit.dto.PoolView;
 import com.bss.benefit.entity.ChoiceAllocation;
@@ -132,9 +133,8 @@ public class ChoiceLedger {
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
         allocations.save(a);
-        PoolView.Allocation view = allocationView(a);
-        events.publish("ChoiceHeldEvent", "choiceAllocation", view);
-        return view;
+        events.publish("ChoiceHeldEvent", "choiceAllocation", fact(a, pool));
+        return allocationView(a);
     }
 
     /** A goodwill Choice: one more for the household, named by its reason (#358). */
@@ -158,8 +158,7 @@ public class ChoiceLedger {
         grant.setState(ACTIVE);
         grant.setGrantedAt(OffsetDateTime.now());
         grants.save(grant);
-        events.publish("ChoicesGrantedEvent", "choiceGrant", new PoolView.Source(grant.getOfferingId(),
-                grant.getOfferingName(), 1, grant.getOrderId(), grant.getOrderItemId()));
+        events.publish("ChoicesGrantedEvent", "choiceGrant", fact(grant, 1, pool));
         return view(tenant, pool);
     }
 
@@ -177,7 +176,7 @@ public class ChoiceLedger {
             a.setHeldUntil(months > 0 ? OffsetDateTime.now().plusMonths(months) : null);
             a.setLastUpdate(OffsetDateTime.now());
             allocations.save(a);
-            events.publish("ChoicePickedEvent", "choiceAllocation", allocationView(a));
+            events.publish("ChoicePickedEvent", "choiceAllocation", fact(a, pool));
             partnerCosts.record(a);   // active now: this month is owed to the partner
         }
         // grants were asked for only when there is a pool to put them in (lockOrCreate above)
@@ -198,8 +197,7 @@ public class ChoiceLedger {
                 grant.setState(ACTIVE);
                 grant.setGrantedAt(OffsetDateTime.now());
                 grants.save(grant);
-                events.publish("ChoicesGrantedEvent", "choiceGrant",
-                        new PoolView.Source(g.offeringId(), g.offeringName(), g.choices(), orderId, g.orderItemId()));
+                events.publish("ChoicesGrantedEvent", "choiceGrant", fact(grant, g.choices(), pool));
             }
         }
         if (pool != null && request.regrants() != null) {
@@ -234,8 +232,7 @@ public class ChoiceLedger {
             g.setOfferingName(r.offeringName());
         }
         grants.save(g);
-        events.publish("ChoicesRegrantedEvent", "choiceGrant",
-                new PoolView.Source(g.getOfferingId(), g.getOfferingName(), r.choices(), g.getOrderId(), g.getOrderItemId()));
+        events.publish("ChoicesRegrantedEvent", "choiceGrant", fact(g, r.choices(), null));
     }
 
     /** A benefit leaves the pool: its Choice is free again, and why it left is kept. */
@@ -246,7 +243,7 @@ public class ChoiceLedger {
         a.setLastUpdate(OffsetDateTime.now());
         allocations.save(a);
         events.publish(SWAPPED.equals(reason) ? "ChoiceSwappedEvent" : "ChoiceReleasedEvent", "choiceAllocation",
-                allocationView(a));
+                fact(a, null));
     }
 
     /** The quarter this ledger counts swaps in — calendar quarters, UTC. */
@@ -317,6 +314,28 @@ public class ChoiceLedger {
                 tenant, pool.getId(), SWAPPED, quarterStarts());
         return new PoolView(offered(), label(), granted, inUse, granted - inUse, sources, taken, swaps,
                 nextQuarterStarts().toLocalDate().toString());
+    }
+
+    /** The event's view of an allocation: the household it belongs to and where its pool stands now. */
+    private ChoiceEvents.Allocation fact(ChoiceAllocation a, ChoicePool known) {
+        ChoicePool pool = known != null ? known : pools.findById(a.getPoolId()).orElse(null);
+        int granted = pool == null ? 0 : granted(a.getTenantId(), pool.getId());
+        // mid-swap the new benefit is in use before the old one ends: never below zero
+        int left = pool == null ? 0 : Math.max(0, granted - inUse(a.getTenantId(), pool.getId()));
+        return new ChoiceEvents.Allocation(a.getId(), a.getOfferingId(), a.getOfferingName(), a.getCost(),
+                a.getState(), a.getEndReason(), a.getOrderId(), a.getOrderItemId(),
+                a.getHeldUntil() == null ? null : a.getHeldUntil().toLocalDate().toString(),
+                ChoiceEvents.PartyRef.customer(pool == null ? null : pool.getOwnerPartyId()), granted, left);
+    }
+
+    private ChoiceEvents.Grant fact(ChoiceGrant g, int choices, ChoicePool known) {
+        ChoicePool pool = known != null ? known : pools.findById(g.getPoolId()).orElse(null);
+        int granted = pool == null ? 0 : granted(g.getTenantId(), pool.getId());
+        // mid-swap the new benefit is in use before the old one ends: never below zero
+        int left = pool == null ? 0 : Math.max(0, granted - inUse(g.getTenantId(), pool.getId()));
+        return new ChoiceEvents.Grant(g.getOfferingId(), g.getOfferingName(), choices, g.getOrderId(),
+                g.getOrderItemId(), ChoiceEvents.PartyRef.customer(pool == null ? null : pool.getOwnerPartyId()),
+                granted, left);
     }
 
     private static PoolView.Allocation allocationView(ChoiceAllocation a) {

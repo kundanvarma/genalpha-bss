@@ -38,6 +38,11 @@
  *   row and one journal entry, cost of sales against a payable to the partner
  *   A10. the completion replayed (a duplicate partner callback) adds nothing;
  *       finance reads the month by partner, a customer cannot
+ * Marketing (#361):
+ *   "has unused Choices" is an audience (insight's choicesLeft trait) that holds
+ *   the household with Choices left and not the one with none — and a household
+ *   bridged from a foreign BSS; pickers of a benefit are an audience too; the
+ *   shop Home says "You have N of your Choices left" only where Choices are unused
  *
  * Later tickets add their legs here (swap/release, downgrade, holds, CSR desk,
  * governed actions, partner cost, marketing).
@@ -549,6 +554,51 @@ const orderOf = (o) => ({
   if (/[0-9a-f]{8}-[0-9a-f]{4}-/.test(await bo.locator('[data-testid=partner-costs]').innerText())) fail('the finance view shows ids');
   await bo.screenshot({ path: `${SHOTS}/benefit_choices_partner_costs.png`, fullPage: true });
   console.log(`OK A10: "${newName}" owes PlayCo 3.50 for ${month} — one row and one journal entry, even with the completion replayed twice; finance reads it by partner, a customer cannot`);
+
+  /* ---- marketing (#361): the households with Choices they have not spent ---- */
+  const subOf = (tok) => JSON.parse(Buffer.from(tok.split('.')[1], 'base64url')).sub;
+  const chloeId = subOf(chloe);
+  const heddaId = subOf(hedda);
+  const leftOf = async (id) => (await (await ctx.get(`${CHOICES}/pool?ownerPartyId=${id}`, { headers: H(finance) })).json()).left;
+  const chloeLeft = await leftOf(chloeId);
+  const heddaLeft = await leftOf(heddaId);
+  if (chloeLeft < 1 || heddaLeft !== 0) fail(`the marketing leg needs Chloe with Choices left and Hedda with none: ${chloeLeft}, ${heddaLeft}`);
+  const AUD = `${API}/insight/v1/audience`;
+  const unused = await (await ctx.post(AUD, { headers: H(finance), data: { name: `Has unused Choices ${run}`, population: 'customer',
+    criteria: { all: [{ type: 'trait', key: 'choicesLeft', op: 'gte', value: '1' }] } } })).json();
+  const members = async (aud) => ((await (await ctx.get(`${AUD}/${aud.id}/members`, { headers: H(finance) })).json()) || []).map((m) => m.partyId);
+  await settled('the audience counting Chloe (Choices left) and not Hedda (none left)', async () => {
+    const m = await members(unused);
+    return m.includes(chloeId) && !m.includes(heddaId);
+  });
+  // which benefits households choose: an ordinary trait, so an ordinary audience
+  const arcadeAud = await (await ctx.post(AUD, { headers: H(finance), data: { name: `Picked ${newName}`, population: 'customer',
+    criteria: { all: [{ type: 'trait', key: 'benefit', value: newName }] } } })).json();
+  await settled(`the audience of households who picked ${newName}`, async () => (await members(arcadeAud)).includes(ingridId));
+  // a foreign BSS that still runs the picks feeds the same audience, through the bridge
+  const foreign = `acme-choices-${run}`;
+  const bridged = await ctx.post('http://localhost:8140/bridge/v1/acme-bss/event', { headers: { 'Content-Type': 'application/json' },
+    data: { kind: 'BENEFIT_PICKED', account: { ref: foreign, choicesLeft: 2 }, benefit: { name: 'StreamCo Standard' } } });
+  if (!bridged.ok()) fail('the bridge refused a benefit pick: ' + bridged.status());
+  await settled('the bridged household in the unused-Choices audience', async () => (await members(unused)).includes(foreign));
+  // Home says it to the household — only where Choices are unused, in the tenant's word
+  for (const [who, pg, left] of [['Chloe', page, chloeLeft], ['Hedda', hPage, heddaLeft]]) {
+    await pg.goto(`${API}/shop/`);
+    await pg.locator('[data-testid=home-attention]').waitFor({ timeout: 20000 });
+    const line = pg.locator('[data-testid=attention-choices]');
+    if (left > 0) {
+      await line.waitFor({ timeout: 20000 });
+      const text = await line.innerText();
+      if (!text.includes(`You have ${left} of your Choices left`)) fail(`${who}'s Home should say she has ${left} of her Choices left: ${text}`);
+      // the picture once Home has finished reading, not mid-load
+      await pg.waitForFunction(() => !/Reading/.test(document.querySelector('[data-testid=home-health]')?.textContent || 'Reading'), null, { timeout: 30000 }).catch(() => {});
+      await pg.screenshot({ path: `${SHOTS}/benefit_choices_home.png`, fullPage: true });
+    } else {
+      await sleep(3000);   // the line is read on its own; give it the time a reading takes
+      if (await line.count()) fail(`${who} has no Choices left, but Home offers her some`);
+    }
+  }
+  console.log(`OK marketing: "Has unused Choices" holds Chloe (${chloeLeft} left) and not Hedda (none), and a household from the bridge; "${newName}" pickers are an audience; Home says "You have ${chloeLeft} of your Choices left" to Chloe only`);
 
   // a governed tenant: Taranga's benefits wait for an approver like any offering
   const tTok = async (u, pw) => (await (await ctx.post(`${KC}/taranga/protocol/openid-connect/token`, { form: {

@@ -1,10 +1,13 @@
 package com.bss.benefit.service;
 
+import com.bss.benefit.dto.ChoiceEvents;
 import com.bss.benefit.dto.PartnerCostView;
+import com.bss.benefit.entity.ChoicePool;
 import com.bss.benefit.entity.ChoiceAllocation;
 import com.bss.benefit.entity.PartnerCost;
 import com.bss.benefit.events.DomainEventPublisher;
 import com.bss.benefit.repository.ChoiceAllocationRepository;
+import com.bss.benefit.repository.ChoicePoolRepository;
 import com.bss.benefit.repository.PartnerCostRepository;
 import com.bss.benefit.security.TenantContext;
 import com.bss.benefit.security.TenantRegistry;
@@ -45,15 +48,18 @@ public class PartnerCosts {
 
     private final PartnerCostRepository costs;
     private final ChoiceAllocationRepository allocations;
+    private final ChoicePoolRepository pools;
     private final TenantScope tenantScope;
     private final TenantRegistry registry;
     private final DomainEventPublisher events;
     private final TransactionTemplate tx;
 
-    public PartnerCosts(PartnerCostRepository costs, ChoiceAllocationRepository allocations, TenantScope tenantScope,
-            TenantRegistry registry, DomainEventPublisher events, TransactionTemplate tx) {
+    public PartnerCosts(PartnerCostRepository costs, ChoiceAllocationRepository allocations,
+            ChoicePoolRepository pools, TenantScope tenantScope, TenantRegistry registry, DomainEventPublisher events,
+            TransactionTemplate tx) {
         this.costs = costs;
         this.allocations = allocations;
+        this.pools = pools;
         this.tenantScope = tenantScope;
         this.registry = registry;
         this.events = events;
@@ -86,7 +92,9 @@ public class PartnerCosts {
         c.setRecordedAt(OffsetDateTime.now());
         costs.save(c);
         events.publish("ChoiceCostRecordedEvent", "partnerCost", new PartnerCostView.Recorded(c.getId(),
-                a.getId(), month, c.getPartner(), c.getOfferingName(), c.getAmount(), c.getCurrency()), tenant);
+                a.getId(), month, c.getPartner(), c.getOfferingName(), c.getAmount(), c.getCurrency(),
+                ChoiceEvents.PartyRef.customer(pools.findById(a.getPoolId()).map(ChoicePool::getOwnerPartyId)
+                        .orElse(null))), tenant);
     }
 
     /** Every tenant that offers Choices: each active benefit's cost for the month now running. */

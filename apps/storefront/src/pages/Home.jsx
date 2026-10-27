@@ -9,6 +9,8 @@ import { LineDoctor } from './Services.jsx';
 import { OfferingCard } from './Shop.jsx';
 import RouterPanel from './RouterPanel.jsx';
 import Meter from './home/Meter.jsx';
+import ChoicesLine from './home/ChoicesLine.jsx';
+import { kindOf, numberOf, placeOf, leaves, dt } from './home/shape.js';
 import { tracker, unchecked, listed } from '../reach.js';
 
 /* Home — the customer's first screen answers two questions: is everything
@@ -20,18 +22,6 @@ import { tracker, unchecked, listed } from '../reach.js';
  * services as cards with the actions that service can take, money and usage,
  * open work, recent activity, and one commercial suggestion — always last. */
 
-const kindOf = (sv) => {
-  const c = String(sv.category || sv.serviceType || '').toLowerCase();
-  const n = String(sv.name || '').toLowerCase();
-  if (/mobile|sim/.test(c) || /mobile|sim\b|5g|gb\b/.test(n)) return 'mobile';
-  if (/broadband|fib|dsl|internet/.test(c) || /fiber|fibre|broadband|dsl|internet/.test(n)) return 'broadband';
-  if (/\btv\b|iptv|stream/.test(c) || /\btv\b|stream/.test(n)) return 'tv';
-  return 'other';
-};
-const numberOf = (sv) => (sv.supportingResource || []).map((r) => r.value).find(Boolean) || null;
-const placeOf = (sv) => { const p = (sv.place || [])[0]; return p ? (p.name || [p.streetName || p.street1, p.city].filter(Boolean).join(', ')) : null; };
-const leaves = (items, into = []) => { for (const it of items || []) { const kids = it.productOrderItem || []; if (kids.length) leaves(kids, into); else if (it.productOffering) into.push(it); } return into; };
-const dt = (v) => v ? new Date(v).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 const OPEN_BILL = ['new', 'validated', 'sent', 'partiallyPaid'];
 const LIVE_ORDER = (o) => !['completed', 'cancelled', 'rejected', 'failed'].includes(o.state);
 const partOfDay = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; };
@@ -207,6 +197,7 @@ export default function Home() {
             {a.href && <a className="ghost linkbtn" href={a.href}>{a.cta}</a>}
           </div>
         ))}
+        <ChoicesLine />
         {more.length > 0 && <p className="dim small" data-testid="attention-more">{t('and')} {more.length} {t('more')} — <Link to={more.some((a) => ['overdue', 'bill', 'arranged'].includes(a.kind)) ? '/bills' : '/services'}>{t('see all')}</Link></p>}
       </section>
 

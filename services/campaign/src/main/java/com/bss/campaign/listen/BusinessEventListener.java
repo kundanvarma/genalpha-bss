@@ -119,6 +119,11 @@ public class BusinessEventListener {
         if (resource.get("sliceUntil") != null) ctx.put("slice.until", localTime(resource.get("sliceUntil"), tenantId));
         if (resource.get("boostPass") != null) ctx.put("slice.pass", resource.get("boostPass"));
         if (resource.get("lapsedProfile") != null) ctx.put("slice.lapsed", resource.get("lapsedProfile"));
+        // Benefit Choices (#361): which benefit, and how many Choices the household has left
+        if (eventType != null && eventType.startsWith("Choice")) {
+            if (resource.get("offeringName") != null) ctx.put("choice.benefit", resource.get("offeringName"));
+            if (resource.get("choicesLeft") != null) ctx.put("choice.left", resource.get("choicesLeft"));
+        }
         return ctx;
     }
 
