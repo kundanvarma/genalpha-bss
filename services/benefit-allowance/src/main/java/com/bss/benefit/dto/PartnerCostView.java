@@ -16,6 +16,6 @@ public record PartnerCostView(String period, String currency, BigDecimal total, 
 
     /** One recorded month of one active benefit — the event's payload and the revenue posting's source. */
     public record Recorded(String id, String allocationId, String period, String partner, String offeringName,
-            BigDecimal amount, String currency) {
+            BigDecimal amount, String currency, List<ChoiceEvents.PartyRef> relatedParty) {
     }
 }

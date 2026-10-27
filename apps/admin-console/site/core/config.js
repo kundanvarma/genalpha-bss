@@ -65,7 +65,7 @@ const TRIGGER_EVENTS = [
   { value: 'ShippingOrderStateChangeEvent', label: 'Parcel/handset shipped or delivered' },
   { value: 'BucketBalanceChangeEvent', label: 'Data balance topped up (top-up bought / loyalty data gifted)' },
   { value: 'UsageThresholdBreachedEvent', label: 'Data running low (OCS usage threshold, e.g. 80% used)' },
-  { value: 'ServiceSliceChangeEvent', label: 'Network priority changed (boost pass on / lapsed, priority tier)' },
+  { value: 'ServiceSliceChangeEvent', label: 'Network priority changed (boost pass on / lapsed, priority tier)' }, { value: 'ChoicePickedEvent', label: 'Benefit picked with a Choice' }, { value: 'ChoicesGrantedEvent', label: 'Choices granted (a plan or goodwill)' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the

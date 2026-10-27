@@ -8,10 +8,13 @@ accounting_configuration_test revenue billing party-account
 agentic_workforce_test      trouble-ticket mock-legacy
 ai_slice_test               quote assurance mock-5gc intelligence
 ai_visibility_states_test   product-catalog storefront
+audience_activation_test    insight mock-social
+audience_async_activation_test insight mock-social
 audience_scheduler_test     bss-bridge insight
 audience_snapshot_test      bss-bridge insight
 audience_sql_test           bss-bridge insight
 b2b_test                    communication quote
+benefit_choices_test        benefit-allowance mock-partner revenue insight campaign bss-bridge intelligence ontology
 bill_distribution_test      mock-distribution
 bill_situation_test         billing party-account
 billing_ia_test             billing party-account payment revenue intelligence user-roles
@@ -32,6 +35,7 @@ csr_wayfinding_test         knowledge intelligence party-account trouble-ticket
 decision_log_test           campaign insight
 device_commerce_test        revenue device-commerce
 device_entitlement_test     device-entitlement mock-ts43-device mock-smdp mock-hss
+device_model_test           usage insight
 diagnosis_in_place_test    assurance trouble-ticket recommendation intelligence knowledge
 engagement_test             communication insight
 family_phase2_test          communication
@@ -44,8 +48,10 @@ interaction_timeline_test   communication party-interaction campaign
 knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
 loyalty_test                loyalty
+martech_test                campaign intelligence communication assurance trouble-ticket
 offering_rules_panel_test   policy product-catalog console
 omnichannel_test            campaign party-interaction communication
+partner_activation_test     mock-partner
 party_debris_test           party-account product-inventory product-ordering billing revenue party-interaction communication campaign shopping-cart trouble-ticket appointment insight user-roles
 price_builder_test          product-stock insight
 process_memory_test         process trouble-ticket
