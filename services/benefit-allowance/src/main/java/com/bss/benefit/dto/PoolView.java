@@ -8,7 +8,7 @@ import java.util.List;
  * ids, are what a person reads; the ids ride along for the next request.
  */
 public record PoolView(boolean offered, String label, int granted, int inUse, int left,
-        List<Source> grants, List<Allocation> allocations) {
+        List<Source> grants, List<Allocation> allocations, int swapsThisQuarter, String nextQuarterStarts) {
 
     /** A plan that put Choices in. */
     public record Source(String offeringId, String offeringName, int choices) {

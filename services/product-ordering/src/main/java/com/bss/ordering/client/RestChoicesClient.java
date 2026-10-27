@@ -28,11 +28,12 @@ public class RestChoicesClient implements ChoicesClient {
 
     @Override
     public HoldOutcome hold(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost) {
+            String offeringName, int cost, List<Source> replaces) {
         try {
             restClient.post()
                     .uri(BASE + "/hold")
-                    .body(new HoldBody(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost))
+                    .body(new HoldBody(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost,
+                            replaces == null ? List.of() : replaces))
                     .retrieve()
                     .toBodilessEntity();
             return HoldOutcome.held();
@@ -48,8 +49,19 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     @Override
-    public void settle(String orderId, String ownerPartyId, List<Grant> grants) {
-        post("/order/" + orderId + "/settle", new SettleBody(ownerPartyId, grants));
+    public void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings) {
+        post("/order/" + orderId + "/settle", new SettleBody(ownerPartyId, grants, endings));
+    }
+
+    @Override
+    public Swaps swaps(String ownerPartyId) {
+        try {
+            PoolCount pool = restClient.get().uri(BASE + "/pool?ownerPartyId={owner}", ownerPartyId)
+                    .retrieve().body(PoolCount.class);
+            return pool == null ? new Swaps(0, null) : new Swaps(pool.swapsThisQuarter(), pool.nextQuarterStarts());
+        } catch (RestClientException e) {
+            throw new DownstreamException("benefit-allowance is unreachable", e);
+        }
     }
 
     @Override
@@ -80,9 +92,13 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     private record HoldBody(String ownerPartyId, String orderId, String orderItemId, String offeringId,
-            String offeringName, int cost) {
+            String offeringName, int cost, List<Source> replaces) {
     }
 
-    private record SettleBody(String ownerPartyId, List<Grant> grants) {
+    private record SettleBody(String ownerPartyId, List<Grant> grants, List<Ending> endings) {
+    }
+
+    /** As much of the pool as the swap-limit rule needs. */
+    private record PoolCount(int swapsThisQuarter, String nextQuarterStarts) {
     }
 }

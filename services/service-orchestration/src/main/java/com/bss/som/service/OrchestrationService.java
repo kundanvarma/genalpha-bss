@@ -167,6 +167,12 @@ public class OrchestrationService {
             // provisioned/fulfilled milestones fire on REAL fulfilment (a delivered
             // parcel / a done install), not on optimistic activation.
             completeDeferredServiceOrders(tenant, productOrderId);
+            // a SWAP's endings (#356): the old benefit stops now that the new one landed
+            List<Map<String, Object>> landed = new ArrayList<>();
+            collectItems((List<Map<String, Object>>) productOrder.get("productOrderItem"), landed);
+            String swapper = productOrder.get("relatedParty") instanceof List<?> ps && !ps.isEmpty() ? idOf(ps.get(0)) : null;
+            endDeletedServices(tenant, landed.stream()
+                    .filter(i -> "delete".equalsIgnoreCase(String.valueOf(i.get("action")))).toList(), swapper, productOrderId);
             return;
         }
         if ((!"acknowledged".equals(state) && !fulfilled) || alreadyOrchestrated) {
@@ -191,8 +197,12 @@ public class OrchestrationService {
         // is passed by, so the create and the completed event may both arrive.
         List<Map<String, Object>> deletes = items.stream()
                 .filter(i -> "delete".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
-        endDeletedServices(tenant, deletes, owner, productOrderId);
         items.removeAll(deletes);
+        if (items.isEmpty() || fulfilled) {
+            // an ending on its own stops now; in a SWAP (#356) the endings wait for
+            // the order's completed event, so the old benefit stays until the new one lands
+            endDeletedServices(tenant, deletes, owner, productOrderId);
+        }
         if (items.isEmpty()) {
             return;
         }

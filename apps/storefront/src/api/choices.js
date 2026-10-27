@@ -22,3 +22,28 @@ export async function pickBenefit(offering) {
     }),
   }));
 }
+
+/** Give a benefit back: a TMF622 order that ends its product; the Choice returns once it completes. */
+export async function releaseBenefit(productId) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productOrderItem: [{ id: '1', action: 'delete', product: { id: productId } }] }),
+  }));
+}
+
+/** Swap: ONE order that ends the old benefit and picks the new — the old stays until the new is active. */
+export async function swapBenefit(productId, offering) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: `Swap for ${offering.name}`,
+      productOrderItem: [
+        { id: '1', action: 'delete', product: { id: productId } },
+        { id: '2', action: 'add', quantity: 1,
+          productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' } },
+      ],
+    }),
+  }));
+}

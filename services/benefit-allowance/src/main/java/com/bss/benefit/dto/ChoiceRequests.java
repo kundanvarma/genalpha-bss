@@ -17,9 +17,28 @@ public final class ChoiceRequests {
     private ChoiceRequests() {
     }
 
-    /** Hold Choices for one benefit item of an order being placed. */
+    /**
+     * Hold Choices for one benefit item of an order being placed. In a swap,
+     * {@code replaces} names the benefits the same order ends: their Choices
+     * count as free for this hold, because the order cannot complete without
+     * ending them.
+     */
     public record Hold(@NotBlank String ownerPartyId, @NotBlank String orderId, @NotBlank String orderItemId,
-            @NotBlank String offeringId, @NotBlank String offeringName, @Min(1) int cost) {
+            @NotBlank String offeringId, @NotBlank String offeringName, @Min(1) int cost,
+            List<@Valid Source> replaces) {
+
+        public Hold(String ownerPartyId, String orderId, String orderItemId, String offeringId, String offeringName,
+                int cost) {
+            this(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost, List.of());
+        }
+    }
+
+    /** An allocation by the order item that made it (the inventory product's lineage). */
+    public record Source(@NotBlank String orderId, @NotBlank String orderItemId) {
+    }
+
+    /** A benefit the completing order ends: swapped for another, or simply released. */
+    public record Ending(@NotBlank String orderId, @NotBlank String orderItemId, boolean swapped) {
     }
 
     /** One plan item that grants Choices, as the order completes. */
@@ -27,7 +46,11 @@ public final class ChoiceRequests {
             @Min(1) int choices) {
     }
 
-    /** The order completed: commit what it held, add what it granted. */
-    public record Settle(@NotBlank String ownerPartyId, List<@Valid Grant> grants) {
+    /** The order completed: commit what it held, add what it granted, end what it ended. */
+    public record Settle(@NotBlank String ownerPartyId, List<@Valid Grant> grants, List<@Valid Ending> endings) {
+
+        public Settle(String ownerPartyId, List<Grant> grants) {
+            this(ownerPartyId, grants, List.of());
+        }
     }
 }
