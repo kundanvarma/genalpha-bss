@@ -488,6 +488,39 @@ public class RevenueService {
     }
 
     /**
+     * Benefit Choices (#390): the operator paid a partner's invoice, so the payable
+     * the monthly partner costs built up is settled — debit the partner payable,
+     * credit cash. The journal had only ever accrued partner payables; this is the
+     * first posting that pays one. Keyed on the invoice, so a replay posts nothing.
+     */
+    @Transactional
+    public boolean postPartnerPayment(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        Object rawId = event.get("id");
+        if (rawId == null || event.get("amount") == null) {
+            return false;   // nothing to key a posting by, or nothing to pay
+        }
+        String id = rawId.toString();
+        String sourceRef = "partner-payment:" + id;
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal amount = money(event.get("amount"));
+        if (amount.signum() <= 0) {
+            return false;   // an invoice for nothing settles nothing
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String partner = String.valueOf(event.getOrDefault("partner", "partner"));
+        String desc = "Paid " + partner + " — invoice " + event.getOrDefault("reference", "")
+                + " for " + event.getOrDefault("period", "");
+        List<JournalLine> posting = List.of(
+                line("partner:payable", amount, null, id, "Settles the payable to " + partner),
+                line("cash", null, amount, id, desc));
+        saveBalanced(tenant, sourceRef, "partnerPayment", desc, currency, null, posting);
+        return true;
+    }
+
+    /**
      * Mobile wholesale PROVIDER side (W-M7): the host earns wholesale revenue from
      * an external MVNO's traffic — booked as a receivable + wholesale revenue,
      * keyed on the provider-ledger id so replays are free. The mirror of the

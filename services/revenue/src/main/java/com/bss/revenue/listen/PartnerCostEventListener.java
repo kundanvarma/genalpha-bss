@@ -14,7 +14,8 @@ import java.util.Map;
 
 /** Benefit Choices (#360) — the subledger's ear on the benefit ledger: each
  *  month an active partner benefit costs is booked as cost of sales + a payable
- *  to the partner, idempotent per recorded month. */
+ *  to the partner, idempotent per recorded month; a paid partner invoice
+ *  settles that payable against cash (#390). */
 @Component
 @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
 public class PartnerCostEventListener {
@@ -36,11 +37,22 @@ public class PartnerCostEventListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"ChoiceCostRecordedEvent".equals(String.valueOf(envelope.get("eventType")))) {
+            String eventType = String.valueOf(envelope.get("eventType"));
+            if (!"ChoiceCostRecordedEvent".equals(eventType) && !"PartnerInvoicePaidEvent".equals(eventType)) {
                 return;
             }
             Object rawTenant = envelope.get("tenantId");
             String tenantId = rawTenant == null ? "genalpha" : String.valueOf(rawTenant);
+            if ("PartnerInvoicePaidEvent".equals(eventType)) {
+                // a paid partner invoice settles the payable (#390)
+                Map<String, Object> invoice = BillingEventListener.resource(envelope, "partnerInvoice");
+                if (invoice != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        revenue.postPartnerPayment(invoice);
+                    }
+                }
+                return;
+            }
             Map<String, Object> cost = BillingEventListener.resource(envelope, "partnerCost");
             if (cost != null) {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {

@@ -38,6 +38,8 @@
  *   row and one journal entry, cost of sales against a payable to the partner
  *   A10. the completion replayed (a duplicate partner callback) adds nothing;
  *       finance reads the month by partner, a customer cannot
+ *   a partner's invoice (#390) recorded twice is one invoice; owed beside
+ *       invoiced, the difference in words; paid on the screen, settled once
  * Marketing (#361):
  *   "has unused Choices" is an audience (insight's choicesLeft trait) that holds
  *   the household with Choices left and not the one with none — and a household
@@ -576,6 +578,44 @@ const orderOf = (o) => ({
   if (/[0-9a-f]{8}-[0-9a-f]{4}-/.test(await bo.locator('[data-testid=partner-costs]').innerText())) fail('the finance view shows ids');
   await bo.screenshot({ path: `${SHOTS}/benefit_choices_partner_costs.png`, fullPage: true });
   console.log(`OK A10: "${newName}" owes PlayCo 3.50 for ${month} — one row and one journal entry, even with the completion replayed twice; finance reads it by partner, a customer cannot`);
+
+  /* ---- partner invoices (#390): owed beside invoiced, and the payable settled ---- */
+  const playco = async () => ((await (await ctx.get(`${CHOICES}/partnerCost?period=${month}`, { headers: H(finance) })).json())
+    .partners || []).find((p) => p.partner === 'PlayCo');
+  const beforeInv = await playco();
+  if (!beforeInv) fail('the month should reconcile PlayCo: no partners entry');
+  const invRef = `PC-${run}`;
+  const invBody = { partner: 'PlayCo', period: month, reference: invRef, amount: 1.25 };
+  const inv1 = await (await ctx.post(`${CHOICES}/partnerInvoice`, { headers: H(finance), data: invBody })).json();
+  const inv2 = await (await ctx.post(`${CHOICES}/partnerInvoice`, { headers: H(finance), data: invBody })).json();
+  if (!inv1.id || inv1.id !== inv2.id) fail('the same invoice recorded twice should be one invoice: ' + JSON.stringify([inv1, inv2]));
+  const afterInv = await playco();
+  const rise = Math.round((afterInv.invoiced - beforeInv.invoiced) * 100) / 100;
+  if (rise !== 1.25) fail(`PlayCo's invoiced should rise by 1.25 exactly once, rose ${rise}`);
+  if (Math.round((afterInv.invoiced - afterInv.owed - afterInv.difference) * 100) !== 0) fail('difference must be invoiced - owed: ' + JSON.stringify(afterInv));
+  if ((await ctx.post(`${CHOICES}/partnerInvoice`, { headers: H(ingrid), data: invBody })).status() !== 403) fail('a customer recorded a partner invoice');
+  // finance pays it on the screen; the Journal settles the payable once
+  await bo.evaluate(() => window.consoleGoTo('journalEntry'));
+  await bo.evaluate(() => window.consoleGoTo('partnerCost'));
+  const recon = bo.locator('[data-testid=partner-reconciled][data-partner="PlayCo"]');
+  await recon.waitFor({ timeout: 30000 });
+  const words = await recon.locator('[data-testid=partner-difference]').innerText();
+  if (!/matches|more than owed|less than owed/.test(words)) fail('the difference should be in words: ' + words);
+  await recon.locator('[data-testid=partner-invoice]', { hasText: invRef }).locator('[data-testid=partner-invoice-pay]').click();
+  await bo.locator('[data-testid=partner-invoices-said]', { hasText: 'is paid' }).waitFor({ timeout: 20000 });
+  await recon.locator('[data-testid=partner-invoice]', { hasText: invRef }).filter({ hasText: 'paid' }).waitFor({ timeout: 20000 });
+  await ctx.post(`${CHOICES}/partnerInvoice/${inv1.id}/pay`, { headers: H(finance) });   // a second payment changes nothing
+  const settledPay = await settled('the payment on the journal', async () => {
+    const r = await ctx.get(`${API}/revenue/v1/journalEntry?sourceType=partnerPayment&limit=200`, { headers: H(finance) });
+    const mine = ((await r.json()) || []).filter((e) => (e.description || '').includes(invRef));
+    return mine.length > 0 ? mine : null;
+  });
+  await sleep(4000);   // time for a duplicate to land, were there one
+  const paidTwice = ((await (await ctx.get(`${API}/revenue/v1/journalEntry?sourceType=partnerPayment&limit=200`, { headers: H(finance) })).json()) || [])
+    .filter((e) => (e.description || '').includes(invRef));
+  if (settledPay.length !== 1 || paidTwice.length !== 1) fail(`the invoice should be settled once on the journal, found ${paidTwice.length}`);
+  await bo.screenshot({ path: `${SHOTS}/benefit_choices_invoices.png`, fullPage: true });
+  console.log(`OK invoices: PlayCo's ${invRef} recorded once (invoiced +1.25), "${words}"; paid on the screen and settled once on the journal`);
 
   /* ---- marketing (#361): the households with Choices they have not spent ---- */
   const subOf = (tok) => JSON.parse(Buffer.from(tok.split('.')[1], 'base64url')).sub;

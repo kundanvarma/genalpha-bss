@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PartnerInvoices } from './PartnerInvoices.jsx';
 
 /* Partner costs (#360, Benefit Choices) — what the operator owes its partners
  * for a month. A customer picks a partner's service with a Choice and pays
@@ -17,11 +18,14 @@ const money = (amount, currency) => new Intl.NumberFormat(undefined, { style: 'c
 export function PartnerCosts({ authFetch }) {
   const [month, setMonth] = useState(thisMonth());
   const [bill, setBill] = useState(null);
+  const [version, setVersion] = useState(0);   // bumped when an invoice changes, to read the month again
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let live = true;
-    setBill(null);
+    // a new month starts blank; a re-read of the same month (after an invoice changed)
+    // keeps what is on screen until the new answer lands, so nothing below unmounts
+    setBill((b) => (b && b.period === month ? b : null));
     setError(null);
     authFetch(`${LEDGER}?period=${encodeURIComponent(month)}`)
       .then(async (res) => {
@@ -31,7 +35,7 @@ export function PartnerCosts({ authFetch }) {
       .then((b) => { if (live) setBill(b); })
       .catch((e) => { if (live) setError(`Could not read partner costs, so this is unknown — not zero (${e.message})`); });
     return () => { live = false; };
-  }, [authFetch, month]);
+  }, [authFetch, month, version]);
 
   return (
     <div data-testid="partner-costs">
@@ -67,6 +71,8 @@ export function PartnerCosts({ authFetch }) {
           </div>
         </>
       ) : null}
+      {bill ? <PartnerInvoices authFetch={authFetch} month={month} bill={bill} money={money}
+        onChanged={() => setVersion((v) => v + 1)} /> : null}
     </div>
   );
 }
