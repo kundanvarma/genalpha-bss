@@ -20,6 +20,7 @@ export function Choices({ authFetch }) {
   const [said, setSaid] = useState(null);
   const [grants, setGrants] = useState({});
   const [busy, setBusy] = useState(false);
+  const [showRetired, setShowRetired] = useState(false);
 
   const load = useCallback(() => allOfferings(authFetch)
     .then((all) => { setOfferings(all); setGrants({}); })
@@ -42,7 +43,10 @@ export function Choices({ authFetch }) {
 
   if (!offerings) return <div data-testid="island-choices"><p className="dim">{error || 'Loading the catalog…'}</p></div>;
   const plans = offerings.filter((o) => isPlan(o) && o.lifecycleStatus !== 'Retired');
-  const benefits = offerings.filter((o) => o.choiceCost > 0);
+  // today's catalogue first: a retired benefit is history, one tick away (#378)
+  const allBenefits = offerings.filter((o) => o.choiceCost > 0);
+  const retired = allBenefits.filter((o) => o.lifecycleStatus === 'Retired').length;
+  const benefits = showRetired ? allBenefits : allBenefits.filter((o) => o.lifecycleStatus !== 'Retired');
   return (
     <div data-testid="island-choices" style={{ display: 'grid', gap: 16 }}>
       <p className="zone-note">A plan grants Choices for each line bought on it; a household spends them on benefits. Set the grants, make a benefit — no JSON.</p>
@@ -66,7 +70,10 @@ export function Choices({ authFetch }) {
       </section>
 
       <section className="card">
-        <h3>Benefits <span className="dim small">{benefits.length}</span></h3>
+        <h3>Benefits <span className="dim small">{benefits.length}</span>
+          {retired > 0 && <label className="dim small" style={{ marginLeft: 12, fontWeight: 'normal' }}>
+            <input type="checkbox" data-testid="show-retired" checked={showRetired}
+              onChange={(e) => setShowRetired(e.target.checked)} /> Show {retired} retired</label>}</h3>
         <table data-testid="choice-benefits"><thead><tr><th>Benefit</th><th>Costs</th><th>Partner</th><th>Partner charges / month</th><th>Holds</th><th>State</th></tr></thead>
           <tbody>{benefits.map((b) => (
             <tr key={b.id} data-benefit={b.name}>
