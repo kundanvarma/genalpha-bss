@@ -14,7 +14,7 @@ audience_scheduler_test     bss-bridge insight
 audience_snapshot_test      bss-bridge insight
 audience_sql_test           bss-bridge insight
 b2b_test                    communication quote
-benefit_choices_test        benefit-allowance mock-partner revenue insight campaign bss-bridge intelligence ontology billing
+benefit_choices_test        benefit-allowance mock-partner revenue insight campaign bss-bridge intelligence ontology billing mock-5gc
 bill_distribution_test      mock-distribution
 bill_situation_test         billing party-account
 billing_ia_test             billing party-account payment revenue intelligence user-roles
