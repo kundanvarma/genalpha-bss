@@ -6,6 +6,11 @@ import { NO_SHOP } from './no.js';
 import { NO_ACCOUNT } from './no-account.js';
 
 export const NN = {
+  // Nynorsk starts from Bokmål and overrides what differs — the spread comes FIRST,
+  // so every entry below wins. (It sat in the middle until #387, and the forty
+  // overrides written above it were silently replaced by their bokmål forms.)
+  ...NO_SHOP,
+  ...NO_ACCOUNT,
   // Home attention + the offer page as a decision (2026-09-15)
   'services are paused — no charges apply while they are paused.': 'tenester er sette på pause — ingenting vert belasta medan dei er på pause.',
   'Review services': 'Sjå tenestene',
@@ -47,9 +52,6 @@ export const NN = {
   'Services': 'Tenester',
   'Billing': 'Fakturaar',
   'Shop': 'Butikk',
-  // Nynorsk starts from Bokmål and overrides what differs
-  ...NO_SHOP,
-  ...NO_ACCOUNT,
   'Invite a friend': 'Verv ein ven',
   'You each get': 'De får begge',
   'when they place their first order.': 'når dei fullfører si første bestilling.',
