@@ -11,7 +11,7 @@
     "expo-crypto": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.3",
-    "react": "19.3.0",
+    "react": "19.3.1",
     "react-dom": "^19.3.0",
     "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.10.0",
