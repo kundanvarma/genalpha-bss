@@ -8,6 +8,8 @@
 # A role with nothing after it is only defined.
 benefit:read
 benefit:write bss-ordering
+# ordering reads collections to tell policy whether a household picking a benefit is in collections (#391)
+billing:read bss-ordering
 # the care desk reads a household's Choices (#358): the CSR bundle, and the all-round demo staff login
 benefit:read composite:agent
 benefit:read user:demo

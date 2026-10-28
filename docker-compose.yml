@@ -217,6 +217,7 @@ services:
       INVENTORY_BASE_URL: http://product-inventory:8080
       STOCK_BASE_URL: http://product-stock:8080
       CHOICES_BASE_URL: http://benefit-allowance:8080
+      BILLING_BASE_URL: http://billing:8080
       PAYMENT_BASE_URL: http://payment:8080
       AGREEMENT_BASE_URL: http://agreement:8080
       # TMF645/679 order-time serviceability gate (anonymous, fail-open)

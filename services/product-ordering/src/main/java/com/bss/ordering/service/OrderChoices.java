@@ -90,6 +90,11 @@ class OrderChoices {
         return !endedBenefits(leafItems).isEmpty() && items(leafItems).stream().anyMatch(i -> i.cost() > 0);
     }
 
+    /** Does this order pick a NEW benefit — one that is not a swap for one it ends? (eligibility, #391) */
+    boolean isPick(List<Map<String, Object>> leafItems) {
+        return endedBenefits(leafItems).isEmpty() && items(leafItems).stream().anyMatch(i -> i.cost() > 0);
+    }
+
     ChoicesClient.Pool pool(String ownerPartyId) {
         return ledger.pool(ownerPartyId);
     }

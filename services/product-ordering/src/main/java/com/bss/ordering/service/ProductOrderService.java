@@ -71,6 +71,7 @@ public class ProductOrderService {
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
     private final com.bss.ordering.credit.CreditDecisionService creditService;
     private final OrderChoices orderChoices;
+    private final com.bss.ordering.client.CollectionsClient collectionsClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
@@ -79,7 +80,8 @@ public class ProductOrderService {
             com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
             com.bss.ordering.client.RiskClient riskClient,
             com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff,
-            com.bss.ordering.credit.CreditDecisionService creditService, OrderChoices orderChoices) {
+            com.bss.ordering.credit.CreditDecisionService creditService, OrderChoices orderChoices,
+            com.bss.ordering.client.CollectionsClient collectionsClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -98,6 +100,7 @@ public class ProductOrderService {
         this.riskClient = riskClient;
         this.legacyHandoff = legacyHandoff;
         this.creditService = creditService;
+        this.collectionsClient = collectionsClient;
         this.orderChoices = orderChoices;
     }
 
@@ -1082,6 +1085,14 @@ public class ProductOrderService {
             if (swaps.nextQuarterStarts() != null) {
                 context.put("nextQuarterStarts", swaps.nextQuarterStarts());
             }
+        }
+        // Benefit Choices eligibility (#391): an order that picks a NEW benefit says so,
+        // and whether the household is in collections, so "no new picks while in
+        // collections" is the operator's rule, not code. Billing is asked only for a
+        // pick; when it cannot say, inCollections is absent and the rule does not fire.
+        if (ownerPartyId != null && orderChoices.isPick(leaves)) {
+            context.put("choicePick", true);
+            collectionsClient.inCollections(ownerPartyId).ifPresent(v -> context.put("inCollections", v));
         }
         // The delivery place (freg F-P3): home deliveries carry how the address
         // was sourced — registry-verified or typed by hand. Rules read both;

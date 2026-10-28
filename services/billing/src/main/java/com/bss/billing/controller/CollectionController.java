@@ -40,8 +40,9 @@ public class CollectionController {
 
     @GetMapping("/collectionCase")
     public ResponseEntity<List<CollectionCaseView>> cases(
-            @RequestParam(name = "state", required = false) String state) {
-        return ResponseEntity.ok(service.findCases(state));
+            @RequestParam(name = "state", required = false) String state,
+            @RequestParam(name = "accountId", required = false) String accountId) {
+        return ResponseEntity.ok(service.findCases(state, accountId));
     }
 
     @GetMapping("/collectionCase/{id}")
