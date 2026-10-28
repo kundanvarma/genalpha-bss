@@ -12,13 +12,14 @@ left by someone else) is launched through the same governance door a person
 would use, so the launch is on record like any other.
 """
 import json
+import os
 import urllib.error
 import urllib.parse
 import urllib.request
 
-KEYCLOAK = "http://localhost:8085/realms/taranga/protocol/openid-connect/token"
-CATALOG = "http://localhost:8080/tmf-api/productCatalogManagement/v4"
-POLICY = "http://localhost:8080/tmf-api/policyManagement/v4"
+KEYCLOAK = os.environ.get("KEYCLOAK_URL", "http://localhost:8085") + "/realms/taranga/protocol/openid-connect/token"
+CATALOG = os.environ.get("API_URL", "http://localhost:8080") + "/tmf-api/productCatalogManagement/v4"
+POLICY = os.environ.get("API_URL", "http://localhost:8080") + "/tmf-api/policyManagement/v4"
 
 GRANTS = {"Taranga Mobile Priority 5G": 3, "Taranga Mobile Unlimited 5G": 2, "Taranga Mobile 20 GB": 1}
 # (name, group, list price NOK/month, what the partner charges Taranga a month, partner, what the customer reads)
@@ -40,8 +41,11 @@ SWAP_RULE = "Choices: 3 swaps a quarter"
 
 
 def token():
+    # the laptop's demo login by default; the hosted box rotates every demo password, so
+    # there the approver's comes from its login sheet: TARANGA_APPROVER_PASSWORD=... python3 ...
     data = urllib.parse.urlencode({"grant_type": "password", "client_id": "bss-demo",
-                                   "username": "henrik@taranga.example", "password": "henrik"}).encode()
+                                   "username": os.environ.get("TARANGA_APPROVER", "henrik@taranga.example"),
+                                   "password": os.environ.get("TARANGA_APPROVER_PASSWORD", "henrik")}).encode()
     with urllib.request.urlopen(urllib.request.Request(KEYCLOAK, data=data)) as r:
         return json.load(r)["access_token"]
 
@@ -105,6 +109,12 @@ for name, group, value, wholesale, partner, description in BENEFITS:
             "category": [ref(cats[c], "Category") for c in ("Partner services", "Choices", group)],
             "productOfferingPrice": [ref(prices[price_name], "ProductOfferingPrice")]})
         print(f"benefit: {name} made — {o.get('lifecycleStatus')}")
+    elif (o.get("choiceCost") != 1 or o.get("choicePartner") != partner
+          or o.get("choiceWholesaleCost") != wholesale):
+        # an offering of that name without its Choice terms (made by an older catalog, or by hand)
+        o = call(CATALOG, "PATCH", f"productOffering/{o['id']}",
+                 {"choiceCost": 1, "choicePartner": partner, "choiceWholesaleCost": wholesale})
+        print(f"benefit: {name} given its terms — 1 Pick, {partner}, {wholesale}/month")
     if o.get("lifecycleStatus") not in ("Active", "Launched"):
         try:
             call(CATALOG, "POST", f"productOffering/{o['id']}/governance/launch",
