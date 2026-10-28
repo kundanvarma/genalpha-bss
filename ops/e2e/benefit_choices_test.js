@@ -42,6 +42,9 @@
  *       invoiced, the difference in words; paid on the screen, settled once
  *   eligibility (#391): a household in collections is refused a NEW pick by
  *       the operator's rule, in its words (a 422 from policy, not the ledger's 409)
+ *   "can I pick this?" (#392): the preview and the order never disagree — yes
+ *       before a first pick, the order's own words when none are left or the
+ *       household is in collections; the shop shows the reason on the card
  * Marketing (#361):
  *   "has unused Choices" is an audience (insight's choicesLeft trait) that holds
  *   the household with Choices left and not the one with none — and a household
@@ -152,6 +155,9 @@ const orderOf = (o) => ({
   }
   if (pool?.granted !== 2 || pool.left !== 2) fail('the plan never granted its 2 Choices: ' + JSON.stringify(pool));
   console.log(`OK the plan completed and granted: ${pool.left} of ${pool.granted} ${pool.label} left (from ${pool.grants[0].offeringName})`);
+  // #392 — "can I pick this?" before ordering: yes, and the pick below goes through
+  const firstLook = (await call(page, 'GET', `${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${stream.id}`, chloe)).body;
+  if (firstLook.allowed !== true) fail('the preview should allow a first pick: ' + JSON.stringify(firstLook));
 
   /* 2 — the shop's Choices page: words, not ids; a pick is an order */
   await page.click('[data-testid=profile-menu] summary');
@@ -202,6 +208,14 @@ const orderOf = (o) => ({
   pool = (await call(page, 'GET', `${CHOICES}/pool`, chloe)).body;
   if (pool.inUse !== 2 || pool.left !== 0) fail('A1: the pool should be fully used, never over: ' + JSON.stringify(pool));
   console.log(`OK A1: two picks raced for the last Choice — one placed, one refused: "${refusal}"`);
+  // #392 — preview and order never disagree: with none left, the preview says no in the order's own words
+  const phoneCo = by('PhoneCo Upgrade Pass');
+  const noLook = (await call(page, 'GET', `${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${phoneCo.id}`, chloe)).body;
+  const noOrder = await call(page, 'POST', ORDERS, chloe, orderOf(phoneCo));
+  if (noLook.allowed !== false || noOrder.status !== 409 || noOrder.body.message !== noLook.reason) {
+    fail(`preview and order disagree: preview ${JSON.stringify(noLook)} vs order ${noOrder.status} ${noOrder.body.message}`);
+  }
+  console.log(`OK preview: yes before the first pick (and it went through); no with none left — "${noLook.reason}", word for word what the order said`);
 
   /* A2 — the same order item held twice: one allocation, spent once (ordering's own machine identity) */
   const machine = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
@@ -413,8 +427,12 @@ const orderOf = (o) => ({
   const heldRow = hPage.locator('[data-testid=choice-row]', { hasText: phone.name });
   await heldRow.locator('[data-testid=held-until]').waitFor({ timeout: 20000 });
   if ((await heldRow.locator('[data-testid=release-benefit]').count()) > 0) fail('a held benefit offers Release on the page');
-  await hPage.screenshot({ path: `${SHOTS}/benefit_choices_held.png`, fullPage: true });
   console.log(`OK the page says "${await heldRow.locator('[data-testid=held-until]').innerText()}" and offers no Release`);
+  // #392 — the cards say WHY a benefit cannot be picked, from ordering's preview, not the page's own arithmetic
+  const reason = hPage.locator('[data-testid=benefit-card]', { hasText: audio.name }).locator('[data-testid=pick-reason]');
+  await reason.waitFor({ timeout: 20000 });
+  if (!/you have 0 left/.test(await reason.innerText())) fail('the card should say why: ' + await reason.innerText());
+  await hPage.screenshot({ path: `${SHOTS}/benefit_choices_held.png`, fullPage: true });
 
   // A9 — a catalog change does not rewrite what was picked
   const catalogUrl = `${API}/tmf-api/productCatalogManagement/v4/productOffering/${stream.id}`;
@@ -630,6 +648,10 @@ const orderOf = (o) => ({
   const collectionsBody = await collectionsPick.json().catch(() => ({ message: `answered ${collectionsPick.status()}` }));
   if (collectionsPick.status() !== 422 || !/overdue balance is settled/.test(collectionsBody.message || '')) {
     fail(`a pick for a household in collections should be refused by the rule (422), got ${collectionsPick.status()}: ${collectionsBody.message}`);
+  }
+  const debtorLook = await (await ctx.get(`${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${stream.id}&partyId=${debtor}`, { headers: H(finance) })).json();
+  if (debtorLook.allowed !== false || debtorLook.reason !== collectionsBody.message) {
+    fail('the preview should refuse the household in collections with the rule\'s words: ' + JSON.stringify(debtorLook));
   }
   console.log(`OK eligibility: a household in collections (${openCases[0].state}) was refused a new pick — "${collectionsBody.message}"`);
 

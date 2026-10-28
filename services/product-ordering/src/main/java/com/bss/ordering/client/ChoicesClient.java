@@ -32,6 +32,16 @@ public interface ChoicesClient {
 
     void release(String orderId);
 
+    /**
+     * Where the household stands, for "can I pick this?" (#392): whether this
+     * operator offers Choices, its word for one, how many are left, and which
+     * benefits are already picked.
+     */
+    Standing standing(String ownerPartyId);
+
+    record Standing(boolean offered, String label, int left, java.util.Set<String> pickedOfferingIds) {
+    }
+
     /** A benefit's allocation, named by the order item that made it (the product's lineage). */
     record Source(String orderId, String orderItemId) {
     }
