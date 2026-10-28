@@ -6,6 +6,11 @@ import { NO_SHOP } from './no.js';
 import { NO_ACCOUNT } from './no-account.js';
 
 export const NN = {
+  // Nynorsk starts from Bokmål and overrides what differs — the spread comes FIRST,
+  // so every entry below wins. (It sat in the middle until #387, and the forty
+  // overrides written above it were silently replaced by their bokmål forms.)
+  ...NO_SHOP,
+  ...NO_ACCOUNT,
   // Home attention + the offer page as a decision (2026-09-15)
   'services are paused — no charges apply while they are paused.': 'tenester er sette på pause — ingenting vert belasta medan dei er på pause.',
   'Review services': 'Sjå tenestene',
@@ -47,9 +52,6 @@ export const NN = {
   'Services': 'Tenester',
   'Billing': 'Fakturaar',
   'Shop': 'Butikk',
-  // Nynorsk starts from Bokmål and overrides what differs
-  ...NO_SHOP,
-  ...NO_ACCOUNT,
   'Invite a friend': 'Verv ein ven',
   'You each get': 'De får begge',
   'when they place their first order.': 'når dei fullfører si første bestilling.',
@@ -217,4 +219,28 @@ export const NN = {
   'Pick up where you left off': 'Hald fram der du slapp',
   'Customers who bought this also bought': 'Kundar som kjøpte dette kjøpte også',
   'Thanks for being with us — this shelf includes our best loyalty picks.': 'Takk for at du er hos oss — denne hylla inneheld dei beste lojalitetstilboda våre.',
+  // Benefit Choices (#387) — after the bokmål spread, so these win
+  'Already picked': 'Allereie valt',
+  'Costs': 'Kostar',
+  'From': 'Frå',
+  'No benefits are on offer right now.': 'Ingen fordelar er tilgjengelege akkurat no.',
+  'Not enough': 'Ikkje nok',
+  'Pick with': 'Vel med',
+  'Pick': 'Vel',
+  'Picked': 'Valt',
+  'Picking…': 'Vel…',
+  'Swap for…': 'Byt til…',
+  'Swap': 'Byt',
+  'Swapping': 'Byter',
+  'Swaps this quarter': 'Byte dette kvartalet',
+  'The benefits could not be loaded': 'Fordelane kunne ikkje lastast',
+  'Your plan does not include': 'Abonnementet ditt inkluderer ikkje',
+  'Your plans do not include': 'Abonnementa dine inkluderer ikkje',
+  'a new quarter starts': 'eit nytt kvartal startar',
+  'activating now. It appears below in a moment.': 'vert aktivert no. Han dukkar opp nedanfor om ein augneblink.',
+  'left': 'att',
+  'pick a benefit with them, at no extra cost.': 'vel ein fordel med dei, utan ekstra kostnad.',
+  'released — pick something else whenever you like.': 'gitt tilbake — vel noko anna når du vil.',
+  'stays active until': 'held fram som aktiv til',
+  'yet. Plans that do:': 'enno. Abonnement som gjer det:',
 };

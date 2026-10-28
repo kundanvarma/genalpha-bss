@@ -120,7 +120,7 @@ export default function Choices() {
                     {(benefits || []).filter((b) => !picked.has(b.id)).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                   <button className="ghost" data-testid="release-benefit" disabled={busy !== null}
-                    onClick={() => act(a.id, () => releaseBenefit(productOf(a).id), `${a.offeringName} ${t('released — the Choice is yours to pick again.')}`)}>
+                    onClick={() => act(a.id, () => releaseBenefit(productOf(a).id), `${a.offeringName} ${t('released — pick something else whenever you like.')}`)}>
                     {t('Release')}
                   </button>
                 </>
