@@ -190,20 +190,43 @@ if [ -f "$REG" ]; then
 fi
 
 # ---------- 6. fleet + seeds ----------
+fail_install() { echo "FATAL: $1" >&2; exit 1; }
+# The running fleet must BE this build before anything writes through it: a seed
+# run against an old container writes through old code (the catalog once dropped
+# every Choice term that way). verify-fleet.sh removes recreate leftovers, recreates
+# stale containers and starts never-started ones once, then judges — and names
+# every offender if anything is still wrong (#380).
+verify_fleet() {
+  log "fleet: every container on this build, none stuck (settles up to 15 min)"
+  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE bash ops/cloud/aws-demo/verify-fleet.sh --repair" \
+    || fail_install "the running fleet is not this build — see the verify-fleet lines above"
+}
+
 if [ ! -f .cloud-seeded ]; then
   log "fleet up (first boot ~5 min), then shape: $FLEET_SHAPE"
   as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh up"
   [ "$FLEET_SHAPE" = "demo" ] && as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh demo"
+  verify_fleet
   log "seeds: taranga"
-  as_user "cd '$APP_DIR' && python3 ops/seed/seed_taranga.py && python3 ops/seed/seed_taranga_growth.py"
+  as_user "cd '$APP_DIR' && python3 ops/seed/seed_taranga.py && python3 ops/seed/seed_taranga_growth.py && python3 ops/seed/seed_choices_taranga.py"
   if [ "${DEMO_ENET:-0}" = "1" ]; then
     log "seeds: enet"
     as_user "cd '$APP_DIR' && python3 ops/seed/seed_enet.py && python3 ops/seed/seed_enet_growth.py && python3 ops/seed/seed_enet_history.py"
   fi
   touch .cloud-seeded; chown "$DEMO_USER" .cloud-seeded
 else
-  log "fleet already seeded — starting what is down"
-  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d >/dev/null 2>&1; COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh $FLEET_SHAPE"
+  # The volume outlives the init script: a component added since this box was
+  # built has no database until we make it (#380 — benefit-allowance, 28 Oct).
+  log "databases: every one the fleet needs"
+  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d postgres" || fail_install "postgres would not start"
+  as_user "cd '$APP_DIR' && bash ops/cloud/aws-demo/ensure-databases.sh" || fail_install "the databases could not be ensured"
+  log "fleet already seeded — bringing every service onto this build"
+  # compose's own output, and its exit code, are the record: this line was once
+  # `>/dev/null 2>&1`, and a recreate cut short read exactly like success (#380)
+  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d 2>&1 | grep -vE ' (Running|Healthy|Waiting)$'; exit \${PIPESTATUS[0]}" \
+    || fail_install "docker compose up failed — the fleet is part old, part new"
+  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh $FLEET_SHAPE"
+  verify_fleet
 fi
 
 # ---------- 6a. the admin credential keycloak ACTUALLY has ----------

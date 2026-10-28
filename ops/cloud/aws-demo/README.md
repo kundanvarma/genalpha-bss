@@ -120,7 +120,23 @@ ssh ubuntu@<elastic-ip> 'sudo -E /opt/taranga/bss/ops/cloud/aws-demo/install.sh'
 ```
 
 Pulls `GIT_REF`, rebuilds jars and images only if the commit changed, restarts
-what is down, regenerates the override and the Caddyfile. Seeds are idempotent;
+what is down, regenerates the override and the Caddyfile.
+
+**An exit 0 is not the proof; the running fleet is (#380).** A redeploy used to
+end with `docker compose up -d >/dev/null 2>&1`, and on 28 Oct 2026 a recreate cut
+short read exactly like success: most containers on their old images, renamed
+`<hash>_bss-*` leftovers crash-looping, the gateway never started, a new
+component crash-looping for want of its database. The install now:
+
+1. creates any database `infra/postgres/init-databases.sql` names that the
+   volume lacks (`ensure-databases.sh`; that script runs only on an empty volume);
+2. shows compose's output and stops on its exit code;
+3. runs `verify-fleet.sh --repair` before any seed: leftovers removed, stale
+   containers force-recreated and never-started ones started once, then
+   every running container must be on its tag's current image, with none
+   `Created`, `Restarting` or unhealthy, or the install fails naming them.
+
+Both scripts run on their own too: `ensure-databases.sh --check`, `verify-fleet.sh --now`. Seeds are idempotent;
 re-run them by hand after a catalog change:
 `cd /opt/taranga/bss && python3 ops/seed/seed_taranga.py`.
 
