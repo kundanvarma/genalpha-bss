@@ -60,6 +60,7 @@ public class StorefrontTenantConfigController {
         if (tenant.getPrivacyUrl() != null) manifest.put("privacyUrl", tenant.getPrivacyUrl());
         if (tenant.getTermsUrl() != null) manifest.put("termsUrl", tenant.getTermsUrl());
         if (tenant.getTagline() != null) manifest.put("tagline", tenant.getTagline());
+        manifest.put("choicesLabel", choicesLabelOf(tenant));
         // the pricing-policy ATTESTATION: uniform = one price everywhere;
         // per-channel = the tenant chose differentiated channel pricing and
         // says so openly — what is forbidden is differentiation that hides
@@ -69,6 +70,12 @@ public class StorefrontTenantConfigController {
         manifest.put("logoUrl", logoUrlOf(tenant));
         manifest.put("businessSales", tenant.isBusinessSales());
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
+    }
+
+    /** The operator's word for a Choice (#386): every screen says it, none hard-codes "Choice". */
+    private static String choicesLabelOf(TenantHosts.Entry tenant) {
+        return tenant != null && tenant.getChoicesLabel() != null && !tenant.getChoicesLabel().isBlank()
+                ? tenant.getChoicesLabel() : "Choices";
     }
 
     private String logoUrlOf(TenantHosts.Entry tenant) {
@@ -128,6 +135,7 @@ public class StorefrontTenantConfigController {
                 + "', privacyUrl: '" + js(privacyUrl)
                 + "', termsUrl: '" + js(termsUrl)
                 + "', tagline: '" + js(tagline)
+                + "', choicesLabel: '" + js(choicesLabelOf(tenant))
                 + "', priceParity: '" + js(tenant != null ? tenant.getPriceParityMode() : "uniform")
                 + "', businessSales: " + businessSales
                 // the vendor behind each seam this tenant configures (tenants.yml); seams not

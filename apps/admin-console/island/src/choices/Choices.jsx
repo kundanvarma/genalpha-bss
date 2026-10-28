@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { allOfferings, patchOffering } from './deskApi.js';
 import { BenefitForm } from './BenefitForm.jsx';
+import { choices, count } from './word.js';
 
 /* BENEFIT CHOICES, AUTHORED (#359).
  *
@@ -32,7 +33,7 @@ export function Choices({ authFetch }) {
     setError(null);
     try {
       await patchOffering(authFetch, plan.id, { choicesGranted: Number(grants[plan.id]) });
-      setSaid(`${plan.name} now grants ${grants[plan.id]} Choice${Number(grants[plan.id]) === 1 ? '' : 's'} per line.`);
+      setSaid(`${plan.name} now grants ${count(grants[plan.id])} per line.`);
       await load();
     } catch (e) {
       setError(e.message);
@@ -49,17 +50,17 @@ export function Choices({ authFetch }) {
   const benefits = showRetired ? allBenefits : allBenefits.filter((o) => o.lifecycleStatus !== 'Retired');
   return (
     <div data-testid="island-choices" style={{ display: 'grid', gap: 16 }}>
-      <p className="zone-note">A plan grants Choices for each line bought on it; a household spends them on benefits. Set the grants, make a benefit — no JSON.</p>
+      <p className="zone-note">A plan grants {choices()} for each line bought on it; a household spends them on benefits. Set the grants, make a benefit — no JSON.</p>
       {said && <p className="ok small" data-testid="choices-said">{said}</p>}
       {error && <p className="error small" role="alert">{error}</p>}
 
       <section className="card">
         <h3>What each plan grants</h3>
-        <table data-testid="choice-plans"><thead><tr><th>Plan</th><th>Choices per line</th><th /></tr></thead>
+        <table data-testid="choice-plans"><thead><tr><th>Plan</th><th>{choices()} per line</th><th /></tr></thead>
           <tbody>{plans.map((p) => (
             <tr key={p.id} data-plan={p.name}>
               <td>{p.name}</td>
-              <td><input type="number" min={1} step={1} aria-label={`Choices ${p.name} grants per line`} disabled={busy}
+              <td><input type="number" min={1} step={1} aria-label={`${choices()} ${p.name} grants per line`} disabled={busy}
                 value={grants[p.id] ?? (p.choicesGranted || '')} placeholder="none"
                 onChange={(e) => setGrants((g) => ({ ...g, [p.id]: e.target.value }))} /></td>
               <td>{grants[p.id] !== undefined && Number(grants[p.id]) >= 1 && (
@@ -78,7 +79,7 @@ export function Choices({ authFetch }) {
           <tbody>{benefits.map((b) => (
             <tr key={b.id} data-benefit={b.name}>
               <td>{b.name}</td>
-              <td>{b.choiceCost} Choice{b.choiceCost === 1 ? '' : 's'}</td>
+              <td>{count(b.choiceCost)}</td>
               <td>{b.choicePartner || '—'}{b.choicePartnerTerms && <> · <a href={b.choicePartnerTerms} target="_blank" rel="noreferrer">terms</a></>}</td>
               <td>{b.choiceWholesaleCost == null ? '—' : Number(b.choiceWholesaleCost).toFixed(2)}</td>
               <td>{b.choiceHoldMonths ? `${b.choiceHoldMonths} months` : '—'}</td>
