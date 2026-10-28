@@ -66,6 +66,24 @@ const run = Date.now();
   await page.locator('[data-testid="app-topup"]').first().waitFor({ timeout: 10000 });
   console.log('OK one-tap top-up offered on the line card');
 
+  // 5b'. Benefit Choices on the phone (#389): the plan grants 2; pick one on the card, see it
+  // go active, release it (before 5c: a downgrade with a Choice in use would be refused)
+  const bounce = async () => { await page.locator('text=Usage').last().click(); await page.locator('text=Home').last().click(); };
+  const choicesLeft = async () => (await page.locator('[data-testid="app-choices-left"]').textContent({ timeout: 15000 })).trim();
+  await page.locator('[data-testid="app-choices-card"]').waitFor({ timeout: 20000 });
+  for (let i = 0; i < 12 && !/^2 of 2 /.test(await choicesLeft()); i++) { await page.waitForTimeout(2500); await bounce(); }
+  if (!/^2 of 2 Choices$/.test(await choicesLeft())) fail('the app should show "2 of 2 Choices": ' + await choicesLeft());
+  await page.locator('[data-testid="app-choice-pick"]', { hasText: 'StreamCo Standard' }).click();
+  let release = page.locator('[data-testid="app-choice-release"]');
+  for (let i = 0; i < 20 && !(await release.count()); i++) { await page.waitForTimeout(2500); await bounce(); }
+  if (!(await release.count())) fail('the picked benefit never went active on the card');
+  if (!/^1 of 2 Choices$/.test(await choicesLeft())) fail('after a pick the app should show "1 of 2 Choices": ' + await choicesLeft());
+  await page.locator('[data-testid="app-choices-card"]').screenshot({ path: `${__dirname}/.shots/app_choices.png` });
+  await release.first().click();
+  for (let i = 0; i < 20 && !/^2 of 2 /.test(await choicesLeft()); i++) { await page.waitForTimeout(2500); await bounce(); }
+  if (!/^2 of 2 Choices$/.test(await choicesLeft())) fail('the release should give the Choice back: ' + await choicesLeft());
+  console.log('OK app Choices: 2 of 2 → picked StreamCo Standard (1 of 2, active) → released (2 of 2)');
+
   // 5c. Plan change from the phone: tap, pick, same number
   await page.locator('[data-testid="app-change-plan"]').first().click();
   await page.locator('[data-testid="app-plan-options"]').waitFor({ timeout: 10000 });
