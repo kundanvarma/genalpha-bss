@@ -56,6 +56,8 @@ public class TenantHosts {
         private String ocsProvider;
         /** The storefront hero line — the operator's voice, console-editable. */
         private String tagline;
+        /** Benefit Choices (#386): the operator's own word for a Choice (tenants.yml choices-label). */
+        private String choicesLabel;
         /** uniform (default) | per-channel — attested to humans AND agents. */
         private String priceParityMode;
         /** direct (default) | governed — is launch a decision here? Attested. */
@@ -137,6 +139,14 @@ public class TenantHosts {
 
         public String getBrandColor() {
             return brandColor;
+        }
+
+        public String getChoicesLabel() {
+            return choicesLabel;
+        }
+
+        public void setChoicesLabel(String choicesLabel) {
+            this.choicesLabel = choicesLabel;
         }
 
         public String getTagline() {

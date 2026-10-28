@@ -681,7 +681,25 @@ const orderOf = (o) => ({
   if (!(await tLine.innerText()).includes('You have 1 of your Picks left')) fail('Taranga\'s Home should say Picks: ' + await tLine.innerText());
   await tPage.waitForFunction(() => !/Reading/.test(document.querySelector('[data-testid=home-health]')?.textContent || 'Reading'), null, { timeout: 30000 }).catch(() => {});
   await tPage.screenshot({ path: `${SHOTS}/benefit_choices_taranga_home.png`, fullPage: true });
-  console.log(`OK Taranga: "${first0.label}" — the plan granted 2, ${tStream.name} picked with no hold (Norway), StreamCo owed in ${tBill.currency}, and Home says "You have 1 of your Picks left"`);
+  // and Taranga's back office says it in Taranga's word, never a hard-coded "Choice" (#386)
+  const tBo = await (await browser.newContext({ viewport: { width: 1360, height: 1000 } })).newPage();
+  global.shotPage = tBo;
+  await tBo.goto('http://console.taranga.localhost:8080/console/');
+  await tBo.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await tBo.fill('input[name="username"]', 'demo');
+  await tBo.fill('input[name="password"]', 'demo');
+  await tBo.click('input[type="submit"], button[type="submit"]');
+  await tBo.waitForSelector('#username', { timeout: 30000 });
+  await tBo.evaluate(() => window.consoleGoTo('choices'));
+  const tDesk = tBo.locator('[data-testid=island-choices]');
+  await tDesk.locator('[data-testid=choice-plans]').waitFor({ timeout: 30000 });
+  const head = await tDesk.locator('[data-testid=choice-plans] thead').innerText();
+  const streamRow = await tDesk.locator('[data-testid=choice-benefits] tr[data-benefit="StreamCo Standard"]').innerText();
+  if (!/Picks per line/i.test(head) || !/1 Pick\b/.test(streamRow) || /Choice/.test(await tDesk.innerText())) {
+    fail('Taranga\'s desk should say Picks, never Choice: ' + head + ' | ' + streamRow);
+  }
+  await tBo.screenshot({ path: `${SHOTS}/benefit_choices_taranga_desk.png`, fullPage: true });
+  console.log(`OK Taranga: "${first0.label}" — the plan granted 2, ${tStream.name} picked with no hold (Norway), StreamCo owed in ${tBill.currency}, and Home says "You have 1 of your Picks left"; the back office says "1 Pick", "Picks per line"`);
   console.log(`OK governance: a Taranga benefit was "${draft.lifecycleStatus}" until an approver launched it (${onSale.lifecycleStatus}); the manager could not approve her own; unlaunched after`);
 
   await browser.close();

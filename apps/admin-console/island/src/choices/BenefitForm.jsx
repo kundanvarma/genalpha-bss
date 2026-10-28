@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { categoryNamed, categoryRef, createOffering } from './deskApi.js';
+import { choice, choices } from './word.js';
 
 /* A new benefit, with no JSON (#359): the fields a product manager knows —
  * name, group, cost in Choices, the partner and their terms, what the partner
@@ -56,11 +57,11 @@ export function BenefitForm({ authFetch, onCreated }) {
           {GROUPS.map((g) => <option key={g}>{g}</option>)}
         </select>
       </label>
-      {field('Costs (Choices)', 'cost', { type: 'number', min: 1, step: 1, required: true })}
+      {field(`Costs (${choices()})`, 'cost', { type: 'number', min: 1, step: 1, required: true })}
       {field('Partner', 'partner', { placeholder: 'who provides it' })}
       {field("Partner's terms", 'terms', { placeholder: 'a link to their terms' })}
       {field('Partner charges a month', 'wholesale', { type: 'number', min: 0, step: '0.01', placeholder: 'what we pay them' })}
-      {field('Holds its Choice (months)', 'hold', { type: 'number', min: 0, step: 1, placeholder: '0 — no hold' })}
+      {field(`Holds its ${choice()} (months)`, 'hold', { type: 'number', min: 0, step: 1, placeholder: '0 — no hold' })}
       {field('What the customer reads', 'description', { placeholder: 'one sentence for the shop' })}
       <div style={{ alignSelf: 'end' }}>
         <button className="primary" type="submit" disabled={busy || !f.name.trim()}>Create benefit</button>
