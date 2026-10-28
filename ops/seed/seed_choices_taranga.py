@@ -123,6 +123,36 @@ for name, group, value, wholesale, partner, description in BENEFITS:
         except urllib.error.HTTPError as e:
             print(f"benefit: {name} NOT launched — {e.code} {e.read().decode()[:200]}")
 
+# the operator's OWN benefit (#393): priority on the customer's existing line, picked with a
+# Pick — no partner, no new line. "Top-ups" FIRST: service orchestration applies the slice to
+# the line the household already has (no hours, so it stays until the add-on is ended), and
+# ending the add-on gives the line back its plan's profile. "Choices" second shelves it.
+PRIORITY = "Priority on my line"
+for cname in ("Top-ups",):
+    if cname not in cats:
+        cats[cname] = call(CATALOG, "POST", "category", {"name": cname, "lifecycleStatus": "Active"})
+if PRIORITY + " Monthly" not in prices:
+    prices[PRIORITY + " Monthly"] = call(CATALOG, "POST", "productOfferingPrice", {
+        "name": PRIORITY + " Monthly", "priceType": "recurring", "lifecycleStatus": "Active",
+        "recurringChargePeriodType": "month", "price": {"unit": "NOK", "value": 59}})
+if PRIORITY not in offerings:
+    spec = call(CATALOG, "POST", "productSpecification", {"name": PRIORITY + " spec", "lifecycleStatus": "Active",
+        "productSpecCharacteristic": [
+            {"name": n, "valueType": "string", "configurable": False,
+             "productSpecCharacteristicValue": [{"value": v, "isDefault": True}]}
+            for n, v in (("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-UNL-PRIO"),
+                         ("guaranteedDlMbps", "50"), ("Priority network", "On your line until you release it"))]})
+    offerings[PRIORITY] = call(CATALOG, "POST", "productOffering", {
+        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1,
+        "description": "Your line on the priority 5G slice — first in line when the network is busy — "
+                       "picked with one of your Picks. Release it and your line goes back to its plan.",
+        "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
+        "category": [{"id": cats["Top-ups"]["id"], "name": "Top-ups", "@referredType": "Category"},
+                     {"id": cats["Choices"]["id"], "name": "Choices", "@referredType": "Category"}],
+        "productOfferingPrice": [{"id": prices[PRIORITY + " Monthly"]["id"], "name": PRIORITY + " Monthly",
+                                  "@referredType": "ProductOfferingPrice"}]})
+    print(f"benefit: {PRIORITY} (the operator's own, 1 Pick, priority slice on the existing line)")
+
 if not any(r.get("name") == SWAP_RULE for r in call(POLICY, "GET", "policyRule?limit=200") or []):
     call(POLICY, "POST", "policyRule", {
         "name": SWAP_RULE, "domain": "order", "effect": "deny", "priority": 50, "enabled": True,

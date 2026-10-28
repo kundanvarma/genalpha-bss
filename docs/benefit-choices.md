@@ -115,41 +115,71 @@ partner brand is invented.
 
 ---
 
+## Closing the gaps (#385)
+
+The first build left a list of honest limits; the follow-on closed most of it:
+
+- **The operator's own word everywhere.** The back office says *Picks* at
+  Taranga ("1 Pick", "Picks per line"), from the tenant config every console
+  loads. (#386)
+- **Norwegian.** Every Choices string in the shop has a bokmål entry, with
+  nynorsk where it differs, and the claims gate fails on any that is missing.
+  (#387) Found on the way: forty nynorsk overrides had been silently replaced
+  by their bokmål forms; they win again.
+- **The mobile app** runs on Expo SDK 58 (#388) and has a Choices card on Home:
+  how many are left, what is in use, pick and release — the same orders the shop
+  places. (#389)
+- **Partner invoices.** Finance records a partner's invoice for a month; Partner
+  costs show owed beside invoiced and the difference in words; *Mark paid* posts
+  the settlement — the partner payable against cash — once. (#390)
+- **Eligibility is a rule.** "No new picks while in collections" is policy data
+  the operator edits: ordering tells policy that an order picks a new benefit and
+  whether the household has an open collections case. (#391)
+- **"Can I pick this?"** Ordering answers before an order, from the order's own
+  checks in the order's own sequence, holding nothing; the shop's cards say why
+  a benefit cannot be picked instead of doing their own arithmetic. A benefit
+  already in use is no longer picked twice. (#392)
+- **The operator's own priority.** *Priority on my line* puts the household's
+  existing line on the priority slice for a Choice, owes no partner, and gives
+  the line back its plan's profile when released. (#393)
+
+
 ## Honest limits
 
 - **The pool is per household, not per billing account.** The design asked for
   the billing account; the build keys on the customer party. For a household
   with one account they are the same. A business customer with several accounts
   would share one pool.
-- **No "can I pick this?" preview.** The design asked for a typed preview
-  answer before ordering. The shop and the desk know by reading the pool and the
-  catalog; the authoritative answer is the order itself (refused with the
-  numbers).
-- **Eligibility is not yet a policy decision.** The swap limit is a policy rule
-  the operator edits; whether a plan in arrears may still pick, or whether the
-  recipient belongs to the account, is not checked by policy and leaves no
-  decision record.
-- **Merchant of record is not a setting.** Every benefit is sold as the
-  partner's; an operator selling a benefit as its own would need that switch.
-- **The operator's own benefits are not Choices yet.** The priority pass and
-  boost pass still sell as add-ons; the design wanted them pickable too.
+- **Merchant of record is not a setting.** Every partner benefit is sold as the
+  partner's; an operator selling a partner's benefit as its own would need that
+  switch.
 - **Holds are off in Norway** until it is confirmed whether a held benefit is a
   binding period (bindingstid). Taranga therefore seeds no held benefit.
-- **Partner cost counts whole months, never prorated**: a benefit active on any
-  day of a month costs that month. It is recorded at the pick and by an hourly
-  sweep as each month begins. Nothing yet reconciles it against the partner's
-  own invoice.
+- **Eligibility leaves no decision record.** The rule decides and its words reach
+  the customer, but policy keeps no stored decision with the rule's version.
+  When billing cannot be read, the collections fact is absent and the rule does
+  not fire — an outage never refuses a pick. Ordering's machine identity reads
+  billing with `billing:read`, broader than the one question it asks.
+- **The preview skips risk and credit.** Each records an assessment when asked
+  and a preview must leave no trace, so an operator rule built on a risk score or
+  a credit decision is the one way a preview's yes can become an order's no.
+- **Partner invoices are entered by hand.** Nothing receives them from the
+  partner; a paid invoice is booked against cash, with no bank or AP system
+  behind it. Partner cost still counts whole months, never prorated.
+- **Priority on a Priority plan buys nothing.** A household whose plan already
+  rides the priority slice can still pick the add-on; it changes nothing (and
+  never takes the plan's priority away), but nothing refuses it yet.
 - **"Activated" and "activation failed" are not events of their own.** A pick
   going active is *picked*; a refused one gives its Choice back as *released*.
   The partner's own reason sits on the service, not on the event.
 - **The background AI worker cannot use Choices.** Its badge carries the
   goodwill approver role (it would approve its own goodwill) and not the
   ordering role, so it was deliberately left out; the desk assistant can.
-- **The mobile app has no Choices screen.** The shop, the care desk, the back
-  office and Home do.
-- **The new customer sentences are English only.** Taranga runs in English;
-  a Norwegian-language tenant would need the strings translated.
+- **Server-side reasons are English.** The shop's own strings are translated;
+  a refusal or a preview reason written by the ledger, ordering or a policy rule
+  is in the words it was written in.
 - **The bus does not keep a household's events in order** (they are keyed by
   event id), so the *Choices left* trait keeps the newest by event time and
   ignores an older one that arrives late.
-- **Nothing here is on the hosted demo box.**
+- **Nothing here is on the hosted demo box** beyond the first build: the follow-on
+  reaches it with the next deploy.

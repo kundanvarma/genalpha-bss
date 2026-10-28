@@ -824,7 +824,10 @@ public class OrchestrationService {
                     && p.get("realizingService") instanceof List<?> rs && !rs.isEmpty()
                     ? idOf(rs.get(0)) : null;
             if (serviceId == null) {
-                // a billing-only product (insurance) has no service to stop
+                // a billing-only product (insurance) has no service to stop — but one that
+                // applied an open-ended slice to the customer's line ("Priority on my line",
+                // #393) takes it away again: the line whose slice that product's order set
+                endSliceAppliedBy(tenant, owner, originOrderOf(item), productOrderId);
                 continue;
             }
             services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
@@ -837,6 +840,30 @@ public class OrchestrationService {
                     terminate(instance, "ended by order " + productOrderId);
                 }
             });
+        }
+    }
+
+    /** The order that created the product an item ends — its TMF637 lineage, copied on by ordering. */
+    private static String originOrderOf(Map<String, Object> item) {
+        if (item.get("product") instanceof Map<?, ?> p && p.get("productOrderItem") instanceof List<?> refs
+                && !refs.isEmpty() && refs.get(0) instanceof Map<?, ?> first
+                && first.get("productOrderId") instanceof String origin && !origin.isBlank()) {
+            return origin;
+        }
+        return null;
+    }
+
+    /** End the slice on the owner's line that THIS order applied — and only that one (#393). */
+    private void endSliceAppliedBy(String tenant, String owner, String originOrderId, String endingOrderId) {
+        if (owner == null || originOrderId == null) {
+            return;
+        }
+        for (ServiceInstance line : services.findByTenantIdAndOwnerPartyId(tenant, owner)) {
+            if (originOrderId.equals(line.getSliceOrderId())) {
+                endSlice(tenant, line, "ended");
+                log.info("order {} ended the add-on from order {}: line {} leaves its slice",
+                        endingOrderId, originOrderId, line.getId());
+            }
         }
     }
 
@@ -1150,6 +1177,15 @@ public class OrchestrationService {
             log.warn("boost pass '{}' refused for line {}: device '{}' is not slice-capable", passName, line.getId(), line.getDeviceModel());
             return Optional.empty();
         }
+        if (intent.boostHours() == null && intent.profile().equals(line.getSliceProfile())
+                && line.getSliceUntil() == null) {
+            // the line already rides this profile with no end (a Priority PLAN): an open-ended
+            // add-on changes nothing, and must not take the slice over — ending the add-on
+            // would otherwise strip the plan's own priority (#393)
+            log.info("'{}' on order {}: line {} already rides '{}' from its plan — nothing to change",
+                    passName, productOrderId, line.getId(), intent.profile());
+            return Optional.of(line);
+        }
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime from = line.getSliceUntil() != null && line.getSliceUntil().isAfter(now)
                 && intent.profile().equals(line.getSliceProfile()) ? line.getSliceUntil() : now;
@@ -1262,6 +1298,33 @@ public class OrchestrationService {
         }
     }
 
+    /**
+     * A line leaves its slice: back to its plan's own profile, its base charging
+     * plan, the core told, and an event saying why — "lapsed" when a pass's hours
+     * ran out, "ended" when the product that applied it was ended (#393).
+     */
+    private void endSlice(String tenant, ServiceInstance line, String state) {
+        String was = line.getSliceProfile();
+        line.setSliceProfile(null);
+        line.setSliceUntil(null);
+        line.setSliceOrderId(null);
+        line.setSliceGuaranteedDlMbps(null);
+        restoreBaseChargingPlan(tenant, line);
+        services.save(line);
+        slices.release(tenant, line.getId());
+        Map<String, Object> ev = new java.util.LinkedHashMap<>();
+        ev.put("id", line.getId());
+        ev.put("name", line.getName());
+        ev.put("sliceProfile", "default");
+        ev.put("state", state);
+        ev.put("lapsedProfile", was);
+        if (line.getOwnerPartyId() != null) {
+            ev.put("relatedParty", List.of(Map.of("id", line.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceSliceChangeEvent", "service", ev);
+        log.info("slice {}: line {} back to its plan's profile (was '{}')", state, line.getId(), was);
+    }
+
     /** Boost passes lapse on their own clock: the core already reverted; the record follows and says so. */
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${bss.som.slice-tick-ms:10000}")
@@ -1276,25 +1339,7 @@ public class OrchestrationService {
                     for (ServiceInstance lapsed : services.findTop100ByTenantIdAndSliceUntilBefore(
                             tenant.getId(), OffsetDateTime.now())) {
                         try {
-                            String was = lapsed.getSliceProfile();
-                            lapsed.setSliceProfile(null);
-                            lapsed.setSliceUntil(null);
-                            lapsed.setSliceOrderId(null);
-                            lapsed.setSliceGuaranteedDlMbps(null);
-                            restoreBaseChargingPlan(tenant.getId(), lapsed);
-                            services.save(lapsed);
-                            slices.release(tenant.getId(), lapsed.getId());
-                            Map<String, Object> ev = new java.util.LinkedHashMap<>();
-                            ev.put("id", lapsed.getId());
-                            ev.put("name", lapsed.getName());
-                            ev.put("sliceProfile", "default");
-                            ev.put("state", "lapsed");
-                            ev.put("lapsedProfile", was);
-                            if (lapsed.getOwnerPartyId() != null) {
-                                ev.put("relatedParty", List.of(Map.of("id", lapsed.getOwnerPartyId(), "role", "customer")));
-                            }
-                            events.publish("ServiceSliceChangeEvent", "service", ev);
-                            log.info("boost pass lapsed: line {} back to best effort (was '{}')", lapsed.getId(), was);
+                            endSlice(tenant.getId(), lapsed, "lapsed");
                         } catch (Exception e) {
                             log.warn("slice expiry failed for {}: {}", lapsed.getId(), e.getMessage());
                         }

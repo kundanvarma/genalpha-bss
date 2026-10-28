@@ -96,6 +96,40 @@ for name, price_name, value, description, hold, partner, wholesale in BENEFITS:
         "productOfferingPrice": [ref(prices[price_name], "ProductOfferingPrice")]})
     print(f"benefit: {name} (1 Choice)")
 
+# the operator's OWN benefit (#393): priority on the customer's existing line, picked with a
+# Choice — no partner, no new line. "Top-ups" FIRST: service orchestration applies the slice to
+# the line the household already has (no hours, so it stays until the add-on is ended), and
+# ending the add-on gives the line back its plan's profile. "Choices" second shelves it.
+PRIORITY = "Priority on my line"
+for cname in ("Top-ups",):
+    if cname not in cats:
+        cats[cname] = req("POST", "category", {"name": cname, "lifecycleStatus": "Active"})
+# looked up by NAME: this catalog is larger than one page of 100
+prices.update({p["name"]: p for p in req("GET", "productOfferingPrice?limit=100&name="
+                                           + urllib.parse.quote(PRIORITY + " Monthly")) or []})
+offerings.update({o["name"]: o for o in req("GET", "productOffering?limit=100&name=" + urllib.parse.quote(PRIORITY)) or []})
+if PRIORITY + " Monthly" not in prices:
+    prices[PRIORITY + " Monthly"] = req("POST", "productOfferingPrice", {
+        "name": PRIORITY + " Monthly", "priceType": "recurring", "lifecycleStatus": "Active",
+        "recurringChargePeriodType": "month", "price": {"unit": "EUR", "value": 5.99}})
+if PRIORITY not in offerings:
+    spec = req("POST", "productSpecification", {"name": PRIORITY + " spec", "lifecycleStatus": "Active",
+        "productSpecCharacteristic": [
+            {"name": n, "valueType": "string", "configurable": False,
+             "productSpecCharacteristicValue": [{"value": v, "isDefault": True}]}
+            for n, v in (("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-UNL-PRIO"),
+                         ("guaranteedDlMbps", "50"), ("Priority network", "On your line until you release it"))]})
+    offerings[PRIORITY] = req("POST", "productOffering", {
+        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1,
+        "description": "Your line on the priority 5G slice — first in line when the network is busy — "
+                       "picked with one of your Choices. Release it and your line goes back to its plan.",
+        "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
+        "category": [{"id": cats["Top-ups"]["id"], "name": "Top-ups", "@referredType": "Category"},
+                     {"id": cats["Choices"]["id"], "name": "Choices", "@referredType": "Category"}],
+        "productOfferingPrice": [{"id": prices[PRIORITY + " Monthly"]["id"], "name": PRIORITY + " Monthly",
+                                  "@referredType": "ProductOfferingPrice"}]})
+    print(f"benefit: {PRIORITY} (the operator's own, 1 Choice, priority slice on the existing line)")
+
 # the swap limit is a rule, not code: ordering hands it the facts, the operator sets the number
 POLICY = "http://localhost:8080/tmf-api/policyManagement/v4"
 SWAP_RULE = "Choices: 3 swaps a quarter"

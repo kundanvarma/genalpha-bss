@@ -42,6 +42,9 @@
  *       invoiced, the difference in words; paid on the screen, settled once
  *   eligibility (#391): a household in collections is refused a NEW pick by
  *       the operator's rule, in its words (a 422 from policy, not the ledger's 409)
+ *   the operator's own priority (#393): picked, the household's EXISTING line
+ *       rides the priority slice (core + record), no partner owed; released, the
+ *       line returns to its plan's profile and the Choice comes back
  *   "can I pick this?" (#392): the preview and the order never disagree — yes
  *       before a first pick, the order's own words when none are left or the
  *       household is in collections; the shop shows the reason on the card
@@ -718,6 +721,49 @@ const orderOf = (o) => ({
   const onSale = await (await ctx.get(`${CAT}/productOffering/${draft.id}`, { headers: H(henrik) })).json();
   if (!['Launched', 'Active'].includes(onSale.lifecycleStatus) || onSale.choiceCost !== 1) fail('the approver launch did not put the benefit on sale: ' + JSON.stringify(onSale).slice(0, 200));
   await gov(draft.id, 'unlaunch', henrik, { note: 'test cleanup' });
+
+  /* ---- the operator's own priority as a Pick (#393): on the EXISTING line, no partner, released back ---- */
+  const CORE = 'http://localhost:8154';
+  const prioStaff = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+  const emailP = `petra-${run}@example.com`;
+  const madeP = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(prioStaff), data: { email: emailP, givenName: 'Petra', familyName: `Priority${run}` } })).json();
+  const petra = (await (await ctx.post(`${KC}/bss/protocol/openid-connect/token`, { form: {
+    grant_type: 'password', client_id: 'bss-demo', username: emailP, password: madeP.temporaryPassword } })).json()).access_token;
+  const PH2 = { ...H(petra), 'X-Channel': 'web' };
+  const prio = (await (await ctx.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent('Priority on my line')}`)).json())[0];
+  if (!prio || prio.choiceCost !== 1 || prio.choicePartner) fail('Priority on my line should be a 1-Choice benefit with no partner — run seed_choices.py: ' + JSON.stringify(prio));
+  const petraPool = async () => (await (await ctx.get(`${CHOICES}/pool`, { headers: PH2 })).json());
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(plan)] } });
+  const petraLine = await settled('Petra\'s mobile line', async () => ((await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: PH2 })).json()) || [])
+    .find((sv) => sv.state === 'active' && sv.name === plan.name));
+  await settled('Petra\'s plan granting 2', async () => (await petraPool()).granted === 2);
+  const svChars = (sv) => Object.fromEntries((sv?.serviceCharacteristic || []).map((c) => [c.name, c.value]));
+  const coreOf = async () => (await fetch(`${CORE}/subscribers/${petraLine.id}/slice`)).json();
+  if ((await coreOf()).profile !== 'default') fail('the line should start on its plan\'s profile: ' + JSON.stringify(await coreOf()));
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(prio)] } });
+  const onPrio = await settled('the priority slice on Petra\'s line', async () => {
+    const sv = (await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service/${petraLine.id}`, { headers: PH2 })).json());
+    return svChars(sv).sliceProfile === 'priority' ? sv : null; });
+  if (svChars(onPrio).sliceUntil) fail('picked priority should not lapse on a clock: ' + svChars(onPrio).sliceUntil);
+  const core1p = await coreOf();
+  if (core1p.profile !== 'priority' || !core1p.active) fail('the core should carry the line on priority: ' + JSON.stringify(core1p));
+  const lines = ((await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: PH2 })).json()) || []).filter((sv) => sv.state === 'active');
+  if (lines.filter((sv) => sv.name === plan.name).length !== 1) fail('picking priority must not create a second line');
+  await settled('the priority pick committed', async () => (await petraPool()).allocations.some((a) => a.offeringName === prio.name && a.state === 'committed'));
+  const owedPrio = ((await (await ctx.get(`${CHOICES}/partnerCost?period=${new Date().toISOString().slice(0, 7)}`, { headers: H(prioStaff) })).json()).lines || [])
+    .filter((l) => l.offeringName === prio.name);
+  if (owedPrio.length) fail('the operator\'s own benefit owes no partner: ' + JSON.stringify(owedPrio));
+  // released: the line goes back to its plan's profile, and the Choice comes back
+  const prioProduct = await settled('the priority product in inventory', async () => ((await (await ctx.get(`${API}/tmf-api/productInventory/v4/product?status=active`, { headers: PH2 })).json()) || [])
+    .find((pr) => pr.name === prio.name));
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [{ id: '1', action: 'delete', product: { id: prioProduct.id } }] } });
+  await settled('the line back on its plan\'s profile', async () => (await coreOf()).profile === 'default');
+  const back = (await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service/${petraLine.id}`, { headers: PH2 })).json());
+  if (svChars(back).sliceProfile) fail('the record should say the slice ended: ' + JSON.stringify(svChars(back)));
+  await settled('the Choice given back', async () => (await petraPool()).left === 2);
+  console.log(`OK priority: "${prio.name}" put Petra's existing line on the priority slice (no new line, no clock, no partner owed); released, the line is back on its plan's profile and the Choice is free`);
 
   /* ---- the demo tenant (#362): Taranga calls them Picks, sells in NOK, holds nothing (Norway) ---- */
   const tStaff = await tTok('demo', 'demo');
