@@ -32,6 +32,9 @@ bss:
       - id: tenant-a
         issuer: https://idp.tenant-a.test/realms/bss
         wholesale-order-secret: test-wholesale-secret-a
+        # two tenants, two partner platforms (#355): tenant-a activates through a partner gateway
+        partner-platform: http
+        partner-base-url: http://partner.tenant-a.test
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
         wholesale-order-secret: test-wholesale-secret-b

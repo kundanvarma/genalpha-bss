@@ -58,6 +58,14 @@ public class BridgeService {
                 "churnRisk", "kv", paths("customerId", "account.ref", "band", "band")));
         m.put("BILL_ISSUED", new EventMap("CustomerBillCreateEvent", "bss.bridge.events",
                 "customerBill", "kv", paths("customerId", "account.ref", "amount", "amount")));
+        // Benefit Choices (#361): an operator whose own BSS still runs the picks feeds the
+        // same traits — which benefit, and how many Choices the household has left
+        m.put("BENEFIT_PICKED", new EventMap("ChoicePickedEvent", "bss.bridge.events",
+                "choiceAllocation", "kv", paths("customerId", "account.ref", "offeringName", "benefit.name",
+                        "choicesLeft", "account.choicesLeft")));
+        m.put("BENEFIT_ENDED", new EventMap("ChoiceReleasedEvent", "bss.bridge.events",
+                "choiceAllocation", "kv", paths("customerId", "account.ref", "offeringName", "benefit.name",
+                        "choicesLeft", "account.choicesLeft")));
         // ORG_CREATED's extra fields are ITERATED into the event: tradingName
         // before industry is the order the wire already had.
         m.put("ORG_CREATED", new EventMap("OrganizationCreateEvent", "bss.bridge.events",

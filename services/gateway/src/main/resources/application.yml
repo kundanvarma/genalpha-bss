@@ -220,6 +220,12 @@ spring:
               uri: ${STOCK_URL:http://localhost:8086}
               predicates:
                 - Path=/tmf-api/productStockManagement/**
+            # Benefit Choices (#354): the household's pool. A house API, not a
+            # TM Forum one — the commercial change itself travels as TMF622.
+            - id: benefit-allowance
+              uri: ${CHOICES_URL:http://localhost:8163}
+              predicates:
+                - Path=/benefitAllowance/**
             - id: payment
               uri: ${PAYMENT_URL:http://localhost:8087}
               predicates:

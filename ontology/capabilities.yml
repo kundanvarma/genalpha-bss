@@ -307,6 +307,22 @@ capabilities:
     route: { method: POST, path: "/tmf-api/customerBillManagement/v4/customerBill/{id}/dispute" }
     roles: [billing:write]
 
+  - id: benefit.pool
+    version: 1
+    component: benefit-allowance
+    kind: house-api
+    meaning: A household's Choices — granted, in use, left, and each benefit's state — in the tenant's own word for a Choice.
+    route: { method: GET, path: "/benefitAllowance/v1/pool" }
+    roles: [benefit:read]
+
+  - id: benefit.goodwill
+    version: 1
+    component: benefit-allowance
+    kind: house-api
+    meaning: Grant a household one goodwill Choice, for a reason a person decided.
+    route: { method: POST, path: "/benefitAllowance/v1/goodwill" }
+    roles: [benefit:write, billing:admin]
+
   - id: billing.creditNote
     version: 1
     component: billing

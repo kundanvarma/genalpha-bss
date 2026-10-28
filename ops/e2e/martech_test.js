@@ -134,6 +134,7 @@ async function staffToken(request, realm) {
 
   // --- Marketing self-serve: the same journey, defined in the console GUI
   const page = await browser.newPage();
+  global.shotPage = page; // a failure leaves a picture of the console
   await page.goto('http://localhost:8080/console/');
   await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
   if (await page.locator('input[name="username"]').count()) {
@@ -199,13 +200,15 @@ async function staffToken(request, realm) {
   console.log('OK console campaign fired once; reached counter shows', reached);
 
   // --- Pause is one click
-  await row.locator('button', { hasText: 'Pause' }).click();
-  await page.locator('#listing-body tr', { hasText: guiName })
-    .locator('button', { hasText: 'Resume' }).waitFor({ timeout: 10000 });
-  console.log('OK paused from the GUI (button flipped to Resume)');
+  // row actions sit behind the row's ⋯ menu since the back-office redesign
+  await row.locator('[data-testid=row-more]').click();
+  await row.getByRole('menuitem', { name: 'Pause' }).click();
+  await page.locator('#listing-body tr', { hasText: guiName }).filter({ hasText: 'paused' }).waitFor({ timeout: 10000 });
+  console.log('OK paused from the GUI (the row now reads paused)');
 
   // --- The AI audit ledger is a console tab: the draft we just made is in it
-  await page.locator('.tab', { hasText: 'AI Audit' }).click();
+  // it lives under AI & Automation ("Audit trail") since the navigation paper: go by its path
+  await page.evaluate(() => window.consoleGoTo('audit'));
   await page.locator('#listing-body tr', { hasText: 'campaign-copy' }).first()
     .waitFor({ timeout: 10000 });
   console.log('OK AI audit tab lists the copy-assistant call (provider + model on record)');
@@ -305,4 +308,4 @@ async function staffToken(request, realm) {
 
   await browser.close();
   console.log('\nALL MARTECH CHECKS PASSED');
-})().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });
+})().catch(async (e) => { console.error('FAIL:', e.message.split('\n')[0]); try { await global.shotPage?.screenshot({ path: `${__dirname}/.shots/martech_FAIL.png`, fullPage: true }); } catch { /* no page */ } process.exit(1); });

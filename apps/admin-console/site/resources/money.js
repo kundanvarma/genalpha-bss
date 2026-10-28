@@ -92,6 +92,18 @@ RESOURCES.push(
     columns: [],
   },
   {
+    // What the operator owes benefit partners (#360): the third view of the
+    // Accounting island, beside the journal that books it.
+    path: 'partnerCost',
+    title: 'Partner costs',
+    island: 'accounting',
+    islandView: 'partnerCost',
+    readOnly: true,
+    noCreate: true,
+    fields: [],
+    columns: [],
+  },
+  {
     // Where live financial configuration is changed, and where the setup pages
     // that nobody needs for today's work now live: the ladder over the chart of
     // accounts, bill formats, deliveries and the shadow bill run.

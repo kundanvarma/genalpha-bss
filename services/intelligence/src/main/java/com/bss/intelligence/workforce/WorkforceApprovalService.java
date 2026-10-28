@@ -33,6 +33,8 @@ public class WorkforceApprovalService {
 
     private static final Set<String> METHODS = Set.of("POST", "PATCH", "DELETE");
 
+    private static final java.util.List<String> DOMAIN_DOORS = java.util.List.of("/tmf-api/", "/benefitAllowance/v1/");
+
     private final WorkforceApprovalRepository approvals;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
@@ -62,11 +64,13 @@ public class WorkforceApprovalService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "method must be POST, PATCH or DELETE");
         }
-        // Only the TMF doors: an approval can never point back at the AI
-        // plane, the agent surfaces, or anywhere outside the domain APIs.
-        if (!path.startsWith("/tmf-api/")) {
+        // Only the domain doors: an approval can never point back at the AI
+        // plane, the agent surfaces, or anywhere outside the domain APIs. The
+        // list is explicit — the TM Forum APIs, and the Choices ledger's house
+        // API (a goodwill Choice, #358) — so a new door is a deliberate edit.
+        if (DOMAIN_DOORS.stream().noneMatch(path::startsWith) || path.contains("..")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "path must be a /tmf-api/ door");
+                    "path must be a domain door (" + String.join(", ", DOMAIN_DOORS) + ")");
         }
         WorkforceApproval row = new WorkforceApproval();
         row.setId("apr_" + UUID.randomUUID());

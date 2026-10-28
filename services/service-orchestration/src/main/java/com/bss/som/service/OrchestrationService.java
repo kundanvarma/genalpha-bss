@@ -58,6 +58,7 @@ public class OrchestrationService {
     private final com.bss.som.repository.CommissionEntryRepository commissionEntries;
     private final long commissionWindowMs;
     private final com.bss.som.client.PartnerEntitlementClient partners;
+    private final PartnerActivations partnerActivations;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -89,7 +90,7 @@ public class OrchestrationService {
             com.bss.som.repository.CommissionEntryRepository commissionEntries,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.som.commission-window-ms:1209600000}") long commissionWindowMs,
-            com.bss.som.client.PartnerEntitlementClient partners,
+            com.bss.som.client.PartnerEntitlementClient partners, PartnerActivations partnerActivations,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.client.EntitlementClient entitlement,
@@ -130,6 +131,7 @@ public class OrchestrationService {
         this.commissionEntries = commissionEntries;
         this.commissionWindowMs = commissionWindowMs;
         this.partners = partners;
+        this.partnerActivations = partnerActivations;
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -165,6 +167,12 @@ public class OrchestrationService {
             // provisioned/fulfilled milestones fire on REAL fulfilment (a delivered
             // parcel / a done install), not on optimistic activation.
             completeDeferredServiceOrders(tenant, productOrderId);
+            // a SWAP's endings (#356): the old benefit stops now that the new one landed
+            List<Map<String, Object>> landed = new ArrayList<>();
+            collectItems((List<Map<String, Object>>) productOrder.get("productOrderItem"), landed);
+            String swapper = productOrder.get("relatedParty") instanceof List<?> ps && !ps.isEmpty() ? idOf(ps.get(0)) : null;
+            endDeletedServices(tenant, landed.stream()
+                    .filter(i -> "delete".equalsIgnoreCase(String.valueOf(i.get("action")))).toList(), swapper, productOrderId);
             return;
         }
         if ((!"acknowledged".equals(state) && !fulfilled) || alreadyOrchestrated) {
@@ -184,6 +192,17 @@ public class OrchestrationService {
                 .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
         renameModifiedServices(tenant, modifies, owner);
         items.removeAll(modifies);
+        // Endings (action=delete) stop the service the product names — and a
+        // partner service stops with the partner. Idempotent: an ended service
+        // is passed by, so the create and the completed event may both arrive.
+        List<Map<String, Object>> deletes = items.stream()
+                .filter(i -> "delete".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
+        items.removeAll(deletes);
+        if (items.isEmpty() || fulfilled) {
+            // an ending on its own stops now; in a SWAP (#356) the endings wait for
+            // the order's completed event, so the old benefit stays until the new one lands
+            endDeletedServices(tenant, deletes, owner, productOrderId);
+        }
         if (items.isEmpty()) {
             return;
         }
@@ -286,6 +305,20 @@ public class OrchestrationService {
             String id = so.getId();
             String serviceId = outcome.serviceId();
             deferred = outcome.deferred();
+            // a partner service the partner has not confirmed waits; one it refused fails, with its reason
+            var partnerState = partnerActivations.of(tenant, serviceId).map(com.bss.som.entity.PartnerActivation::getState);
+            if (partnerState.filter(com.bss.som.entity.PartnerActivation.REFUSED::equals).isPresent()) {
+                so.setState(ServiceOrder.FAILED);
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                if (itemId != null) {
+                    ordering.updateItemState(productOrderId, itemId, "failed");
+                }
+                continue;
+            }
+            if (partnerState.filter(com.bss.som.entity.PartnerActivation.PENDING::equals).isPresent()) {
+                deferred = true;
+            }
 
             // C4 — a physical item's service order is HELD inProgress until its
             // parcel/install actually lands; only a digital service completes NOW.
@@ -529,17 +562,11 @@ public class OrchestrationService {
         boolean nonLine = partnerService || securityFeature || internet || tv || device;
         String poolType = nonLine ? null : ResourcePool.MSISDN;
         if (partnerService) {
-            // the partner's platform owns the account; we hold the code
-            ResourceAssignment entitlement = new ResourceAssignment();
-            entitlement.setId(UUID.randomUUID().toString());
-            entitlement.setTenantId(tenant);
-            entitlement.setPoolId("partner");
-            entitlement.setValue(partners.activate(name, owner));
-            entitlement.setServiceId(serviceId);
-            entitlement.setOwnerPartyId(owner);
-            entitlement.setAssignedAt(OffsetDateTime.now());
-            assignments.save(entitlement);
-            realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(), entitlement.getValue());
+            // the partner's platform owns the account; we hold the code — once the partner gives it
+            PartnerActivations.Started started = partnerActivations.start(tenant, serviceId, owner, name,
+                    productOrderId, idOf(item));
+            realise(tenant, serviceId, offeringId, "partner-entitlement", partners.vendor(tenant),
+                    started.code() != null ? started.code() : started.state().name().toLowerCase());
         }
         // Keep-your-number: if the customer ported a number in, activate on
         // it and skip the pool draw entirely.
@@ -781,6 +808,35 @@ public class OrchestrationService {
                 log.info("commission clawed back: {} {} from {} — the customer left inside the window",
                         entry.getAmountValue(), entry.getAmountUnit(), entry.getDealerOrgId());
             }
+        }
+    }
+
+    /**
+     * A delete item carries the service that realises the product being ended
+     * (ordering completes it from inventory), so the right service stops even
+     * when a customer has several of the same. Owner is checked as for a plan
+     * change: a mismatching id is skipped, never ended.
+     */
+    private void endDeletedServices(String tenant, List<Map<String, Object>> deletes, String owner,
+            String productOrderId) {
+        for (Map<String, Object> item : deletes) {
+            String serviceId = item.get("product") instanceof Map<?, ?> p
+                    && p.get("realizingService") instanceof List<?> rs && !rs.isEmpty()
+                    ? idOf(rs.get(0)) : null;
+            if (serviceId == null) {
+                // a billing-only product (insurance) has no service to stop
+                continue;
+            }
+            services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
+                if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
+                    log.warn("delete order names service {} owned by another party — not ended",
+                            instance.getId());
+                    return;
+                }
+                if (!ServiceInstance.TERMINATED.equals(instance.getState())) {
+                    terminate(instance, "ended by order " + productOrderId);
+                }
+            });
         }
     }
 
@@ -1344,6 +1400,14 @@ public class OrchestrationService {
         String releasedNumber = null;
         for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(
                 instance.getTenantId(), instance.getId())) {
+            if ("partner".equals(a.getPoolId())) {
+                // a partner activation code is a credential, never a number: the
+                // partner is told to stop, and the code leaves with the service
+                // (it must not age on the number shelf and be "re-issued")
+                partnerActivations.deactivate(instance, a.getValue());
+                assignments.delete(a);
+                continue;
+            }
             releasedNumber = a.getValue();
             assignments.delete(a);
             com.bss.som.entity.NumberQuarantine shelf = new com.bss.som.entity.NumberQuarantine();

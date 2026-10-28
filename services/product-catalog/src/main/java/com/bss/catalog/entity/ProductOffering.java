@@ -85,6 +85,29 @@ public class ProductOffering {
     @Column(name = "requires_verified_identity")
     private Boolean requiresVerifiedIdentity;
 
+    /** Choices a plan grants the household's pool (null: not a granting plan). */
+    @Column(name = "choices_granted")
+    private Integer choicesGranted;
+
+    /** What a benefit costs in Choices (null: not a benefit). */
+    @Column(name = "choice_cost")
+    private Integer choiceCost;
+
+    /** Months a picked benefit holds its Choice (null: no hold). */
+    @Column(name = "choice_hold_months")
+    private Integer choiceHoldMonths;
+
+    // Benefit Choices (#359): who provides the benefit, their terms, what it costs the operator
+
+    @Column(name = "choice_partner", length = 500)
+    private String choicePartner;
+
+    @Column(name = "choice_partner_terms", length = 500)
+    private String choicePartnerTerms;
+
+    @Column(name = "choice_wholesale_cost", precision = 12, scale = 2)
+    private java.math.BigDecimal choiceWholesaleCost;
+
     /** JSON array of child offering references, echoed verbatim. */
     @Column(name = "bundled_product_offering", length = 4000)
     private String bundledProductOfferingJson;
@@ -173,6 +196,54 @@ public class ProductOffering {
 
     public void setRequiresVerifiedIdentity(Boolean requiresVerifiedIdentity) {
         this.requiresVerifiedIdentity = requiresVerifiedIdentity;
+    }
+
+    public Integer getChoicesGranted() {
+        return choicesGranted;
+    }
+
+    public void setChoicesGranted(Integer choicesGranted) {
+        this.choicesGranted = choicesGranted;
+    }
+
+    public String getChoicePartner() {
+        return choicePartner;
+    }
+
+    public void setChoicePartner(String choicePartner) {
+        this.choicePartner = choicePartner;
+    }
+
+    public String getChoicePartnerTerms() {
+        return choicePartnerTerms;
+    }
+
+    public void setChoicePartnerTerms(String choicePartnerTerms) {
+        this.choicePartnerTerms = choicePartnerTerms;
+    }
+
+    public java.math.BigDecimal getChoiceWholesaleCost() {
+        return choiceWholesaleCost;
+    }
+
+    public void setChoiceWholesaleCost(java.math.BigDecimal choiceWholesaleCost) {
+        this.choiceWholesaleCost = choiceWholesaleCost;
+    }
+
+    public Integer getChoiceHoldMonths() {
+        return choiceHoldMonths;
+    }
+
+    public void setChoiceHoldMonths(Integer choiceHoldMonths) {
+        this.choiceHoldMonths = choiceHoldMonths;
+    }
+
+    public Integer getChoiceCost() {
+        return choiceCost;
+    }
+
+    public void setChoiceCost(Integer choiceCost) {
+        this.choiceCost = choiceCost;
     }
 
     public void setIsBundle(Boolean isBundle) {

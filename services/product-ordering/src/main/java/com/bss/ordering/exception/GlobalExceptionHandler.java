@@ -98,6 +98,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(ChoicesConflictException.class)
+    public ResponseEntity<ErrorResponse> handleChoicesConflict(ChoicesConflictException ex) {
+        ErrorResponse body = new ErrorResponse(
+                "409",
+                "Conflict",
+                ex.getMessage(),
+                "409");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
     @ExceptionHandler(DownstreamException.class)
     public ResponseEntity<ErrorResponse> handleDownstream(DownstreamException ex) {
         ErrorResponse body = new ErrorResponse(

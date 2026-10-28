@@ -1,0 +1,38 @@
+action: grantGoodwillChoice
+version: 1
+introduced: 2026-10-27
+status: active
+meaning: Give a household one more Choice, for a reason — goodwill after a bad experience. Always a human decision; an agent may ask, and its request waits on the approval desk.
+intent: Make up for an outage or a botched order with something the customer values, under the same control as a goodwill credit.
+concept: Customer
+inputs:
+  - { name: customerId, type: ref, concept: Customer, required: true, meaning: the household that gets the Choice }
+  - { name: reason, type: string, required: true, meaning: why — it is shown on the household's Choices }
+preconditions:
+  - id: reason-given
+    check: input
+    of: reason
+    says: a goodwill Choice needs a reason
+permissions:
+  anyOf:
+    - { role: agent }
+    - { role: billing:admin }
+governance:
+  # every grant is a person's decision: no threshold — someone holding
+  # billing:admin (the goodwill approver, as for credits) decides it. medium,
+  # not low: low would refuse a registered agent outright; medium lets the
+  # desk assistant ASK, and approval: human files that ask for the approver
+  autonomy: medium
+  approval: human
+  approverRole: billing:admin
+  audit: mandatory
+executes:
+  capability: benefit.goodwill
+  template: { ownerPartyId: "${customerId}", reason: "${reason}" }
+effects:
+  - { capability: ontology.receipt, when: executed }
+emits:
+  - { event: ChoicesGrantedEvent, component: benefit-allowance, meaning: the household has one more Choice }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Customer, settles: ChoicesGrantedEvent }
+pages: [csr:customers]

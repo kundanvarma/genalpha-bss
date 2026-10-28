@@ -1,0 +1,9 @@
+component: benefit-allowance
+version: 1
+oda: house component (Benefit Choices, #352)
+meaning: The household's pool of Choices — what its plans grant, what its benefits hold and use, what is left — and the one place a Choice is counted, held, committed or given back.
+manages: []
+capabilities: [benefit.pool, benefit.goodwill]
+events: [ChoiceHeldEvent, ChoicePickedEvent, ChoicesGrantedEvent, ChoiceReleasedEvent, ChoiceSwappedEvent, ChoicesRegrantedEvent, ChoiceCostRecordedEvent]
+topic: bss.benefit.events
+consults: []

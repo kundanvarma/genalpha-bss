@@ -31,12 +31,14 @@ public class ServiceViews {
     private final ResourceAssignmentRepository assignments;
     private final ServiceRealisationRepository realisations;
     private final ObjectMapper objectMapper;
+    private final com.bss.som.repository.PartnerActivationRepository partnerActivations;
 
     public ServiceViews(ResourceAssignmentRepository assignments, ServiceRealisationRepository realisations,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, com.bss.som.repository.PartnerActivationRepository partnerActivations) {
         this.assignments = assignments;
         this.realisations = realisations;
         this.objectMapper = objectMapper;
+        this.partnerActivations = partnerActivations;
     }
 
     public ServiceView view(ServiceInstance s) {
@@ -81,6 +83,14 @@ public class ServiceViews {
                 characteristics.add(Characteristic.string("activationCode", a.getValue()));
             }
         }
+        // a partner service the partner has not confirmed, or refused, says so in words (#355)
+        partnerActivations.findByTenantIdAndServiceId(s.getTenantId(), s.getId()).ifPresent(pa -> {
+            if (com.bss.som.entity.PartnerActivation.PENDING.equals(pa.getState())) {
+                characteristics.add(Characteristic.string("partnerStatus", "activating — waiting for the partner to confirm"));
+            } else if (com.bss.som.entity.PartnerActivation.REFUSED.equals(pa.getState())) {
+                characteristics.add(Characteristic.string("partnerStatus", "refused: " + pa.getReason()));
+            }
+        });
         characteristics.add(Characteristic.string("category", category));
         if (s.getCfsFamily() != null) {
             characteristics.add(Characteristic.string("fulfilmentFamily", s.getCfsFamily()));

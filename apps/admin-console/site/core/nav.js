@@ -12,7 +12,7 @@ const PER_TAB_GATE = {
   // (the door gate isStaff() below still keeps customers out). Any-of arrays here drop
   // customer-baseline roles (catalog:read, billing:read, ordering:write …), so listing
   // them would not widen the gate — the absent entry is the "every staff member" mechanism.
-  productOffering: 'catalog:write',
+  productOffering: 'catalog:write', choices: 'catalog:write',
   productSpecification: 'catalog:write',
   productOfferingPrice: 'catalog:write',
   productStock: 'stock:read',
@@ -22,7 +22,7 @@ const PER_TAB_GATE = {
   payments: 'billing:admin',
   collections: 'billing:admin',
   journalEntry: 'billing:admin',
-  accountMapping: 'billing:admin',
+  accountMapping: 'billing:admin', partnerCost: 'billing:admin',
   // Configuration is where the chart of accounts is actually changed —
   // the same gate as the rest of the finance desk, and the revenue
   // service refuses every rung without billing:admin underneath.
@@ -158,7 +158,7 @@ const WORKSPACES = [
   // stays the flat union — every `ws.tabs.includes(path)` lookup and the
   // suites' `.tab` contract are untouched. `short` renames a page ONLY in
   // the row (the resource title, crumb and rail keep their full name).
-  { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification', 'category',
+  { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification', 'category', 'choices',
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot', 'approvals', 'envelopes',
     // both simulators live where their gate lives: /ai/v1/simulate/** is
     // catalog:write server-side, so a Sales placement leaked a one-tab Sales
@@ -169,7 +169,7 @@ const WORKSPACES = [
     // copilot is not a destination here: "Ask Copilot" sits on every catalog
     // page (its tab stub stays for the palette and the suites).
     groups: [
-      { label: 'Products', tabs: ['productOffering', 'productSpecification', 'category'] },
+      { label: 'Products', tabs: ['productOffering', 'productSpecification', 'category', 'choices'] },
       { label: 'Pricing', tabs: ['productOfferingPrice'] },
       { label: 'Availability', tabs: ['productStock', 'serviceableArea'] },
       { label: 'Lifecycle', tabs: ['approvals', 'envelopes'] },
@@ -186,7 +186,7 @@ const WORKSPACES = [
   // `whole` = the destination IS one screen carrying its own areas, so the row never repeats it.
   { label: 'Billing & Revenue', tabs: ['billingOverview', 'customerBill', 'dispute',
     'payments', 'remittance/unapplied', 'collections', 'dunning', 'partyRiskAssessment',
-    'journalEntry', 'accountMapping', 'financialConfiguration', 'billFormatProfile',
+    'journalEntry', 'accountMapping', 'partnerCost', 'financialConfiguration', 'billFormatProfile',
     'billDistribution', 'shadowDrift'],
     groups: [
       { label: 'Overview', tabs: ['billingOverview'], whole: true },
@@ -194,7 +194,7 @@ const WORKSPACES = [
       { label: 'Payments', tabs: ['payments', 'remittance/unapplied'], whole: true },
       { label: 'Collections', tabs: ['collections', 'dunning', 'partyRiskAssessment'],
         short: { collections: 'Cases' } },
-      { label: 'Accounting', tabs: ['journalEntry', 'accountMapping'], whole: true },
+      { label: 'Accounting', tabs: ['journalEntry', 'accountMapping', 'partnerCost'], whole: true },
       { label: 'Configuration', tabs: ['financialConfiguration', 'billFormatProfile',
         'billDistribution', 'shadowDrift'], whole: true },
     ] },

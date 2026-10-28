@@ -103,6 +103,10 @@ public class RevenueService {
         DEFAULT_CHART.put("club-share:expense", new String[] {"6150", "Community sponsorship (Klubbdugnad)"});
         DEFAULT_CHART.put("club-share:payable", new String[] {"2150", "Payable to community clubs"});
         DEFAULT_CHART.put("mobile-wholesale:revenue", new String[] {"4020", "Mobile wholesale revenue"});
+        // Benefit Choices (#360): the customer picks a partner's service "for free";
+        // the operator pays the partner its wholesale price every month it is active
+        DEFAULT_CHART.put("partner:cogs", new String[] {"5160", "Partner benefits (COGS)"});
+        DEFAULT_CHART.put("partner:payable", new String[] {"2160", "Accounts payable — benefit partners"});
         // device commerce: IFRS 15 puts more equipment revenue at delivery than
         // cash received on subsidised operator-book bundles — the gap is a
         // contract asset unwound monthly against service billings. Bank/BNPL
@@ -448,6 +452,38 @@ public class RevenueService {
                 line("club-share:expense", amount, null, conversionId, desc),
                 line("club-share:payable", null, amount, conversionId, "Payable to club " + club));
         saveBalanced(tenant, sourceRef, "clubShare", desc + " — " + conversionId, currency, null, posting);
+        return true;
+    }
+
+    /**
+     * Benefit Choices (#360): one month of one active partner benefit, as the
+     * benefit ledger recorded it — cost of sales against a payable to the
+     * partner. Keyed on the ledger row, which is itself unique per benefit and
+     * month, so a replay or a second sweep posts nothing.
+     */
+    @Transactional
+    public boolean postPartnerCost(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        Object rawId = event.get("id");
+        if (rawId == null || event.get("amount") == null) {
+            return false;   // nothing to key a posting by, or nothing to book
+        }
+        String id = rawId.toString();
+        String sourceRef = "partner-cost:" + id;
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal amount = money(event.get("amount"));
+        if (amount.signum() <= 0) {
+            return false;   // a partner that charges nothing owes nothing
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String partner = String.valueOf(event.getOrDefault("partner", "partner"));
+        String desc = event.getOrDefault("offeringName", "Benefit") + " — " + event.getOrDefault("period", "");
+        List<JournalLine> posting = List.of(
+                line("partner:cogs", amount, null, id, desc),
+                line("partner:payable", null, amount, id, "Payable to " + partner));
+        saveBalanced(tenant, sourceRef, "partnerCost", desc, currency, null, posting);
         return true;
     }
 

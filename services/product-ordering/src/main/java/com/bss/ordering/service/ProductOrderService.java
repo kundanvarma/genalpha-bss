@@ -41,13 +41,16 @@ public class ProductOrderService {
     private static final String STATE_HELD = "held";
     private static final String STATE_ACKNOWLEDGED = "acknowledged";
     private static final String STATE_IN_PROGRESS = "inProgress";
+    // TMF622: nothing the order asked for could be delivered / only some of it was (#355)
+    private static final String STATE_FAILED = "failed";
+    private static final String STATE_PARTIAL = "partial";
     // TMF622: the parent order is partially fulfilled while some items are done
     // and others are still on their own track (a shipped SIM, a pending install).
     private static final String STATE_PARTIALLY_COMPLETED = "partiallyCompleted";
     private static final String TOPUP_CATEGORY = "Top-ups";
-    private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled");
+    private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled", STATE_FAILED, STATE_PARTIAL);
     // Item-level terminal states used by the per-item rollup.
-    private static final Set<String> ITEM_TERMINAL = Set.of(STATE_COMPLETED, "cancelled");
+    private static final Set<String> ITEM_TERMINAL = Set.of(STATE_COMPLETED, "cancelled", STATE_FAILED);
 
     private final ProductOrderRepository repository;
     private final ProductOrderMapper mapper;
@@ -67,6 +70,7 @@ public class ProductOrderService {
     private final com.bss.ordering.client.RiskClient riskClient;
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
     private final com.bss.ordering.credit.CreditDecisionService creditService;
+    private final OrderChoices orderChoices;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
@@ -75,7 +79,7 @@ public class ProductOrderService {
             com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
             com.bss.ordering.client.RiskClient riskClient,
             com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff,
-            com.bss.ordering.credit.CreditDecisionService creditService) {
+            com.bss.ordering.credit.CreditDecisionService creditService, OrderChoices orderChoices) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -94,6 +98,7 @@ public class ProductOrderService {
         this.riskClient = riskClient;
         this.legacyHandoff = legacyHandoff;
         this.creditService = creditService;
+        this.orderChoices = orderChoices;
     }
 
     @Transactional(readOnly = true)
@@ -157,6 +162,11 @@ public class ProductOrderService {
         requireOfferingsAvailable(dto);
         validateBundleComposition(dto);
         validateServiceability(dto);
+        // before the entity is built: a delete item is completed from inventory
+        // (its offering, the service that realises it) so the record and the
+        // event carry the product being ended, not only its id
+        int deletes = validateDeleteItems(dto,
+                partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState(STATE_ACKNOWLEDGED);
         }
@@ -205,17 +215,43 @@ public class ProductOrderService {
             entity.setDescription(((entity.getDescription() == null ? ""
                     : entity.getDescription() + " ") + "[credit-review]").trim());
         }
-        boolean modifyOnly = validateModifyItems(dto, entity.getOwnerPartyId());
+        int modifies = validateModifyItems(dto, entity.getOwnerPartyId());
+        // Benefit Choices (#357): held benefits, downgrades below what is in use, and
+        // the benefits a cease must end with it — refused, or added here as endings
+        List<Map<String, Object>> endings = orderChoices.prepare(flattenItemMaps(dto.getProductOrderItem()),
+                entity.getOwnerPartyId());
+        if (!endings.isEmpty()) {
+            List<Map<String, Object>> withEndings = new ArrayList<>(dto.getProductOrderItem());
+            withEndings.addAll(endings);
+            dto.setProductOrderItem(withEndings);
+            deletes += endings.size();
+        }
+        if (modifies > 0 || !endings.isEmpty()) {
+            // the record keeps what the checks above added to the items (a plan's lineage,
+            // a cease's endings): completion reads the record, not this request
+            entity.setProductOrderItemJson(mapper.writeItems(dto.getProductOrderItem()));
+        }
+        int changes = modifies + deletes;
+        boolean changeOnly = changes > 0 && changes == flattenItemMaps(dto.getProductOrderItem()).size();
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
+        try {
+            // after stock, so a refusal here gives the stock back too
+            orderChoices.hold(flattenItemMaps(dto.getProductOrderItem()), id, entity.getOwnerPartyId());
+        } catch (RuntimeException refused) {
+            stockClient.release(id);
+            throw refused;
+        }
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
         // THE OVERLAY SEAM: legacy-federated items hand off to the legacy
         // fulfilment queue — fail-soft, the order stands either way
         legacyHandoff.handoff(id, flattenItemMaps(dto.getProductOrderItem()), entity.getOwnerPartyId());
-        if (modifyOnly) {
-            // A plan change touches no network: same service, same number. It
-            // completes in this transaction so the channel sees it instantly.
+        if (changeOnly) {
+            // A plan change touches no network: same service, same number. An
+            // ending only stops things. Either completes in this transaction so
+            // the channel sees it instantly; the orchestrator winds the service
+            // down off the event.
             return completeNow(entity);
         }
         return created;
@@ -227,15 +263,15 @@ public class ProductOrderService {
      * the product must exist, be active and belong to the ordering customer;
      * the target must be a real non-bundle offering different from the current
      * one; and an unexpired commitment on the current plan blocks the change.
-     * Returns true when the order is modify-only.
+     * Returns how many modify items the order carries.
      */
     @SuppressWarnings("unchecked")
-    private boolean validateModifyItems(ProductOrderDto dto, String ownerPartyId) {
+    private int validateModifyItems(ProductOrderDto dto, String ownerPartyId) {
         List<Map<String, Object>> items = flattenItemMaps(dto.getProductOrderItem());
         List<Map<String, Object>> modifies = items.stream()
                 .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
         if (modifies.isEmpty()) {
-            return false;
+            return 0;
         }
         for (Map<String, Object> item : modifies) {
             String productId = idOf(item.get("product"));
@@ -259,6 +295,12 @@ public class ProductOrderService {
             if (newOfferingId == null) {
                 throw new OrderValidationException("a modify item must name the new productOffering");
             }
+            if (product.get("productOrderItem") != null && item.get("product") instanceof Map<?, ?> named) {
+                // the plan's lineage names the Choices grant a plan change re-grants (#357)
+                Map<String, Object> withLineage = new java.util.LinkedHashMap<>((Map<String, Object>) named);
+                withLineage.put("productOrderItem", product.get("productOrderItem"));
+                item.put("product", withLineage);
+            }
             CatalogClient.OfferingRef target = catalogClient.findOffering(newOfferingId)
                     .orElseThrow(() -> new OrderValidationException(
                             "productOffering '" + newOfferingId + "' not found in catalog"));
@@ -278,7 +320,64 @@ public class ProductOrderService {
                         String.valueOf(product.get("name")));
             }
         }
-        return modifies.size() == items.size();
+        return modifies.size();
+    }
+
+    /**
+     * Ending a product (TMF622 action=delete): the item names the installed
+     * product it ends. The product must exist, be active and belong to the
+     * ordering customer, and an unexpired commitment on its offering blocks it,
+     * as it blocks a plan change. The item is completed from inventory — its
+     * offering and the service that realises it — so provisioning and the
+     * orchestrator know what to stop. A delete adds nothing: no stock, no
+     * availability check, no new commitment (collectItems skips it).
+     * Returns how many delete items the order carries.
+     */
+    @SuppressWarnings("unchecked")
+    private int validateDeleteItems(ProductOrderDto dto, String ownerPartyId) {
+        List<Map<String, Object>> deletes = flattenItemMaps(dto.getProductOrderItem()).stream()
+                .filter(ProductOrderService::isDelete).toList();
+        for (Map<String, Object> item : deletes) {
+            String productId = idOf(item.get("product"));
+            if (productId == null) {
+                throw new OrderValidationException(
+                        "a delete item must reference the product it ends (product.id)");
+            }
+            Map<String, Object> product = inventoryClient.getProduct(productId)
+                    .orElseThrow(() -> new OrderValidationException(
+                            "product '" + productId + "' not found"));
+            if (!"active".equalsIgnoreCase(String.valueOf(product.get("status")))) {
+                throw new OrderValidationException("'" + product.get("name")
+                        + "' is not active, so there is nothing to end");
+            }
+            String productOwner = customerPartyIn(
+                    (List<Map<String, Object>>) product.get("relatedParty"));
+            if (ownerPartyId == null || !ownerPartyId.equals(productOwner)) {
+                throw new OrderValidationException(
+                        "product '" + productId + "' does not belong to the ordering customer");
+            }
+            requireNoActiveCommitment(ownerPartyId, idOf(product.get("productOffering")),
+                    String.valueOf(product.get("name")));
+            Map<String, Object> ref = new java.util.LinkedHashMap<>();
+            ref.put("id", productId);
+            ref.put("name", product.get("name"));
+            if (product.get("realizingService") != null) {
+                ref.put("realizingService", product.get("realizingService"));
+            }
+            if (product.get("productOrderItem") != null) {
+                // the product's lineage: which order item made it (how its benefit allocation is named, #356)
+                ref.put("productOrderItem", product.get("productOrderItem"));
+            }
+            item.put("product", ref);
+            if (product.get("productOffering") != null) {
+                item.put("productOffering", product.get("productOffering"));
+            }
+        }
+        return deletes.size();
+    }
+
+    private static boolean isDelete(Map<String, Object> item) {
+        return "delete".equalsIgnoreCase(String.valueOf(item.get("action")));
     }
 
     /**
@@ -427,6 +526,9 @@ public class ProductOrderService {
         entity.setState(STATE_COMPLETED);
         provision(entity);
         mintCommitments(entity);
+        // an ending of a benefit gives its Choice back (#356)
+        orderChoices.settle(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId(),
+                entity.getOwnerPartyId());
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
         return updated;
@@ -439,6 +541,8 @@ public class ProductOrderService {
      */
     private void applyCompletion(ProductOrder entity) {
         provision(entity);
+        orderChoices.settle(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId(),
+                entity.getOwnerPartyId());
         stockClient.consume(entity.getId());
         paymentRefIds(entity).forEach(paymentClient::capture);
         mintCommitments(entity);
@@ -476,14 +580,40 @@ public class ProductOrderService {
         }
         entity.setProductOrderItemJson(mapper.writeItems(items));
         String rolled = rollupState(items);
-        boolean nowComplete = STATE_COMPLETED.equals(rolled) && !STATE_COMPLETED.equals(entity.getState());
+        // completed, or partial: what WAS delivered is provisioned (a failed item never is)
+        boolean nowComplete = (STATE_COMPLETED.equals(rolled) || STATE_PARTIAL.equals(rolled))
+                && !TERMINAL_STATES.contains(entity.getState());
+        boolean nowFailed = STATE_FAILED.equals(rolled) && !TERMINAL_STATES.contains(entity.getState());
+        if (TERMINAL_STATES.contains(rolled) && !TERMINAL_STATES.contains(entity.getState())) {
+            // a swap's endings happen with a full landing, and not otherwise: the old benefit stays
+            setDeleteStates(items, STATE_COMPLETED.equals(rolled) ? STATE_COMPLETED : "cancelled");
+            entity.setProductOrderItemJson(mapper.writeItems(items));
+        }
         entity.setState(rolled);
         if (nowComplete) {
             applyCompletion(entity);
         }
+        if (nowFailed) {
+            // nothing was delivered: give back what the order held, as a cancellation does
+            stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
+            paymentRefIds(entity).forEach(paymentClient::voidPayment);
+        }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
         return updated;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setDeleteStates(List<Map<String, Object>> items, String state) {
+        for (Map<String, Object> item : items) {
+            if (isDelete(item)) {
+                item.put("state", state);
+            }
+            if (item.get("productOrderItem") instanceof List<?> kids) {
+                setDeleteStates((List<Map<String, Object>>) kids, state);
+            }
+        }
     }
 
     /** Force every item (incl. children) to one state — used on whole-order completion. */
@@ -564,13 +694,23 @@ public class ProductOrderService {
      * partiallyCompleted; any started -> inProgress; else acknowledged.
      */
     private String rollupState(List<Map<String, Object>> items) {
-        List<String> leaves = new ArrayList<>();
-        collectLeafStates(items, leaves);
+        List<Map<String, Object>> leafItems = new ArrayList<>();
+        collectLeaves(items, leafItems);
+        // A SWAP (#356): the endings in an order that also adds are not a track
+        // of their own — they follow the picks, so the old benefit ends only once
+        // the new one has landed (and not at all if it did not).
+        List<Map<String, Object>> tracked = leafItems.stream().filter(i -> !isDelete(i)).toList();
+        List<String> leaves = (tracked.isEmpty() ? leafItems : tracked).stream()
+                .map(i -> i.get("state") == null ? STATE_ACKNOWLEDGED : String.valueOf(i.get("state"))).toList();
         if (leaves.isEmpty()) {
             return STATE_ACKNOWLEDGED;
         }
         if (leaves.stream().allMatch(ITEM_TERMINAL::contains)) {
-            return leaves.stream().anyMatch(STATE_COMPLETED::equals) ? STATE_COMPLETED : "cancelled";
+            boolean anyCompleted = leaves.stream().anyMatch(STATE_COMPLETED::equals);
+            if (leaves.stream().anyMatch(STATE_FAILED::equals)) {
+                return anyCompleted ? STATE_PARTIAL : STATE_FAILED;
+            }
+            return anyCompleted ? STATE_COMPLETED : "cancelled";
         }
         if (leaves.stream().anyMatch(STATE_COMPLETED::equals)) {
             return STATE_PARTIALLY_COMPLETED;
@@ -580,16 +720,15 @@ public class ProductOrderService {
     }
 
     @SuppressWarnings("unchecked")
-    private void collectLeafStates(List<Map<String, Object>> items, List<String> into) {
+    private void collectLeaves(List<Map<String, Object>> items, List<Map<String, Object>> into) {
         if (items == null) {
             return;
         }
         for (Map<String, Object> item : items) {
             if (item.get("productOrderItem") instanceof List<?> kids && !kids.isEmpty()) {
-                collectLeafStates((List<Map<String, Object>>) kids, into);
+                collectLeaves((List<Map<String, Object>>) kids, into);
             } else {
-                Object st = item.get("state");
-                into.add(st == null ? STATE_ACKNOWLEDGED : String.valueOf(st));
+                into.add(item);
             }
         }
     }
@@ -932,6 +1071,18 @@ public class ProductOrderService {
         context.put("maxLineQuantity", maxLineQuantity);
         context.put("totalQuantity", total);
         context.put("lineCount", items.size());
+        // Benefit Choices (#356): a SWAP and how many this household has made this
+        // quarter, so the operator's swap limit is a rule, not code. Read only for
+        // an order that is a swap; the rule's message may name {nextQuarterStarts}.
+        List<Map<String, Object>> leaves = flattenItemMaps(dto.getProductOrderItem());
+        if (ownerPartyId != null && orderChoices.isSwap(leaves)) {
+            com.bss.ordering.client.ChoicesClient.Pool swaps = orderChoices.pool(ownerPartyId);
+            context.put("choiceSwap", true);
+            context.put("choiceSwapsThisQuarter", swaps.swapsThisQuarter());
+            if (swaps.nextQuarterStarts() != null) {
+                context.put("nextQuarterStarts", swaps.nextQuarterStarts());
+            }
+        }
         // The delivery place (freg F-P3): home deliveries carry how the address
         // was sourced — registry-verified or typed by hand. Rules read both;
         // an order with nothing shipping has neither var, so such rules
@@ -1037,8 +1188,10 @@ public class ProductOrderService {
             return;
         }
         for (Map<String, Object> item : items) {
-            // a fixed bundle component bills through its bundle, never on its own
-            if (Boolean.TRUE.equals(item.get("decomposedComponent"))) {
+            // a fixed bundle component bills through its bundle, never on its own;
+            // an ending adds nothing (no stock, no availability, no commitment)
+            if (Boolean.TRUE.equals(item.get("decomposedComponent")) || isDelete(item)
+                    || STATE_FAILED.equals(item.get("state"))) {   // a failed item mints no commitment
                 continue;
             }
             Object offering = item.get("productOffering");
@@ -1084,6 +1237,7 @@ public class ProductOrderService {
         }
         if (cancelling) {
             stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
             paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
@@ -1102,6 +1256,7 @@ public class ProductOrderService {
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOrderDto deleted = mapper.toDto(entity);
         stockClient.release(id);
+        orderChoices.release(flattenItemMaps(deleted.getProductOrderItem()), id);
         repository.delete(entity);
         events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
     }
@@ -1323,7 +1478,7 @@ public class ProductOrderService {
                 continue;
             }
             for (Map<String, Object> item : flattenItemMaps(past.getProductOrderItem())) {
-                if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+                if (!isDelete(item) && item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
                     java.math.BigDecimal one = priceCache.computeIfAbsent(
                             ref.get("id").toString(),
                             oid -> catalogClient.findOfferingDetail(oid)
@@ -1373,6 +1528,7 @@ public class ProductOrderService {
         } else {
             entity.setState("cancelled");
             stockClient.release(entity.getId());
+            orderChoices.release(flattenItemMaps(mapper.toDto(entity).getProductOrderItem()), entity.getId());
             paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
@@ -1565,6 +1721,22 @@ public class ProductOrderService {
 
         boolean provisioned = false;
         for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
+            if (STATE_FAILED.equals(item.get("state"))) {
+                continue;   // the partner refused it, or it failed otherwise: nothing to put in inventory
+            }
+            if (isDelete(item) && "cancelled".equals(item.get("state"))) {
+                continue;   // a swap whose pick did not land: the old benefit stays
+            }
+            if (isDelete(item)) {
+                // an ending: the product record closes the way a ceased service
+                // closes it (inventory's own vocabulary, with the date it ended)
+                Map<String, Object> patch = new java.util.LinkedHashMap<>();
+                patch.put("status", "cancelled");
+                patch.put("terminationDate", OffsetDateTime.now().toString());
+                inventoryClient.updateProduct(idOf(item.get("product")), patch);
+                provisioned = true;
+                continue;
+            }
             if (!(item.get("productOffering") instanceof Map<?, ?> offering) || offering.get("id") == null) {
                 continue;
             }

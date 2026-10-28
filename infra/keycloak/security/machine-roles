@@ -1,0 +1,13 @@
+# Realm roles every realm must carry, and the machine identity that holds each.
+# A realm file only seeds a FRESH realm (--import-realm skips existing ones), so
+# a role a new component needs reaches running realms here: ops/keycloak/converge.sh
+# creates the role where it is missing and grants it where the line says:
+#   <role> <client-id>           to that client's service account (a machine)
+#   <role> composite:<role>      into a composite role people hold (a desk's bundle)
+#   <role> user:<username>       to one named user
+# A role with nothing after it is only defined.
+benefit:read
+benefit:write bss-ordering
+# the care desk reads a household's Choices (#358): the CSR bundle, and the all-round demo staff login
+benefit:read composite:agent
+benefit:read user:demo

@@ -17,3 +17,4 @@ export * from './api/numbers.js';
 export * from './api/growth.js';
 export * from './api/devices.js';
 export * from './api/controls.js';
+export * from './api/choices.js';

@@ -45,6 +45,21 @@ public class RestInventoryClient implements InventoryClient {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public java.util.List<java.util.Map<String, Object>> activeProductsOf(String ownerPartyId) {
+        try {
+            java.util.List<java.util.Map<String, Object>> found = restClient.get()
+                    .uri("/tmf-api/productInventory/v4/product?relatedPartyId={owner}&status=active&limit=100", ownerPartyId)
+                    .retrieve()
+                    .body(java.util.List.class);
+            return found == null ? java.util.List.of() : found;
+        } catch (RestClientException e) {
+            // a cease that cannot see the benefits must not pretend there are none
+            throw new DownstreamException("product-inventory is unreachable", e);
+        }
+    }
+
+    @Override
     public void updateProduct(String id, java.util.Map<String, Object> patch) {
         try {
             restClient.patch()

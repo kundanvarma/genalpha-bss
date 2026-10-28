@@ -216,6 +216,7 @@ services:
       PARTY_BASE_URL: http://party-account:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
       STOCK_BASE_URL: http://product-stock:8080
+      CHOICES_BASE_URL: http://benefit-allowance:8080
       PAYMENT_BASE_URL: http://payment:8080
       AGREEMENT_BASE_URL: http://agreement:8080
       # TMF645/679 order-time serviceability gate (anonymous, fail-open)
@@ -1942,6 +1943,43 @@ services:
       kafka:
         condition: service_started
 
+  benefit-allowance:
+    build: ./services/benefit-allowance
+    container_name: bss-benefit-allowance
+    restart: unless-stopped
+    # A leaking JVM is bounded and restarted here, instead of growing until
+    # the VM's OOM killer takes Kafka. Steady state is ~600 MiB with the
+    # 224m heap + 128m metaspace above; 1g catches a runaway, not a busy day.
+    mem_limit: 1g
+    environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      # (which tenants offer Choices, and what they call one, live there too)
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      DB_URL: jdbc:postgresql://postgres:5432/benefit_allowance
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: benefit_allowance_app
+      DB_PASSWORD: benefit_allowance_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8163:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   party-account:
     build: ./services/party-account
     container_name: bss-party-account
@@ -2219,6 +2257,7 @@ services:
       APP_URL: http://mobile-app:8080
       PIM_URL: http://mock-pim:8080
       STOCK_URL: http://product-stock:8080
+      CHOICES_URL: http://benefit-allowance:8080
       PAYMENT_URL: http://payment:8080
       WORKER_CONTROLLER_URL: http://worker-controller:8080
       LEGACY_URL: http://mock-legacy:8080
@@ -2463,6 +2502,17 @@ services:
     restart: unless-stopped
     ports:
       - "8162:8080"
+
+  # A content partner's activation platform, mocked (#355): the stand-in behind
+  # the partner-entitlement seam's `http` adapter. Answers active / pending /
+  # refused, dedupes on our request key, and carries the failure switches the
+  # suites flip (PUT /switches) — late, timeout, refuse, deactivate-fails.
+  mock-partner:
+    build: ./integrations/mock-partner
+    container_name: bss-mock-partner
+    restart: unless-stopped
+    ports:
+      - "8164:8080"
 
   mock-fsm:
     build: ./integrations/mock-fsm

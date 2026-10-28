@@ -47,6 +47,7 @@ full   seed_verified_identity
 full   seed_catalog_taxonomy
 full   seed_family_max
 full   seed_vas
+full   seed_choices
 full   seed_lifecycle_characteristics
 full   seed_screens_plus
 full   seed_entitlement

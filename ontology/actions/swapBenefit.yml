@@ -1,0 +1,58 @@
+action: swapBenefit
+version: 1
+introduced: 2026-10-27
+status: active
+meaning: Swap one of the household's benefits for another — one order that ends the old and picks the new; the old stays active until the new one is, and the swap counts toward the tenant's swap limit.
+intent: 'A customer would rather have the audiobooks than the films — changed on the call, without ever leaving them with nothing.'
+concept: Subscription
+inputs:
+  - { name: subscriptionId, type: ref, concept: Subscription, required: true, meaning: the benefit being swapped out }
+  - { name: targetOfferingId, type: ref, concept: ProductOffering, required: true, meaning: the benefit to swap to }
+preconditions:
+  - id: benefit-active
+    check: state
+    concept: Subscription
+    of: subscriptionId
+    in: [active]
+    says: only an active benefit can be swapped
+  - id: target-on-sale
+    check: state
+    concept: ProductOffering
+    of: targetOfferingId
+    in: [Active, Launched]
+    says: the benefit to swap to must be on offer
+  - id: a-different-benefit
+    check: function
+    function: differentOffering
+    args: [subscriptionId, targetOfferingId]
+    says: a swap needs a different benefit
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: ordering:write }
+policy: { domain: order, capability: policy.evaluate }
+governance:
+  autonomy: high
+  approval: none
+  audit: mandatory
+executes:
+  capability: productOrdering.create
+  template:
+    productOrderItem:
+      - id: "1"
+        action: delete
+        product: { id: "${subscriptionId}" }
+      - id: "2"
+        action: add
+        quantity: 1
+        productOffering: { id: "${targetOfferingId}", name: "${targetOffering.name}" }
+    relatedParty:
+      - { id: "${owner.id}", role: customer }
+effects:
+  - { capability: ontology.receipt, when: executed }
+emits:
+  - { event: ProductOrderCreateEvent, component: product-ordering, meaning: the swap was placed }
+  - { event: ChoiceSwappedEvent, component: benefit-allowance, meaning: "the old benefit gave its Choice to the new one, once the new one was active" }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: ProductOrder, settles: ChoiceSwappedEvent }
+pages: [csr:customers]
