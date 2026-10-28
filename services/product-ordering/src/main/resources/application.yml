@@ -118,6 +118,8 @@ bss:
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
     stock-base-url: ${STOCK_BASE_URL:http://localhost:8086}
     choices-base-url: ${CHOICES_BASE_URL:http://localhost:8163}
+    # collections, for the "no new picks while in collections" eligibility fact (#391)
+    billing-base-url: ${BILLING_BASE_URL:http://localhost:8088}
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}

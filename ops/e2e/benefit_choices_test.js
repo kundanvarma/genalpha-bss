@@ -40,6 +40,8 @@
  *       finance reads the month by partner, a customer cannot
  *   a partner's invoice (#390) recorded twice is one invoice; owed beside
  *       invoiced, the difference in words; paid on the screen, settled once
+ *   eligibility (#391): a household in collections is refused a NEW pick by
+ *       the operator's rule, in its words (a 422 from policy, not the ledger's 409)
  * Marketing (#361):
  *   "has unused Choices" is an audience (insight's choicesLeft trait) that holds
  *   the household with Choices left and not the one with none — and a household
@@ -616,6 +618,20 @@ const orderOf = (o) => ({
   if (settledPay.length !== 1 || paidTwice.length !== 1) fail(`the invoice should be settled once on the journal, found ${paidTwice.length}`);
   await bo.screenshot({ path: `${SHOTS}/benefit_choices_invoices.png`, fullPage: true });
   console.log(`OK invoices: PlayCo's ${invRef} recorded once (invoiced +1.25), "${words}"; paid on the screen and settled once on the journal`);
+  /* ---- eligibility (#391): no NEW picks while a household is in collections ---- */
+  // a real GenAlpha household with an open collections case (no agreed payment plan), from billing
+  const openCases = ((await (await ctx.get(`${API}/tmf-api/customerBillManagement/v4/collectionCase`, { headers: H(finance) })).json()) || [])
+    .filter((c) => ['reminded', 'warned', 'restricted', 'suspended'].includes(c.state) && !c.holds?.promiseToPay);
+  if (!openCases.length) fail('eligibility needs a household in collections on this fleet — run collections_test.js once first');
+  const debtor = openCases[0].accountId;
+  // a care agent picks for them (staff order on the household's behalf): the operator's rule refuses it
+  const collectionsPick = await ctx.post(ORDERS, { headers: { ...H(finance), 'X-Channel': 'csr' }, data: {
+    relatedParty: [{ id: debtor, role: 'customer' }], productOrderItem: [add(stream)] } });
+  const collectionsBody = await collectionsPick.json().catch(() => ({ message: `answered ${collectionsPick.status()}` }));
+  if (collectionsPick.status() !== 422 || !/overdue balance is settled/.test(collectionsBody.message || '')) {
+    fail(`a pick for a household in collections should be refused by the rule (422), got ${collectionsPick.status()}: ${collectionsBody.message}`);
+  }
+  console.log(`OK eligibility: a household in collections (${openCases[0].state}) was refused a new pick — "${collectionsBody.message}"`);
 
   /* ---- marketing (#361): the households with Choices they have not spent ---- */
   const subOf = (tok) => JSON.parse(Buffer.from(tok.split('.')[1], 'base64url')).sub;

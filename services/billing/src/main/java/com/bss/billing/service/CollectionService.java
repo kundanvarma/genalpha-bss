@@ -489,10 +489,25 @@ public class CollectionService {
 
     @Transactional(readOnly = true)
     public List<CollectionCaseView> findCases(String state) {
+        return findCases(state, null);
+    }
+
+    /**
+     * Cases, optionally for ONE account (#391: ordering asks whether a household
+     * picking a benefit is in collections). A customer token is always scoped to
+     * its own case — the accountId it sends cannot widen that.
+     */
+    @Transactional(readOnly = true)
+    public List<CollectionCaseView> findCases(String state, String accountId) {
         String tenantId = tenantScope.currentTenantId();
         java.util.Optional<String> own = partyScope.scopedPartyId();
         if (own.isPresent()) {
             return cases.findByTenantIdAndAccountId(tenantId, own.get())
+                    .map(c -> List.of(caseView(c))).orElse(List.of());
+        }
+        if (accountId != null && !accountId.isBlank()) {
+            return cases.findByTenantIdAndAccountId(tenantId, accountId)
+                    .filter(c -> state == null || state.equals(c.getState()))
                     .map(c -> List.of(caseView(c))).orElse(List.of());
         }
         List<CollectionCase> rows = state == null ? cases.findByTenantId(tenantId)

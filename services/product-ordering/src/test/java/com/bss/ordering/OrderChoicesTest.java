@@ -3,11 +3,14 @@ package com.bss.ordering;
 import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.ChoicesClient;
+import com.bss.ordering.client.CollectionsClient;
+import com.bss.ordering.client.PolicyClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.client.PromotionClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -74,8 +77,16 @@ class OrderChoicesTest {
     @MockitoBean
     private InventoryClient inventoryClient;
 
+    @MockitoBean
+    private PolicyClient policyClient;
+
+    @MockitoBean
+    private CollectionsClient collectionsClient;
+
     @BeforeEach
     void catalog() {
+        given(policyClient.evaluateOrder(any())).willReturn(PolicyClient.Decision.allow());
+        given(collectionsClient.inCollections(anyString())).willReturn(Optional.of(false));
         given(catalogClient.findOffering("po-stream")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-stream", "StreamCo Standard")));
         given(catalogClient.findOffering("po-plan")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-plan", "Mobile Max")));
         given(catalogClient.findOffering("po-plain")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-plain", "Data Top-up")));
@@ -162,5 +173,39 @@ class OrderChoicesTest {
 
     private static RequestPostProcessor writeToken() {
         return jwt().authorities(new SimpleGrantedAuthority("ordering:write"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aNewPick_tellsPolicyItIsAPick_andWhetherTheHouseholdIsInCollections() throws Exception {
+        given(collectionsClient.inCollections("cust-1")).willReturn(Optional.of(true));
+        given(policyClient.evaluateOrder(any())).willReturn(PolicyClient.Decision.deny(
+                "A new benefit can be picked once the overdue balance is settled.", "Choices: no new picks while in collections"));
+        mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(order("po-stream")))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("overdue balance is settled")));
+        ArgumentCaptor<Map<String, Object>> ctx = ArgumentCaptor.forClass(Map.class);
+        verify(policyClient).evaluateOrder(ctx.capture());
+        org.assertj.core.api.Assertions.assertThat(ctx.getValue())
+                .containsEntry("choicePick", true).containsEntry("inCollections", true);
+        verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void anOrderWithNoBenefit_neverAsksBilling_andWhenBillingCannotSayTheFactIsAbsent() throws Exception {
+        mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(order("po-plain")))
+                .andExpect(status().isCreated());
+        verify(collectionsClient, never()).inCollections(anyString());
+
+        given(collectionsClient.inCollections("cust-1")).willReturn(Optional.empty());
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
+                .willReturn(ChoicesClient.HoldOutcome.held());
+        mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(order("po-stream")))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<Map<String, Object>> ctx = ArgumentCaptor.forClass(Map.class);
+        verify(policyClient, org.mockito.Mockito.atLeastOnce()).evaluateOrder(ctx.capture());
+        Map<String, Object> last = ctx.getAllValues().get(ctx.getAllValues().size() - 1);
+        org.assertj.core.api.Assertions.assertThat(last).containsEntry("choicePick", true).doesNotContainKey("inCollections");
     }
 }

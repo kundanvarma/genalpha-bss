@@ -119,4 +119,17 @@ if not any(r.get("name") == SWAP_RULE for r in policy("GET", "policyRule?limit=2
         "message": "You have used this quarter's 3 swaps. The next swap is possible from {nextQuarterStarts}."})
     print(f"rule: {SWAP_RULE}")
 
+# eligibility (#391): no NEW picks while the household is in collections — a rule the
+# operator edits or disables; a release, and a swap of what is already picked, still work
+PICK_RULE = "Choices: no new picks while in collections"
+if not any(r.get("name") == PICK_RULE for r in policy("GET", "policyRule?limit=200") or []):
+    policy("POST", "policyRule", {
+        "name": PICK_RULE, "domain": "order", "effect": "deny", "priority": 40, "enabled": True,
+        "description": "A household in collections cannot pick a new benefit until its balance is settled or a payment plan is agreed.",
+        "condition": json.dumps({"and": [{"==": [{"var": "choicePick"}, True]},
+                                         {"==": [{"var": "inCollections"}, True]}]}),
+        "message": "A new benefit can be picked once the overdue balance is settled or a payment plan is agreed. "
+                   "Benefits you already have stay as they are."})
+    print(f"rule: {PICK_RULE}")
+
 print("Choices seeded: three granting plans, three benefits (one held 12 months), the swap limit.")
