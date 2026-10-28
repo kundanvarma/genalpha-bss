@@ -5,10 +5,12 @@ import com.bss.benefit.dto.PartnerCostView;
 import com.bss.benefit.entity.ChoicePool;
 import com.bss.benefit.entity.ChoiceAllocation;
 import com.bss.benefit.entity.PartnerCost;
+import com.bss.benefit.entity.PartnerInvoice;
 import com.bss.benefit.events.DomainEventPublisher;
 import com.bss.benefit.repository.ChoiceAllocationRepository;
 import com.bss.benefit.repository.ChoicePoolRepository;
 import com.bss.benefit.repository.PartnerCostRepository;
+import com.bss.benefit.repository.PartnerInvoiceRepository;
 import com.bss.benefit.security.TenantContext;
 import com.bss.benefit.security.TenantRegistry;
 import com.bss.benefit.security.TenantScope;
@@ -53,10 +55,11 @@ public class PartnerCosts {
     private final TenantRegistry registry;
     private final DomainEventPublisher events;
     private final TransactionTemplate tx;
+    private final PartnerInvoiceRepository invoices;
 
     public PartnerCosts(PartnerCostRepository costs, ChoiceAllocationRepository allocations,
             ChoicePoolRepository pools, TenantScope tenantScope, TenantRegistry registry, DomainEventPublisher events,
-            TransactionTemplate tx) {
+            TransactionTemplate tx, PartnerInvoiceRepository invoices) {
         this.costs = costs;
         this.allocations = allocations;
         this.pools = pools;
@@ -64,6 +67,7 @@ public class PartnerCosts {
         this.registry = registry;
         this.events = events;
         this.tx = tx;
+        this.invoices = invoices;
     }
 
     static String period(OffsetDateTime at) {
@@ -134,7 +138,30 @@ public class PartnerCosts {
                             x.amount().add(y.amount())));
         }
         BigDecimal total = rows.stream().map(PartnerCost::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new PartnerCostView(month, currency(tenant), total, List.copyOf(lines.values()));
+        return new PartnerCostView(month, currency(tenant), total, List.copyOf(lines.values()),
+                reconciled(tenant, month, rows));
+    }
+
+    /**
+     * Each partner's month, owed beside invoiced (#390): every partner the ledger owes
+     * or that sent an invoice, so an invoice for a month nothing was owed shows too.
+     */
+    private List<PartnerCostView.Partner> reconciled(String tenant, String month, List<PartnerCost> rows) {
+        Map<String, BigDecimal> owed = new TreeMap<>();
+        for (PartnerCost c : rows) {
+            owed.merge(c.getPartner(), c.getAmount(), BigDecimal::add);
+        }
+        Map<String, List<PartnerInvoice>> billed = new TreeMap<>();
+        for (PartnerInvoice i : invoices.findByTenantIdAndPeriodOrderByPartnerAscRecordedAtAsc(tenant, month)) {
+            billed.computeIfAbsent(i.getPartner(), k -> new java.util.ArrayList<>()).add(i);
+            owed.putIfAbsent(i.getPartner(), BigDecimal.ZERO);
+        }
+        return owed.entrySet().stream().map(e -> {
+            List<PartnerInvoice> theirs = billed.getOrDefault(e.getKey(), List.of());
+            BigDecimal invoiced = theirs.stream().map(PartnerInvoice::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            return new PartnerCostView.Partner(e.getKey(), e.getValue(), invoiced, invoiced.subtract(e.getValue()),
+                    theirs.stream().map(PartnerInvoices::view).toList());
+        }).toList();
     }
 
     private String currency(String tenant) {

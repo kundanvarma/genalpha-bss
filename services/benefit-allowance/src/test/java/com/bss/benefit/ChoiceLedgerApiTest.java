@@ -345,4 +345,54 @@ class ChoiceLedgerApiTest {
         mockMvc.perform(get(BASE + "/partnerCost").param("period", "October").with(finance))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void aPartnerInvoiceIsReconciledAgainstWhatWasOwed_recordedOnce_paidOnce() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        String partner = "TuneCo " + UUID.randomUUID();
+        String month = java.time.YearMonth.now(java.time.ZoneOffset.UTC).toString();
+        grant(owner, 1);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"ownerPartyId": "%s", "orderId": "ord-inv", "orderItemId": "1", "offeringId": "po-tune",
+                                 "offeringName": "TuneCo Music", "cost": 1, "partner": "%s", "wholesaleCost": 40.00}
+                                """.formatted(owner, partner)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/order/ord-inv/settle").with(ordering())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"ownerPartyId\": \"" + owner + "\"}"))
+                .andExpect(status().isOk());
+
+        RequestPostProcessor finance = jwt().authorities(new SimpleGrantedAuthority("billing:admin"));
+        String body = """
+                {"partner": "%s", "period": "%s", "reference": "INV-2026-10-07", "amount": 42.50}
+                """.formatted(partner, month);
+        String first = mockMvc.perform(post(BASE + "/partnerInvoice").with(finance)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String again = mockMvc.perform(post(BASE + "/partnerInvoice").with(finance)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        assertThat(again).isEqualTo(first);   // the same invoice twice is one invoice
+
+        String row = "$.partners[?(@.partner == '%s')]".formatted(partner);
+        mockMvc.perform(get(BASE + "/partnerCost").param("period", month).with(finance))
+                .andExpect(jsonPath(row + ".owed").value(40.0))
+                .andExpect(jsonPath(row + ".invoiced").value(42.5))
+                .andExpect(jsonPath(row + ".difference").value(2.5))
+                .andExpect(jsonPath(row + ".invoices.length()").value(1))
+                .andExpect(jsonPath(row + ".invoices[0].paid").value(false));
+
+        String id = first.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post(BASE + "/partnerInvoice/" + id + "/pay").with(finance))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.paid").value(true));
+        }
+        mockMvc.perform(post(BASE + "/partnerInvoice").with(customer(owner))
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        mockMvc.perform(post(BASE + "/partnerInvoice").with(ordering())
+                .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
+        mockMvc.perform(post(BASE + "/partnerInvoice").with(finance).contentType(MediaType.APPLICATION_JSON)
+                .content(body.replace(month, "October"))).andExpect(status().isBadRequest());
+    }
 }

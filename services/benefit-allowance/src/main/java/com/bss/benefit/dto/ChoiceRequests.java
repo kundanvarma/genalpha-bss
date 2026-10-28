@@ -72,4 +72,11 @@ public final class ChoiceRequests {
             this(ownerPartyId, grants, List.of(), List.of());
         }
     }
+
+    /** Finance records a partner's invoice for a month (#390). The reference is the partner's own. */
+    public record PartnerInvoice(@jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 255) String partner,
+            @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])") String period,
+            @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 120) String reference,
+            @jakarta.validation.constraints.NotNull @jakarta.validation.constraints.DecimalMin("0") java.math.BigDecimal amount) {
+    }
 }

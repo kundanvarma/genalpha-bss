@@ -8,6 +8,7 @@ import com.bss.benefit.exception.BadRequestException;
 import com.bss.benefit.security.PartyScope;
 import com.bss.benefit.service.ChoiceLedger;
 import com.bss.benefit.service.PartnerCosts;
+import com.bss.benefit.service.PartnerInvoices;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,11 +33,27 @@ public class ChoiceController {
     private final ChoiceLedger ledger;
     private final PartyScope partyScope;
     private final PartnerCosts partnerCosts;
+    private final PartnerInvoices partnerInvoices;
 
-    public ChoiceController(ChoiceLedger ledger, PartyScope partyScope, PartnerCosts partnerCosts) {
+    public ChoiceController(ChoiceLedger ledger, PartyScope partyScope, PartnerCosts partnerCosts,
+            PartnerInvoices partnerInvoices) {
         this.ledger = ledger;
         this.partyScope = partyScope;
         this.partnerCosts = partnerCosts;
+        this.partnerInvoices = partnerInvoices;
+    }
+
+    /** Finance records a partner's invoice for a month (#390); the same invoice twice is one. */
+    @PostMapping("/partnerInvoice")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PartnerCostView.Invoice recordInvoice(@Valid @RequestBody ChoiceRequests.PartnerInvoice request) {
+        return partnerInvoices.record(request);
+    }
+
+    /** Finance marks an invoice paid — once; revenue books the settlement of the payable. */
+    @PostMapping("/partnerInvoice/{id}/pay")
+    public PartnerCostView.Invoice payInvoice(@PathVariable String id) {
+        return partnerInvoices.pay(id);
     }
 
     /** What the operator owes its partners for a month (YYYY-MM, default this one) — finance only. */

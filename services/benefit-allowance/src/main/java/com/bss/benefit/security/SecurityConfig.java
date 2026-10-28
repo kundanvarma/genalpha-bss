@@ -61,6 +61,9 @@ public class SecurityConfig {
                         // what the operator owes its partners (#360): money, so finance alone
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/partnerCost")
                                 .hasAuthority(FINANCE)
+                        // partner invoices and their payment (#390): money, so finance alone
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/partnerInvoice",
+                                ApiConstants.BASE_PATH + "/partnerInvoice/*/pay").hasAuthority(FINANCE)
                         // a goodwill Choice (#358): ordering's machine, or the human approver replaying
                         // the governed action (billing:admin — the same goodwill gate as a credit)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/goodwill")
