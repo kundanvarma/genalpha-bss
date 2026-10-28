@@ -153,6 +153,7 @@ function sameRules(rules, realm) {
   /* ---------- 5. "temporary" means temporary (#322) ---------- */
   // The laptop fleet opts OUT of temporary passwords for its machine-driven suites, so
   // the login is made as the product makes it — temporary — through the admin API.
+  adm = await admin(ctx);   // the master admin token lives a minute; each leg signs in fresh
   const A = { Authorization: `Bearer ${adm}`, 'Content-Type': 'application/json' };
   const mkTemp = async (who) => {
     const handed = 'handed over by the family';                    // a password someone else has seen
@@ -198,6 +199,7 @@ function sameRules(rules, realm) {
 
   /* ---------- 6. guessing is throttled (#326) ---------- */
   const BF = JSON.parse(fs.readFileSync(path.join(SECURITY, 'brute-force.json'), 'utf8'));
+  adm = await admin(ctx);
   for (const realm of [...realms, OP]) {
     const r = await (await ctx.get(`${KC}/admin/realms/${realm}`, { headers: { Authorization: `Bearer ${adm}` } })).json();
     for (const k of ['bruteForceProtected', 'permanentLockout', 'failureFactor', 'waitIncrementSeconds', 'maxFailureWaitSeconds']) {
@@ -242,6 +244,7 @@ function sameRules(rules, realm) {
 
   /* ---------- 7. account mail works on the laptop (#327) ---------- */
   const MAILPIT = 'http://localhost:8025';
+  adm = await admin(ctx);
   const bssRealm = await (await ctx.get(`${KC}/admin/realms/bss`, { headers: { Authorization: `Bearer ${adm}` } })).json();
   if ((bssRealm.smtpServer || {}).host !== 'mailpit') fail(`the converge step did not point the realms' mail at Mailpit: ${JSON.stringify(bssRealm.smtpServer)}`);
   if (bssRealm.verifyEmail) fail('the laptop demo fleet must keep email verification OFF (its self-registration suites)');
@@ -306,11 +309,15 @@ function sameRules(rules, realm) {
   await fresh2.fill('input[name="password-new"]', newWords);
   await fresh2.fill('input[name="password-confirm"]', newWords);
   await fresh2.click('input[type="submit"], button[type="submit"]');
-  await fresh2.waitForTimeout(2500);
+  // the person lands back where they started — the tenant's own shop, signed in —
+  // not on Keycloak's dead-end "click here to proceed" (what a mail sent with no
+  // app to return to shows; seen on the box, 2026-10-21)
+  await fresh2.waitForURL((u) => u.href.startsWith(shopOP), { timeout: 20000 })
+    .catch(() => fail(`after the reset the person was left at ${fresh2.url().replace(/[?#].*/, '')}, not back in ${shopOP}`));
   await b4.close();
   if (!(await token(ctx, OP, newcomer, newWords))) fail('the password set through the reset mail does not sign in');
   if (await token(ctx, OP, newcomer, firstWords)) fail('the old password still works after the reset');
-  console.log(`OK FORGOT PASSWORD: "${reset.Subject}" reached Mailpit, its link set a new password that signs in, and the old one no longer does`);
+  console.log(`OK FORGOT PASSWORD: "${reset.Subject}" reached Mailpit, its link set a new password, the person landed back in ${OP}'s shop, the new password signs in and the old one no longer does`);
 
   await ctx.delete(`${KC}/admin/realms/${OP}`, { headers: { Authorization: `Bearer ${adm}` } });
   console.log('PASS password_policy_test — every tenant\'s sign-in follows the length rules of NIST SP 800-63B, in plain words');
