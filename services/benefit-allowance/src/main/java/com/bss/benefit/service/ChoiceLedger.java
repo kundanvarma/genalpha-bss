@@ -120,7 +120,8 @@ public class ChoiceLedger {
         // asks in this same sequence, so the two never disagree); a swap that ends it is not "already picked"
         java.util.Set<String> replaced = request.replaces() == null ? java.util.Set.of() : request.replaces().stream()
                 .map(r -> r.orderId() + "\u0000" + r.orderItemId()).collect(java.util.stream.Collectors.toSet());
-        boolean already = pool != null && allocations.findByTenantIdAndPoolIdAndStateInOrderByCreatedAtAsc(
+        // pool is not null here: the count above refused a household with no pool
+        boolean already = allocations.findByTenantIdAndPoolIdAndStateInOrderByCreatedAtAsc(
                         tenant, pool.getId(), IN_USE).stream()
                 .anyMatch(a -> a.getOfferingId() != null && a.getOfferingId().equals(request.offeringId())
                         && !replaced.contains(a.getOrderId() + "\u0000" + a.getOrderItemId()));
