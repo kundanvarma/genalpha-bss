@@ -29,9 +29,29 @@ updates:
       - dependency-name: "org.springframework.cloud:spring-cloud-dependencies"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: npm
-    directories: ["/apps/storefront", "/apps/csr-console", "/apps/mobile", "/ops/e2e"]
+    directories: ["/apps/storefront", "/apps/csr-console", "/ops/e2e"]
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+  # The mobile app is an Expo app: the Expo SDK decides React, React Native and every
+  # expo package together, and they move only with an SDK upgrade (`expo install
+  # --fix`). A lone bump here is how #341 put an SDK-58 package on an SDK-57 app.
+  # In-SDK patches (like #384) still arrive.
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "react-native-*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
