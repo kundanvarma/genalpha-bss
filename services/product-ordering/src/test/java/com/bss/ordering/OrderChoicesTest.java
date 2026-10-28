@@ -35,6 +35,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -207,5 +208,43 @@ class OrderChoicesTest {
         verify(policyClient, org.mockito.Mockito.atLeastOnce()).evaluateOrder(ctx.capture());
         Map<String, Object> last = ctx.getAllValues().get(ctx.getAllValues().size() - 1);
         org.assertj.core.api.Assertions.assertThat(last).containsEntry("choicePick", true).doesNotContainKey("inCollections");
+    }
+
+    private static RequestPostProcessor household() {
+        return jwt().jwt(j -> j.subject("cust-1"))
+                .authorities(new SimpleGrantedAuthority("customer"), new SimpleGrantedAuthority("ordering:read"));
+    }
+
+    private static final String PREVIEW = "/tmf-api/productOrderingManagement/v4/choicePreview";
+
+    @Test
+    void canIPickThis_answersAsTheOrderWould_inWords_holdingNothing() throws Exception {
+        given(choices.standing("cust-1")).willReturn(new ChoicesClient.Standing(true, "Picks", 1, java.util.Set.of()));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").with(household()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.allowed").value(true))
+                .andExpect(jsonPath("$.label").value("Picks"));
+
+        given(choices.standing("cust-1")).willReturn(new ChoicesClient.Standing(true, "Picks", 1, java.util.Set.of("po-stream")));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("StreamCo Standard is already picked"));
+
+        given(choices.standing("cust-1")).willReturn(new ChoicesClient.Standing(true, "Picks", 0, java.util.Set.of()));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("StreamCo Standard costs 1 of your Picks and you have 0 left"));
+
+        given(choices.standing("cust-1")).willReturn(new ChoicesClient.Standing(true, "Picks", 2, java.util.Set.of()));
+        given(collectionsClient.inCollections("cust-1")).willReturn(Optional.of(true));
+        given(policyClient.evaluateOrder(any())).willReturn(PolicyClient.Decision.deny(
+                "A new benefit can be picked once the overdue balance is settled.", "Choices: no new picks while in collections"));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("A new benefit can be picked once the overdue balance is settled."));
+
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-plain").with(household()))
+                .andExpect(status().isBadRequest());   // not a benefit
+        verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
     }
 }

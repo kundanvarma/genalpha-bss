@@ -47,3 +47,8 @@ export async function swapBenefit(productId, offering) {
     }),
   }));
 }
+
+/** "Can I pick this?" — ordering's answer before an order, from the order's own checks; holds nothing (#392). */
+export async function choicePreview(offeringId) {
+  return json(await authFetch(`${ORDERING}/choicePreview?offeringId=${encodeURIComponent(offeringId)}`));
+}

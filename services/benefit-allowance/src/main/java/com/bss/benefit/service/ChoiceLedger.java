@@ -116,6 +116,18 @@ public class ChoiceLedger {
             throw new ConflictException(request.offeringName() + " costs " + request.cost() + " of your "
                     + label() + " and you have " + left + " left");
         }
+        // then: a benefit the household already has is not picked twice (#392 — the preview
+        // asks in this same sequence, so the two never disagree); a swap that ends it is not "already picked"
+        java.util.Set<String> replaced = request.replaces() == null ? java.util.Set.of() : request.replaces().stream()
+                .map(r -> r.orderId() + "\u0000" + r.orderItemId()).collect(java.util.stream.Collectors.toSet());
+        // pool is not null here: the count above refused a household with no pool
+        boolean already = allocations.findByTenantIdAndPoolIdAndStateInOrderByCreatedAtAsc(
+                        tenant, pool.getId(), IN_USE).stream()
+                .anyMatch(a -> a.getOfferingId() != null && a.getOfferingId().equals(request.offeringId())
+                        && !replaced.contains(a.getOrderId() + "\u0000" + a.getOrderItemId()));
+        if (already) {
+            throw new ConflictException(request.offeringName() + " is already picked");
+        }
         ChoiceAllocation a = new ChoiceAllocation();
         a.setTenantId(tenant);
         a.setId(UUID.randomUUID().toString());

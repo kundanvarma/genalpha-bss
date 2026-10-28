@@ -67,6 +67,30 @@ public class RestChoicesClient implements ChoicesClient {
     }
 
     @Override
+    public Standing standing(String ownerPartyId) {
+        try {
+            PoolWire wire = restClient.get().uri(BASE + "/pool?ownerPartyId={owner}", ownerPartyId)
+                    .retrieve().body(PoolWire.class);
+            if (wire == null) {
+                return new Standing(false, "Choices", 0, java.util.Set.of());
+            }
+            java.util.Set<String> picked = wire.allocations() == null ? java.util.Set.of()
+                    : wire.allocations().stream().map(PickWire::offeringId).filter(java.util.Objects::nonNull)
+                            .collect(java.util.stream.Collectors.toSet());
+            return new Standing(wire.offered(), wire.label() == null ? "Choices" : wire.label(), wire.left(), picked);
+        } catch (RestClientException e) {
+            throw new DownstreamException("benefit-allowance is unreachable", e);
+        }
+    }
+
+    /** The ledger's pool, as much of it as "can I pick this?" reads. */
+    private record PoolWire(boolean offered, String label, int left, List<PickWire> allocations) {
+    }
+
+    private record PickWire(String offeringId) {
+    }
+
+    @Override
     public void release(String orderId) {
         post("/order/" + orderId + "/release", null);
     }

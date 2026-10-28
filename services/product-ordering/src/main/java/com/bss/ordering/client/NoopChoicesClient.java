@@ -29,4 +29,9 @@ public class NoopChoicesClient implements ChoicesClient {
     @Override
     public void release(String orderId) {
     }
+
+    @Override
+    public Standing standing(String ownerPartyId) {
+        return new Standing(false, "Choices", 0, java.util.Set.of());
+    }
 }

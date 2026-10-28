@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listOfferings, myChoices, myProducts, pickBenefit, releaseBenefit, swapBenefit } from '../api.js';
+import { choicePreview, listOfferings, myChoices, myProducts, pickBenefit, releaseBenefit, swapBenefit } from '../api.js';
 import { t } from '../i18n.js';
 
 /*
@@ -17,6 +17,7 @@ export default function Choices() {
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [error, setError] = useState(null);
+  const [previews, setPreviews] = useState({}); // offeringId -> ordering's "can I pick this?" (#392)
 
   function refresh() {
     myProducts().then(setProducts).catch((e) => setError(e.message));
@@ -32,6 +33,13 @@ export default function Choices() {
       setPlans(all.filter((o) => o.choicesGranted > 0));
     }).catch((e) => setError(`${t('The benefits could not be loaded')}: ${e.message}`));
   }, []);
+  // ask ordering, per benefit, whether it can be picked and why not — the page decides nothing (#392);
+  // an unanswered preview leaves the button to the order itself, which is the authority
+  useEffect(() => {
+    if (!pool?.offered || !benefits?.length) return;
+    Promise.all(benefits.map((b) => choicePreview(b.id).then((p) => [b.id, p]).catch(() => [b.id, null])))
+      .then((pairs) => setPreviews(Object.fromEntries(pairs)));
+  }, [pool, benefits]);
   // while a pick is activating, look again until the partner has confirmed it
   const activating = pool?.allocations?.some((a) => a.state === 'held');
   useEffect(() => {
@@ -137,17 +145,19 @@ export default function Choices() {
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
           {(benefits || []).map((b) => {
             const mine = picked.has(b.id);
-            const short = pool.left < b.choiceCost;
+            const answer = previews[b.id];
+            const asking = !(b.id in previews);   // until ordering answers, the page vouches for nothing
+            const refused = answer && !answer.allowed;
             return (
               <div key={b.id} className="card" data-testid="benefit-card" style={{ padding: 12 }}>
                 <b>{b.name}</b>
                 <p className="muted" style={{ minHeight: '3em' }}>{b.description}</p>
                 <p style={{ margin: '4px 0' }}>{t('Costs')} {b.choiceCost} {t('of your')} {label}</p>
-                <button className="primary" data-testid="pick-benefit" disabled={mine || short || busy !== null}
-                  title={mine ? t('Already picked') : short ? `${t('Not enough')} ${label} ${t('left')}` : ''}
+                <button className="primary" data-testid="pick-benefit" disabled={mine || asking || refused || busy !== null}
                   onClick={() => pick(b)}>
                   {mine ? t('Picked') : busy === b.id ? t('Picking…') : t('Pick')}
                 </button>
+                {refused && !mine && <p className="muted small" data-testid="pick-reason" style={{ margin: '6px 0 0' }}>{answer.reason}</p>}
               </div>
             );
           })}

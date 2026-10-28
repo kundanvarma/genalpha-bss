@@ -233,9 +233,9 @@ class ChoiceLedgerApiTest {
 
     private void pickHeld(RequestPostProcessor as, String owner, String orderId, int months) throws Exception {
         mockMvc.perform(post(BASE + "/hold").with(as).contentType(MediaType.APPLICATION_JSON).content("""
-                {"ownerPartyId": "%s", "orderId": "%s", "orderItemId": "1", "offeringId": "po-phone",
+                {"ownerPartyId": "%s", "orderId": "%s", "orderItemId": "1", "offeringId": "po-phone-%s",
                  "offeringName": "Phone offer (12 months)", "cost": 1, "holdMonths": %d}
-                """.formatted(owner, orderId, months))).andExpect(status().isCreated());
+                """.formatted(owner, orderId, orderId, months))).andExpect(status().isCreated());
         mockMvc.perform(post(BASE + "/order/" + orderId + "/settle").with(as).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"ownerPartyId\": \"" + owner + "\"}")).andExpect(status().isOk());
     }
@@ -394,5 +394,17 @@ class ChoiceLedgerApiTest {
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
         mockMvc.perform(post(BASE + "/partnerInvoice").with(finance).contentType(MediaType.APPLICATION_JSON)
                 .content(body.replace(month, "October"))).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void aBenefitAlreadyPicked_isNotPickedTwice_unlessASwapEndsIt() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 2);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(holdBody(owner, "dup-a-" + owner, "1"))).andExpect(status().isCreated());
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content(holdBody(owner, "dup-b-" + owner, "1")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("StreamCo Standard is already picked"));
     }
 }
