@@ -56,8 +56,29 @@ const ORDERS = `${API}/tmf-api/productOrderingManagement/v4/productOrder`;
 const run = Date.now();
 const SHOTS = `${__dirname}/.shots`;
 
-const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
+// a failure THROWS, so the one handler at the bottom cleans up what this run made before exiting (#378)
+const fail = (m) => { throw new Error(m); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Offerings this run creates are this run's to remove (#378): a numbered
+ * "PlayCo Arcade <run>" left on sale shows on every household's Choices page.
+ * Each is deleted at the end — or on a failure — and retired if the catalog
+ * refuses the delete, so nothing a run made is left on a shelf. */
+const leftovers = [];
+async function removeLeftovers() {
+  const c = await request.newContext();
+  const removed = [];
+  for (const l of leftovers.splice(0)) {
+    const tok = (await (await c.post(`${KC}/${l.realm}/protocol/openid-connect/token`, { form: {
+      grant_type: 'password', client_id: 'bss-demo', username: l.user, password: l.pass } })).json()).access_token;
+    const url = `${API}/tmf-api/productCatalogManagement/v4/productOffering/${l.id}`;
+    const headers = { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', 'X-Channel': 'web' };
+    const gone = await c.delete(url, { headers });
+    if (!gone.ok()) await c.patch(url, { headers, data: { lifecycleStatus: 'Retired' } });
+    removed.push({ ...l, url, headers });
+  }
+  return { c, removed };
+}
 
 async function register(page, email, first, last) {
   await page.goto(`${API}/shop/`);
@@ -509,6 +530,7 @@ const orderOf = (o) => ({
   if ((await bo.locator('#island-panel textarea').count()) > 0) fail('the authoring desk shows a JSON box');
   await bo.screenshot({ path: `${SHOTS}/benefit_choices_authoring.png`, fullPage: true });
   const authored = (await (await ctx.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent(newName)}`)).json())[0];
+  if (authored) leftovers.push({ id: authored.id, realm: 'bss', user: 'demo', pass: 'demo' });
   if (!authored || authored.choiceCost !== 1 || authored.choicePartner !== 'PlayCo' || authored.choiceWholesaleCost !== 3.5) {
     fail('the authored benefit should carry its cost, partner and wholesale cost: ' + JSON.stringify(authored));
   }
@@ -608,6 +630,7 @@ const orderOf = (o) => ({
   const CAT = `${API}/tmf-api/productCatalogManagement/v4`;
   const draft = await (await ctx.post(`${CAT}/productOffering`, { headers: H(sigrid), data: {
     name: `Lydbok+ Familie ${run}`, isBundle: false, choiceCost: 1, choicePartner: 'Lydbok+', choiceWholesaleCost: 4 } })).json();
+  leftovers.push({ id: draft.id, realm: 'taranga', user: 'henrik@taranga.example', pass: 'henrik' });
   if (draft.lifecycleStatus === 'Active' || draft.lifecycleStatus === 'Launched') fail('a Taranga benefit went on sale without approval: ' + draft.lifecycleStatus);
   const gov = (id, door, tok, body) => ctx.post(`${CAT}/productOffering/${id}/governance/${door}`, { headers: H(tok), data: body || {} });
   const selfApprove = await gov(draft.id, 'approve', sigrid, {});
@@ -662,9 +685,20 @@ const orderOf = (o) => ({
   console.log(`OK governance: a Taranga benefit was "${draft.lifecycleStatus}" until an approver launched it (${onSale.lifecycleStatus}); the manager could not approve her own; unlaunched after`);
 
   await browser.close();
+  // nothing this run made stays on a shelf (#378)
+  const { c: cleaner, removed } = await removeLeftovers();
+  for (const r of removed) {
+    const left = await cleaner.get(r.url, { headers: r.headers });
+    const status = left.ok() ? (await left.json()).lifecycleStatus : 'gone';
+    if (!['gone', 'Retired'].includes(status)) fail(`an offering this run made is still ${status}: ${r.id}`);
+  }
+  console.log(`OK cleanup: the ${removed.length} offerings this run made are gone from the catalog`);
+
   console.log('\nALL BENEFIT-CHOICES CHECKS PASSED — grants, picks, never oversold, never spent twice, walls hold; release, swaps that wait for the new benefit, refusals that give Choices back, the swap limit; downgrades, lines, holds and a cease that keeps what is held; the care desk, an agent pick with a receipt, and goodwill only by a human; benefits authored with no JSON, under launch governance.');
 })().catch(async (e) => {
   console.error('FAIL:', e.message.split('\n')[0]);
   try { require('fs').mkdirSync(SHOTS, { recursive: true }); await global.shotPage?.screenshot({ path: `${SHOTS}/benefit_choices_FAIL.png`, fullPage: true }); } catch { /* no page to show */ }
+  // what this run made is removed even when it failed (#378)
+  try { await removeLeftovers(); } catch (c) { console.error('cleanup could not finish:', c.message.split('\n')[0]); }
   process.exit(1);
 });
