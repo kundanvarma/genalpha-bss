@@ -5,7 +5,7 @@
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
     "@react-navigation/bottom-tabs": "^7.20.0",
-    "@react-navigation/native": "^7.5.0",
+    "@react-navigation/native": "^7.5.1",
     "expo": "~58.0.21",
     "expo-auth-session": "~58.0.16",
     "expo-crypto": "~58.0.7",
