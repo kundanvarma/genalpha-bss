@@ -4,8 +4,8 @@
   "main": "index.js",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
-    "@react-navigation/bottom-tabs": "^7.20.0",
-    "@react-navigation/native": "^7.5.0",
+    "@react-navigation/bottom-tabs": "^7.21.0",
+    "@react-navigation/native": "^7.5.1",
     "expo": "~58.0.21",
     "expo-auth-session": "~58.0.16",
     "expo-crypto": "~58.0.7",
@@ -13,7 +13,7 @@
     "expo-web-browser": "~58.0.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-native": "0.88.0",
+    "react-native": "0.88.1",
     "react-native-safe-area-context": "~5.10.0",
     "react-native-screens": "~4.30.0",
     "react-native-web": "^0.21.4"
