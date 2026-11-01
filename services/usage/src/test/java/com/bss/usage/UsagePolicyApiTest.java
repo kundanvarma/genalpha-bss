@@ -137,9 +137,12 @@ class UsagePolicyApiTest {
     private OffsetDateTime outsideTheWindowButInThisPeriod() {
         OffsetDateTime periodStart = LocalDate.now().withDayOfMonth(1)
                 .atStartOfDay().atOffset(java.time.ZoneOffset.UTC);
-        OffsetDateTime justBeforeThePass = OffsetDateTime.now().minusDays(2);
-        // whichever is later: never before the period, never inside the window
-        return justBeforeThePass.isBefore(periodStart) ? periodStart.plusHours(1) : justBeforeThePass;
+        OffsetDateTime twoDaysAgo = OffsetDateTime.now().minusDays(2);
+        // whichever is later: never before the period, and never inside the window — the
+        // pass starts a minute ago, so on the 1st and 2nd (when two days ago is last month)
+        // the first second of this month is still before it. Only a run in the first
+        // minute of a month has no such moment.
+        return twoDaysAgo.isBefore(periodStart) ? periodStart.plusSeconds(1) : twoDaysAgo;
     }
 
     private String rateBody(String party) {
@@ -402,7 +405,7 @@ class UsagePolicyApiTest {
                         .content("""
                                 {"partyId": "tp-cust", "usageType": "tp data", "zone": "world-1",
                                  "amountGB": 5, "validFrom": "%s", "validityDays": 3}
-                                """.formatted(OffsetDateTime.now().minusDays(1))))
+                                """.formatted(OffsetDateTime.now().minusMinutes(1))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.zone").value("world-1"));
 
