@@ -46,10 +46,17 @@ jobs:
           java-version: '21'
           cache: maven
       # One reactor: shared modules compile once, and every module's tests run.
-      # A runner has native Docker, so the Testcontainers tests need none of
-      # the coaxing a laptop does (see CLAUDE.md).
+      # The Testcontainers client asks Docker for API 1.32 unless told otherwise,
+      # and the runner's Docker (like Colima on a laptop) refuses anything below
+      # 1.40 — after which every Postgres test is "skipped", which reads exactly
+      # like a pass. It did, unnoticed, from late October 2026. The version must
+      # be a JVM system property in the test fork; DOCKER_API_VERSION is ignored.
       - name: Build and test
-        run: mvn -B verify
+        run: mvn -B verify -DargLine="-Dapi.version=1.44"
+      # A gate that cannot see a skip is not a gate: every Postgres migration
+      # test must have RUN, against real Postgres, in every module that has one.
+      - name: The Postgres tests ran (none skipped)
+        run: python3 ops/ci-postgres-ran.py
 
   images:
     name: Every service image builds
