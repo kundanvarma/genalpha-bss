@@ -10,6 +10,10 @@ const run = Date.now();
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
+  // whether a benefit can be picked is ordering's answer, asked per benefit — never the app's arithmetic
+  // (counted from the start: the Choices card asks as soon as Home first shows it)
+  let previewsAsked = 0;
+  page.on('request', (r) => { if (r.url().includes('/choicePreview?')) previewsAsked++; });
 
   // 1. Cold start: tenant manifest brands the sign-in screen
   await page.goto(APP);
@@ -73,6 +77,8 @@ const run = Date.now();
   await page.locator('[data-testid="app-choices-card"]').waitFor({ timeout: 20000 });
   for (let i = 0; i < 12 && !/^2 of 2 /.test(await choicesLeft()); i++) { await page.waitForTimeout(2500); await bounce(); }
   if (!/^2 of 2 Choices$/.test(await choicesLeft())) fail('the app should show "2 of 2 Choices": ' + await choicesLeft());
+  for (let i = 0; i < 8 && !previewsAsked; i++) await page.waitForTimeout(1000);
+  if (!previewsAsked) fail('the app offered picks without asking ordering "can I pick this?"');
   await page.locator('[data-testid="app-choice-pick"]', { hasText: 'StreamCo Standard' }).click();
   let release = page.locator('[data-testid="app-choice-release"]');
   for (let i = 0; i < 20 && !(await release.count()); i++) { await page.waitForTimeout(2500); await bounce(); }

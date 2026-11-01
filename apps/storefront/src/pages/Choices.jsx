@@ -34,12 +34,17 @@ export default function Choices() {
     }).catch((e) => setError(`${t('The benefits could not be loaded')}: ${e.message}`));
   }, []);
   // ask ordering, per benefit, whether it can be picked and why not — the page decides nothing (#392);
-  // an unanswered preview leaves the button to the order itself, which is the authority
+  // an unanswered preview leaves the button to the order itself, which is the authority.
+  // Asked again only when what is left or what is picked changes — not on every activation poll —
+  // and an older round that answers late is dropped, so it can never re-offer a pick.
+  const standing = pool?.offered ? `${pool.left}|${pool.allocations.map((a) => a.offeringId).sort().join(',')}` : null;
   useEffect(() => {
-    if (!pool?.offered || !benefits?.length) return;
+    if (!standing || !benefits?.length) return undefined;
+    let current = true;
     Promise.all(benefits.map((b) => choicePreview(b.id).then((p) => [b.id, p]).catch(() => [b.id, null])))
-      .then((pairs) => setPreviews(Object.fromEntries(pairs)));
-  }, [pool, benefits]);
+      .then((pairs) => { if (current) setPreviews(Object.fromEntries(pairs)); });
+    return () => { current = false; };
+  }, [standing, benefits]);
   // while a pick is activating, look again until the partner has confirmed it
   const activating = pool?.allocations?.some((a) => a.state === 'held');
   useEffect(() => {
