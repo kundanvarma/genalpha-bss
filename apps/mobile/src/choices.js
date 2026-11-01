@@ -41,6 +41,14 @@ export async function productOfPick(allocation) {
   return products.find((p) => (p.productOrderItem || []).some((l) => l.productOrderId === allocation.orderId)) || null;
 }
 
+/**
+ * "Can I pick this?" (#392) — ordering's answer before an order, from the order's
+ * own checks (Choices left, already picked, the operator's eligibility rules).
+ * The party is my token. The app shows the answer; it never works it out.
+ */
+export const choicePreview = (offeringId) =>
+  call(`/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${encodeURIComponent(offeringId)}`);
+
 /** Pick a benefit: an order; ordering holds its Choices (refused with the numbers when too few are left). */
 export const pickBenefit = (offering) => call(ORDERS, { method: 'POST', body: JSON.stringify({
   description: offering.name,
