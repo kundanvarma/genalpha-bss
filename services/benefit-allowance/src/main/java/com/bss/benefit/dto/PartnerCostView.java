@@ -24,9 +24,14 @@ public record PartnerCostView(String period, String currency, BigDecimal total, 
     public record Invoice(String id, String reference, BigDecimal amount, boolean paid, String paidAt) {
     }
 
-    /** The event's view of an invoice — what revenue settles the payable with. */
+    /**
+     * The event's view of an invoice — what revenue settles the payable with:
+     * {@code accrued} is the part of the ledger's accrual this payment settles
+     * (present once paid), {@code amount} what the partner invoiced.
+     */
     public record InvoiceEvent(String id, String partner, String period, String reference, BigDecimal amount,
-            String currency) {
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            BigDecimal accrued, String currency) {
     }
 
     /** One partner's benefit: how many households had it active this month, and what that costs. */

@@ -513,11 +513,43 @@ public class RevenueService {
         String partner = String.valueOf(event.getOrDefault("partner", "partner"));
         String desc = "Paid " + partner + " — invoice " + event.getOrDefault("reference", "")
                 + " for " + event.getOrDefault("period", "");
-        List<JournalLine> posting = List.of(
-                line("partner:payable", amount, null, id, "Settles the payable to " + partner),
-                line("cash", null, amount, id, desc));
+        BigDecimal accrued = event.get("accrued") == null ? null : money(event.get("accrued"));
+        List<JournalLine> posting = partnerPaymentLegs(amount, accrued).stream()
+                .map(l -> line(l.account(), l.debit(), l.credit(), id, switch (l.account()) {
+                    case "partner:payable" -> "Settles the payable to " + partner;
+                    case "partner:cogs" -> "Invoiced above what was accrued — " + partner;
+                    default -> desc;
+                }))
+                .toList();
         saveBalanced(tenant, sourceRef, "partnerPayment", desc, currency, null, posting);
         return true;
+    }
+
+    /** One leg of a posting before it meets the tenant's chart. */
+    public record Leg(String account, BigDecimal debit, BigDecimal credit) {
+    }
+
+    /**
+     * Paying a partner invoice (#390 review): cash goes out at what was invoiced;
+     * the payable is settled by what the ledger accrued for it; anything invoiced
+     * above that is cost of sales the accrual missed. With no accrual on the event
+     * (an older event) the payable is settled at the invoice amount, as before.
+     */
+    public static List<Leg> partnerPaymentLegs(BigDecimal amount, BigDecimal accrued) {
+        if (accrued == null) {
+            return List.of(new Leg("partner:payable", amount, null), new Leg("cash", null, amount));
+        }
+        BigDecimal settled = accrued.max(BigDecimal.ZERO).min(amount);
+        BigDecimal variance = amount.subtract(settled);
+        List<Leg> legs = new java.util.ArrayList<>();
+        if (settled.signum() > 0) {
+            legs.add(new Leg("partner:payable", settled, null));
+        }
+        if (variance.signum() > 0) {
+            legs.add(new Leg("partner:cogs", variance, null));
+        }
+        legs.add(new Leg("cash", null, amount));
+        return List.copyOf(legs);
     }
 
     /**

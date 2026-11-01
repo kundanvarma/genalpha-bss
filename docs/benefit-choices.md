@@ -165,7 +165,11 @@ The first build left a list of honest limits; the follow-on closed most of it:
   a credit decision is the one way a preview's yes can become an order's no.
 - **Partner invoices are entered by hand.** Nothing receives them from the
   partner; a paid invoice is booked against cash, with no bank or AP system
-  behind it. Partner cost still counts whole months, never prorated.
+  behind it. Partner cost still counts whole months, never prorated. Paying an
+  invoice settles the payable at what was accrued and books anything billed
+  above that to partner cost of sales; an invoice *below* the accrual leaves the
+  rest in the payable, because nothing says the partner's month is complete.
+  A paid invoice cannot be corrected in place — the difference is its own invoice.
 - **Priority on a Priority plan buys nothing.** A household whose plan already
   rides the priority slice can still pick the add-on; it changes nothing (and
   never takes the plan's priority away), but nothing refuses it yet.
