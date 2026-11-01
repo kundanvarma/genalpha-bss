@@ -247,4 +247,24 @@ class OrderChoicesTest {
                 .andExpect(status().isBadRequest());   // not a benefit
         verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
     }
+
+    @Test
+    void aBusinessAdmin_mayAskOnlyForMembersOfItsOwnOrganization() throws Exception {
+        RequestPostProcessor admin = jwt().jwt(j -> j.subject("admin-1"))
+                .authorities(new SimpleGrantedAuthority("business:admin"), new SimpleGrantedAuthority("ordering:read"));
+        given(partyClient.organizationOf("admin-1")).willReturn(Optional.of("org-a"));
+        given(partyClient.organizationOf("member-a")).willReturn(Optional.of("org-a"));
+        given(partyClient.organizationOf("stranger")).willReturn(Optional.of("org-b"));
+        given(choices.standing(anyString())).willReturn(new ChoicesClient.Standing(true, "Picks", 1, java.util.Set.of()));
+
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").param("partyId", "stranger").with(admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("not a member of your organization")));
+        verify(choices, never()).standing("stranger");
+        verify(collectionsClient, never()).inCollections("stranger");
+
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-stream").param("partyId", "member-a").with(admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.allowed").value(true));
+    }
 }

@@ -1931,21 +1931,21 @@ public class ProductOrderService {
     }
 
     /**
-     * B2B boundary: a business:admin token orders on behalf of people, but only
-     * people inside the admin's OWN organization — both looked up live from the
-     * party service, never trusted from the request.
+     * The B2B boundary for any request that names a customer: a business:admin
+     * may act only for members of its OWN organization. Returns that
+     * organization, or null when the caller is not a business admin (nothing
+     * to check). Used by order creation and by "Can I pick this?" (#392).
      */
-    private void requireSameOrgForBusinessAdmin(ProductOrderDto dto) {
+    public String requireSameOrgForBusinessAdmin(String customer) {
         var auth = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
         if (auth == null || auth.getAuthorities().stream()
                 .noneMatch(a -> "business:admin".equals(a.getAuthority()))) {
-            return;
+            return null;
         }
         String adminOrg = partyClient.organizationOf(auth.getName())
                 .orElseThrow(() -> new OrderValidationException(
                         "business admin has no organization membership"));
-        String customer = customerPartyIn(dto.getRelatedParty());
         if (customer == null) {
             throw new OrderValidationException("order needs a customer relatedParty");
         }
@@ -1953,6 +1953,19 @@ public class ProductOrderService {
         if (!adminOrg.equals(memberOrg)) {
             throw new OrderValidationException(
                     "customer '" + customer + "' is not a member of your organization");
+        }
+        return adminOrg;
+    }
+
+    /**
+     * B2B boundary: a business:admin token orders on behalf of people, but only
+     * people inside the admin's OWN organization — both looked up live from the
+     * party service, never trusted from the request.
+     */
+    private void requireSameOrgForBusinessAdmin(ProductOrderDto dto) {
+        String adminOrg = requireSameOrgForBusinessAdmin(customerPartyIn(dto.getRelatedParty()));
+        if (adminOrg == null) {
+            return;
         }
         // SPLIT BILLING: the payer follows the ORDERER. A company admin's
         // order is company-paid — the org rides the order (and every product

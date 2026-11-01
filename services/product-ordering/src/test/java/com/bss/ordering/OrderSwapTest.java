@@ -173,4 +173,32 @@ class OrderSwapTest {
     private static RequestPostProcessor token() {
         return jwt().authorities(new SimpleGrantedAuthority("ordering:write"), new SimpleGrantedAuthority("ordering:read"));
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void releasingOneAndAddingTwo_isANewPick_soTheEligibilityRuleStillMeetsIt() throws Exception {
+        given(catalogClient.findOfferingDetail("po-video")).willReturn(Optional.of(Map.of(
+                "id", "po-video", "name", "VideoCo", "lifecycleStatus", "Launched", "choiceCost", 1)));
+        given(choices.pool(anyString())).willReturn(new ChoicesClient.Pool(3, 1, List.of(),
+                List.of(new ChoicesClient.InUse("StreamCo Standard", 1, "committed", "ord-old", "1", null)), 3, "2027-01-01"));
+        mockMvc.perform(post(BASE).with(token()).contentType(MediaType.APPLICATION_JSON).content("""
+                        {"relatedParty": [{"id": "cust-1", "role": "customer"}], "productOrderItem": [
+                          {"id": "1", "action": "delete", "product": {"id": "prod-old"}},
+                          {"id": "2", "action": "add", "productOffering": {"id": "po-audio"}},
+                          {"id": "3", "action": "add", "productOffering": {"id": "po-video"}}]}
+                        """))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<Map<String, Object>> ctx = ArgumentCaptor.forClass(Map.class);
+        verify(policy).evaluateOrder(ctx.capture());
+        assertThat(ctx.getValue()).containsEntry("choicePick", true);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aLikeForLikeSwap_isNotANewPick() throws Exception {
+        swapOrder();
+        ArgumentCaptor<Map<String, Object>> ctx = ArgumentCaptor.forClass(Map.class);
+        verify(policy).evaluateOrder(ctx.capture());
+        assertThat(ctx.getValue()).doesNotContainKey("choicePick");
+    }
 }

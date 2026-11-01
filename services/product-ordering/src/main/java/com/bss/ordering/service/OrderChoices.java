@@ -90,9 +90,30 @@ class OrderChoices {
         return !endedBenefits(leafItems).isEmpty() && items(leafItems).stream().anyMatch(i -> i.cost() > 0);
     }
 
-    /** Does this order pick a NEW benefit — one that is not a swap for one it ends? (eligibility, #391) */
+    /**
+     * Does this order pick a NEW benefit (eligibility, #391)? A like-for-like swap
+     * is not one; an order that adds more than its endings give back is — so
+     * "release one, add two" meets the same rule as "add one".
+     */
     boolean isPick(List<Map<String, Object>> leafItems) {
-        return endedBenefits(leafItems).isEmpty() && items(leafItems).stream().anyMatch(i -> i.cost() > 0);
+        int added = items(leafItems).stream().mapToInt(i -> i.cost() * i.quantity()).sum();
+        return added > 0 && added > endedCost(leafItems);
+    }
+
+    /** What the benefits this order ends were worth in Choices. */
+    private int endedCost(List<Map<String, Object>> leafItems) {
+        int total = 0;
+        for (Map<String, Object> item : leafItems) {
+            if (!"delete".equalsIgnoreCase(String.valueOf(item.get("action")))
+                    || "cancelled".equals(item.get("state"))) {
+                continue;
+            }
+            Object refId = item.get("productOffering") instanceof Map<?, ?> ref ? ref.get("id") : null;
+            if (refId != null) {
+                total += catalog.findOfferingDetail(refId.toString()).map(d -> positive(d.get("choiceCost"))).orElse(0);
+            }
+        }
+        return total;
     }
 
     ChoicesClient.Pool pool(String ownerPartyId) {
