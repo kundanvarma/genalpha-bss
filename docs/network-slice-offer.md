@@ -29,7 +29,7 @@ The catalog declares slice intent on the product specification:
 1. The order completes; the SOM reads the offering's slice intent from the catalog.
 2. `SliceProvisioningClient.apply(tenant, serviceId, profile, until)` tells the core. Fail-open: an unreachable core never blocks the order; the record still carries the intent and the expiry sweep re-applies.
 3. The TMF638 service record carries `sliceProfile` and `sliceUntil` as characteristics; the storefront shows a ⚡ Priority badge with the expiry in the tenant's zone; CSR sees the same record.
-4. `ServiceSliceChangeEvent` rides the bus on apply and on lapse, so a journey can say "your boost is on" or "your boost ended — buy another".
+4. `ServiceSliceChangeEvent` rides the bus on apply and on lapse, so a journey can say "your boost is on" or "your boost ended — buy another". Its `state` says which: `on` and `lapsed` for a timed boost pass; `added` and `ended` for open-ended priority (the "Priority on my line" Pick, or a plan change that takes a plan's priority away), so a boost journey never fires for priority that has no clock.
 5. The sweep (`bss.som.slice-tick-ms`) releases lapsed passes; the core reverts on its own clock regardless.
 
 ## The seam
