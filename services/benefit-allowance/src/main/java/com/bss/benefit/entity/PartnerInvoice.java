@@ -38,6 +38,10 @@ public class PartnerInvoice {
     @Column(name = "paid_at")
     private java.time.OffsetDateTime paidAt;
 
+    /** The part of the month's accrual this invoice settled when paid (#390 review). */
+    @Column(name = "settled_accrual")
+    private java.math.BigDecimal settledAccrual;
+
     public String getTenantId() {
         return tenantId;
     }
@@ -108,5 +112,13 @@ public class PartnerInvoice {
 
     public void setPaidAt(java.time.OffsetDateTime paidAt) {
         this.paidAt = paidAt;
+    }
+
+    public java.math.BigDecimal getSettledAccrual() {
+        return settledAccrual;
+    }
+
+    public void setSettledAccrual(java.math.BigDecimal settledAccrual) {
+        this.settledAccrual = settledAccrual;
     }
 }

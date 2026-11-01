@@ -42,6 +42,9 @@ class ChoiceLedgerApiTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private com.bss.benefit.repository.PartnerInvoiceRepository partnerInvoices;
+
     private static RequestPostProcessor ordering() {
         return jwt().authorities(new SimpleGrantedAuthority("benefit:write"));
     }
@@ -383,11 +386,26 @@ class ChoiceLedgerApiTest {
                 .andExpect(jsonPath(row + ".invoices[0].paid").value(false));
 
         String id = first.replaceAll(".*\"id\":\"([^\"]+)\".*", "$1");
+        // the partner corrects its invoice before it is paid: the same invoice, the new amount
+        String corrected = mockMvc.perform(post(BASE + "/partnerInvoice").with(finance)
+                        .contentType(MediaType.APPLICATION_JSON).content(body.replace("42.50", "41.00")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.amount").value(41.0))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(corrected).contains("\"id\":\"" + id + "\"");
+        mockMvc.perform(get(BASE + "/partnerCost").param("period", month).with(finance))
+                .andExpect(jsonPath(row + ".invoiced").value(41.0))
+                .andExpect(jsonPath(row + ".invoices.length()").value(1));
         for (int i = 0; i < 2; i++) {
             mockMvc.perform(post(BASE + "/partnerInvoice/" + id + "/pay").with(finance))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.paid").value(true));
         }
+        // paying settles what was accrued (40.00); the 1.00 invoiced above it is the variance revenue books
+        assertThat(partnerInvoices.findById(id).orElseThrow().getSettledAccrual()).isEqualByComparingTo("40.00");
+        // a paid invoice is not corrected in place — the difference is its own invoice
+        mockMvc.perform(post(BASE + "/partnerInvoice").with(finance).contentType(MediaType.APPLICATION_JSON)
+                .content(body.replace("42.50", "45.00"))).andExpect(status().isConflict());
         mockMvc.perform(post(BASE + "/partnerInvoice").with(customer(owner))
                 .contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isForbidden());
         mockMvc.perform(post(BASE + "/partnerInvoice").with(ordering())
