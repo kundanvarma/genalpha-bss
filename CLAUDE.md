@@ -31,7 +31,7 @@ ops/arch/ratchet.sh                                       # architecture ratchet
 ops/arch/claims.sh                                        # claims gate: the prose must match the code
 ```
 
-- The **Testcontainers** tests (`PostgresMigrationTest`, 29 components — the only ones that meet real Postgres) skip silently on this laptop unless Colima is spelled out. They pass in CI, where Docker is native:
+- The **Testcontainers** tests (`PostgresMigrationTest`, 29 components — the only ones that meet real Postgres) skip silently on this laptop unless Colima is spelled out. CI needs the same API pin — without it they skipped there too, unnoticed, from late October 2026 — so `ci.yml` passes it and `ops/ci-postgres-ran.py` fails the build if any module's Postgres test skipped. Locally:
 
 ```bash
 DOCKER_HOST=unix://$HOME/.colima/default/docker.sock TESTCONTAINERS_RYUK_DISABLED=true \
