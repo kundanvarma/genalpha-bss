@@ -73,6 +73,10 @@ public class ServiceInstance {
     @Column(name = "slice_order_id", length = 36)
     private String sliceOrderId;
 
+    /** The open-ended priority add-on paying for this line's slice — its owner, or a standby behind the plan. */
+    @Column(name = "slice_addon_order_id", length = 36)
+    private String sliceAddonOrderId;
+
     /** Slice-aware charging: the rate plan the line rode BEFORE the slice (restored at lapse). */
     @Column(name = "slice_base_charging_spec", length = 64)
     private String sliceBaseChargingSpec;
@@ -154,4 +158,12 @@ public class ServiceInstance {
     public void setSliceGuaranteedDlMbps(Integer v) { this.sliceGuaranteedDlMbps = v; }
     public String getDeviceModel() { return deviceModel; }
     public void setDeviceModel(String v) { this.deviceModel = v; }
+
+    public String getSliceAddonOrderId() {
+        return sliceAddonOrderId;
+    }
+
+    public void setSliceAddonOrderId(String sliceAddonOrderId) {
+        this.sliceAddonOrderId = sliceAddonOrderId;
+    }
 }

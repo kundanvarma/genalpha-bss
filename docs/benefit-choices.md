@@ -170,9 +170,16 @@ The first build left a list of honest limits; the follow-on closed most of it:
   above that to partner cost of sales; an invoice *below* the accrual leaves the
   rest in the payable, because nothing says the partner's month is complete.
   A paid invoice cannot be corrected in place — the difference is its own invoice.
-- **Priority on a Priority plan buys nothing.** A household whose plan already
-  rides the priority slice can still pick the add-on; it changes nothing (and
-  never takes the plan's priority away), but nothing refuses it yet.
+- **Priority on a Priority plan buys nothing — until the plan changes.** A
+  household whose plan already rides the priority slice can still pick the
+  add-on; the line remembers that the Pick pays for priority too, so a later
+  move to a plan without priority keeps the line on the slice, and releasing
+  the Pick then ends it. Releasing it while the plan still gives priority never
+  takes the plan's priority away. Nothing refuses the pick yet. A plan change
+  away from priority with no such Pick now takes the plan's priority away
+  (before, the line kept riding the slice). Two gaps remain: a timed boost pass
+  bought on top of open-ended priority ends that priority when the pass lapses,
+  and a Pick applied before this change is not known to the line as a standby.
 - **"Activated" and "activation failed" are not events of their own.** A pick
   going active is *picked*; a refused one gives its Choice back as *released*.
   The partner's own reason sits on the service, not on the event.

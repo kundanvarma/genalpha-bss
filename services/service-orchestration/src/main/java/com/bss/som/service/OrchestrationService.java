@@ -190,7 +190,7 @@ public class OrchestrationService {
         // follows the new offering. Idempotent: renaming twice is a no-op.
         List<Map<String, Object>> modifies = items.stream()
                 .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
-        renameModifiedServices(tenant, modifies, owner);
+        renameModifiedServices(tenant, modifies, owner, productOrderId);
         items.removeAll(modifies);
         // Endings (action=delete) stop the service the product names — and a
         // partner service stops with the partner. Idempotent: an ended service
@@ -859,12 +859,66 @@ public class OrchestrationService {
             return;
         }
         for (ServiceInstance line : services.findByTenantIdAndOwnerPartyId(tenant, owner)) {
-            if (originOrderId.equals(line.getSliceOrderId())) {
-                endSlice(tenant, line, "ended");
-                log.info("order {} ended the add-on from order {}: line {} leaves its slice",
-                        endingOrderId, originOrderId, line.getId());
+            switch (SliceOwnership.afterEnding(line, originOrderId)) {
+                case END -> {
+                    endSlice(tenant, line, "ended");
+                    log.info("order {} ended the add-on from order {}: line {} leaves its slice",
+                            endingOrderId, originOrderId, line.getId());
+                }
+                case HAND_TO_ADDON -> handToAddon(line);
+                case CLEAR_ADDON -> {
+                    // the plan still gives this line priority: only the add-on stops paying
+                    line.setSliceAddonOrderId(null);
+                    services.save(line);
+                    log.info("order {} ended the add-on from order {}: line {} keeps its plan's priority",
+                            endingOrderId, originOrderId, line.getId());
+                }
+                case NOTHING -> { }
             }
         }
+    }
+
+    /** A standby priority add-on takes over the slice the line already rides — nothing changes on the network. */
+    private void handToAddon(ServiceInstance line) {
+        log.info("line {}: its slice now belongs to the add-on from order {} (was {})",
+                line.getId(), line.getSliceAddonOrderId(), line.getSliceOrderId());
+        line.setSliceOrderId(line.getSliceAddonOrderId());
+        services.save(line);
+    }
+
+    /**
+     * A plan change carries the line's priority with it: onto a Priority plan the
+     * line rides the plan's slice (the plan now owns it, a paying add-on stands by);
+     * onto a plan without one, the plan's priority goes — to a standby add-on if the
+     * household still pays for one, otherwise away. A pass or an add-on that owns
+     * the slice is not the plan's to end.
+     */
+    private void followPlanPriority(String tenant, ServiceInstance line, String offeringId, String productOrderId) {
+        Optional<com.bss.som.client.CatalogClient.SliceIntent> intent = offeringId == null ? Optional.empty()
+                : catalog.sliceIntentOf(offeringId).filter(i -> i.boostHours() == null);
+        if (intent.isEmpty()) {
+            switch (SliceOwnership.afterPlanLosesPriority(line)) {
+                case END -> endSlice(tenant, line, "ended");
+                case HAND_TO_ADDON -> handToAddon(line);
+                default -> { }
+            }
+            return;
+        }
+        com.bss.som.client.CatalogClient.SliceIntent plan = intent.get();
+        if (plan.profile().equals(line.getSliceProfile()) && line.getSliceUntil() == null) {
+            if (!SliceOwnership.planOwned(line)) {
+                line.setSliceOrderId(productOrderId);   // the plan now gives it; the add-on stands by
+                services.save(line);
+            }
+            return;
+        }
+        line.setSliceProfile(plan.profile());
+        line.setSliceUntil(null);
+        line.setSliceOrderId(productOrderId);
+        line.setSliceGuaranteedDlMbps(plan.guaranteedDlMbps());
+        services.save(line);
+        slices.apply(tenant, line.getId(), plan.profile(), null);
+        moveToSliceChargingPlan(tenant, line, plan.chargingSpecId());
     }
 
     /**
@@ -874,7 +928,8 @@ public class OrchestrationService {
      * never renamed.
      */
     @SuppressWarnings("unchecked")
-    private void renameModifiedServices(String tenant, List<Map<String, Object>> modifies, String owner) {
+    private void renameModifiedServices(String tenant, List<Map<String, Object>> modifies, String owner,
+            String productOrderId) {
         for (Map<String, Object> item : modifies) {
             String newName = item.get("productOffering") instanceof Map<?, ?> o && o.get("name") != null
                     ? String.valueOf(o.get("name")) : null;
@@ -909,6 +964,9 @@ public class OrchestrationService {
                             ocs.changeRatePlan(tenant, instance.getId(), chargingSpec));
                     // and the phone's entitlements follow the new plan
                     entitlement.changeOffering(tenant, instance.getId(), modifyOfferingId);
+                    // and so does its priority: a Priority plan puts the line on its slice,
+                    // a plan without one takes the plan's priority away (#393, review)
+                    followPlanPriority(tenant, instance, modifyOfferingId, productOrderId);
                 }
                 // an in-place upgrade/downgrade re-provisions the line to the new
                 // characteristic (broadband speed, TV screens/points) — same
@@ -1159,7 +1217,8 @@ public class OrchestrationService {
             log.warn("boost pass '{}' on order {}: customer {} has no active mobile line", passName, productOrderId, owner);
             return Optional.empty();
         }
-        if (productOrderId != null && productOrderId.equals(line.getSliceOrderId())) {
+        if (productOrderId != null && (productOrderId.equals(line.getSliceOrderId())
+                || productOrderId.equals(line.getSliceAddonOrderId()))) {
             return Optional.of(line); // the same order already applied — idempotent
         }
         // DEVICE ELIGIBILITY: a slice needs a 5G standalone handset. The network told
@@ -1182,7 +1241,11 @@ public class OrchestrationService {
             // the line already rides this profile with no end (a Priority PLAN): an open-ended
             // add-on changes nothing, and must not take the slice over — ending the add-on
             // would otherwise strip the plan's own priority (#393)
-            log.info("'{}' on order {}: line {} already rides '{}' from its plan — nothing to change",
+            // — but it is remembered as paying for it, so a later plan change away from
+            // priority hands the slice to the add-on instead of dropping it (#393, review)
+            line.setSliceAddonOrderId(productOrderId);
+            services.save(line);
+            log.info("'{}' on order {}: line {} already rides '{}' from its plan — the add-on stands by",
                     passName, productOrderId, line.getId(), intent.profile());
             return Optional.of(line);
         }
@@ -1193,6 +1256,9 @@ public class OrchestrationService {
         line.setSliceProfile(intent.profile());
         line.setSliceUntil(until);
         line.setSliceOrderId(productOrderId);
+        if (until == null) {
+            line.setSliceAddonOrderId(productOrderId);   // an open-ended add-on: it owns and pays
+        }
         line.setSliceGuaranteedDlMbps(intent.guaranteedDlMbps());
         services.save(line);
         slices.apply(tenant, line.getId(), intent.profile(), until);
@@ -1205,8 +1271,10 @@ public class OrchestrationService {
         ev.put("name", line.getName());
         ev.put("sliceProfile", intent.profile());
         // state lets a journey trigger on "on" and EXIT on "lapsed" (a boost-on
-        // message must not be cut short by the pass order completing)
-        ev.put("state", "on");
+        // message must not be cut short by the pass order completing). An
+        // open-ended priority Pick is "added" — it has no clock, so a "your boost
+        // is on until …" journey must never fire for it — and leaves as "ended".
+        ev.put("state", until == null ? "added" : "on");
         if (until != null) {
             ev.put("sliceUntil", until.toString());
         }
@@ -1308,6 +1376,7 @@ public class OrchestrationService {
         line.setSliceProfile(null);
         line.setSliceUntil(null);
         line.setSliceOrderId(null);
+        line.setSliceAddonOrderId(null);
         line.setSliceGuaranteedDlMbps(null);
         restoreBaseChargingPlan(tenant, line);
         services.save(line);
