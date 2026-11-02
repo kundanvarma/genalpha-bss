@@ -136,7 +136,7 @@ public class LlmRouter implements LlmAdapter {
         // URL and default headers on it, and on a shared builder those piled up —
         // a later adapter (a fallback, another tenant) would have carried the
         // earlier one's x-api-key to its own provider.
-        RestClient.Builder builder = this.builder.clone();
+        RestClient.Builder own = this.builder.clone();
         return switch (s.provider()) {
             case "stub" -> new StubAdapter();
             case "openai-compatible" -> {
@@ -144,9 +144,9 @@ public class LlmRouter implements LlmAdapter {
                     throw new IllegalStateException("tenant '" + tenant.getId()
                             + "': openai-compatible needs ai-base-url and ai-model");
                 }
-                yield new OpenAiCompatibleAdapter(builder, s.baseUrl(), s.apiKey(), s.model());
+                yield new OpenAiCompatibleAdapter(own, s.baseUrl(), s.apiKey(), s.model());
             }
-            case "anthropic" -> new AnthropicAdapter(builder, s.baseUrl(), s.apiKey(), s.model());
+            case "anthropic" -> new AnthropicAdapter(own, s.baseUrl(), s.apiKey(), s.model());
             default -> throw new IllegalStateException("tenant '" + tenant.getId()
                     + "': unknown ai-provider '" + s.provider() + "'");
         };
