@@ -3,6 +3,7 @@ package com.bss.intelligence.chat;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.llm.AiGovernor;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.security.TenantContext;
 import com.bss.intelligence.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -78,7 +79,14 @@ public class CareChatService {
         if (partyIdOrNull == null) {
             // warm the shelf while the visitor is still typing their first
             // message — the crawl must never sit inside a reply
-            java.util.concurrent.CompletableFuture.runAsync(this::guestContext);
+            // — on another thread, so the tenant rides along explicitly (#422): without it the
+            // warm-up read some other tenant's shelf into the cache
+            String tenant = tenantScope.currentTenantId();
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try (TenantContext ignored = TenantContext.actAs(tenant)) {
+                    guestContext();
+                }
+            });
         }
         return sessions.save(s);
     }
@@ -242,15 +250,20 @@ public class CareChatService {
         return ctx.toString();
     }
 
-    private volatile String shelfCache;
-    private volatile long shelfCachedAt;
+    /** One shelf per tenant, and when it was read: a guest only ever sees their own operator's shop (#422). */
+    private record Shelf(String text, long readAt) {
+    }
+
+    private final java.util.Map<String, Shelf> shelves = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** The public shelf, compact: what a guest could see in the shop.
-     * Cached for two minutes — the catalog crawl is paged and must never
-     * run per-message. */
-    private String guestContext() {
-        if (shelfCache != null && System.currentTimeMillis() - shelfCachedAt < 120_000) {
-            return shelfCache;
+     * Cached for two minutes per tenant — the catalog crawl is paged and must
+     * never run per-message. */
+    String guestContext() {
+        String tenant = tenantScope.currentTenantId();
+        Shelf cached = shelves.get(tenant);
+        if (cached != null && System.currentTimeMillis() - cached.readAt() < 120_000) {
+            return cached.text();
         }
         StringBuilder ctx = new StringBuilder("PUBLIC SHELF (name | monthly price):\n");
         try {
@@ -274,9 +287,9 @@ public class CareChatService {
         } catch (Exception e) {
             ctx.append("(shelf unavailable)\n");
         }
-        shelfCache = ctx.toString();
-        shelfCachedAt = System.currentTimeMillis();
-        return shelfCache;
+        String text = ctx.toString();
+        shelves.put(tenant, new Shelf(text, System.currentTimeMillis()));
+        return text;
     }
 
     private String history(CareChatSession s) {
