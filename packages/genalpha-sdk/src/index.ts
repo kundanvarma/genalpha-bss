@@ -273,6 +273,8 @@ export interface PickBenefitInputs {
   customerId: string;
   /** the benefit to pick (id of a ProductOffering) */
   benefitOfferingId: string;
+  /** for a benefit picked once per line (#420): which of the household's lines it is for — ordering refuses a per-line pick without one, or with a line that is not the household's (id of a Service) */
+  lineId?: string;
 }
 
 /**

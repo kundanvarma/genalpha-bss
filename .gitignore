@@ -52,3 +52,6 @@ apps/admin-console/site/island/
 apps/admin-console/island/node_modules/
 .service-kind-bundle.cjs
 apps/storefront/dist-ssr/
+
+# eval results are local evidence, not source (#422)
+ops/evals/.results/
