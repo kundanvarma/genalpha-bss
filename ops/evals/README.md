@@ -8,8 +8,8 @@
   wall, and that every session carries the AI disclosure. No key needed.
 - **Simulated customers + judge:** a model plays a customer with a goal for a
   few turns; a second, versioned model call grades the transcript against a
-  fixed rubric. Needs `AI_API_KEY` (from the environment or the repo `.env`;
-  never printed). Without it this layer is **NOT RUN** and the exit code is 3 —
+  fixed rubric. Needs `AI_API_KEY` in the environment (the script never reads
+  the secrets file itself, and never prints the key). Without it this layer is **NOT RUN** and the exit code is 3 —
   a skipped eval never reads as a pass.
 
 Results go to `ops/evals/.results/` (gitignored) with the judge model and a

@@ -8,8 +8,8 @@
  * checks on what the chat actually answered. These need no key and always run.
  * Layer 2, SIMULATED CUSTOMERS + JUDGE: a model plays a customer for a few turns
  * (τ²-bench style) and a second, versioned model call scores the transcript
- * against a fixed rubric. They need a model key (AI_API_KEY in the environment
- * or the repo's .env). Without one they are reported as NOT RUN and the exit
+ * against a fixed rubric. They need a model key (AI_API_KEY in the environment;
+ * the script never reads the secrets file itself). Without one they are reported as NOT RUN and the exit
  * code is 3 — a skipped eval must never read as a passed one.
  *
  * Results land in ops/evals/.results/<timestamp>.json (gitignored) with the
@@ -18,24 +18,20 @@
  * Exit codes: 0 all passed · 1 a deterministic check failed · 2 a judged
  * simulation failed · 3 deterministic passed but model-backed layer NOT RUN.
  */
-import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, '..', '..');
 const CASES = JSON.parse(readFileSync(join(HERE, 'cases', 'care_chat.json'), 'utf8'));
 const HOSTS = { genalpha: 'http://localhost:8080', taranga: 'http://shop.taranga.localhost:8080' };
 const JUDGE_MODEL = process.env.EVAL_JUDGE_MODEL || 'claude-sonnet-5';
 
 function modelKey() {
-  if (process.env.AI_API_KEY) return process.env.AI_API_KEY;
-  const env = join(ROOT, '.env');
-  if (!existsSync(env)) return null;
-  const line = readFileSync(env, 'utf8').split('\n').find((l) => l.startsWith('AI_API_KEY='));
-  const v = line ? line.slice('AI_API_KEY='.length).trim().replace(/^["']|["']$/g, '') : '';
-  return v || null;   // never printed
+  // the key comes from the environment only — this script never reads the secrets file itself:
+  //   AI_API_KEY=… node ops/evals/care_chat_evals.mjs
+  return process.env.AI_API_KEY || null;   // never printed
 }
 
 async function chat(tenant) {
