@@ -20,7 +20,7 @@ public class RestCommunicationClient implements CommunicationClient {
 
     @Override
     public SendOutcome send(String partyId, String subject, String content, String channel,
-            Map<String, Object> context) {
+            Map<String, Object> context, AiMark ai) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("subject", subject);
         body.put("content", content);
@@ -33,6 +33,9 @@ public class RestCommunicationClient implements CommunicationClient {
             if ("transactional".equals(context.get("category"))) {
                 body.put("characteristic", List.of(Map.of("name", "category", "value", "transactional")));
             }
+        }
+        if (ai != null) {
+            body.put("characteristic", withAiMark(body.get("characteristic"), ai));
         }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
@@ -72,6 +75,32 @@ public class RestCommunicationClient implements CommunicationClient {
         } catch (RestClientException e) {
             throw new IllegalStateException("communication rejected the templated campaign message", e);
         }
+    }
+
+    /** The machine-readable AI marker, appended to whatever characteristics
+     * the send already carries: {aiGenerated: true} and, when known, {aiModel}. */
+    private static List<Map<String, Object>> withAiMark(Object existing, AiMark ai) {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        if (existing instanceof List<?> list) {
+            for (Object o : list) {
+                if (o instanceof Map<?, ?> m) {
+                    Map<String, Object> copy = new java.util.LinkedHashMap<>();
+                    m.forEach((k, v) -> copy.put(String.valueOf(k), v));
+                    out.add(copy);
+                }
+            }
+        }
+        Map<String, Object> generated = new java.util.LinkedHashMap<>();
+        generated.put("name", "aiGenerated");
+        generated.put("value", true);
+        out.add(generated);
+        if (ai.model() != null && !ai.model().isBlank()) {
+            Map<String, Object> model = new java.util.LinkedHashMap<>();
+            model.put("name", "aiModel");
+            model.put("value", ai.model());
+            out.add(model);
+        }
+        return out;
     }
 
     /** Communication answers 200 even when it declines: an all-recipients-

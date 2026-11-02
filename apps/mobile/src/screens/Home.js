@@ -237,7 +237,14 @@ export default function Home({ navigation }) {
       {recs.length > 0 && (
         <Card title={products.length ? 'Complete your home' : 'For you'} testID="recs-card">
           {personal?.caption && (
-            <Row testID="app-foryou-caption" left={`✨ ${personal.caption}`} />
+            <Row testID="app-foryou-caption" left={(
+              // a model wrote this line (EU AI Act Art. 50): said on screen, to a
+              // screen reader, and as data-ai-generated on the web build
+              <Text accessibilityLabel={`AI-written: ${personal.caption}`} dataSet={{ aiGenerated: 'true' }}>
+                {`✨ ${personal.caption}`}
+                <Text testID="app-ai-label" style={{ color: palette().dim, fontSize: 12 }}>{' · AI-written'}</Text>
+              </Text>
+            )} />
           )}
           {personal?.retentionFlag && (
             <Row testID="app-retention-banner"

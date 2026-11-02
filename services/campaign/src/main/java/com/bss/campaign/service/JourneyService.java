@@ -693,6 +693,19 @@ public class JourneyService {
         return "completed".equals(e.getStatus()) ? stepCount : e.getStepIndex();
     }
 
+    /** A message step the AI drafted carries {@code aiGenerated: true} and
+     * {@code aiModel} (the console stamps them on the copilot's draft and the
+     * step builder keeps them through edits): that becomes the AI mark on the
+     * send. A step without them is human copy and goes out unmarked. */
+    public static com.bss.campaign.client.CommunicationClient.AiMark aiMarkOf(Map<String, Object> message) {
+        Object flag = message.get("aiGenerated");
+        String model = textOf(message, "aiModel");
+        boolean marked = Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag))
+                || (model != null && !model.isBlank());
+        return marked ? new com.bss.campaign.client.CommunicationClient.AiMark(
+                model == null || model.isBlank() ? null : model) : null;
+    }
+
     /** The guarded send every journey message goes through: quiet hours
      * park to the window's end, a spent budget postpones an hour.
      * @return false when parked (the enrollment was saved with a new time). */
@@ -741,7 +754,7 @@ public class JourneyService {
             }
             outcome = communication.send(enrollment.getPartyId(),
                     java.util.Objects.requireNonNullElse(textOf(message, "subject"), ""),
-                    content, textOf(message, "channel"), context);
+                    content, textOf(message, "channel"), context, aiMarkOf(message));
         }
         // Communication has guardrails of its own (frequency cap, opt-out) and
         // declines with a 200 — the postpone-not-drop rule must hold HERE too,
@@ -1152,6 +1165,11 @@ public class JourneyService {
         for (Map<String, Object> a : armsOf(journey)) {
             if (enrollment.getArm().equals(str(a.get("name")))) {
                 Map<String, Object> spoken = new LinkedHashMap<>(step);
+                // the arm's own copy replaces the step's: so does its provenance
+                spoken.remove("aiGenerated");
+                spoken.remove("aiModel");
+                if (a.get("aiGenerated") != null) spoken.put("aiGenerated", a.get("aiGenerated"));
+                if (a.get("aiModel") != null) spoken.put("aiModel", a.get("aiModel"));
                 if (a.get("subject") != null) spoken.put("subject", a.get("subject"));
                 if (a.get("content") != null) spoken.put("content", a.get("content"));
                 if (a.get("templateRef") != null) spoken.put("templateRef", a.get("templateRef"));

@@ -27,7 +27,15 @@ public record CampaignView(
         @JsonInclude(JsonInclude.Include.NON_NULL) String conversionEvent,
         @JsonProperty("@type") String type) {
 
-    @JsonPropertyOrder({"subject", "content"})
-    public record Message(String subject, String content) {
+    /** {@code aiGenerated}/{@code aiModel} appear only on AI-written copy,
+     * so a human-written message reads exactly as it always did. */
+    @JsonPropertyOrder({"subject", "content", "aiGenerated", "aiModel"})
+    public record Message(String subject, String content,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean aiGenerated,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String aiModel) {
+
+        public Message(String subject, String content) {
+            this(subject, content, null, null);
+        }
     }
 }

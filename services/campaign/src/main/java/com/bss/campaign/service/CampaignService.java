@@ -105,6 +105,10 @@ public class CampaignService {
         entity.setTriggerState(dto.triggerState());
         entity.setMessageSubject(subject);
         entity.setMessageContent(content);
+        if (dto.message() != null && dto.message().aiWritten()) {
+            entity.setAiGenerated(true);
+            entity.setAiModel(clip(dto.message().aiModel(), 128));
+        }
         entity.setPromotionCode(dto.promotionCode());
         entity.setConversionEvent(dto.conversionEvent());
         if (dto.conversionWindowDays() != null) {
@@ -413,8 +417,12 @@ public class CampaignService {
                     : campaign.getMessageContent();
             String content = campaign.getPromotionCode() == null
                     ? body : body.replace("{code}", campaign.getPromotionCode());
-            CommunicationClient.SendOutcome outcome = communication.send(partyId, subject, content,
-                    campaign.getName() == null ? null : Map.of("source", campaign.getName()));
+            // the AI mark belongs to the campaign's own message; an A/B arm is
+            // copy the marketer wrote in the arms box, so it goes out unmarked
+            CommunicationClient.AiMark ai = arm == null && campaign.isAiGenerated()
+                    ? new CommunicationClient.AiMark(campaign.getAiModel()) : null;
+            CommunicationClient.SendOutcome outcome = communication.send(partyId, subject, content, null,
+                    campaign.getName() == null ? null : Map.of("source", campaign.getName()), ai);
             if (outcome == CommunicationClient.SendOutcome.CAPPED
                     || outcome == CommunicationClient.SendOutcome.SUPPRESSED) {
                 // still ledgered as treated (they were TARGETED — holdout math
@@ -504,9 +512,18 @@ public class CampaignService {
         return value;
     }
 
+    private static String clip(String text, int max) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String t = text.strip();
+        return t.length() <= max ? t : t.substring(0, max);
+    }
+
     private CampaignView view(Campaign c) {
         return new CampaignView(c.getId(), c.getHref(), c.getName(), c.getStatus(), c.getTriggerEventType(),
-                c.getTriggerState(), new CampaignView.Message(c.getMessageSubject(), c.getMessageContent()),
+                c.getTriggerState(), new CampaignView.Message(c.getMessageSubject(), c.getMessageContent(),
+                        c.isAiGenerated() ? Boolean.TRUE : null, c.isAiGenerated() ? c.getAiModel() : null),
                 c.getPromotionCode(), c.getSegmentName(), c.getAudienceRef(), armsOf(c), c.getHoldoutPercent(),
                 c.getConversionWindowDays(), c.getConversionEvent(), "Campaign");
     }

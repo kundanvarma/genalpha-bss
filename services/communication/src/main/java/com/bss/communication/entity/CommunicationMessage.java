@@ -57,6 +57,36 @@ public class CommunicationMessage {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
+    /** A model wrote this copy (EU AI Act Art. 50(2)); answered back as the
+     * characteristic aiGenerated=true. A {@code Boolean} that is TRUE or null,
+     * with a {@code Boolean} getter: the inbox lists by Query-by-Example, which
+     * reads the probe through its getters, and a primitive {@code false} there
+     * would turn into {@code ai_generated = false} on every list. */
+    @Column(name = "ai_generated")
+    private Boolean aiGenerated;
+
+    /** Which model wrote it ("provider/model"), when the sender said. */
+    @Column(name = "ai_model", length = 128)
+    private String aiModel;
+
+    /** TRUE when a model wrote the copy, otherwise null — never FALSE. */
+    public Boolean getAiGenerated() {
+        return aiGenerated;
+    }
+
+    /** TRUE marks the message; anything else leaves the column empty (unmarked). */
+    public void setAiGenerated(Boolean aiGenerated) {
+        this.aiGenerated = Boolean.TRUE.equals(aiGenerated) ? Boolean.TRUE : null;
+    }
+
+    public String getAiModel() {
+        return aiModel;
+    }
+
+    public void setAiModel(String aiModel) {
+        this.aiModel = aiModel;
+    }
+
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 

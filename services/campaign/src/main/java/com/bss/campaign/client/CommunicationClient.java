@@ -22,8 +22,22 @@ public interface CommunicationClient {
      * null = in-app. A journey step's channel is honoured for inline copy exactly
      * as it is for a template — a "WhatsApp-first" journey must not fall back
      * to the inbox in silence. */
+    default SendOutcome send(String partyId, String subject, String content, String channel,
+            java.util.Map<String, Object> context) {
+        return send(partyId, subject, content, channel, context, null);
+    }
+
+    /** Send inline copy that may have been written by a model. A non-null
+     * {@code ai} rides beside the TMF681 payload as the characteristics
+     * {@code aiGenerated=true} and {@code aiModel} (EU AI Act Art. 50(2):
+     * machine-readable marking); the standard fields are untouched. */
     SendOutcome send(String partyId, String subject, String content, String channel,
-            java.util.Map<String, Object> context);
+            java.util.Map<String, Object> context, AiMark ai);
+
+    /** Provenance of copy a model wrote: which model ("provider/model"), or
+     * null when the console could not say. Absent (a null AiMark) = human copy. */
+    record AiMark(String model) {
+    }
 
     /** Send via a reusable template — communication renders the localized,
      *  tokenized copy for the given channel and context. */

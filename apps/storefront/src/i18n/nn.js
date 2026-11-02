@@ -250,4 +250,5 @@ export const NN = {
   'released — pick something else whenever you like.': 'gitt tilbake — vel noko anna når du vil.',
   'stays active until': 'held fram som aktiv til',
   'yet. Plans that do:': 'enno. Abonnement som gjer det:',
+  'AI-written': 'Skrive av KI',
 };

@@ -162,7 +162,7 @@ export default function Shop() {
             <OfferingCard offering={picks[0]} prices={prices} />
             <div className="lead-why">
               <div className="assist-label">{t('Why this?')}</div>
-              <p data-testid="foryou-caption">✨ {personal?.caption || t('Picked from what you have and what you looked at — nothing you already own, nothing that needs an identity check first.')}</p>
+              <p data-testid="foryou-caption" data-ai-generated={personal?.caption ? 'true' : undefined}>✨ {personal?.caption || t('Picked from what you have and what you looked at — nothing you already own, nothing that needs an identity check first.')}{personal?.caption && <span className="ai-label" data-testid="ai-label"> · {t('AI-written')}</span>}</p>
               {personal?.retentionFlag && (
                 <p className="dim small" data-testid="retention-banner">💙 {t('Thanks for being with us — this shelf includes our best loyalty picks.')}</p>
               )}

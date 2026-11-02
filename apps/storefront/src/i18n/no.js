@@ -232,4 +232,5 @@ export const NO_SHOP = {
   'released — pick something else whenever you like.': 'gitt tilbake — velg noe annet når du vil.',
   'stays active until': 'forblir aktiv til',
   'yet. Plans that do:': 'ennå. Abonnementer som gjør det:',
+  'AI-written': 'Skrevet av KI',
 };

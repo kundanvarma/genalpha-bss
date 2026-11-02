@@ -37,6 +37,39 @@ public record SendRequest(
         return null;
     }
 
+    /** TMF681 characteristic {name:"aiGenerated", value:true} — the caller's
+     * machine-readable declaration that a model wrote this copy (EU AI Act
+     * Art. 50(2)). A JSON true or the text "true" both count. */
+    public boolean aiGenerated() {
+        if (characteristic == null) {
+            return false;
+        }
+        for (NameValue c : characteristic) {
+            if (c != null && "aiGenerated".equals(c.name())
+                    && "true".equalsIgnoreCase(String.valueOf(c.value()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** TMF681 characteristic {name:"aiModel"} — which model wrote the copy, or null. */
+    public String aiModel() {
+        if (characteristic == null) {
+            return null;
+        }
+        for (NameValue c : characteristic) {
+            if (c != null && "aiModel".equals(c.name()) && c.value() != null) {
+                String model = String.valueOf(c.value()).strip();
+                if (model.isEmpty()) {
+                    return null;
+                }
+                return model.length() <= 128 ? model : model.substring(0, 128);
+            }
+        }
+        return null;
+    }
+
     /** TMF681 characteristic {name:"category", value:"transactional"} — the
      * caller's declaration that this send is service mail, not marketing. */
     public boolean transactional() {
