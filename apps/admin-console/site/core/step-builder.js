@@ -40,7 +40,7 @@ function stepBuilderControl(field) {
   function toStep(n) {
     const s = { type: n.type };
     if (n.type !== 'exit' && n.stage) s.stage = n.stage;
-    if (n.type === 'message') { s.channel = n.channel || 'inApp'; if (n.subject) s.subject = n.subject; if (n.content) s.content = n.content; }
+    if (n.type === 'message') { s.channel = n.channel || 'inApp'; if (n.subject) s.subject = n.subject; if (n.content) s.content = n.content; if (n.aiGenerated) { s.aiGenerated = true; if (n.aiModel) s.aiModel = n.aiModel; } }
     else if (n.type === 'wait') { if (n.days) s.days = Number(n.days); if (n.hours) s.hours = Number(n.hours); }
     else if (n.type === 'waitForEvent') { if (n.event) s.event = n.event; if (n.state) s.state = n.state; if (n.days) s.days = Number(n.days); if (n.tsub || n.tcon) s.onTimeout = { subject: n.tsub, content: n.tcon }; }
     else if (n.type === 'decision') { if (n.inSegment) s.inSegment = n.inSegment; if (n.tsub || n.tcon) s.then = { subject: n.tsub, content: n.tcon }; if (n.esub || n.econ) s.else = { subject: n.esub, content: n.econ }; }
@@ -48,7 +48,7 @@ function stepBuilderControl(field) {
   }
   function fromStep(s, i) {
     const n = { id: nid(), type: s.type || 'message', stage: s.stage, x: 24, y: 20 + i * 118 };
-    if (n.type === 'message') { n.channel = s.channel || 'inApp'; n.subject = s.subject; n.content = s.content; }
+    if (n.type === 'message') { n.channel = s.channel || 'inApp'; n.subject = s.subject; n.content = s.content; n.aiGenerated = s.aiGenerated === true; n.aiModel = s.aiModel; } // the AI mark survives edits
     else if (n.type === 'wait') { n.days = s.days; n.hours = s.hours; }
     else if (n.type === 'waitForEvent') { n.event = s.event; n.state = s.state; n.days = s.days; n.tsub = s.onTimeout && s.onTimeout.subject; n.tcon = s.onTimeout && s.onTimeout.content; }
     else if (n.type === 'decision') { n.inSegment = s.inSegment; n.tsub = s.then && s.then.subject; n.tcon = s.then && s.then.content; n.esub = s.else && s.else.subject; n.econ = s.else && s.else.content; }

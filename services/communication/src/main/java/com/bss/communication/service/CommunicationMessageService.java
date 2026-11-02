@@ -212,6 +212,7 @@ public class CommunicationMessageService {
             entity.setStatus(CommunicationMessage.SENT);
             entity.setReceiverPartyId(receiver);
             entity.setSource(dto.source());
+            markAi(entity, dto);
             entity.setCreatedAt(OffsetDateTime.now());
             entity.setLastUpdate(OffsetDateTime.now());
             MessageView created = toView(repository.save(entity));
@@ -253,6 +254,7 @@ public class CommunicationMessageService {
         entity.setMessageType("email");
         entity.setStatus(CommunicationMessage.SENT);
         entity.setReceiverPartyId("prospect:" + email);
+        markAi(entity, dto);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         // THE SANDBOX WALL covers the prospect path too — raw-email egress is
@@ -291,12 +293,36 @@ public class CommunicationMessageService {
         });
     }
 
+    /** The sender's AI mark is kept on the message, so the inbox, the event
+     * and every later read still say a model wrote it. */
+    private static void markAi(CommunicationMessage entity, SendRequest dto) {
+        if (dto.aiGenerated()) {
+            entity.setAiGenerated(Boolean.TRUE);
+            entity.setAiModel(dto.aiModel());
+        }
+    }
+
     private MessageView toView(CommunicationMessage entity) {
         return new MessageView(entity.getId(), entity.getHref(), entity.getSubject(), entity.getContent(),
                 entity.getMessageType(), entity.getStatus(), entity.getSource(), entity.getDeliveryStatus(),
-                List.of(PartyRef.customer(entity.getReceiverPartyId())),
-                entity.getSourceEventType() == null ? null
-                        : List.of(new NameValue("sourceEventType", entity.getSourceEventType())),
+                List.of(PartyRef.customer(entity.getReceiverPartyId())), characteristicsOf(entity),
                 entity.getCreatedAt(), entity.getLastUpdate(), "CommunicationMessage");
+    }
+
+    /** House facts riding beside the TMF681 payload: the event that minted the
+     * message, and the AI mark (aiGenerated, aiModel). Null when there are none,
+     * so an unmarked message reads exactly as it always did. */
+    private static List<NameValue> characteristicsOf(CommunicationMessage entity) {
+        List<NameValue> out = new java.util.ArrayList<>();
+        if (entity.getSourceEventType() != null) {
+            out.add(new NameValue("sourceEventType", entity.getSourceEventType()));
+        }
+        if (Boolean.TRUE.equals(entity.getAiGenerated())) {
+            out.add(new NameValue("aiGenerated", true));
+            if (entity.getAiModel() != null) {
+                out.add(new NameValue("aiModel", entity.getAiModel()));
+            }
+        }
+        return out.isEmpty() ? null : List.copyOf(out);
     }
 }

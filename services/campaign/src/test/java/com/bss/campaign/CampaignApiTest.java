@@ -70,6 +70,35 @@ class CampaignApiTest {
                 .andExpect(jsonPath("$.length()").value(0));
     }
 
+    /** The console passes the copy assistant's provenance with the message;
+     * the campaign answers it back from the store, and human copy shows none. */
+    @Test
+    void aiWrittenMessageIsMarkedOnTheWire() throws Exception {
+        mockMvc.perform(post(BASE + "/campaign").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"name": "AI drafted", "triggerEventType": "ProductOrderCreateEvent",
+                                 "message": {"subject": "Hi", "content": "Edited after the draft.",
+                                             "aiGenerated": true, "aiModel": "anthropic/claude-sonnet"}}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message.aiGenerated").value(true))
+                .andExpect(jsonPath("$.message.aiModel").value("anthropic/claude-sonnet"));
+        mockMvc.perform(get(BASE + "/campaign").with(staff()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.name == 'AI drafted')].message.aiGenerated").value(true))
+                .andExpect(jsonPath("$[?(@.name == 'AI drafted')].message.aiModel")
+                        .value("anthropic/claude-sonnet"));
+
+        mockMvc.perform(post(BASE + "/campaign").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"name": "Typed by hand", "triggerEventType": "ProductOrderCreateEvent",
+                                 "message": {"subject": "Hi", "content": "Mine."}}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message.aiGenerated").doesNotExist())
+                .andExpect(jsonPath("$.message.aiModel").doesNotExist());
+    }
+
     @Test
     void rejectsIncompleteAndUnknownStatus() throws Exception {
         mockMvc.perform(post(BASE + "/campaign").with(staff())

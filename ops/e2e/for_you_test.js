@@ -132,6 +132,9 @@ async function token(request, user, pass) {
   await caption.waitFor({ timeout: 15000 }).catch(() => fail('the shop never showed the caption'));
   const text = await caption.textContent();
   if (!DEVICE_TRAIL.test(text)) fail('the shop caption is not Alice\'s: ' + text);
+  // EU AI Act Art. 50: a model wrote this line, so it says so in words and in the markup
+  if (await caption.getAttribute('data-ai-generated') !== 'true') fail('the shop caption is not marked data-ai-generated');
+  if (!/AI-written|Skrevet av KI|Skrive av KI/.test(text)) fail('the shop caption carries no AI-written label: ' + text);
   await page.locator('[data-testid=recommended] .card, [data-testid=recommended] a')
     .first().waitFor({ timeout: 10000 })
     .catch(() => fail('the rail rendered no cards'));
@@ -152,6 +155,8 @@ async function token(request, user, pass) {
     .catch(() => fail('the app never showed her caption'));
   const appText = await appCaption.textContent();
   if (!DEVICE_TRAIL.test(appText)) fail('the app caption is not Alice\'s: ' + appText);
+  if (!/AI-written/.test(appText)) fail('the app caption carries no AI-written label: ' + appText);
+  if (await app.locator('[data-testid="app-foryou-caption"] [data-ai-generated="true"]').count() < 1) fail('the app caption is not marked data-ai-generated');
   console.log('OK IN HER POCKET: the same caption over the same rail on the mobile app —'
     + ' one governed rail, every channel (and the 5-minute cache means the app visit cost'
     + ' zero extra model calls)');

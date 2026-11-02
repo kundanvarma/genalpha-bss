@@ -47,6 +47,9 @@ RESOURCES.push(
         controls.name?.set({ name: draft.name });
         controls.triggerEventType?.set({ triggerEventType: draft.triggerEventType });
         controls.holdoutPercent?.set({ holdoutPercent: draft.holdoutPercent });
+        // EU AI Act Art. 50(2): every message step the copilot wrote carries its mark
+        const by = [draft.provider, draft.model].filter(Boolean).join('/');
+        draft.steps = (draft.steps || []).map((st) => st.type === 'message' ? { ...st, aiGenerated: true, aiModel: by || undefined } : st);
         controls.steps.set({ steps: JSON.stringify(draft.steps, null, 2) });
         DESK.lastDraft = { form: 'journeys', steps: JSON.stringify(draft.steps, null, 2), name: draft.name };
       },
@@ -137,14 +140,16 @@ RESOURCES.push(
         base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
       { name: 'messageSubject', label: 'Message subject — type {{ for a name', required: true, tokens: true },
       { name: 'messageContent', label: 'Message — {{ inserts a name, {code} the promo code', kind: 'longtext', required: true, tokens: true },
+      { name: 'aiModel', label: 'AI-written — filled by ✨ Draft with the model that wrote the message; it stays marked when you edit it, and customers\' messages carry the mark' },
       { name: 'messageVariants', label: 'A/B arms (JSON, optional) — 2-4 of {name, subject, content}; treated customers split evenly and stats read per arm', kind: 'jsontext',
         placeholder: '[{"name":"A","subject":"…","content":"…"},{"name":"B","subject":"…","content":"…"}]' },
       { name: 'holdoutPercent', label: 'Holdout % — a control group that gets NO message, so lift can be measured', kind: 'number', placeholder: '0' },
       { name: 'conversionWindowDays', label: 'Conversion window (days)', kind: 'number', placeholder: '7' },
     ],
     assemble: (body) => {
-      const { messageSubject, messageContent, ...rest } = body;
-      return { ...rest, message: { subject: messageSubject, content: messageContent } };
+      const { messageSubject, messageContent, aiModel, ...rest } = body;
+      const ai = aiModel ? { aiGenerated: true, aiModel } : {};
+      return { ...rest, message: { subject: messageSubject, content: messageContent, ...ai } };
     },
     columns: ['name', 'status', 'triggerEventType', 'segmentName', 'promotionCode', 'reached'],
     detail: async (item) => {
@@ -199,6 +204,7 @@ RESOURCES.push(
         const copy = await res.json();
         controls.messageSubject.set({ messageSubject: copy.subject });
         controls.messageContent.set({ messageContent: copy.content });
+        controls.aiModel?.set({ aiModel: [copy.provider, copy.model].filter(Boolean).join('/') || 'AI copy assistant' });
       },
     },
   },

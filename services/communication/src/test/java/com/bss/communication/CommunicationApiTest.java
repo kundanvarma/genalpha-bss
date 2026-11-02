@@ -108,6 +108,42 @@ class CommunicationApiTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** EU AI Act Art. 50(2): the sender's machine-readable AI mark is kept on
+     * the message and answered back — on the send AND on the customer's own read. */
+    @Test
+    void aiMarkedCopyIsStoredAndAnsweredBack() throws Exception {
+        mockMvc.perform(post(BASE).with(staff())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"subject": "Welcome aboard", "content": "Glad to have you.",
+                                 "source": "AI welcome",
+                                 "characteristic": [{"name": "aiGenerated", "value": true},
+                                                    {"name": "aiModel", "value": "anthropic/claude-sonnet"}],
+                                 "relatedParty": [{"id": "cust-ai1", "role": "customer"}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.subject").value("Welcome aboard"))
+                .andExpect(jsonPath("$.characteristic[0].name").value("aiGenerated"))
+                .andExpect(jsonPath("$.characteristic[0].value").value(true))
+                .andExpect(jsonPath("$.characteristic[1].name").value("aiModel"))
+                .andExpect(jsonPath("$.characteristic[1].value").value("anthropic/claude-sonnet"));
+
+        mockMvc.perform(get(BASE + "?limit=100").with(customer("cust-ai1")))
+                .andExpect(jsonPath("$[0].subject").value("Welcome aboard"))
+                .andExpect(jsonPath("$[0].characteristic[0].name").value("aiGenerated"))
+                .andExpect(jsonPath("$[0].characteristic[1].value").value("anthropic/claude-sonnet"));
+
+        // human copy: no mark, and no characteristic block at all
+        mockMvc.perform(post(BASE).with(staff())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"subject": "Typed by hand", "content": "Mine.",
+                                 "relatedParty": [{"id": "cust-ai2", "role": "customer"}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.characteristic").doesNotExist());
+    }
+
     @Test
     void backOfficeSendsAdHoc_theMartechDoor() throws Exception {
         mockMvc.perform(post(BASE).with(staff())

@@ -69,6 +69,14 @@ public class Campaign {
     @Column(name = "promotion_code", length = 64)
     private String promotionCode;
 
+    /** The message copy came from the AI copy assistant (EU AI Act Art. 50(2)). */
+    @Column(name = "ai_generated", nullable = false)
+    private boolean aiGenerated;
+
+    /** Which model wrote it, "provider/model"; null when unknown or human copy. */
+    @Column(name = "ai_model", length = 128)
+    private String aiModel;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -107,6 +115,10 @@ public class Campaign {
     public void setMessageContent(String messageContent) { this.messageContent = messageContent; }
     public String getPromotionCode() { return promotionCode; }
     public void setPromotionCode(String promotionCode) { this.promotionCode = promotionCode; }
+    public boolean isAiGenerated() { return aiGenerated; }
+    public void setAiGenerated(boolean aiGenerated) { this.aiGenerated = aiGenerated; }
+    public String getAiModel() { return aiModel; }
+    public void setAiModel(String aiModel) { this.aiModel = aiModel; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
