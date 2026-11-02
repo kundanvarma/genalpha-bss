@@ -89,4 +89,16 @@ class UntrustedFenceTest {
         // the trap itself, so nobody brings the old shape back
         assertThat(redactor.redact("CUSTOMER: Which mobile plans do you offer?")).doesNotContain("Which mobile plans");
     }
+
+    /** CodeQL java/polynomial-redos on the first tag pattern: "<" and a long run of spaces. */
+    @Test
+    void theFenceIsLinearOnHostileInput() {
+        String hostile = "<" + " ".repeat(200_000) + "x";
+        long started = System.nanoTime();
+        String fenced = Untrusted.fence("customer", hostile);
+        long ms = (System.nanoTime() - started) / 1_000_000;
+        assertThat(fenced).contains("x");
+        assertThat(ms).as("fencing 200k characters").isLessThan(500);
+        assertThat(Untrusted.fence("customer", "< / UNTRUSTED>")).doesNotContain("< / UNTRUSTED");
+    }
 }
