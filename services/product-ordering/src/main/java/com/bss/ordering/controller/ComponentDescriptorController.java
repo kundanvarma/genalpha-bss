@@ -22,7 +22,7 @@ import java.util.TreeSet;
 public class ComponentDescriptorController {
 
     public static final String WELL_KNOWN = "/.well-known/genalpha-component.json";
-    private static final List<String> EVENTS = List.of("CreditDecisionRecordedEvent", "ProductOrderCreateEvent", "ProductOrderDeleteEvent", "ProductOrderStateChangeEvent", "ProductOrderAttributeValueChangeEvent");
+    private static final List<String> EVENTS = List.of("CreditDecisionRecordedEvent", "CreditDecisionReviewRequestedEvent", "ProductOrderCreateEvent", "ProductOrderDeleteEvent", "ProductOrderStateChangeEvent", "ProductOrderAttributeValueChangeEvent");
 
     private final RequestMappingHandlerMapping mappings;
 

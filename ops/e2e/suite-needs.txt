@@ -49,6 +49,7 @@ knowledge_help_test         knowledge intelligence
 lead_cdp_engagement_test    quote insight communication
 loyalty_test                loyalty
 martech_test                campaign intelligence communication assurance trouble-ticket
+norway_rails_test           mock-freg trouble-ticket
 offering_rules_panel_test   policy product-catalog console
 omnichannel_test            campaign party-interaction communication
 partner_activation_test     mock-partner

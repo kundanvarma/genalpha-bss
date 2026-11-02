@@ -5,14 +5,14 @@ import { availabilityFor, checkQualification, deliveryOptions, getOffering, getS
 import { beginLogin, isCustomer, isSignedIn, switchAccount } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, registeredAddressOf, saveDraft, withRegisteredAddress } from '../address.js';
-import { dueNow, loadDevicePlanDraft, loadSlotDraft, performCheckout, qualificationItems,
-  saveDevicePlanDraft, saveSlotDraft } from '../checkout.js';
+import { dueNow, loadDevicePlanDraft, loadSlotDraft, performCheckout, qualificationItems, saveDevicePlanDraft, saveSlotDraft } from '../checkout.js';
 import { checkPromotion, confirmPayment, createPaymentSession, numberOffers,
   paymentMethods, savePaymentMethod } from '../api.js';
 import { monthlyTotal, oneTimeTotal, pricesOf, fmtAmount } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 import { freshDevicePlan, FinancingChooser, TradeInPanel } from './cart/DevicePanels.jsx';
+import CreditNotice from './cart/CreditNotice.jsx';
 // How a payment method reads to the shopper (the API gives the machine name).
 const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal', mmg: 'MMG mobile money', vipps: 'Vipps' };
 
@@ -1003,7 +1003,7 @@ export default function Cart() {
           </p>
         </div>
       )}
-
+      {signedIn && lines.length > 0 && <CreditNotice />}
       <div className="cartactions">
         <Link to="/" className="dim">{t('Continue shopping')}</Link>
         <button className="primary big" onClick={checkout}

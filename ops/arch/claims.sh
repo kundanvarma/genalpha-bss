@@ -499,7 +499,7 @@ badneeds=$(python3 ops/arch/suite_needs_check.py)
 # Choices yet, so an English string on a Norwegian page would be seen first by a
 # customer. Every t('…') on the Choices screens needs a bokmål entry.
 untranslated=$(python3 ops/arch/choices_i18n_check.py) || fail "the Choices i18n check could not run" "fix: see ops/arch/choices_i18n_check.py"
-[ -z "$untranslated" ] || fail "Choices strings with no Norwegian entry: $(echo "$untranslated" | paste -sd'|' -)" \
+[ -z "$untranslated" ] || fail "Choices/credit strings with no Norwegian entry: $(echo "$untranslated" | paste -sd'|' -)" \
   "fix: add them to apps/storefront/src/i18n/no.js (nn inherits; override in nn.js where nynorsk differs)"
 
 # react and react-dom are ONE version or the app is a blank page: React refuses

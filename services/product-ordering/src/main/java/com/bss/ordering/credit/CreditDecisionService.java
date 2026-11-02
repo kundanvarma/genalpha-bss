@@ -39,12 +39,14 @@ public class CreditDecisionService {
     private final boolean enabled;
     private final Set<String> enabledTenants;
     private final String purpose;
+    private final String bureau;
 
     public CreditDecisionService(CreditDecisionPort port, CreditDecisionRepository repository,
             DomainEventPublisher events, TenantScope tenantScope,
             @Value("${bss.credit.enabled:true}") boolean enabled,
             @Value("${bss.credit.tenants:}") String tenants,
-            @Value("${bss.credit.purpose:postpaid-signup}") String purpose) {
+            @Value("${bss.credit.purpose:postpaid-signup}") String purpose,
+            @Value("${bss.credit.bureau-name:the credit bureau}") String bureau) {
         this.port = port;
         this.repository = repository;
         this.events = events;
@@ -53,6 +55,17 @@ public class CreditDecisionService {
         this.enabledTenants = tenants == null || tenants.isBlank() ? Set.of()
                 : Set.of(tenants.split("\\s*,\\s*"));
         this.purpose = purpose;
+        this.bureau = bureau;
+    }
+
+    /** What the check is for — the legitimate purpose the bureau is asked under. */
+    public String purpose() {
+        return purpose;
+    }
+
+    /** Who is asked: the bureau's name as the operator wants customers to read it. */
+    public String bureau() {
+        return bureau;
     }
 
     /** Enabled globally, and (when a tenant list is set) for THIS tenant. */
@@ -88,7 +101,8 @@ public class CreditDecisionService {
      * rejection — the audit trail IS the point of storing decisions.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(String partyId, CreditDecisionPort.Decision decision) {
+    public void record(String partyId, String orderId, CreditDecisionPort.Decision decision) {
+        CreditReason reason = CreditReason.of(decision);
         CreditDecision row = new CreditDecision();
         row.setId(UUID.randomUUID().toString());
         row.setTenantId(tenantScope.currentTenantId());
@@ -98,6 +112,9 @@ public class CreditDecisionService {
         row.setRemarksPresent(decision.remarksPresent());
         row.setPurpose(purpose);
         row.setDecidedAt(OffsetDateTime.now());
+        row.setOrderId(orderId);
+        row.setReasonCode(reason.code());
+        row.setReason(reason.sentence());
         repository.save(row);
 
         Map<String, Object> resource = new LinkedHashMap<>();
@@ -110,6 +127,11 @@ public class CreditDecisionService {
         resource.put("remarksPresent", decision.remarksPresent());
         resource.put("purpose", purpose);
         resource.put("decidedAt", row.getDecidedAt().toString());
+        if (orderId != null) {
+            resource.put("orderId", orderId);
+        }
+        resource.put("reasonCode", reason.code());
+        resource.put("reason", reason.sentence());
         resource.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         events.publish("CreditDecisionRecordedEvent", "creditDecision", resource);
     }
@@ -129,6 +151,17 @@ public class CreditDecisionService {
                     out.put("remarksPresent", row.isRemarksPresent());
                     out.put("purpose", row.getPurpose());
                     out.put("decidedAt", row.getDecidedAt().toString());
+                    // #422: older rows carry no reason or order — the keys are left off
+                    if (row.getOrderId() != null) {
+                        out.put("orderId", row.getOrderId());
+                    }
+                    if (row.getReasonCode() != null) {
+                        out.put("reasonCode", row.getReasonCode());
+                        out.put("reason", row.getReason());
+                    }
+                    if (row.getReviewRequestedAt() != null) {
+                        out.put("reviewRequestedAt", row.getReviewRequestedAt().toString());
+                    }
                     return out;
                 }).toList();
     }

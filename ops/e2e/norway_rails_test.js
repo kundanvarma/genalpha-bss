@@ -15,6 +15,10 @@
  *  - CREDIT: the frozen test identity gets the DISTINCT machine code
  *    CREDIT_FROZEN at order time (the storefront keys the prepaid path on
  *    it), and the stored record is a decision, never a report.
+ *  - CREDIT WHY (#422): a decline holds the order and the order says why — a
+ *    reason code and sentence, the data categories, that a person reviews
+ *    every decline; asking a person files ONE trouble ticket, a second ask
+ *    replays the same receipt.
  *
  * Prereqs: composed stack up (gateway :8080, keycloak :8085, mock-freg :8141),
  * kai persona seeded (registry arc). Run: node ops/e2e/norway_rails_test.js
@@ -174,6 +178,42 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (!decisions.length || decisions[0].decision !== 'frozen') fail('frozen decision not recorded');
     if (JSON.stringify(decisions[0]).includes('report')) fail('a report-shaped field is stored');
     console.log('OK CREDIT: frozen identity -> 422 CREDIT_FROZEN (prepaid-path key), decision recorded, no report');
+
+    // ---- 5b. CREDIT WHY (#422): a decline holds the order, and says why -----
+    const declined = await (await ctx.post(`${PARTY}/individual`, { headers: H, data: {
+      givenName: 'Avslag', familyName: `Kreditt${run}` } })).json();
+    const pinDecline = await ctx.post(`${ORDERS}/creditDecision/mockOutcome`,
+      { headers: H, data: { ref: declined.id, decision: 'decline' } });
+    if (pinDecline.status() !== 200) fail('mockOutcome decline: ' + pinDecline.status());
+    const held = await (await ctx.post(`${ORDERS}/productOrder`, { headers: H, data: {
+      productOrderItem: [{ id: '1', action: 'add',
+        productOffering: { id: offering.id, name: offering.name } }],
+      relatedParty: [{ id: declined.id, role: 'customer' }] } })).json();
+    if (held.state !== 'held') fail('a decline must hold the order for a person, got ' + held.state);
+    const why = await (await ctx.get(`${ORDERS}/productOrder/${held.id}/creditDecision`, { headers: H })).json();
+    if (why.decision !== 'decline' || why.reasonCode !== 'PAYMENT_REMARK' || !why.reason) {
+      fail('the reason is missing: ' + JSON.stringify(why));
+    }
+    if (!(why.humanReview || '').includes('A person reviews every credit decline')) fail('no human-review statement');
+    if ((why.dataUsed || []).length !== 4) fail('data categories missing: ' + JSON.stringify(why.dataUsed));
+    const notice = await (await ctx.get(`${ORDERS}/creditDecision/notice`, { headers: H })).json();
+    if (!notice.checked || !(notice.notice || '').includes('a person reviews every decline')) {
+      fail('checkout notice: ' + JSON.stringify(notice));
+    }
+    const review = `${ORDERS}/productOrder/${held.id}/creditDecision/review`;
+    const asked = await ctx.post(review, { headers: H, data: { note: 'e2e: the debt was paid' } });
+    if (asked.status() !== 201) fail('review request should 201, got ' + asked.status());
+    const filed = await asked.json();
+    if (!filed.ticketId) fail('no ticket behind the review: ' + JSON.stringify(filed));
+    const askedAgain = await ctx.post(review, { headers: H, data: {} });
+    const replay = await askedAgain.json();
+    if (askedAgain.status() !== 200 || !replay.alreadyRequested || replay.ticketId !== filed.ticketId) {
+      fail('a second ask must replay the first, not file another ticket: ' + JSON.stringify(replay));
+    }
+    const ticket = await ctx.get(`${API}/tmf-api/troubleTicket/v4/troubleTicket/${filed.ticketId}`, { headers: H });
+    if (ticket.status() !== 200) fail('the review ticket is not in the care queue: ' + ticket.status());
+    await ctx.patch(`${ORDERS}/productOrder/${held.id}`, { headers: H, data: { state: 'cancelled' } });
+    console.log(`OK CREDIT WHY: decline held the order with "${why.reason}"; one review ticket, replayed on a second ask`);
 
     console.log('\nALL PART-A LEGS GREEN');
   } finally {

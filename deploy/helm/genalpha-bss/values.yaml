@@ -259,6 +259,7 @@ services:
       AGREEMENT_BASE_URL: http://agreement:8080
       PROMOTION_BASE_URL: http://promotion:8080
       POLICY_BASE_URL: http://policy:8080
+      TICKET_BASE_URL: http://trouble-ticket:8080
   product-inventory:
     db: product_inventory
     dbRole: inventory_app
