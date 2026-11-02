@@ -212,7 +212,9 @@ public class ActionExecuteService {
         ReceiptStore.Attempt attempt;
         try {
             attempt = store.recordAttempt(caller.tenant(), name, caller.subject(), caller.agent(),
-                    agentVersion(caller), String.join(",", caller.roles()),
+                    // the authority names how the agent is known: by the token, or only by its own word (#422)
+                    agentVersion(caller), String.join(",", caller.roles())
+                            + (caller.agent() == null ? "" : ",agent:" + caller.agentEvidence()),
                     String.valueOf(action.path("version").asInt(1)),
                     writeJson(inputs), writeJson(check), target,
                     idempotencyKey(caller, action, inputs));
