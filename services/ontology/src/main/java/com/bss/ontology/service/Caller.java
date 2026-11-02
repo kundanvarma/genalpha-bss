@@ -15,14 +15,29 @@ import java.util.stream.Collectors;
  * carries the {@code customer} role is a customer — it may act on its own things
  * only, whatever else it holds.
  */
-public record Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent) {
+public record Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent,
+        boolean agentVerified) {
+
+    /** A caller whose agent, if any, only named itself (a header) — not proven by the token. */
+    public Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent) {
+        this(bearer, subject, roles, channel, tenant, agent, false);
+    }
 
     public static final String CHANNEL_HEADER = "X-Channel";
     /** Which registered agent is acting for the person — named in every receipt. Absent = a person at a screen. */
     public static final String AGENT_HEADER = "X-GenAlpha-Agent";
 
     public Caller withAgent(String name) {
-        return new Caller(bearer, subject, roles, channel, tenant, name);
+        return new Caller(bearer, subject, roles, channel, tenant, name, false);
+    }
+
+    /**
+     * How the agent is known, for the receipt (#422): {@code verified} — the token's
+     * own {@code act} (actor) claim names it, issued by the identity server in a token
+     * exchange; {@code declared} — only the agent's own header says so; {@code none}.
+     */
+    public String agentEvidence() {
+        return agent == null ? "none" : agentVerified ? "verified" : "declared";
     }
 
     public boolean isCustomer() {
@@ -45,7 +60,25 @@ public record Caller(String bearer, String subject, Set<String> roles, String ch
         }
         String channel = request == null ? null : request.getHeader(CHANNEL_HEADER);
         String agent = request == null ? null : request.getHeader(AGENT_HEADER);
+        agent = agent == null || agent.isBlank() ? null : agent.trim();
+        // An agent acting for a person through a token exchange (RFC 8693) is named by the
+        // token's own act claim. That is proof; the header is only a claim, so when the token
+        // names an actor, the token wins and the header cannot rename it (#422).
+        String actor = auth instanceof JwtAuthenticationToken jwt ? actorOf(jwt) : null;
+        boolean verified = actor != null;
         return new Caller(bearer, subject, roles, channel == null || channel.isBlank() ? "web" : channel.trim(), tenant,
-                agent == null || agent.isBlank() ? null : agent.trim());
+                verified ? actor : agent, verified);
+    }
+
+    /** The acting party in an RFC 8693 {@code act} claim — its client id or subject — or null. */
+    static String actorOf(JwtAuthenticationToken jwt) {
+        Object act = jwt.getToken().getClaims().get("act");
+        if (act instanceof java.util.Map<?, ?> m) {
+            Object who = m.get("client_id") != null ? m.get("client_id") : m.get("sub");
+            if (who instanceof String s && !s.isBlank()) {
+                return s.trim();
+            }
+        }
+        return null;
     }
 }
