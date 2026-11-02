@@ -177,6 +177,16 @@ loyalty "/v3/api-docs/**"
 ontology "/actuator/health/**"
 ontology "/actuator/prometheus"
 ontology ApiConstants.WELL_KNOWN
+# NOT A permitAll, SO NOT AN ENTRY — but anonymous all the same (#422):
+#   /.well-known/oauth-protected-resource[/**]   RFC 9728 metadata for the MCP endpoint
+# Spring Security 7's oauth2ResourceServer() serves it from its own filter,
+# before authorization, with no matcher this check can see. Measured on
+# 2026-11-02 (McpServerTest with the customizer removed): the document is served
+# anyway. The other components configure oauth2ResourceServer() the same way, so
+# they very likely answer it too (naming no authorization server, and their
+# internal URL) — inferred, not yet measured per component. The ontology fills
+# it with the tenant's issuer on purpose. Teaching the drift check about
+# framework-served paths is a follow-up.
 
 # ---- party-account ----   (infrastructure only)
 party-account "/actuator/health/**"

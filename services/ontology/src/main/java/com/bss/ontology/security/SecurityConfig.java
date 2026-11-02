@@ -32,7 +32,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
-            TenantRegistry tenants) throws Exception {
+            TenantRegistry tenants, ProtectedResourceMetadata protectedResource) throws Exception {
         http
                 // OFF ON PURPOSE. A cross-site request forgery works by making the
                 // browser send a request carrying its AMBIENT credentials — a cookie
@@ -50,7 +50,20 @@ public class SecurityConfig {
                         .requestMatchers(ApiConstants.BASE_PATH + "/**").authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
+                        .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter))
+                        // RFC 9728, which MCP 2026-07-28 requires of a protected MCP server: where
+                        // to get a token for this resource. Spring Security serves the document at
+                        // /.well-known/oauth-protected-resource[/<resource path>] from its own filter,
+                        // before authorization — so it is anonymous WITHOUT a permitAll line, and
+                        // ops/security/public-paths.txt names it in a comment rather than an entry.
+                        // Left alone it names NO authorization server (the issuer resolver is
+                        // per-tenant, so Spring cannot know one) and the resource as this pod's
+                        // internal URL; both are filled here. The tenant is TenantScope's: the
+                        // gateway's hostname stamp for an anonymous caller, never a body or a claim.
+                        .protectedResourceMetadata(meta -> meta.protectedResourceMetadataCustomizer(
+                                b -> protectedResource.describe(b)))
+                        // the 401's resource_metadata pointer, at the public origin, not this pod's
+                        .authenticationEntryPoint(protectedResource.entryPoint()));
         return http.build();
     }
 

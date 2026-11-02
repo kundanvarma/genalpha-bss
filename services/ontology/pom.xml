@@ -87,6 +87,12 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- MockMvc for the MCP door's tests (McpServerTest) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Boot 4 split autoconfiguration into per-technology modules: a
              technology this service uses directly needs its own module, or its
              autoconfiguration is simply absent at runtime (#199). -->
