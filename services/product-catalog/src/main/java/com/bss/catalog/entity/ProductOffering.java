@@ -97,6 +97,10 @@ public class ProductOffering {
     @Column(name = "choice_hold_months")
     private Integer choiceHoldMonths;
 
+    /** A benefit picked once per LINE, not once per household (#420; null/false: per household). */
+    @Column(name = "choice_per_line")
+    private Boolean choicePerLine;
+
     // Benefit Choices (#359): who provides the benefit, their terms, what it costs the operator
 
     @Column(name = "choice_partner", length = 500)
@@ -323,5 +327,13 @@ public class ProductOffering {
 
     public void setProductOfferingRelationshipJson(String productOfferingRelationshipJson) {
         this.productOfferingRelationshipJson = productOfferingRelationshipJson;
+    }
+
+    public Boolean getChoicePerLine() {
+        return choicePerLine;
+    }
+
+    public void setChoicePerLine(Boolean choicePerLine) {
+        this.choicePerLine = choicePerLine;
     }
 }

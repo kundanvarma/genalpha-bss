@@ -34,7 +34,7 @@ public class RestChoicesClient implements ChoicesClient {
                     .uri(BASE + "/hold")
                     .body(new HoldBody(ownerPartyId, orderId, orderItemId, offeringId, offeringName, cost,
                             replaces == null ? List.of() : replaces, terms.holdMonths(), terms.partner(),
-                            terms.wholesaleCost()))
+                            terms.wholesaleCost(), terms.lineId()))
                     .retrieve()
                     .toBodilessEntity();
             return HoldOutcome.held();
@@ -74,10 +74,14 @@ public class RestChoicesClient implements ChoicesClient {
             if (wire == null) {
                 return new Standing(false, "Choices", 0, java.util.Set.of());
             }
-            java.util.Set<String> picked = wire.allocations() == null ? java.util.Set.of()
-                    : wire.allocations().stream().map(PickWire::offeringId).filter(java.util.Objects::nonNull)
-                            .collect(java.util.stream.Collectors.toSet());
-            return new Standing(wire.offered(), wire.label() == null ? "Choices" : wire.label(), wire.left(), picked);
+            List<PickWire> picks = wire.allocations() == null ? List.of() : wire.allocations();
+            java.util.Set<String> picked = picks.stream().map(PickWire::offeringId).filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            java.util.Set<String> onLines = picks.stream().filter(p -> p.offeringId() != null && p.lineId() != null)
+                    .map(p -> Standing.onLine(p.offeringId(), p.lineId()))
+                    .collect(java.util.stream.Collectors.toSet());
+            return new Standing(wire.offered(), wire.label() == null ? "Choices" : wire.label(), wire.left(), picked,
+                    onLines);
         } catch (RestClientException e) {
             throw new DownstreamException("benefit-allowance is unreachable", e);
         }
@@ -87,7 +91,7 @@ public class RestChoicesClient implements ChoicesClient {
     private record PoolWire(boolean offered, String label, int left, List<PickWire> allocations) {
     }
 
-    private record PickWire(String offeringId) {
+    private record PickWire(String offeringId, String lineId) {
     }
 
     @Override
@@ -119,7 +123,7 @@ public class RestChoicesClient implements ChoicesClient {
 
     private record HoldBody(String ownerPartyId, String orderId, String orderItemId, String offeringId,
             String offeringName, int cost, List<Source> replaces, Integer holdMonths, String partner,
-            java.math.BigDecimal wholesaleCost) {
+            java.math.BigDecimal wholesaleCost, String lineId) {
     }
 
     private record SettleBody(String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants) {

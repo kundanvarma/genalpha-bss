@@ -326,13 +326,18 @@ public class ActionExecuteService {
         }
         if (node.isObject()) {
             ObjectNode o = json.createObjectNode();
+            boolean[] valueLeftOut = {false};
             node.properties().forEach(f -> {
                 JsonNode v = fill(f.getValue(), action, inputs, r, missing);
                 if (v != OMIT) {
                     o.set(f.getKey(), v);
+                } else if ("value".equals(f.getKey())) {
+                    valueLeftOut[0] = true;
                 }
             });
-            return o;
+            // a name/value pair (a TMF characteristic) whose value the caller left out says
+            // nothing — it is dropped whole, not sent as a bare name (#420: an optional line)
+            return valueLeftOut[0] ? OMIT : o;
         }
         if (node.isArray()) {
             ArrayNode a = json.createArrayNode();

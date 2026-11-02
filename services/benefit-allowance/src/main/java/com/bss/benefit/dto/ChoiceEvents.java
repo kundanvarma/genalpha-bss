@@ -25,7 +25,9 @@ public final class ChoiceEvents {
     /** A benefit held, picked, swapped or released. */
     public record Allocation(String id, String offeringId, String offeringName, int cost, String state,
             String endReason, String orderId, String orderItemId, String heldUntil, List<PartyRef> relatedParty,
-            int choicesGranted, int choicesLeft) {
+            int choicesGranted, int choicesLeft,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String lineId) {
     }
 
     /** A plan (or goodwill) granting Choices, or a plan change re-granting them. */

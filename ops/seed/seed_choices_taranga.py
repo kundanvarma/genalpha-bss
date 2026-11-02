@@ -143,7 +143,7 @@ if PRIORITY not in offerings:
             for n, v in (("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-UNL-PRIO"),
                          ("guaranteedDlMbps", "50"), ("Priority network", "On your line until you release it"))]})
     offerings[PRIORITY] = call(CATALOG, "POST", "productOffering", {
-        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1,
+        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1, "choicePerLine": True,
         "description": "Your line on the priority 5G slice — first in line when the network is busy — "
                        "picked with one of your Picks. Release it and your line goes back to its plan.",
         "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
@@ -152,6 +152,9 @@ if PRIORITY not in offerings:
         "productOfferingPrice": [{"id": prices[PRIORITY + " Monthly"]["id"], "name": PRIORITY + " Monthly",
                                   "@referredType": "ProductOfferingPrice"}]})
     print(f"benefit: {PRIORITY} (the operator's own, 1 Pick, priority slice on the existing line)")
+elif not offerings[PRIORITY].get("choicePerLine"):
+    call(CATALOG, "PATCH", f"productOffering/{offerings[PRIORITY]['id']}", {"choicePerLine": True})
+    print(f"benefit: {PRIORITY} is now picked once per line (#420)")
 
 if not any(r.get("name") == SWAP_RULE for r in call(POLICY, "GET", "policyRule?limit=200") or []):
     call(POLICY, "POST", "policyRule", {

@@ -16,6 +16,8 @@ public record PoolView(boolean offered, String label, int granted, int inUse, in
 
     /** A benefit that took Choices out: held while its order runs, committed once it is active. */
     public record Allocation(String id, String offeringId, String offeringName, int cost, String state,
-            String orderId, String orderItemId, String heldUntil) {
+            String orderId, String orderItemId, String heldUntil,
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String lineId) {
     }
 }

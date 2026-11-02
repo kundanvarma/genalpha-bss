@@ -267,4 +267,60 @@ class OrderChoicesTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.allowed").value(true));
     }
+
+    private static String linePick(String line) {
+        String chars = line == null ? "" : """
+                , "product": {"productCharacteristic": [{"name": "lineServiceId", "value": "%s"}]}""".formatted(line);
+        return """
+                {"relatedParty": [{"id": "cust-1", "role": "customer"}],
+                 "productOrderItem": [{"id": "1", "action": "add", "productOffering": {"id": "po-prio"}%s}]}
+                """.formatted(chars);
+    }
+
+    private void perLineCatalog() {
+        given(catalogClient.findOffering("po-prio")).willReturn(Optional.of(new CatalogClient.OfferingRef("po-prio", "Priority on my line")));
+        given(catalogClient.findOfferingDetail("po-prio")).willReturn(Optional.of(Map.of("id", "po-prio",
+                "name", "Priority on my line", "lifecycleStatus", "Launched", "choiceCost", 1, "choicePerLine", true)));
+        given(inventoryClient.activeProductsOf("cust-1")).willReturn(List.of(
+                Map.of("id", "prod-plan", "realizingService", List.of(Map.of("id", "line-a"))),
+                Map.of("id", "prod-plan-2", "realizingService", List.of(Map.of("id", "line-b")))));
+        given(choices.hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any()))
+                .willReturn(ChoicesClient.HoldOutcome.held());
+    }
+
+    @Test
+    void aPerLineBenefit_namesOneOfTheHouseholdsOwnLines_andTheHoldCarriesIt() throws Exception {
+        perLineCatalog();
+        mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(linePick(null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Choose which line Priority on my line is for"));
+        mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(linePick("line-of-a-stranger")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("That line is not one of this household's active lines"));
+        verify(choices, never()).hold(anyString(), anyString(), anyString(), anyString(), anyString(), anyInt(), any(), any());
+
+        String body = mockMvc.perform(post(BASE).with(writeToken()).contentType(MediaType.APPLICATION_JSON).content(linePick("line-a")))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String orderId = objectMapper.readTree(body).get("id").asString();
+        verify(choices).hold("cust-1", orderId, "1", "po-prio", "Priority on my line", 1, List.of(),
+                new ChoicesClient.Terms(null, null, null, "line-a"));
+    }
+
+    @Test
+    void canIPickThis_forAPerLineBenefit_answersForOneLine() throws Exception {
+        perLineCatalog();
+        given(choices.standing("cust-1")).willReturn(new ChoicesClient.Standing(true, "Picks", 2,
+                java.util.Set.of("po-prio"), java.util.Set.of(ChoicesClient.Standing.onLine("po-prio", "line-a"))));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-prio").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("Choose which line Priority on my line is for"));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-prio").param("lineId", "line-a").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("Priority on my line is already picked for this line"));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-prio").param("lineId", "line-b").with(household()))
+                .andExpect(jsonPath("$.allowed").value(true));
+        mockMvc.perform(get(PREVIEW).param("offeringId", "po-prio").param("lineId", "line-of-a-stranger").with(household()))
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.reason").value("That line is not one of this household's active lines"));
+    }
 }

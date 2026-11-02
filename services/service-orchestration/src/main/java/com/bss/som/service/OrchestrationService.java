@@ -410,7 +410,7 @@ public class OrchestrationService {
             boolean boostDeclared = declared.stream().anyMatch(r -> "slice".equalsIgnoreCase(r.seam()));
             if (boostDeclared) {
                 com.bss.som.seam.adapters.SliceSeam.intentOf(values).ifPresent(intent ->
-                        applyBoostPass(tenant, owner, productOrderId, name, intent).ifPresent(line ->
+                        applyBoostPass(tenant, owner, productOrderId, name, intent, lineNamedBy(item)).ifPresent(line ->
                                 realise(tenant, line.getId(), offeringId, "slice", slices.vendor(), intent.profile())));
             }
             log.info("'{}' is billing-only (CFS {}) — no service to provision{}", name, cfs.name(),
@@ -492,7 +492,7 @@ public class OrchestrationService {
             final String passName = name;
             final String passOwner = owner;
             catalog.sliceIntentOf(offeringId).ifPresent(intent ->
-                    applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
+                    applyBoostPass(tenant, passOwner, productOrderId, passName, intent, lineNamedBy(item)));
             log.info("'{}' is billing-only ({}) by category — no service to provision", name, category);
             return ItemOutcome.nothingToProvision();
         }
@@ -841,6 +841,18 @@ public class OrchestrationService {
                 }
             });
         }
+    }
+
+    /** The line a per-line Pick names (#420): its {@code lineServiceId} characteristic, or null. */
+    private static String lineNamedBy(Map<String, Object> item) {
+        if (item.get("product") instanceof Map<?, ?> p && p.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> m && "lineServiceId".equals(m.get("name")) && m.get("value") != null) {
+                    return String.valueOf(m.get("value"));
+                }
+            }
+        }
+        return null;
     }
 
     /** The order that created the product an item ends — its TMF637 lineage, copied on by ordering. */
@@ -1204,15 +1216,21 @@ public class OrchestrationService {
      * from the later of now and the current expiry. Fail-open on the core.
      */
     Optional<ServiceInstance> applyBoostPass(String tenant, String owner, String productOrderId, String passName,
-            com.bss.som.client.CatalogClient.SliceIntent intent) {
+            com.bss.som.client.CatalogClient.SliceIntent intent, String namedLine) {
         if (owner == null) {
             log.warn("boost pass '{}' on order {} has no owner — nothing to boost", passName, productOrderId);
             return Optional.empty();
         }
-        ServiceInstance line = services.findByTenantIdAndOwnerPartyId(tenant, owner).stream()
-                .filter(sv -> ServiceInstance.ACTIVE.equals(sv.getState()))
-                .filter(sv -> isMobileLine(sv.getName()))
-                .findFirst().orElse(null);
+        // a per-line Pick (#420) names its line: that line, if it is the owner's and active — never
+        // another one instead. With no line named (a boost pass, an older order), the first mobile line.
+        ServiceInstance line = namedLine != null
+                ? services.findByIdAndTenantId(namedLine, tenant)
+                        .filter(sv -> owner.equals(sv.getOwnerPartyId()) && ServiceInstance.ACTIVE.equals(sv.getState()))
+                        .orElse(null)
+                : services.findByTenantIdAndOwnerPartyId(tenant, owner).stream()
+                        .filter(sv -> ServiceInstance.ACTIVE.equals(sv.getState()))
+                        .filter(sv -> isMobileLine(sv.getName()))
+                        .findFirst().orElse(null);
         if (line == null) {
             log.warn("boost pass '{}' on order {}: customer {} has no active mobile line", passName, productOrderId, owner);
             return Optional.empty();

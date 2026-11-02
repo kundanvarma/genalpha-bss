@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { authFetch, hasRole } from '../../auth.js';
 import { logInteraction } from '../../api.js';
+import { activeServicesOf } from '../../api/holdings.js';
 
 /*
  * The household's Choices on the care desk (#358, Benefit Choices): what the
@@ -47,11 +48,15 @@ export default function Choices({ id, bss }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [reason, setReason] = useState('');
+  const [lines, setLines] = useState([]);   // the household's numbered lines, for a per-line benefit (#420)
 
   function refresh() {
     setError(null);
     poolOf(id).then(setPool).catch((e) => setError(`Could not reach the Choices ledger, so this is unknown — not empty (${e.message})`));
     productsOf(id).then(setProducts).catch((e) => setError(`Could not read the customer's products (${e.message})`));
+    activeServicesOf(id).then((all) => setLines((all || []).filter((sv) => sv.state === 'active'
+      && (sv.supportingResource || []).some((r) => r.value))))
+      .catch((e) => setError(`Could not read the customer's lines, so per-line benefits are left out (${e.message})`));
   }
   useEffect(() => {
     refresh();
@@ -87,6 +92,13 @@ export default function Choices({ id, bss }) {
   const label = pool?.label || 'Choices';
   const picked = new Set((pool?.allocations || []).map((a) => a.offeringId));
   const canAct = hasRole('ordering:write');
+  const numberOf = (lineId) => (lines.find((l) => l.id === lineId)?.supportingResource || []).find((r) => r.value)?.value;
+  // what can be offered: a household benefit once, a per-line benefit once per line (#420) —
+  // whether it can be picked is the ledger's answer, given in its own words when it refuses
+  const offers = shelf.flatMap((b) => (b.choicePerLine
+    ? lines.filter((l) => !(pool?.allocations || []).some((a) => a.offeringId === b.id && a.lineId === l.id))
+      .map((l) => ({ key: `${b.id}|${l.id}`, b, line: l.id, name: `${b.name} for ${numberOf(l.id)}` }))
+    : (picked.has(b.id) ? [] : [{ key: b.id, b, line: null, name: b.name }])));
 
   return (
     <section className="card" data-testid="csr-choices" style={{ marginTop: 12 }}>
@@ -101,7 +113,7 @@ export default function Choices({ id, bss }) {
         const product = productOf(a);
         return (
           <div className="row" key={a.id} data-testid="csr-choice-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ flex: 1 }}>{a.offeringName}</span>
+            <span style={{ flex: 1 }}>{a.offeringName}{a.lineId && numberOf(a.lineId) ? ` · ${numberOf(a.lineId)}` : ''}</span>
             <span className="dim small" data-testid="csr-choice-state">
               {a.state === 'held' ? 'activating — waiting for the partner' : 'active'}{a.heldUntil ? ` · held until ${a.heldUntil}` : ''}
             </span>
@@ -113,7 +125,8 @@ export default function Choices({ id, bss }) {
                     if (to) run(`Swapping ${a.offeringName} for ${to.name}`, () => bss.swapBenefit({ subscriptionId: product.id, targetOfferingId: to.id }));
                   }}>
                   <option value="">Swap for…</option>
-                  {shelf.filter((b) => !picked.has(b.id)).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  {/* a per-line benefit (#420) is picked for a line, not swapped into */}
+                  {shelf.filter((b) => !picked.has(b.id) && !b.choicePerLine).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
                 <button className="ghost small" data-testid="csr-release" disabled={busy}
                   onClick={() => run(`${a.offeringName} released — the Choice is free again`, () => authFetch(ORDERS, {
@@ -130,11 +143,12 @@ export default function Choices({ id, bss }) {
       })}
       {canAct && pool && pool.left > 0 && (
         <div className="row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-          {shelf.filter((b) => !picked.has(b.id) && b.choiceCost <= pool.left).map((b) => (
-            <button key={b.id} className="ghost small" data-testid="csr-pick" disabled={busy}
-              title={b.description || ''}
-              onClick={() => run(`Picking ${b.name}`, () => bss.pickBenefit({ customerId: id, benefitOfferingId: b.id }))}>
-              Pick {b.name}
+          {offers.map((o) => (
+            <button key={o.key} className="ghost small" data-testid="csr-pick" disabled={busy}
+              title={o.b.description || ''}
+              onClick={() => run(`Picking ${o.name}`, () => bss.pickBenefit({ customerId: id, benefitOfferingId: o.b.id,
+                ...(o.line ? { lineId: o.line } : {}) }))}>
+              Pick {o.name}
             </button>
           ))}
         </div>

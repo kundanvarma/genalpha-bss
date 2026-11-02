@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { choicePreview, listOfferings, myChoices, myProducts, pickBenefit, releaseBenefit, swapBenefit } from '../api.js';
+import { choicePreview, listOfferings, myActiveServices, myChoices, myProducts, pickBenefit, releaseBenefit, swapBenefit } from '../api.js';
 import { t } from '../i18n.js';
 
 /*
@@ -17,10 +17,14 @@ export default function Choices() {
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [error, setError] = useState(null);
-  const [previews, setPreviews] = useState({}); // offeringId -> ordering's "can I pick this?" (#392)
+  const [previews, setPreviews] = useState({}); // offeringId (or offeringId|lineId) -> ordering's "can I pick this?" (#392)
+  const [lines, setLines] = useState([]);        // the household's numbered lines, for a per-line benefit (#420)
+  const [lineFor, setLineFor] = useState({});    // offeringId -> the line chosen on its card
 
   function refresh() {
     myProducts().then(setProducts).catch((e) => setError(e.message));
+    myActiveServices().then((all) => setLines((all || []).filter((sv) => sv.state === 'active'
+      && (sv.supportingResource || []).some((r) => r.value)))).catch(() => setLines(null));   // null: could not be read
     return myChoices().then(setPool).catch((e) => setError(e.message));
   }
   // the product a benefit lives in: the one the picking order made (its TMF637 lineage)
@@ -37,11 +41,13 @@ export default function Choices() {
   // an unanswered preview leaves the button to the order itself, which is the authority.
   // Asked again only when what is left or what is picked changes — not on every activation poll —
   // and an older round that answers late is dropped, so it can never re-offer a pick.
-  const standing = pool?.offered ? `${pool.left}|${pool.allocations.map((a) => a.offeringId).sort().join(',')}` : null;
+  // A per-line benefit (#420) is asked about once per line.
+  const standing = pool?.offered ? `${pool.left}|${pool.allocations.map((a) => `${a.offeringId}@${a.lineId || ''}`).sort().join(',')}|${(lines || []).map((l) => l.id).join(',')}` : null;
   useEffect(() => {
     if (!standing || !benefits?.length) return undefined;
     let current = true;
-    Promise.all(benefits.map((b) => choicePreview(b.id).then((p) => [b.id, p]).catch(() => [b.id, null])))
+    const asks = benefits.flatMap((b) => (b.choicePerLine ? (lines || []).map((l) => [`${b.id}|${l.id}`, b.id, l.id]) : [[b.id, b.id, null]]));
+    Promise.all(asks.map(([key, id, line]) => choicePreview(id, line).then((p) => [key, p]).catch(() => [key, null])))
       .then((pairs) => { if (current) setPreviews(Object.fromEntries(pairs)); });
     return () => { current = false; };
   }, [standing, benefits]);
@@ -74,11 +80,11 @@ export default function Choices() {
     }
   }
 
-  async function pick(offering) {
+  async function pick(offering, lineId) {
     setBusy(offering.id);
     setNotice(null);
     try {
-      await pickBenefit(offering);
+      await pickBenefit(offering, lineId);
       setNotice({ ok: true, text: `${offering.name} — ${t('activating now. It appears below in a moment.')}` });
       await refresh();
     } catch (e) {
@@ -130,7 +136,7 @@ export default function Choices() {
                   <select data-testid="swap-for" aria-label={`${t('Swap')} ${a.offeringName}`} disabled={busy !== null} value=""
                     onChange={(e) => { const to = (benefits || []).find((b) => b.id === e.target.value); if (to) act(a.id, () => swapBenefit(productOf(a).id, to), `${t('Swapping')} ${a.offeringName} → ${to.name}. ${a.offeringName} ${t('stays active until')} ${to.name} ${t('is.')}`); }}>
                     <option value="">{t('Swap for…')}</option>
-                    {(benefits || []).filter((b) => !picked.has(b.id)).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    {(benefits || []).filter((b) => !picked.has(b.id) && !b.choicePerLine).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                   <button className="ghost" data-testid="release-benefit" disabled={busy !== null}
                     onClick={() => act(a.id, () => releaseBenefit(productOf(a).id), `${a.offeringName} ${t('released — pick something else whenever you like.')}`)}>
@@ -149,17 +155,21 @@ export default function Choices() {
         {benefits?.length === 0 && <p className="muted">{t('No benefits are on offer right now.')}</p>}
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
           {(benefits || []).map((b) => {
-            const mine = picked.has(b.id);
-            const answer = previews[b.id];
-            const asking = !(b.id in previews);   // until ordering answers, the page vouches for nothing
+            const line = b.choicePerLine ? (lineFor[b.id] || lines?.[0]?.id) : null;
+            const key = line ? `${b.id}|${line}` : b.id;
+            const mine = b.choicePerLine ? (pool.allocations || []).some((a) => a.offeringId === b.id && a.lineId === line) : picked.has(b.id);
+            const answer = previews[key];
+            const asking = !(key in previews);   // until ordering answers, the page vouches for nothing
             const refused = answer && !answer.allowed;
             return (
               <div key={b.id} className="card" data-testid="benefit-card" style={{ padding: 12 }}>
                 <b>{b.name}</b>
                 <p className="muted" style={{ minHeight: '3em' }}>{b.description}</p>
-                <p style={{ margin: '4px 0' }}>{t('Costs')} {b.choiceCost} {t('of your')} {label}</p>
-                <button className="primary" data-testid="pick-benefit" disabled={mine || asking || refused || busy !== null}
-                  onClick={() => pick(b)}>
+                <p style={{ margin: '4px 0' }}>{t('Costs')} {b.choiceCost} {t('of your')} {label}{b.choicePerLine ? ` ${t('per line')}` : ''}</p>
+                {b.choicePerLine && <LinePicker lines={lines} value={line} label={`${t('Line for')} ${b.name}`}
+                  onChange={(id) => setLineFor({ ...lineFor, [b.id]: id })} />}
+                <button className="primary" data-testid="pick-benefit" disabled={mine || asking || refused || busy !== null || (b.choicePerLine && !line)}
+                  onClick={() => pick(b, line)}>
                   {mine ? t('Picked') : busy === b.id ? t('Picking…') : t('Pick')}
                 </button>
                 {refused && !mine && <p className="muted small" data-testid="pick-reason" style={{ margin: '6px 0 0' }}>{answer.reason}</p>}
@@ -169,5 +179,18 @@ export default function Choices() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** Which of the household's lines a per-line benefit is for (#420) — by name and number, never an id. */
+function LinePicker({ lines, value, label, onChange }) {
+  if (lines === null) return <p className="muted small" data-testid="lines-unread">{t('Your lines could not be read just now.')}</p>;
+  if (!lines.length) return <p className="muted small" data-testid="no-lines">{t('You need a mobile line for this one.')}</p>;
+  const numberOf = (sv) => (sv.supportingResource || []).find((r) => r.value)?.value;
+  return (
+    <select data-testid="pick-line" aria-label={label} value={value || ''} onChange={(e) => onChange(e.target.value)}
+      style={{ marginBottom: 6, maxWidth: '100%' }}>
+      {lines.map((l) => <option key={l.id} value={l.id}>{numberOf(l)} · {l.name}</option>)}
+    </select>
   );
 }

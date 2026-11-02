@@ -38,9 +38,17 @@ class OrderChoices {
         this.inventory = inventory;
     }
 
-    /** One item of the order and what it is worth in Choices. */
-    private record Item(String itemId, String offeringId, String name, int quantity, int cost, int grants) {
+    /**
+     * One item of the order and what it is worth in Choices. A per-line benefit
+     * (#420) names the line it is for: {@code lineId}, the service id of one of
+     * the household's lines, carried as the item's {@value #LINE} characteristic.
+     */
+    private record Item(String itemId, String offeringId, String name, int quantity, int cost, int grants,
+            boolean perLine, String lineId) {
     }
+
+    /** The add item's characteristic naming the line a per-line benefit is for (#420). */
+    static final String LINE = "lineServiceId";
 
     /** Hold the Choices the order's benefits cost; on any refusal nothing stays held. */
     void hold(List<Map<String, Object>> leafItems, String orderId, String ownerPartyId) {
@@ -51,15 +59,55 @@ class OrderChoices {
         if (ownerPartyId == null) {
             throw new OrderValidationException("a benefit is picked for a customer — name the customer");
         }
+        requireLines(benefits, ownerPartyId);
         List<ChoicesClient.Source> replaces = endedBenefits(leafItems);
         for (Item b : benefits) {
+            ChoicesClient.Terms terms = termsOf(b.offeringId());
             ChoicesClient.HoldOutcome outcome = ledger.hold(ownerPartyId, orderId, b.itemId(), b.offeringId(),
-                    b.name(), b.cost() * b.quantity(), replaces, termsOf(b.offeringId()));
+                    b.name(), b.cost() * b.quantity(), replaces, b.perLine() ? terms.onLine(b.lineId()) : terms);
             if (!outcome.ok()) {
                 ledger.release(orderId);
                 throw new ChoicesConflictException(outcome.message());
             }
         }
+    }
+
+    /**
+     * A per-line benefit (#420) names one of the household's own active lines, one
+     * line per item and one such item per order (a line's slice is owned by the
+     * order that set it). The line comes from the request, so it is checked against
+     * what inventory says the household has — never trusted.
+     */
+    private void requireLines(List<Item> benefits, String ownerPartyId) {
+        List<Item> perLine = benefits.stream().filter(Item::perLine).toList();
+        if (perLine.isEmpty()) {
+            return;
+        }
+        if (perLine.size() > 1) {
+            throw new OrderValidationException("pick one per-line benefit per order");
+        }
+        Item b = perLine.get(0);
+        if (b.quantity() > 1) {
+            throw new OrderValidationException(b.name() + " is picked for one line at a time");
+        }
+        lineRefusal(b.name(), b.lineId(), ownerPartyId).ifPresent(why -> {
+            throw new OrderValidationException(why);
+        });
+    }
+
+    /**
+     * Why a per-line benefit cannot be picked for {@code lineId}: none named, or not
+     * one of the household's active lines. Asked by the order and by "Can I pick
+     * this?" alike, at the same point — before the ledger — so the two never disagree.
+     */
+    Optional<String> lineRefusal(String name, String lineId, String ownerPartyId) {
+        if (lineId == null || lineId.isBlank()) {
+            return Optional.of("Choose which line " + name + " is for");
+        }
+        boolean ours = inventory.activeProductsOf(ownerPartyId).stream()
+                .anyMatch(p -> p.get("realizingService") instanceof List<?> rs && rs.stream()
+                        .anyMatch(r -> r instanceof Map<?, ?> m && m.get("id") instanceof String id && lineId.equals(id)));
+        return ours ? Optional.empty() : Optional.of("That line is not one of this household's active lines");
     }
 
     /** The order completed: what it held is in use for good, its plans add Choices, its endings give back. */
@@ -344,9 +392,22 @@ class OrderChoices {
             String name = ref.get("name") != null ? String.valueOf(ref.get("name"))
                     : detail.map(d -> String.valueOf(d.get("name"))).orElse(offeringId);
             int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
-            out.add(new Item(itemId.toString(), offeringId, name, quantity, cost, grants));
+            boolean perLine = cost > 0 && detail.map(d -> Boolean.TRUE.equals(d.get("choicePerLine"))).orElse(false);
+            out.add(new Item(itemId.toString(), offeringId, name, quantity, cost, grants, perLine, lineOf(item)));
         }
         return out;
+    }
+
+    /** The {@value #LINE} characteristic on an add item's product, or null. */
+    private static String lineOf(Map<String, Object> item) {
+        if (item.get("product") instanceof Map<?, ?> p && p.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> m && LINE.equals(m.get("name")) && m.get("value") != null) {
+                    return String.valueOf(m.get("value"));
+                }
+            }
+        }
+        return null;
     }
 
     private static int positive(Object value) {

@@ -75,7 +75,7 @@ export function Choices({ authFetch }) {
           {retired > 0 && <label className="dim small" style={{ marginLeft: 12, fontWeight: 'normal' }}>
             <input type="checkbox" data-testid="show-retired" checked={showRetired}
               onChange={(e) => setShowRetired(e.target.checked)} /> Show {retired} retired</label>}</h3>
-        <table data-testid="choice-benefits"><thead><tr><th>Benefit</th><th>Costs</th><th>Partner</th><th>Partner charges / month</th><th>Holds</th><th>State</th></tr></thead>
+        <table data-testid="choice-benefits"><thead><tr><th>Benefit</th><th>Costs</th><th>Partner</th><th>Partner charges / month</th><th>Holds</th><th>Picked</th><th>State</th></tr></thead>
           <tbody>{benefits.map((b) => (
             <tr key={b.id} data-benefit={b.name}>
               <td>{b.name}</td>
@@ -83,6 +83,7 @@ export function Choices({ authFetch }) {
               <td>{b.choicePartner || '—'}{b.choicePartnerTerms && <> · <a href={b.choicePartnerTerms} target="_blank" rel="noreferrer">terms</a></>}</td>
               <td>{b.choiceWholesaleCost == null ? '—' : Number(b.choiceWholesaleCost).toFixed(2)}</td>
               <td>{b.choiceHoldMonths ? `${b.choiceHoldMonths} months` : '—'}</td>
+              <td data-testid="benefit-scope">{b.choicePerLine ? 'once per line' : 'once per household'}</td>
               <td data-testid="benefit-state">{b.lifecycleStatus === 'In design'
                 ? <button className="linkish small" onClick={() => window.consoleGoTo?.('approvals')}>waiting for launch approval →</button>
                 : b.lifecycleStatus}</td>

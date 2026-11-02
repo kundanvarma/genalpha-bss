@@ -57,6 +57,10 @@ public class ProductOfferingDto {
     @JsonProperty("choiceHoldMonths")
     private Integer choiceHoldMonths;
 
+    /** House field beside TMF620 (#420): picked once per line (a phone's benefit), not once per household. */
+    @JsonProperty("choicePerLine")
+    private Boolean choicePerLine;
+
     /** House field beside TMF620 (#359): the partner who provides this benefit. */
     @JsonProperty("choicePartner")
     private String choicePartner;
@@ -284,5 +288,13 @@ public class ProductOfferingDto {
 
     public void setProductOfferingRelationship(List<Map<String, Object>> productOfferingRelationship) {
         this.productOfferingRelationship = productOfferingRelationship;
+    }
+
+    public Boolean getChoicePerLine() {
+        return choicePerLine;
+    }
+
+    public void setChoicePerLine(Boolean choicePerLine) {
+        this.choicePerLine = choicePerLine;
     }
 }

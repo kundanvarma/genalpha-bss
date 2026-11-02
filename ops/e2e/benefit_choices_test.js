@@ -117,10 +117,15 @@ function call(page, method, url, token, body) {
   }, { method, url: url.replace(API, ''), token, body });
 }
 
-const orderOf = (o) => ({
+const orderOf = (o, lineId) => ({
   productOrderItem: [{ id: '1', action: 'add', quantity: 1,
-    productOffering: { id: o.id, name: o.name, '@referredType': 'ProductOffering' } }],
+    productOffering: { id: o.id, name: o.name, '@referredType': 'ProductOffering' },
+    // a per-line benefit (#420) names the line it is for
+    ...(lineId ? { product: { productCharacteristic: [{ name: 'lineServiceId', value: lineId }] } } : {}) }],
 });
+/** The first active numbered line in a service list — what a per-line benefit (#420) is picked for. */
+const firstLine = (services) => (services || []).find((sv) => sv.state === 'active'
+  && (sv.supportingResource || []).some((r) => r.value));
 
 (async () => {
   const ctx = await request.newContext();
@@ -212,9 +217,11 @@ const orderOf = (o) => ({
   if (pool.inUse !== 2 || pool.left !== 0) fail('A1: the pool should be fully used, never over: ' + JSON.stringify(pool));
   console.log(`OK A1: two picks raced for the last Choice — one placed, one refused: "${refusal}"`);
   // #392 — preview and order never disagree: with none left, the preview says no in the order's own words
-  const phoneCo = by('PhoneCo Upgrade Pass');
-  const noLook = (await call(page, 'GET', `${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${phoneCo.id}`, chloe)).body;
-  const noOrder = await call(page, 'POST', ORDERS, chloe, orderOf(phoneCo));
+  const phoneCo = by('PhoneCo Upgrade Pass');   // picked per line (#420): asked about for Chloe's line
+  const chloeLine = firstLine((await call(page, 'GET', `${API}/tmf-api/serviceInventory/v4/service`, chloe)).body);
+  if (!chloeLine) fail('Chloe should have a numbered line by now');
+  const noLook = (await call(page, 'GET', `${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${phoneCo.id}&lineId=${chloeLine.id}`, chloe)).body;
+  const noOrder = await call(page, 'POST', ORDERS, chloe, orderOf(phoneCo, chloeLine.id));
   if (noLook.allowed !== false || noOrder.status !== 409 || noOrder.body.message !== noLook.reason) {
     fail(`preview and order disagree: preview ${JSON.stringify(noLook)} vs order ${noOrder.status} ${noOrder.body.message}`);
   }
@@ -409,7 +416,8 @@ const orderOf = (o) => ({
   console.log('OK a second line on Mobile 50 GB added its Choice — granted 2');
 
   // a held benefit: PhoneCo holds its Choice 12 months (GenAlpha names no country: the EU cap applies)
-  await hOrder([add(phone)]);
+  const hLine = firstLine(await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: HH })).json());
+  await hOrder([{ ...add(phone), product: { productCharacteristic: [{ name: 'lineServiceId', value: hLine.id }] } }]);   // per line (#420)
   const held = await settled('PhoneCo committed with a date', async () =>
     (await hPool()).allocations.find((a) => a.offeringName === phone.name && a.state === 'committed' && a.heldUntil));
   const expect = new Date(); expect.setUTCMonth(expect.getUTCMonth() + 12);
@@ -735,35 +743,66 @@ const orderOf = (o) => ({
   const prio = (await (await ctx.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent('Priority on my line')}`)).json())[0];
   if (!prio || prio.choiceCost !== 1 || prio.choicePartner) fail('Priority on my line should be a 1-Choice benefit with no partner — run seed_choices.py: ' + JSON.stringify(prio));
   const petraPool = async () => (await (await ctx.get(`${CHOICES}/pool`, { headers: PH2 })).json());
+  // two lines, so "once per line" (#420) has something to prove
   await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(plan)] } });
-  const petraLine = await settled('Petra\'s mobile line', async () => ((await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: PH2 })).json()) || [])
-    .find((sv) => sv.state === 'active' && sv.name === plan.name));
-  await settled('Petra\'s plan granting 2', async () => (await petraPool()).granted === 2);
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(plan)] } });
+  const petraLines = await settled('Petra\'s two mobile lines', async () => {
+    const ls = ((await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: PH2 })).json()) || [])
+      .filter((sv) => sv.state === 'active' && sv.name === plan.name && (sv.supportingResource || []).some((r) => r.value));
+    return ls.length === 2 ? ls : null; });
+  const [lineA, lineB] = petraLines;
+  await settled('Petra\'s plans granting 4', async () => (await petraPool()).granted === 4);
   const svChars = (sv) => Object.fromEntries((sv?.serviceCharacteristic || []).map((c) => [c.name, c.value]));
-  const coreOf = async () => (await fetch(`${CORE}/subscribers/${petraLine.id}/slice`)).json();
-  if ((await coreOf()).profile !== 'default') fail('the line should start on its plan\'s profile: ' + JSON.stringify(await coreOf()));
-  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(prio)] } });
-  const onPrio = await settled('the priority slice on Petra\'s line', async () => {
-    const sv = (await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service/${petraLine.id}`, { headers: PH2 })).json());
-    return svChars(sv).sliceProfile === 'priority' ? sv : null; });
-  if (svChars(onPrio).sliceUntil) fail('picked priority should not lapse on a clock: ' + svChars(onPrio).sliceUntil);
-  const core1p = await coreOf();
-  if (core1p.profile !== 'priority' || !core1p.active) fail('the core should carry the line on priority: ' + JSON.stringify(core1p));
+  const coreOf = async (line) => (await fetch(`${CORE}/subscribers/${line.id}/slice`)).json();
+  const sliceOf = async (line) => svChars(await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service/${line.id}`, { headers: PH2 })).json()).sliceProfile;
+  if ((await coreOf(lineA)).profile !== 'default' || (await coreOf(lineB)).profile !== 'default') fail('both lines should start on their plan\'s profile');
+  const prioOn = (line) => ({ ...add(prio), product: { productCharacteristic: [{ name: 'lineServiceId', value: line.id }] } });
+  const look = async (line) => (await (await ctx.get(`${API}/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${prio.id}${line ? `&lineId=${line.id}` : ''}`, { headers: PH2 })).json());
+  // asked without a line, the preview and the order both say to choose one
+  const noLine = await look(null);
+  const noLineOrder = await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [add(prio)] } });
+  const noLineBody = await noLineOrder.json();
+  if (noLine.allowed !== false || noLineOrder.status() !== 400 || noLineBody.message !== noLine.reason) {
+    fail(`a per-line pick with no line: preview ${JSON.stringify(noLine)} vs order ${noLineOrder.status()} ${noLineBody.message}`);
+  }
+  // line A: priority on A, and only A
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [prioOn(lineA)] } });
+  await settled('priority on line A', async () => (await sliceOf(lineA)) === 'priority');
+  const coreA = await coreOf(lineA);
+  if (coreA.profile !== 'priority' || !coreA.active) fail('the core should carry line A on priority: ' + JSON.stringify(coreA));
+  if ((await sliceOf(lineB)) || (await coreOf(lineB)).profile !== 'default') fail('picking priority for line A must leave line B alone');
   const lines = ((await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`, { headers: PH2 })).json()) || []).filter((sv) => sv.state === 'active');
-  if (lines.filter((sv) => sv.name === plan.name).length !== 1) fail('picking priority must not create a second line');
-  await settled('the priority pick committed', async () => (await petraPool()).allocations.some((a) => a.offeringName === prio.name && a.state === 'committed'));
+  if (lines.filter((sv) => sv.name === plan.name).length !== 2) fail('picking priority must not create a line');
+  await settled('the pick for line A committed', async () => (await petraPool()).allocations.some((a) => a.offeringName === prio.name && a.lineId === lineA.id && a.state === 'committed'));
+  // once per LINE: line B may have it too, line A may not have it twice
+  const lookA = await look(lineA);
+  const lookB = await look(lineB);
+  if (lookA.allowed !== false || !/already picked for this line/.test(lookA.reason || '')) fail('line A should already have priority: ' + JSON.stringify(lookA));
+  if (lookB.allowed !== true) fail('line B should still be able to pick priority: ' + JSON.stringify(lookB));
+  const twiceA = await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [prioOn(lineA)] } });
+  const twiceABody = await twiceA.json();
+  if (twiceA.status() !== 409 || twiceABody.message !== lookA.reason) fail(`a second priority on line A: ${twiceA.status()} ${twiceABody.message} vs preview "${lookA.reason}"`);
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [prioOn(lineB)] } });
+  await settled('priority on line B', async () => (await sliceOf(lineB)) === 'priority');
+  await settled('two priority picks in use', async () => (await petraPool()).allocations.filter((a) => a.offeringName === prio.name && a.state === 'committed').length === 2);
+  if ((await petraPool()).left !== 2) fail('two per-line picks should spend two Choices: ' + JSON.stringify(await petraPool()));
   const owedPrio = ((await (await ctx.get(`${CHOICES}/partnerCost?period=${new Date().toISOString().slice(0, 7)}`, { headers: H(prioStaff) })).json()).lines || [])
     .filter((l) => l.offeringName === prio.name);
   if (owedPrio.length) fail('the operator\'s own benefit owes no partner: ' + JSON.stringify(owedPrio));
-  // released: the line goes back to its plan's profile, and the Choice comes back
-  const prioProduct = await settled('the priority product in inventory', async () => ((await (await ctx.get(`${API}/tmf-api/productInventory/v4/product?status=active`, { headers: PH2 })).json()) || [])
-    .find((pr) => pr.name === prio.name));
-  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [{ id: '1', action: 'delete', product: { id: prioProduct.id } }] } });
-  await settled('the line back on its plan\'s profile', async () => (await coreOf()).profile === 'default');
-  const back = (await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service/${petraLine.id}`, { headers: PH2 })).json());
-  if (svChars(back).sliceProfile) fail('the record should say the slice ended: ' + JSON.stringify(svChars(back)));
-  await settled('the Choice given back', async () => (await petraPool()).left === 2);
-  console.log(`OK priority: "${prio.name}" put Petra's existing line on the priority slice (no new line, no clock, no partner owed); released, the line is back on its plan's profile and the Choice is free`);
+  // released from line A: A goes back to its plan's profile, B keeps priority, one Choice comes back
+  const prioProductFor = (line) => settled(`the priority product for ${line.id.slice(0, 8)}`, async () => ((await (await ctx.get(`${API}/tmf-api/productInventory/v4/product?status=active`, { headers: PH2 })).json()) || [])
+    .find((pr) => pr.name === prio.name && (pr.productCharacteristic || []).some((c) => c.name === 'lineServiceId' && c.value === line.id)));
+  const prioA = await prioProductFor(lineA);
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [{ id: '1', action: 'delete', product: { id: prioA.id } }] } });
+  await settled('line A back on its plan\'s profile', async () => (await coreOf(lineA)).profile === 'default');
+  if (await sliceOf(lineA)) fail('the record should say line A\'s slice ended');
+  if ((await sliceOf(lineB)) !== 'priority' || (await coreOf(lineB)).profile !== 'priority') fail('releasing line A\'s priority must leave line B on priority');
+  await settled('one Choice given back', async () => (await petraPool()).left === 3);
+  const prioB = await prioProductFor(lineB);
+  await ctx.post(ORDERS, { headers: PH2, data: { productOrderItem: [{ id: '1', action: 'delete', product: { id: prioB.id } }] } });
+  await settled('line B back on its plan\'s profile', async () => (await coreOf(lineB)).profile === 'default');
+  await settled('both Choices given back', async () => (await petraPool()).left === 4);
+  console.log(`OK priority per line (#420): "${prio.name}" put line A on the priority slice and not line B; line B could pick it too, line A not twice ("${lookA.reason}"); no line named → "${noLine.reason}", the same from preview and order; released from A, B kept it — no new line, no clock, no partner owed`);
 
   /* ---- the demo tenant (#362): Taranga calls them Picks, sells in NOK, holds nothing (Norway) ---- */
   const tStaff = await tTok('demo', 'demo');

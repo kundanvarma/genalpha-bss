@@ -8,7 +8,7 @@ import { choice, choices } from './word.js';
  * filed in "Partner services" (so the orchestrator activates it with the
  * partner), "Choices" (so the shelves find it) and its own group. */
 const GROUPS = ['Streaming', 'Audio', 'AI', 'Network extras', 'Devices'];
-const EMPTY = { name: '', description: '', group: 'Streaming', cost: '1', partner: '', terms: '', wholesale: '', hold: '' };
+const EMPTY = { name: '', description: '', group: 'Streaming', cost: '1', partner: '', terms: '', wholesale: '', hold: '', perLine: false };
 
 export function BenefitForm({ authFetch, onCreated }) {
   const [f, setF] = useState(EMPTY);
@@ -32,6 +32,7 @@ export function BenefitForm({ authFetch, onCreated }) {
         choicePartnerTerms: f.terms.trim() || undefined,
         choiceWholesaleCost: f.wholesale === '' ? undefined : Number(f.wholesale),
         choiceHoldMonths: f.hold === '' || Number(f.hold) === 0 ? undefined : Number(f.hold),
+        choicePerLine: f.perLine || undefined,
       });
       setF(EMPTY);
       onCreated(made);
@@ -63,6 +64,10 @@ export function BenefitForm({ authFetch, onCreated }) {
       {field('Partner charges a month', 'wholesale', { type: 'number', min: 0, step: '0.01', placeholder: 'what we pay them' })}
       {field(`Holds its ${choice()} (months)`, 'hold', { type: 'number', min: 0, step: 1, placeholder: '0 — no hold' })}
       {field('What the customer reads', 'description', { placeholder: 'one sentence for the shop' })}
+      <label className="small" style={{ alignSelf: 'end' }} title="A phone's benefit — priority, an upgrade pass — is picked for one line, and each line may have it">
+        <input type="checkbox" name="perLine" checked={f.perLine} disabled={busy}
+          onChange={(e) => setF((x) => ({ ...x, perLine: e.target.checked }))} /> One per line (not once per household)
+      </label>
       <div style={{ alignSelf: 'end' }}>
         <button className="primary" type="submit" disabled={busy || !f.name.trim()}>Create benefit</button>
       </div>

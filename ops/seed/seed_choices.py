@@ -71,6 +71,9 @@ for plan, n in GRANTS.items():
         req("PATCH", f"productOffering/{o['id']}", {"choicesGranted": n})
         print(f"plan: {plan} grants {n} Choice(s)")
 
+# a phone's benefit is picked once per LINE, not once per household (#420)
+PER_LINE = {"PhoneCo Upgrade Pass", "Priority on my line"}
+
 for name, price_name, value, description, hold, partner, wholesale in BENEFITS:
     if price_name not in prices:
         prices[price_name] = req("POST", "productOfferingPrice", {
@@ -79,14 +82,16 @@ for name, price_name, value, description, hold, partner, wholesale in BENEFITS:
     if name in offerings:
         o = offerings[name]
         if (o.get("choiceCost") != 1 or (o.get("choiceHoldMonths") or 0) != hold
-                or o.get("choicePartner") != partner or o.get("choiceWholesaleCost") != wholesale):
+                or o.get("choicePartner") != partner or o.get("choiceWholesaleCost") != wholesale
+                or bool(o.get("choicePerLine")) != (name in PER_LINE)):
             req("PATCH", f"productOffering/{o['id']}", {"choiceCost": 1, "choicePartner": partner,
                                                         "choiceWholesaleCost": wholesale,
+                                                        "choicePerLine": name in PER_LINE,
                                                         **({"choiceHoldMonths": hold} if hold else {})})
         continue
     offerings[name] = req("POST", "productOffering", {
         "name": name, "description": description, "lifecycleStatus": "Active", "isBundle": False,
-        "choiceCost": 1,
+        "choiceCost": 1, "choicePerLine": name in PER_LINE,
         **({"choiceHoldMonths": hold} if hold else {}),
         # the partner sells; the operator pays them this a month per active benefit (#360)
         "choicePartner": partner, "choiceWholesaleCost": wholesale,
@@ -120,7 +125,7 @@ if PRIORITY not in offerings:
             for n, v in (("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-UNL-PRIO"),
                          ("guaranteedDlMbps", "50"), ("Priority network", "On your line until you release it"))]})
     offerings[PRIORITY] = req("POST", "productOffering", {
-        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1,
+        "name": PRIORITY, "isBundle": False, "lifecycleStatus": "Active", "choiceCost": 1, "choicePerLine": True,
         "description": "Your line on the priority 5G slice — first in line when the network is busy — "
                        "picked with one of your Choices. Release it and your line goes back to its plan.",
         "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
@@ -129,6 +134,9 @@ if PRIORITY not in offerings:
         "productOfferingPrice": [{"id": prices[PRIORITY + " Monthly"]["id"], "name": PRIORITY + " Monthly",
                                   "@referredType": "ProductOfferingPrice"}]})
     print(f"benefit: {PRIORITY} (the operator's own, 1 Choice, priority slice on the existing line)")
+elif not offerings[PRIORITY].get("choicePerLine"):
+    req("PATCH", f"productOffering/{offerings[PRIORITY]['id']}", {"choicePerLine": True})
+    print(f"benefit: {PRIORITY} is now picked once per line (#420)")
 
 # the swap limit is a rule, not code: ordering hands it the facts, the operator sets the number
 POLICY = "http://localhost:8080/tmf-api/policyManagement/v4"

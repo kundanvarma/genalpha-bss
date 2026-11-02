@@ -18,11 +18,20 @@ public interface ChoicesClient {
      * What the catalog says about a benefit at the moment it is picked: the
      * months it is held (null = none), who provides it and what the operator
      * pays them a month (#360) — the ledger keeps this snapshot, so a later
-     * catalog change never rewrites what was agreed.
+     * catalog change never rewrites what was agreed. For a per-line benefit
+     * (#420), {@code lineId} is the line it is picked for.
      */
-    record Terms(Integer holdMonths, String partner, java.math.BigDecimal wholesaleCost) {
+    record Terms(Integer holdMonths, String partner, java.math.BigDecimal wholesaleCost, String lineId) {
 
-        public static final Terms NONE = new Terms(null, null, null);
+        public static final Terms NONE = new Terms(null, null, null, null);
+
+        public Terms(Integer holdMonths, String partner, java.math.BigDecimal wholesaleCost) {
+            this(holdMonths, partner, wholesaleCost, null);
+        }
+
+        public Terms onLine(String line) {
+            return new Terms(holdMonths, partner, wholesaleCost, line);
+        }
     }
 
     void settle(String orderId, String ownerPartyId, List<Grant> grants, List<Ending> endings, List<Regrant> regrants);
@@ -35,11 +44,21 @@ public interface ChoicesClient {
     /**
      * Where the household stands, for "can I pick this?" (#392): whether this
      * operator offers Choices, its word for one, how many are left, and which
-     * benefits are already picked.
+     * benefits are already picked — household-wide, and per line (#420).
      */
     Standing standing(String ownerPartyId);
 
-    record Standing(boolean offered, String label, int left, java.util.Set<String> pickedOfferingIds) {
+    /** {@code pickedOnLines} holds {@link #onLine} keys: a per-line benefit picked for that line. */
+    record Standing(boolean offered, String label, int left, java.util.Set<String> pickedOfferingIds,
+            java.util.Set<String> pickedOnLines) {
+
+        public Standing(boolean offered, String label, int left, java.util.Set<String> pickedOfferingIds) {
+            this(offered, label, left, pickedOfferingIds, java.util.Set.of());
+        }
+
+        public static String onLine(String offeringId, String lineId) {
+            return offeringId + "\u0000" + lineId;
+        }
     }
 
     /** A benefit's allocation, named by the order item that made it (the product's lineage). */

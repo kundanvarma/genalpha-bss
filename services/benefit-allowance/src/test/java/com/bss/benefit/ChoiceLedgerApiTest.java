@@ -425,4 +425,31 @@ class ChoiceLedgerApiTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("StreamCo Standard is already picked"));
     }
+
+    private String linePick(String owner, String orderId, String line) {
+        return """
+                {"ownerPartyId": "%s", "orderId": "%s", "orderItemId": "1", "offeringId": "po-prio",
+                 "offeringName": "Priority on my line", "cost": 1, "lineId": "%s"}
+                """.formatted(owner, orderId, line);
+    }
+
+    @Test
+    void aPerLineBenefit_isPickedOncePerLine_eachPickCostingItsChoice() throws Exception {
+        String owner = "cust-" + UUID.randomUUID();
+        grant(owner, 3);
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(linePick(owner, "pl-a-" + owner, "line-a"))).andExpect(status().isCreated());
+        // the same benefit on the household's other line is a new pick
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                .content(linePick(owner, "pl-b-" + owner, "line-b"))).andExpect(status().isCreated());
+        // ...but never twice on one line
+        mockMvc.perform(post(BASE + "/hold").with(ordering()).contentType(MediaType.APPLICATION_JSON)
+                        .content(linePick(owner, "pl-c-" + owner, "line-a")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Priority on my line is already picked for this line"));
+        mockMvc.perform(get(BASE + "/pool").with(customer(owner)))
+                .andExpect(jsonPath("$.left").value(1))
+                .andExpect(jsonPath("$.allocations[?(@.lineId == 'line-a')]").exists())
+                .andExpect(jsonPath("$.allocations[?(@.lineId == 'line-b')]").exists());
+    }
 }

@@ -37,9 +37,11 @@ public class ChoicePreview {
     private final ChoicesClient ledger;
     private final CollectionsClient collections;
     private final PolicyClient policy;
+    private final OrderChoices choices;
 
     public ChoicePreview(CatalogClient catalog, ChoicesClient ledger, CollectionsClient collections,
-            PolicyClient policy) {
+            PolicyClient policy, OrderChoices choices) {
+        this.choices = choices;
         this.catalog = catalog;
         this.ledger = ledger;
         this.collections = collections;
@@ -47,6 +49,11 @@ public class ChoicePreview {
     }
 
     public Answer preview(String ownerPartyId, String offeringId) {
+        return preview(ownerPartyId, offeringId, null);
+    }
+
+    /** For a per-line benefit (#420) the answer is for one line: {@code lineId}, the line's service id. */
+    public Answer preview(String ownerPartyId, String offeringId, String lineId) {
         Map<String, Object> detail = catalog.findOfferingDetail(offeringId)
                 .orElseThrow(() -> new OrderValidationException("no offering " + offeringId));
         String name = detail.get("name") == null ? offeringId : detail.get("name").toString();
@@ -72,6 +79,14 @@ public class ChoicePreview {
         if (decision != null && !decision.allowed()) {
             return new Answer(false, decision.message(), name, cost, standing.left(), label);
         }
+        // a per-line benefit (#420): the line, checked where the order checks it — before the ledger
+        boolean perLine = Boolean.TRUE.equals(detail.get("choicePerLine"));
+        if (perLine) {
+            java.util.Optional<String> why = choices.lineRefusal(name, lineId, ownerPartyId);
+            if (why.isPresent()) {
+                return new Answer(false, why.get(), name, cost, standing.left(), label);
+            }
+        }
         if (!standing.offered()) {
             return new Answer(false, label + " are not offered here", name, cost, 0, label);
         }
@@ -79,8 +94,10 @@ public class ChoicePreview {
             return new Answer(false, name + " costs " + cost + " of your " + label + " and you have "
                     + standing.left() + " left", name, cost, standing.left(), label);
         }
-        if (standing.pickedOfferingIds().contains(offeringId)) {
-            return new Answer(false, name + " is already picked", name, cost, standing.left(), label);
+        if (perLine ? standing.pickedOnLines().contains(ChoicesClient.Standing.onLine(offeringId, lineId))
+                : standing.pickedOfferingIds().contains(offeringId)) {
+            return new Answer(false, name + (perLine ? " is already picked for this line" : " is already picked"),
+                    name, cost, standing.left(), label);
         }
         return new Answer(true, null, name, cost, standing.left(), label);
     }

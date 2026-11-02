@@ -124,9 +124,13 @@ public class ChoiceLedger {
         boolean already = allocations.findByTenantIdAndPoolIdAndStateInOrderByCreatedAtAsc(
                         tenant, pool.getId(), IN_USE).stream()
                 .anyMatch(a -> a.getOfferingId() != null && a.getOfferingId().equals(request.offeringId())
+                        // a per-line benefit (#420) is picked once per LINE: the same benefit on
+                        // another of the household's lines is a new pick, not a second one
+                        && (request.lineId() == null || request.lineId().equals(a.getLineId()))
                         && !replaced.contains(a.getOrderId() + "\u0000" + a.getOrderItemId()));
         if (already) {
-            throw new ConflictException(request.offeringName() + " is already picked");
+            throw new ConflictException(request.offeringName() + (request.lineId() == null
+                    ? " is already picked" : " is already picked for this line"));
         }
         ChoiceAllocation a = new ChoiceAllocation();
         a.setTenantId(tenant);
@@ -141,6 +145,7 @@ public class ChoiceLedger {
         // what the operator agreed to pay the partner, as the catalog said at the pick (#360)
         a.setPartner(request.partner());
         a.setWholesaleCost(request.wholesaleCost());
+        a.setLineId(request.lineId());
         a.setState(HELD);
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
@@ -337,7 +342,8 @@ public class ChoiceLedger {
         return new ChoiceEvents.Allocation(a.getId(), a.getOfferingId(), a.getOfferingName(), a.getCost(),
                 a.getState(), a.getEndReason(), a.getOrderId(), a.getOrderItemId(),
                 a.getHeldUntil() == null ? null : a.getHeldUntil().toLocalDate().toString(),
-                ChoiceEvents.PartyRef.customer(pool == null ? null : pool.getOwnerPartyId()), granted, left);
+                ChoiceEvents.PartyRef.customer(pool == null ? null : pool.getOwnerPartyId()), granted, left,
+                a.getLineId());
     }
 
     private ChoiceEvents.Grant fact(ChoiceGrant g, int choices, ChoicePool known) {
@@ -353,6 +359,6 @@ public class ChoiceLedger {
     private static PoolView.Allocation allocationView(ChoiceAllocation a) {
         return new PoolView.Allocation(a.getId(), a.getOfferingId(), a.getOfferingName(), a.getCost(),
                 a.getState(), a.getOrderId(), a.getOrderItemId(),
-                a.getHeldUntil() == null ? null : a.getHeldUntil().toLocalDate().toString());
+                a.getHeldUntil() == null ? null : a.getHeldUntil().toLocalDate().toString(), a.getLineId());
     }
 }
