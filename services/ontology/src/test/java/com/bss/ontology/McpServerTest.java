@@ -111,7 +111,7 @@ class McpServerTest {
 
     private ResultActions rpc(String body, String... headers) throws Exception {
         MockHttpServletRequestBuilder b = post(MCP).with(person()).contentType(MediaType.APPLICATION_JSON).content(body);
-        for (int i = 0; i < headers.length; i += 2) {
+        for (int i = 0; i + 1 < headers.length; i += 2) {   // name, value pairs; a stray odd one is ignored
             b.header(headers[i], headers[i + 1]);
         }
         return mvc.perform(b);
