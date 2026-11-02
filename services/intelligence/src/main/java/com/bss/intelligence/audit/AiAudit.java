@@ -107,6 +107,15 @@ public class AiAudit {
     public String getTokenSource() { return tokenSource; }
     public void setTokenSource(String v) { this.tokenSource = v; }
 
+    /** #422: the W3C trace id (32 hex) of the call. Joins this row to its
+     * trace in a collector, and to the ontology receipt and decision-log row
+     * of the same request. Null when tracing was absent. */
+    @Column(name = "trace_id", length = 32)
+    private String traceId;
+
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String v) { this.traceId = v; }
+
     public Boolean getRawExposure() { return rawExposure; }
     public void setRawExposure(Boolean v) { this.rawExposure = v; }
     public Integer getRedactedFields() { return redactedFields; }

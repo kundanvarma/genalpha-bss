@@ -74,7 +74,8 @@ class AiGovernorRedactionTest {
         entry.setAiRawExposure(rawExposure);
         registry.setRegistry(List.of(entry));
         return new AiGovernor(provider, audits, budgets, contracts, scope, new Redactor(),
-                mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment());
+                mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment(),
+                new com.bss.intelligence.tracing.GenAiTracing(io.opentelemetry.api.OpenTelemetry.noop()));
     }
 
     private AiAudit ledgerRow() {
@@ -134,7 +135,8 @@ class AiGovernorRedactionTest {
         when(scope.currentTenantId()).thenReturn("t1");
         AiGovernor killed = new AiGovernor(provider, audits, budgets, mock(AiContractRepository.class),
                 scope, new Redactor(), mock(PlatformTransactionManager.class), 2000L,
-                new TenantRegistry(), new MockEnvironment());
+                new TenantRegistry(), new MockEnvironment(),
+                new com.bss.intelligence.tracing.GenAiTracing(io.opentelemetry.api.OpenTelemetry.noop()));
         org.assertj.core.api.Assertions.assertThatThrownBy(
                 () -> killed.complete("ticket-reply", LlmAdapter.Tier.FAST, SYSTEM, USER))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);

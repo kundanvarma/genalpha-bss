@@ -105,6 +105,13 @@ public class ActionReceiptRow {
     @Column(name = "row_hash", length = 64)
     private String rowHash;
 
+    /** #422: W3C trace id of the execute that wrote this row; outside the hash chain. */
+    @Column(name = "trace_id", length = 32)
+    private String traceId;
+
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+
     @Column(name = "recorded_at", nullable = false)
     private OffsetDateTime recordedAt;
 

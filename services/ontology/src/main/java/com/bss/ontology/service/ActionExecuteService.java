@@ -77,10 +77,13 @@ public class ActionExecuteService {
     private final ObjectMapper json;
     /** ADR 0025: intent is committed here before the call is dispatched. */
     private final ReceiptStore store;
+    /** #422: one execute_tool span per execute; receipts and decisions carry its trace id. */
+    private final com.bss.ontology.tracing.ActionTracing tracing;
 
     public ActionExecuteService(Registry registry, ActionCheckService checks, ComponentClient client,
             ReceiptPublisher receipts, UpgradeService upgrades, ObjectMapper json,
-            ReceiptStore store) {
+            ReceiptStore store, com.bss.ontology.tracing.ActionTracing tracing) {
+        this.tracing = tracing;
         this.registry = registry;
         this.checks = checks;
         this.client = client;
@@ -90,7 +93,47 @@ public class ActionExecuteService {
         this.store = store;
     }
 
+    /**
+     * The traced door: the whole execute (check, receipt, dispatch, decision) is
+     * one {@code execute_tool} span, current throughout, so every receipt row
+     * and the decision written inside it carry the same trace id.
+     */
     public Outcome execute(JsonNode action, Map<String, String> inputs, Caller caller) {
+        io.opentelemetry.api.trace.Span span = tracing.start(action.path("action").asString(),
+                caller.tenant(), agentLabel(caller), caller.channel());
+        try (io.opentelemetry.context.Scope inSpan = span.makeCurrent()) {
+            Outcome outcome = run(action, inputs, caller);
+            ExecuteReceipt r = outcome.body();
+            com.bss.ontology.tracing.ActionTracing.finish(span, outcomeWord(outcome), outcome.status(),
+                    r == null ? null : r.decisionId(), r == null ? null : r.approvalId());
+            return outcome;
+        } catch (RuntimeException e) {
+            span.setAttribute(com.bss.ontology.tracing.ActionTracing.ERROR_TYPE, e.getClass().getName());
+            span.setStatus(io.opentelemetry.api.trace.StatusCode.ERROR);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+
+    /** One word for how an execute ended, in the receipt's own vocabulary. */
+    static String outcomeWord(Outcome o) {
+        if (o.done()) {
+            return "executed";
+        }
+        if (o.status() == 202) {
+            return "filed-for-approval";
+        }
+        if (o.status() == 504) {
+            return "uncertain";
+        }
+        if (o.status() == 503) {
+            return "not-attempted";
+        }
+        return o.body() != null && o.body().componentStatus() != null ? "refused-by-component" : "refused";
+    }
+
+    private Outcome run(JsonNode action, Map<String, String> inputs, Caller caller) {
         String name = action.path("action").asString();
         Draft out = new Draft(name);
         // a retired action refuses past its date and points at its successor; until then it still runs
@@ -492,6 +535,14 @@ public class ActionExecuteService {
         // listener reads named fields, ignoring the rest. The store for all of
         // this already exists; see insight's decision-topics default.
         context.put("idempotencyKey", idempotencyKey(caller, action, inputs));
+        // #422: the trace this decision was taken in, beside the idempotency key
+        // and for the same reason: it rides in `context`, so insight's
+        // decision_log stores it with no migration and no consumer change.
+        // Absent (not null) when tracing is off, so old and new rows agree.
+        String traceId = com.bss.ontology.tracing.ActionTracing.currentTraceId();
+        if (traceId != null) {
+            context.put("traceId", traceId);
+        }
         d.put("context", context);
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("preconditions", check.preconditions());

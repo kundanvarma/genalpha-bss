@@ -47,7 +47,7 @@ environment-specific half.
 | Control | Owner | Evidence required | Where it lives / status |
 |---|---|---|---|
 | Alerts route to humans (Alertmanager → pager / Slack) | OPERATOR | A test alert received by the on-call route | rules exist (`infra/prometheus/alert-rules.yml`); FIRING pages nobody until routed |
-| Distributed tracing (OpenTelemetry) end to end | SHARED | A trace spanning gateway → service → outbox → consumer | backlog; metrics exist, traces do not |
+| Distributed tracing (OpenTelemetry) end to end | SHARED | A trace spanning gateway → service → outbox → consumer | partial: intelligence and ontology make spans and export over OTLP when an endpoint is set, and stamp the trace id on the AI ledger, the receipts and the decision context ([ai-control-plane-plan.md](ai-control-plane-plan.md), #422); the gateway, the other components and the Kafka hop are not traced |
 | SLOs written down and measured | OPERATOR | SLO document with the smoke SLO (`#57`) as the regression tripwire | — |
 | Immutable release artifacts: per-commit tags, digests, SBOM, signature, provenance | REPO | `cosign verify` and `gh attestation verify` succeed for every image of the release SHA | every image is published to GHCR under its source SHA, signed keyless with cosign and attested with build provenance on every push to main (`ci.yml`, job *Every service image builds*); the SBOM rides the image as a CycloneDX attestation; the digest list is a 400-day artifact |
 | Runtime JDK exercised by automated proof | REPO | PR smoke boots the Java 25 images | `browser-proof.yml`; claims gate binds the README to the Dockerfiles |

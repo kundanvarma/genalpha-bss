@@ -118,6 +118,34 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-restclient</artifactId>
         </dependency>
+        <!-- #422 tracing. Boot's own OpenTelemetry bridge (Micrometer Tracing
+             over the OTel SDK), versions from the Boot BOM. NOT the
+             spring-boot-starter-opentelemetry starter: it also brings the OTLP
+             METRICS registry, which pushes to localhost:4318 by default — a
+             network call on a fleet that has no collector. The span exporter
+             below is only created when
+             management.opentelemetry.tracing.export.otlp.endpoint is set. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-micrometer-tracing-opentelemetry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-tracing-bridge-otel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-exporter-otlp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-webmvc-test</artifactId>

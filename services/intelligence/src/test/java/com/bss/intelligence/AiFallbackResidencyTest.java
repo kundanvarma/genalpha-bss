@@ -114,7 +114,8 @@ class AiFallbackResidencyTest {
         when(contracts.findByTenantIdAndUseCase(anyString(), anyString())).thenReturn(Optional.empty());
         LlmRouter router = new LlmRouter(List.of(new StubAdapter()), registry, scope, RestClient.builder());
         return new AiGovernor(router, audits, budgets, contracts, scope, new Redactor(),
-                mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment());
+                mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment(),
+                new com.bss.intelligence.tracing.GenAiTracing(io.opentelemetry.api.OpenTelemetry.noop()));
     }
 
     private List<AiAudit> ledger() {
