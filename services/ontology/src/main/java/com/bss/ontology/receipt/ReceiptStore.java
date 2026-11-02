@@ -205,4 +205,35 @@ public class ReceiptStore {
             throw new IllegalStateException("SHA-256 is required for the receipt chain", e);
         }
     }
+
+    /**
+     * What machines have already moved through one action on one target, without a
+     * person, since {@code since} (#422): the sum of {@code amountInput} over the
+     * attempts an agent made directly whose {@code keyInput} equals {@code key}. An
+     * approver's own execution of a filed request carries no agent, so it does not count.
+     */
+    public java.math.BigDecimal machineAutoTotal(String tenant, String action, String keyInput, String key,
+            String amountInput, java.time.OffsetDateTime since) {
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        for (ActionReceiptRow r : rows.findByTenantIdAndActionAndPhaseAndRecordedAtAfter(
+                tenant, action, ActionReceiptRow.ATTEMPT, since)) {
+            boolean machine = (r.getAgent() != null && !r.getAgent().isBlank())
+                    || (r.getAuthority() != null && r.getAuthority().contains("workforce:use"));
+            if (!machine || r.getInputs() == null) {
+                continue;
+            }
+            try {
+                tools.jackson.databind.JsonNode in = INPUTS.readTree(r.getInputs());
+                if (key.equals(in.path(keyInput).asString(null))) {
+                    total = total.add(new java.math.BigDecimal(in.path(amountInput).asString("0")));
+                }
+            } catch (RuntimeException e) {
+                // an unreadable row cannot be counted, so it is counted at the most cautious value: the budget is spent
+                return new java.math.BigDecimal("1E9");
+            }
+        }
+        return total;
+    }
+
+    private static final tools.jackson.databind.ObjectMapper INPUTS = new tools.jackson.databind.ObjectMapper();
 }

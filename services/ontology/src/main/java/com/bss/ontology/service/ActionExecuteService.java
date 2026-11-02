@@ -148,14 +148,7 @@ public class ActionExecuteService {
         boolean isApprover = !approverRole.isEmpty() && caller.has(approverRole);
         boolean needsHuman = "human".equals(governance.path("approval").asString()) && !isApprover;
         if (needsHuman && governance.has("approvalAbove")) {
-            String input = governance.path("approvalAbove").path("input").asString();
-            try {
-                java.math.BigDecimal value = new java.math.BigDecimal(inputs.getOrDefault(input, ""));
-                java.math.BigDecimal threshold = new java.math.BigDecimal(governance.path("approvalAbove").path("amount").asString("0"));
-                needsHuman = value.compareTo(threshold) > 0;
-            } catch (NumberFormatException e) {
-                needsHuman = true;
-            }
+            needsHuman = valueNeedsHuman(action, inputs, caller, store, name);
         }
         if (needsHuman) {
             return fileForApproval(action, cap, pathVars, body, inputs, caller, check, out);
@@ -562,5 +555,49 @@ public class ActionExecuteService {
 
     private String agentLabel(Caller caller) {
         return agentLabel(registry, caller);
+    }
+
+    /** The action's first reference input — what a money action is ABOUT (the bill a credit is on). */
+    private static String firstRefInput(JsonNode action) {
+        for (JsonNode in : action.path("inputs")) {
+            if ("ref".equals(in.path("type").asString())) {
+                return in.path("name").asString(null);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The value ladder (approval above an amount), decided in one place so it can be
+     * tested. A person under the line acts; a MACHINE under the line acts only while
+     * what machines already moved on the same target without a person in the last
+     * 30 days, plus this, stays under it (#422). An agent that reads untrusted text
+     * can be talked into asking again and again just below the line; this bounds what
+     * that can cost to one threshold per target per month.
+     */
+    static boolean valueNeedsHuman(JsonNode action, Map<String, String> inputs, Caller caller,
+            com.bss.ontology.receipt.ReceiptStore store, String name) {
+        JsonNode above = action.path("governance").path("approvalAbove");
+        String input = above.path("input").asString();
+        try {
+            java.math.BigDecimal value = new java.math.BigDecimal(inputs.getOrDefault(input, ""));
+            java.math.BigDecimal threshold = new java.math.BigDecimal(above.path("amount").asString("0"));
+            if (value.compareTo(threshold) > 0) {
+                return true;
+            }
+            if (!ActionCheckService.isMachine(caller)) {
+                return false;
+            }
+            String key = firstRefInput(action);
+            String target = key == null ? null : inputs.get(key);
+            if (target == null) {
+                return true;   // a machine moving value on an unnamed target: a person decides
+            }
+            java.math.BigDecimal before = store.machineAutoTotal(caller.tenant(), name, key, target,
+                    input, java.time.OffsetDateTime.now().minusDays(30));
+            return before.add(value).compareTo(threshold) > 0;
+        } catch (NumberFormatException e) {
+            return true;
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.bss.intelligence.chat;
 
+import com.bss.intelligence.llm.Untrusted;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.llm.AiGovernor;
 import com.bss.intelligence.llm.LlmAdapter;
@@ -144,7 +145,7 @@ public class CareChatService {
 
         String context = s.getPartyId() == null ? guestContext() : accountContext(s.getPartyId());
         String prompt = "CONTEXT:\n" + context + "\n\nCONVERSATION SO FAR:\n" + history(s)
-                + "\nCUSTOMER: " + clip(text, 1000) + "\nASSISTANT:";
+                + "\nCUSTOMER:\n" + Untrusted.fence("customer", clip(text, 1000)) + "\nASSISTANT:";
         String reply = null;
         // provider capacity blips (529/429) are normal weather — retry with
         // backoff before ever apologising to a customer
@@ -299,8 +300,10 @@ public class CareChatService {
         StringBuilder h = new StringBuilder();
         for (int i = Math.max(0, all.size() - HISTORY); i < all.size(); i++) {
             CareChatMessage m = all.get(i);
-            h.append(m.getAuthor().equals("customer") ? "CUSTOMER: " : "ASSISTANT: ")
-                    .append(clip(m.getBody(), 500)).append('\n');
+            // what the customer wrote is data, fenced; what the assistant said is its own (#422)
+            h.append(m.getAuthor().equals("customer")
+                    ? "CUSTOMER:\n" + Untrusted.fence("customer", clip(m.getBody(), 500))
+                    : "ASSISTANT: " + clip(m.getBody(), 500)).append('\n');
         }
         return h.toString();
     }

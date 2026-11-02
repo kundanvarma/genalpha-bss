@@ -1,5 +1,6 @@
 package com.bss.intelligence.signal;
 
+import com.bss.intelligence.llm.Untrusted;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.llm.AiGovernor;
 import com.bss.intelligence.llm.LlmAdapter;
@@ -123,7 +124,7 @@ public class SignalClassifier {
             try {
                 String user = "Source: " + signal.get("source")
                         + (signal.get("lang") != null ? " · language: " + signal.get("lang") : "")
-                        + "\nSignal text:\n" + text;
+                        + "\nSignal text:\n" + Untrusted.fence("post", text);
                 String answer = governor.complete("signal-classification",
                         LlmAdapter.Tier.FAST, SYSTEM, user);
                 Map<String, Object> parsed = parse(answer);
