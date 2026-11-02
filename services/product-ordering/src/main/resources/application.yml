@@ -100,6 +100,9 @@ bss:
     enabled: ${CREDIT_ENABLED:true}
     tenants: ${CREDIT_TENANTS:}
     purpose: ${CREDIT_PURPOSE:postpaid-signup}
+    # the bureau's name as customers read it in the checkout notice and the
+    # explanation of a decision (#422)
+    bureau-name: ${CREDIT_BUREAU_NAME:the credit bureau}
     mock:
       outcomes: ${CREDIT_MOCK_OUTCOMES:frozen-test-identity:frozen}
   stock:
@@ -126,6 +129,9 @@ bss:
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8089}
     risk-base-url: ${RISK_BASE_URL:http://localhost:8109}
+    # TMF621: a customer's "ask a person to review my credit decision" (#422),
+    # filed under the customer's own token
+    ticket-base-url: ${TICKET_BASE_URL:http://localhost:8092}
 
 # LOG INJECTION, CLOSED AT THE SINK. A CR or LF inside a logged VALUE forges a
 # log line, and the fleet ships logs to Loki/Grafana where a forged line is a

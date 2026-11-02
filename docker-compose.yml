@@ -226,6 +226,8 @@ services:
       RISK_BASE_URL: http://intelligence:8080
       PROMOTION_BASE_URL: http://promotion:8080
       POLICY_BASE_URL: http://policy:8080
+      # #422: a customer's request for a person to review a credit decision
+      TICKET_BASE_URL: http://trouble-ticket:8080
     volumes:
       - ./infra/tenants:/config:ro
     ports:

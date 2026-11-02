@@ -10,7 +10,9 @@ floor. Prints the missing keys, one per line; prints nothing when complete.
 import re
 import sys
 
-SCREENS = ["apps/storefront/src/pages/Choices.jsx", "apps/storefront/src/pages/home/ChoicesLine.jsx"]
+SCREENS = ["apps/storefront/src/pages/Choices.jsx", "apps/storefront/src/pages/home/ChoicesLine.jsx",
+           # credit explanations (#422): a customer's rights must not read in English on a Norwegian page
+           "apps/storefront/src/pages/orders/CreditExplanation.jsx", "apps/storefront/src/pages/cart/CreditNotice.jsx"]
 BOKMAL = ["apps/storefront/src/i18n/no.js", "apps/storefront/src/i18n/no-account.js"]
 
 CALL = re.compile(r"""\bt\(\s*(['"])((?:\\.|(?!\1).)*)\1\s*\)""")

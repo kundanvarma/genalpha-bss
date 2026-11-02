@@ -203,7 +203,7 @@ public class ProductOrderService {
         com.bss.ordering.credit.CreditDecisionPort.Decision credit =
                 hasAddItem(dto) ? creditService.assessParty(entity.getOwnerPartyId()) : null;
         if (credit != null) {
-            creditService.record(entity.getOwnerPartyId(), credit);
+            creditService.record(entity.getOwnerPartyId(), id, credit);
             if (com.bss.ordering.credit.CreditDecisionPort.FROZEN.equals(credit.decision())) {
                 throw new com.bss.ordering.exception.CreditFrozenException(
                         "credit information is frozen at the bureau — lift the freeze"

@@ -37,6 +37,26 @@ public class CreditDecision {
     @Column(name = "decided_at", nullable = false)
     private OffsetDateTime decidedAt;
 
+    /** The order the decision was taken for (null on decisions stored before #422). */
+    @Column(name = "order_id", length = 36)
+    private String orderId;
+
+    /** Why, as a short machine code (see CreditReason). */
+    @Column(name = "reason_code", length = 32)
+    private String reasonCode;
+
+    /** Why, as the plain-language sentence the customer is shown. */
+    @Column(name = "reason", length = 400)
+    private String reason;
+
+    /** When the customer asked a person to review this decision; null until they do. */
+    @Column(name = "review_requested_at")
+    private OffsetDateTime reviewRequestedAt;
+
+    /** The TMF621 ticket that carries the review to a person. */
+    @Column(name = "review_ticket_id", length = 64)
+    private String reviewTicketId;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }
@@ -53,4 +73,14 @@ public class CreditDecision {
     public void setPurpose(String purpose) { this.purpose = purpose; }
     public OffsetDateTime getDecidedAt() { return decidedAt; }
     public void setDecidedAt(OffsetDateTime decidedAt) { this.decidedAt = decidedAt; }
+    public String getOrderId() { return orderId; }
+    public void setOrderId(String orderId) { this.orderId = orderId; }
+    public String getReasonCode() { return reasonCode; }
+    public void setReasonCode(String reasonCode) { this.reasonCode = reasonCode; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+    public OffsetDateTime getReviewRequestedAt() { return reviewRequestedAt; }
+    public void setReviewRequestedAt(OffsetDateTime reviewRequestedAt) { this.reviewRequestedAt = reviewRequestedAt; }
+    public String getReviewTicketId() { return reviewTicketId; }
+    public void setReviewTicketId(String reviewTicketId) { this.reviewTicketId = reviewTicketId; }
 }

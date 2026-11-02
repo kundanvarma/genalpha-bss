@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { useEffect, useState } from 'react';
 import { cancelOrder, myAppointments, myOrderJourney, myOrders, myShipments } from '../api.js';
 import { takeCheckoutNotice } from '../checkout.js';
+import CreditExplanation from './orders/CreditExplanation.jsx';
 
 const TERMINAL = ['completed', 'cancelled'];
 
@@ -59,9 +60,7 @@ export default function Orders() {
   function toggleJourney(orderId) {
     if (openJourney === orderId) { setOpenJourney(null); return; }
     setOpenJourney(orderId);
-    if (!journeys[orderId]) {
-      myOrderJourney(orderId).then((j) => setJourneys((m) => ({ ...m, [orderId]: j || 'none' })));
-    }
+    if (!journeys[orderId]) myOrderJourney(orderId).then((j) => setJourneys((m) => ({ ...m, [orderId]: j || 'none' })));
   }
 
   // The process flow (TMF701) is the authoritative "where is this order" — it
@@ -298,6 +297,7 @@ export default function Orders() {
                     ))}
                   </div>
                 )}
+                {es === 'held' && <CreditExplanation orderId={o.id} />}
                 {!TERMINAL.includes(es) && (
                   <button className="linkish small" data-testid="why-toggle"
                           onClick={() => toggleJourney(o.id)}>
