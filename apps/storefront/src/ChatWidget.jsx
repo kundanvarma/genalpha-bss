@@ -76,9 +76,14 @@ export default function ChatWidget() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
       });
       const out = await res.json();
-      setStatus('escalated');
-      setMsgs((m) => [...m, { author: 'bot',
-        body: t('Ticket raised') + ` (${out.ticketId}) — ` + t('a human will pick this up.') }]);
+      if (!out.ticketId) {
+        // no ticket exists, so none is promised — the chat stays open
+        setMsgs((m) => [...m, { author: 'bot', body: t("We couldn't raise a ticket just now. Please try again in a moment.") }]);
+      } else {
+        setStatus('escalated');
+        setMsgs((m) => [...m, { author: 'bot',
+          body: t('Ticket raised') + ` (${out.ticketId}) — ` + t('a human will pick this up.') }]);
+      }
     } catch { /* leave as is */ }
     setBusy(false);
     scroll();

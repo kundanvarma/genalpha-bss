@@ -57,6 +57,16 @@ person in the last 30 days counts toward that line: the first small credit goes
 through, the next one on that bill goes to a person. Credits a person approves
 are not counted.
 
+**Found by the evals, and fixed.** The new care chat evals (below) caught two
+real faults on their first run. The redactor treats a line labelled
+`Customer:` as a person's name, and the chat sent each question as
+`CUSTOMER: Which mobile plans…` — so every guest question left as `<name#1>`
+and the model answered blind with a greeting. The fenced question now sits on
+its own line, out of the label rule's reach. And with the ticket system down
+the chat promised "I've raised ticket null" and fell silent; now it says no
+ticket could be raised and keeps helping. The chat's first answer also says, in
+its own words, that it is an AI.
+
 **Proof:** `UntrustedFenceTest` (the fence cannot be closed from inside, the
 chat sends the customer's words fenced), `AiGovernorRedactionTest` (every
 system prompt carries the rule), `MachineValueBudgetTest` (a worker's second
@@ -72,5 +82,8 @@ approvers are not counted).
 - The fence lowers the chance that injected words steer a reply; it cannot make
   a model immune, and there is no measured injection eval yet (see the evals
   work in #422). Copilot prompts that include customer data are not yet fenced.
+- The evals (`ops/evals/care_chat_evals.mjs`) run against the laptop fleet with a
+  real model; CI runs the stub model, which cannot be evaluated. They are not yet
+  scheduled — run them before a release that touches the chat.
 - The money budget is per bill. An attacker with many bills gets one small
   credit per bill per month before a person is asked.

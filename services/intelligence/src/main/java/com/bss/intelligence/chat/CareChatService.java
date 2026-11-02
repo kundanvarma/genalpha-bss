@@ -35,6 +35,10 @@ public class CareChatService {
 
     private static final int HISTORY = 12;
 
+    /** Said when the ticket system does not answer: nothing was raised, so nothing is promised. */
+    static final String NO_TICKET = "I couldn't raise a ticket just now, so nobody has been asked yet. "
+            + "Please try again in a moment — I'm still here to help in the meantime.";
+
     private static final String SYSTEM_AUTHED = """
             You are the care assistant of a telecom operator, chatting with a signed-in \
             customer. You are given THIS CUSTOMER'S OWN account snapshot (bills, orders, \
@@ -44,7 +48,9 @@ public class CareChatService {
             YOURSELF: if the customer wants a human or a ticket, reply with exactly \
             [ESCALATE] and nothing else — the system will raise the real ticket. \
             Never claim an action happened. Never invent amounts, dates or policies. \
-            Never discuss any other customer.""";
+            Never discuss any other customer. You are an AI assistant: when you introduce \
+            yourself, or are asked who or what you are, say so plainly — never claim or \
+            imply to be a person (EU AI Act Art. 50).""";
 
     private static final String SYSTEM_GUEST = """
             You are the shop assistant of a telecom operator, chatting with a visitor who \
@@ -53,7 +59,9 @@ public class CareChatService {
             For account-specific questions, ask them to sign in. YOU CANNOT PERFORM \
             ACTIONS YOURSELF: if the visitor wants a human or a ticket, reply with \
             exactly [ESCALATE] and nothing else — the system will raise the real \
-            ticket. Never claim an action happened. Never invent plans or prices.""";
+            ticket. Never claim an action happened. Never invent plans or prices. You \
+            are an AI assistant: when you introduce yourself, or are asked who or what you \
+            are, say so plainly — never claim or imply to be a person (EU AI Act Art. 50).""";
 
     private final CareChatSessionRepository sessions;
     private final CareChatMessageRepository messages;
@@ -144,7 +152,12 @@ public class CareChatService {
         }
 
         String context = s.getPartyId() == null ? guestContext() : accountContext(s.getPartyId());
-        String prompt = "CONTEXT:\n" + context + "\n\nCONVERSATION SO FAR:\n" + history(s)
+        // the first answer of a conversation says, in its own words, that this is an AI (#422)
+        boolean first = messages.findBySessionIdOrderByCreatedAtAsc(s.getId()).stream()
+                .noneMatch(m -> "bot".equals(m.getAuthor()));
+        String prompt = (first ? "This is your FIRST reply in this conversation: begin by saying, in a few words "
+                + "and in the customer's language, that you are an AI assistant.\n\n" : "")
+                + "CONTEXT:\n" + context + "\n\nCONVERSATION SO FAR:\n" + history(s)
                 + "\nCUSTOMER:\n" + Untrusted.fence("customer", clip(text, 1000)) + "\nASSISTANT:";
         String reply = null;
         // provider capacity blips (529/429) are normal weather — retry with
@@ -178,6 +191,9 @@ public class CareChatService {
             // the model may only SIGNAL; the system performs. A real ticket,
             // a real id, spoken truthfully — never a role-played action.
             EscalationReceipt esc = escalate(s, null);
+            if (esc.ticketId() == null) {
+                return new ChatTurn(NO_TICKET, s.getStatus(), null);
+            }
             return new ChatTurn("I've raised ticket " + esc.ticketId()
                     + " — a human will pick this up shortly.", s.getStatus(), esc.ticketId());
         }
@@ -204,6 +220,12 @@ public class CareChatService {
         }
         String ticketId = bss.openTicket("Care chat escalation", clip(transcript.toString(), 8000),
                 s.getPartyId());
+        if (ticketId == null) {
+            // no ticket exists, so none is promised (found by the care chat evals, #422): the
+            // conversation stays open and the bot keeps helping instead of falling silent
+            messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "bot", NO_TICKET));
+            return new EscalationReceipt(null, s.getStatus());
+        }
         s.setStatus("escalated");
         s.setTicketId(ticketId);
         s.touch();

@@ -210,6 +210,7 @@ export const NO_SHOP = {
   'Your lines could not be read just now.': 'Linjene dine kunne ikke leses akkurat nå.',
   'AI assistant': 'AI-assistent',
   'You are chatting with an AI assistant, not a person. Ask for a human at any time.': 'Du chatter med en AI-assistent, ikke et menneske. Be om et menneske når som helst.',
+  "We couldn't raise a ticket just now. Please try again in a moment.": 'Vi fikk ikke opprettet en sak akkurat nå. Prøv igjen om litt.',
   'Picked': 'Valgt',
   'Picking…': 'Velger…',
   'Release': 'Gi tilbake',

@@ -233,6 +233,7 @@ export const NN = {
   'Your lines could not be read just now.': 'Linjene dine kunne ikkje lesast akkurat no.',
   'AI assistant': 'KI-assistent',
   'You are chatting with an AI assistant, not a person. Ask for a human at any time.': 'Du chattar med ein KI-assistent, ikkje eit menneske. Be om eit menneske når som helst.',
+  "We couldn't raise a ticket just now. Please try again in a moment.": 'Vi fekk ikkje oppretta ei sak akkurat no. Prøv igjen om litt.',
   'Picked': 'Valt',
   'Picking…': 'Vel…',
   'Swap for…': 'Byt til…',
