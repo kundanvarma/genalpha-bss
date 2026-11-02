@@ -33,8 +33,13 @@ public class OpenAiCompatibleAdapter implements LlmAdapter {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public String complete(String system, String user) {
+        return completeWithUsage(null, system, user).text();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public LlmCompletion completeWithUsage(Tier tier, String system, String user) {
         Map<String, Object> response = restClient.post().uri("/v1/chat/completions")
                 .header("Content-Type", "application/json")
                 .body(Map.of(
@@ -45,7 +50,21 @@ public class OpenAiCompatibleAdapter implements LlmAdapter {
                 .retrieve().body(Map.class);
         List<Map<String, Object>> choices = (List<Map<String, Object>>) response.get("choices");
         Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-        return String.valueOf(message.get("content"));
+        return new LlmCompletion(String.valueOf(message.get("content")), usage(response));
+    }
+
+    /** Chat Completions usage: prompt and completion tokens; null when the server leaves it off. */
+    static LlmCompletion.Usage usage(Map<?, ?> response) {
+        Object u = response == null ? null : response.get("usage");
+        if (!(u instanceof Map<?, ?> usage)) {
+            return null;
+        }
+        Integer in = AnthropicAdapter.count(usage.get("prompt_tokens"));
+        Integer out = AnthropicAdapter.count(usage.get("completion_tokens"));
+        if (in == null && out == null) {
+            return null;
+        }
+        return new LlmCompletion.Usage(in == null ? 0 : in, out == null ? 0 : out);
     }
 
     @Override

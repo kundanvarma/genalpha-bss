@@ -132,3 +132,103 @@ a recorded environmental fact, not a regression), martech. Noted seams
 for later: exact provider `usage` capture in the HTTP adapters; a
 separate `ai:admin` authority for budget-setting; MCP-tool actions when
 that surface is rebuilt.
+
+## Fallback, EU-only route, real token counts (#422, 2026-11-02)
+
+Three additions to the governed door, each off until a tenant asks for it.
+
+**A second provider when the first is down.** A tenant may name a fallback
+model per tier in `infra/tenants/tenants.yml`, written exactly like its main
+one. When the main provider cannot be reached, times out, answers a server
+error (5xx) or says it is overloaded (429), the same prompt — already
+redacted, same canary — goes once to the fallback. Anything else (a 400, a
+bad key) is not retried, because it would fail there too. The AI audit page
+then shows two rows: the failed attempt (`error`, as before) and the answer,
+whose `fallbackFrom` names the provider it stood in for. With no fallback
+configured nothing changes: the call fails exactly as it did.
+
+```yaml
+      - id: <tenant>
+        ai-provider: anthropic
+        ai-api-key: ${AI_API_KEY_<TENANT>:}
+        # tried once when anthropic is down; tier keys win over the shared ones
+        ai-fallback-provider: openai-compatible
+        ai-fallback-base-url: https://api.mistral.ai
+        ai-fallback-api-key: ${AI_FALLBACK_API_KEY_<TENANT>:}   # an env reference, never a literal key
+        ai-fallback-model: mistral-small-latest
+        ai-fallback-jurisdiction: EU
+        # optional per tier: ai-fallback-{provider,base-url,api-key,model,jurisdiction}-{fast,smart}
+```
+
+**An EU-only route.** `ai-data-residency: eu` makes the governor refuse any
+model whose jurisdiction is not EU or self-hosted — before the prompt is sent.
+The caller gets a 403 that says which model broke the rule and what to change,
+and the ledger gets a `refused-residency` row. The rule applies to a fallback
+too: an EU-only tenant whose EU model is down is never rescued by a US one; the
+original failure stands and the refused fallback is its own ledger row. The
+model door applies the same rule to digital workers (`worker-ai-jurisdiction`).
+Any other word than `eu` refuses every call — a residency rule with a typo must
+not quietly mean "anywhere".
+
+Jurisdiction is still derived from the provider kind when nobody declares it,
+exactly as before: `anthropic` = US, `openai-compatible` = self-hosted, the
+stub = none. An operator declares it with `ai-jurisdiction` (shared, or
+`ai-jurisdiction-fast` / `-smart`), using one of three words: `EU`, `US`,
+`self-hosted`. The shared declaration covers a tier only while that tier uses
+the shared provider and address; a tier moved to another provider does not
+inherit "EU" from the one it left.
+
+```yaml
+        ai-data-residency: eu
+        ai-provider: openai-compatible
+        ai-base-url: https://api.mistral.ai
+        ai-model: mistral-small-latest
+        ai-jurisdiction: EU
+```
+
+**Real token counts.** When a provider's answer carries its own counts
+(Anthropic `usage.input_tokens` / `output_tokens`, cached-prompt tokens
+included; OpenAI-style `usage.prompt_tokens` / `completion_tokens`), the
+ledger meters those. The characters-divided-by-four estimate remains for an
+answer without them (the stub, a server that leaves the block off), and each
+row says which it used (`tokenSource`: `provider` or `estimate`).
+
+A fix found on the way: the router built every tenant's adapter from ONE
+shared HTTP builder, and the Anthropic adapter adds its key as a default
+header — so an adapter built later (another tenant, or now a fallback)
+carried the earlier provider's key to its own endpoint. Each adapter now gets
+its own copy; `AiFallbackResidencyTest` asserts the fallback never sees the
+first provider's key, and went red when the copy was removed.
+
+Proof: `AiFallbackResidencyTest` (13 tests, two loopback stand-in providers
+behind the real router and adapters), `ModelDoorResidencyTest` (1), and the
+audit view's new keys pinned in `DtoRoundTripTest`. Each new guarantee was
+seen to fail with its code switched off. There is no browser suite for this
+arc: the fleet has no stand-in provider that can be told to fail on demand.
+
+### Honest limits
+
+- **Jurisdiction is a declaration, not a measurement.** The BSS does not
+  look up where an endpoint really runs. `openai-compatible` defaults to
+  "self-hosted" as it always has — so an operator who points it at a public
+  US API and declares nothing passes the EU-only rule. Declare
+  `ai-jurisdiction: US` for such endpoints; the default is kept only so that
+  nothing changes for tenants that have not asked for residency.
+- **EU means the EU word.** EEA or UK endpoints are not a fourth word; an
+  operator decides whether to declare them `EU`, and owns that decision.
+- **One retry, one fallback.** No backoff, no circuit breaker: while the main
+  provider is down, every call pays its failure (up to the client timeout)
+  before the fallback answers. Each of those failures is a ledger row.
+- **A failed attempt may still have reached the provider.** A timeout or a 5xx
+  can come after the provider read the prompt; the ledger records the attempt
+  as `error` with an estimated prompt size and no cost, because no provider
+  told us what it charged.
+- **The fallback answers in its own words.** Prompts are not tuned per model;
+  a JSON-shaped answer from a smaller fallback may be poorer.
+- **Usage covers what the provider reports.** Cached-prompt tokens are counted
+  as plain input at the model's one rate (the copilot price table has no cache
+  rates, unlike the model door's). A server that omits `usage` is estimated.
+- **No browser suite.** The behaviour is proven by unit and MockMvc tests
+  against loopback providers, not end to end through the gateway.
+- **No tenant uses any of it yet.** No key was added to `tenants.yml`; every
+  tenant runs exactly as before until an operator writes one.

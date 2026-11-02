@@ -115,6 +115,12 @@ and ledger.
 - **Each face has its own small-model list.** A worker's side calls are served only for
   models configured for its face; the OpenAI face has none by default. The worker image
   turns off the one side call it would make.
+- **The EU-only rule holds here, the fallback does not.** A tenant with
+  `ai-data-residency: eu` has its workers refused (403, a `refused-residency` row)
+  unless the worker model is declared EU or self-hosted (`worker-ai-jurisdiction`;
+  undeclared `anthropic` reads as US, `openai` as unknown). The copilots' fallback
+  provider (#422, [ai-control-plane-plan.md](ai-control-plane-plan.md)) is not
+  offered at the door: a worker whose provider is down gets the 502 it always got.
 - **No streaming.** The door answers whole responses; workers are configured not to
   stream. A worker is not a person watching text appear, so nothing is lost, but it
   is a limit.

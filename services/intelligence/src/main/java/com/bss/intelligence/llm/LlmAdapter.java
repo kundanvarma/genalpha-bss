@@ -20,6 +20,25 @@ public interface LlmAdapter {
         return complete(system, user);
     }
 
+    /** The answer with the provider's own token counts, when it reports them
+     * (#422). An adapter that cannot read usage answers text only, and the
+     * governor estimates. */
+    default LlmCompletion completeWithUsage(Tier tier, String system, String user) {
+        return LlmCompletion.textOnly(complete(tier, system, user));
+    }
+
+    /** Who will answer this tier, decided before anything is sent — so the
+     * governor can refuse a route on residency before the prompt leaves. */
+    default ModelRoute route(Tier tier) {
+        return ModelRoute.of(this, tier);
+    }
+
+    /** The tenant's second choice for this tier, tried once when the first
+     * fails on a connection error, a timeout, a 5xx or a 429. None by default. */
+    default java.util.Optional<ModelRoute> fallbackRoute(Tier tier) {
+        return java.util.Optional.empty();
+    }
+
     /** Which provider/model answered — recorded in the audit ledger. */
     String provider();
 
