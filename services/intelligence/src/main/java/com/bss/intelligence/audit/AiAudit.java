@@ -92,6 +92,21 @@ public class AiAudit {
     @Column(name = "actor_name", length = 128)
     private String actorName;
 
+    /** #422: the provider that failed first when the tenant's FALLBACK served
+     * (or was refused) this call; null when the first choice answered */
+    @Column(name = "fallback_from", length = 32)
+    private String fallbackFrom;
+
+    /** #422: where the token counts came from — provider (its own usage
+     * block) | estimate (chars/4); null on a refusal or an action row */
+    @Column(name = "token_source", length = 16)
+    private String tokenSource;
+
+    public String getFallbackFrom() { return fallbackFrom; }
+    public void setFallbackFrom(String v) { this.fallbackFrom = v; }
+    public String getTokenSource() { return tokenSource; }
+    public void setTokenSource(String v) { this.tokenSource = v; }
+
     public Boolean getRawExposure() { return rawExposure; }
     public void setRawExposure(Boolean v) { this.rawExposure = v; }
     public Integer getRedactedFields() { return redactedFields; }

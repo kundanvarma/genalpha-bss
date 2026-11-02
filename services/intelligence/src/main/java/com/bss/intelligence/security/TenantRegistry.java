@@ -235,6 +235,80 @@ public class TenantRegistry {
         public boolean isAiRawExposure() { return aiRawExposure; }
         public void setAiRawExposure(boolean v) { this.aiRawExposure = v; }
 
+        /** #422 EU-ONLY ROUTE: {@code ai-data-residency: eu} refuses any model
+         * whose jurisdiction is not EU or self-hosted, fallbacks included.
+         * Absent = any provider (today's behaviour); any other word refuses
+         * every call, because a residency rule with a typo must not mean "any". */
+        private String aiDataResidency;
+        /** Declared jurisdiction of the tenant's own AI stack (EU | US | self-hosted).
+         * Blank = derived from the provider kind, as before. The shared value
+         * applies to a tier only while that tier uses the shared provider and URL. */
+        private String aiJurisdiction;
+        private String aiJurisdictionFast;
+        private String aiJurisdictionSmart;
+        /** #422 FALLBACK: a second provider per tier, tried once when the first
+         * fails on a connection error, a timeout, a 5xx or a 429. Configured
+         * exactly like the primary (the key is an env reference, never a
+         * literal); tier keys first, shared second. Blank = no fallback. */
+        private String aiFallbackProvider;
+        private String aiFallbackBaseUrl;
+        private String aiFallbackApiKey;
+        private String aiFallbackModel;
+        private String aiFallbackJurisdiction;
+        private String aiFallbackProviderFast;
+        private String aiFallbackBaseUrlFast;
+        private String aiFallbackApiKeyFast;
+        private String aiFallbackModelFast;
+        private String aiFallbackJurisdictionFast;
+        private String aiFallbackProviderSmart;
+        private String aiFallbackBaseUrlSmart;
+        private String aiFallbackApiKeySmart;
+        private String aiFallbackModelSmart;
+        private String aiFallbackJurisdictionSmart;
+        /** Declared jurisdiction of the worker model behind the model door. */
+        private String workerAiJurisdiction;
+
+        public String getAiDataResidency() { return aiDataResidency; }
+        public void setAiDataResidency(String v) { this.aiDataResidency = v; }
+        public String getAiJurisdiction() { return aiJurisdiction; }
+        public void setAiJurisdiction(String v) { this.aiJurisdiction = v; }
+        public String getAiJurisdictionFast() { return aiJurisdictionFast; }
+        public void setAiJurisdictionFast(String v) { this.aiJurisdictionFast = v; }
+        public String getAiJurisdictionSmart() { return aiJurisdictionSmart; }
+        public void setAiJurisdictionSmart(String v) { this.aiJurisdictionSmart = v; }
+        public String getAiFallbackProvider() { return aiFallbackProvider; }
+        public void setAiFallbackProvider(String v) { this.aiFallbackProvider = v; }
+        public String getAiFallbackBaseUrl() { return aiFallbackBaseUrl; }
+        public void setAiFallbackBaseUrl(String v) { this.aiFallbackBaseUrl = v; }
+        public String getAiFallbackApiKey() { return aiFallbackApiKey; }
+        public void setAiFallbackApiKey(String v) { this.aiFallbackApiKey = v; }
+        public String getAiFallbackModel() { return aiFallbackModel; }
+        public void setAiFallbackModel(String v) { this.aiFallbackModel = v; }
+        public String getAiFallbackJurisdiction() { return aiFallbackJurisdiction; }
+        public void setAiFallbackJurisdiction(String v) { this.aiFallbackJurisdiction = v; }
+        public String getAiFallbackProviderFast() { return aiFallbackProviderFast; }
+        public void setAiFallbackProviderFast(String v) { this.aiFallbackProviderFast = v; }
+        public String getAiFallbackBaseUrlFast() { return aiFallbackBaseUrlFast; }
+        public void setAiFallbackBaseUrlFast(String v) { this.aiFallbackBaseUrlFast = v; }
+        public String getAiFallbackApiKeyFast() { return aiFallbackApiKeyFast; }
+        public void setAiFallbackApiKeyFast(String v) { this.aiFallbackApiKeyFast = v; }
+        public String getAiFallbackModelFast() { return aiFallbackModelFast; }
+        public void setAiFallbackModelFast(String v) { this.aiFallbackModelFast = v; }
+        public String getAiFallbackJurisdictionFast() { return aiFallbackJurisdictionFast; }
+        public void setAiFallbackJurisdictionFast(String v) { this.aiFallbackJurisdictionFast = v; }
+        public String getAiFallbackProviderSmart() { return aiFallbackProviderSmart; }
+        public void setAiFallbackProviderSmart(String v) { this.aiFallbackProviderSmart = v; }
+        public String getAiFallbackBaseUrlSmart() { return aiFallbackBaseUrlSmart; }
+        public void setAiFallbackBaseUrlSmart(String v) { this.aiFallbackBaseUrlSmart = v; }
+        public String getAiFallbackApiKeySmart() { return aiFallbackApiKeySmart; }
+        public void setAiFallbackApiKeySmart(String v) { this.aiFallbackApiKeySmart = v; }
+        public String getAiFallbackModelSmart() { return aiFallbackModelSmart; }
+        public void setAiFallbackModelSmart(String v) { this.aiFallbackModelSmart = v; }
+        public String getAiFallbackJurisdictionSmart() { return aiFallbackJurisdictionSmart; }
+        public void setAiFallbackJurisdictionSmart(String v) { this.aiFallbackJurisdictionSmart = v; }
+        public String getWorkerAiJurisdiction() { return workerAiJurisdiction; }
+        public void setWorkerAiJurisdiction(String v) { this.workerAiJurisdiction = v; }
+
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }

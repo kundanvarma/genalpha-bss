@@ -240,6 +240,19 @@ public class ModelDoorService {
             return refuse(protocol, key, model, "refused-worker-budget", 402, DoorProtocol.Refusal.BILLING,
                     "the workers' spend ceiling is reached — billing hard limit for this window");
         }
+        // #422: the tenant's EU-only rule holds at the door too — a worker's call is
+        // customer text as much as a copilot's. 403 is not retried by the SDK.
+        com.bss.intelligence.llm.Jurisdiction.Residency residency =
+                com.bss.intelligence.llm.Jurisdiction.Residency.of(tenant.getAiDataResidency());
+        String where = com.bss.intelligence.llm.Jurisdiction.of(tenant.getWorkerAiJurisdiction(),
+                nullToEmpty(tenant.getWorkerAiProvider()).toLowerCase(java.util.Locale.ROOT));
+        if (!residency.permits(where)) {
+            return refuse(protocol, key, model, "refused-residency", 403, DoorProtocol.Refusal.INVALID,
+                    residency == com.bss.intelligence.llm.Jurisdiction.Residency.INVALID
+                            ? "this tenant's ai-data-residency is not a rule this BSS knows — write 'eu', or leave it unset"
+                            : "this tenant's AI must stay in the EU, and its worker model is in jurisdiction " + where
+                                    + " — route it to an EU or self-hosted endpoint and declare worker-ai-jurisdiction: EU");
+        }
         if (requestsStream(body)) {
             // the SDK falls back to a plain call on an error naming "stream" and "not supported"
             return refuse(protocol, key, model, "refused-stream", 400, DoorProtocol.Refusal.INVALID,

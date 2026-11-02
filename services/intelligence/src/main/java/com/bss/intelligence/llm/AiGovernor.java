@@ -12,10 +12,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -23,15 +26,18 @@ import java.util.UUID;
  * through the router, and every call the fleet cares to name goes through
  * HERE first: kill-switch, then budget (fail-closed on a metered
  * resource — the same law the gateway rate limiter and the DNC wash
- * obey), then the model, then the meter, then ONE audit row. Agent
+ * obey), then the residency rule, then the model (and, when it is down, the
+ * tenant's fallback, once), then the meter, then the audit row. Agent
  * ACTIONS — a copilot that writes, an advisor that adopts a draft — land
  * on the same ledger, so the trail answers "which AI touched which
  * resource", not only "what did it say".
  *
- * Metering estimates tokens from text (the chars/4 heuristic) so the stub
- * and every real provider meter identically; exact provider `usage` (on
- * the wire, currently discarded by the HTTP adapters) is a wired-later
- * seam. Cost is tokens × a per-model rate, config as data.
+ * Metering (#422) uses the provider's own token counts when its answer
+ * carries them (Anthropic {@code usage.input_tokens/output_tokens}, OpenAI
+ * {@code usage.prompt_tokens/completion_tokens}); the chars/4 estimate is
+ * the fallback for an answer without usage (the stub, a server that leaves
+ * it off), and the row says which ({@code tokenSource}). Cost is tokens × a
+ * per-model rate, config as data.
  */
 @Component
 public class AiGovernor {
@@ -94,20 +100,24 @@ public class AiGovernor {
 
     /** Exposure class of a use-case: declared, else RAW (honest default).
      * A stub provider exposes nothing regardless of declaration. */
-    private String exposureOf(String useCase, LlmAdapter.Tier tier) {
-        if ("stub".equals(safe(() -> llm.provider(tier)))) {
+    private String exposureOf(String useCase, ModelRoute route) {
+        if ("stub".equals(route.provider())) {
             return "none";
         }
         return exposureByUseCase.getOrDefault(useCase, "raw");
     }
 
-    private String jurisdictionOf(LlmAdapter.Tier tier) {
-        return switch (safe(() -> llm.provider(tier))) {
-            case "anthropic" -> "US";
-            case "openai-compatible" -> "self-hosted";
-            case "stub" -> "none";
-            default -> "unknown";
-        };
+    /** The per-call facts every ledger row of one completion shares. */
+    private record Call(String tenant, String useCase, LlmAdapter.Tier tier, String exposure,
+            String system, String user, String canary, boolean rawExposure, int redactedFields) {
+        Call withPrompt(String system, String user, String canary) {
+            return new Call(tenant, useCase, tier, exposure, system, user, canary, rawExposure, redactedFields);
+        }
+    }
+
+    /** Tokens on a row, and where the count came from: provider | estimate. */
+    private record Meter(int promptTokens, int completionTokens, String source) {
+        static final Meter NONE = new Meter(0, 0, null);
     }
 
     /**
@@ -120,6 +130,14 @@ public class AiGovernor {
      * way, and the answer handed back to the caller has the real values
      * restored, so an agent still reads the customer's own email in a
      * drafted reply.
+     *
+     * RESIDENCY (#422): a tenant with {@code ai-data-residency: eu} is refused
+     * — 403, and a {@code refused-residency} row — before anything leaves, when
+     * the route's jurisdiction is not EU or self-hosted. FALLBACK (#422): when
+     * the first provider fails on a connection error, a timeout, a 5xx or a
+     * 429, the tenant's fallback for that tier (if any) is tried once, under
+     * the same residency rule; the failure and the fallback's answer are each
+     * a row, and the fallback's row names the provider it stood in for.
      */
     public String complete(String useCase, LlmAdapter.Tier tier, String system, String user) {
         // every system prompt carries the rule about fenced, untrusted text (#422)
@@ -127,20 +145,33 @@ public class AiGovernor {
         String tenant = tenantScope.currentTenantId();
         AiBudget budget = budgets.findByTenantId(tenant).orElse(null);
         Redaction map = redactor.begin();
+        // the route is decided BEFORE anything is sent; a tenant stack that
+        // cannot be built is an error row below, as it always was
+        ModelRoute primary;
+        RuntimeException routeFailure = null;
+        try {
+            primary = llm.route(tier);
+        } catch (RuntimeException e) {
+            routeFailure = e;
+            primary = ModelRoute.unresolved();
+        }
         // T-P3: raw exposure is a tenant-registry opt-in, never assumed. A
         // tenant that has not opted in gets the redacted prompt on the wire
         // — the class on the receipt becomes raw-redacted. (This replaced the
         // earlier 422 refusal: the prompt still goes, without the person.)
         var entry = tenants.byId(tenant);
         boolean rawExposure = entry != null && entry.isAiRawExposure();
-        String exposure = exposureOf(useCase, tier);
+        Jurisdiction.Residency residency = Jurisdiction.Residency.of(entry == null ? null : entry.getAiDataResidency());
+        String exposure = exposureOf(useCase, primary);
         if ("raw".equals(exposure) && !rawExposure) {
             exposure = "raw-redacted";
         }
+        String redSystem = redactor.redact(system, map);
+        String redUser = redactor.redact(user, map);
+        Call call = new Call(tenant, useCase, tier, exposure, redSystem, redUser, null, rawExposure, map.count());
 
         if (budget != null && !budget.isEnabled()) {
-            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
-                    "", 0, 0, 0L, "refused-disabled", null, null, null, null, false, map.count());
+            record(call, primary, null, "", Meter.NONE, 0L, "refused-disabled", null);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "AI is disabled for this tenant");
         }
@@ -149,16 +180,18 @@ public class AiGovernor {
         boolean contractSuspended = contracts.findByTenantIdAndUseCase(tenant, useCase)
                 .map(c -> !c.isEnabled()).orElse(false);
         if (contractSuspended) {
-            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
-                    "", 0, 0, 0L, "refused-contract", null, null, null, null, false, map.count());
+            record(call, primary, null, "", Meter.NONE, 0L, "refused-contract", null);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "the model contract for '" + useCase + "' is suspended");
         }
         if (overBudget(tenant, budget)) {
-            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
-                    "", 0, 0, 0L, "refused-budget", null, null, null, null, false, map.count());
+            record(call, primary, null, "", Meter.NONE, 0L, "refused-budget", null);
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "AI spend ceiling reached for this window — raise the budget or wait for the window to roll");
+        }
+        if (!residency.permits(primary.jurisdiction())) {
+            record(call, primary, null, "", Meter.NONE, 0L, "refused-residency", null);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, residencyRefusal(residency, entry, primary, tier));
         }
 
         // T-P4: the retention canary — a unique inert marker rides every
@@ -167,8 +200,6 @@ public class AiGovernor {
         // so it cannot steer the model's answer.
         // Redaction runs on the prompt as written; the canary is appended
         // after, so the redactor can never mistake its digits for a person.
-        String redSystem = redactor.redact(system, map);
-        String redUser = redactor.redact(user, map);
         String canary = null;
         if (!"none".equals(exposure)) {
             canary = "TVX-" + UUID.randomUUID().toString().substring(0, 12);
@@ -176,40 +207,110 @@ public class AiGovernor {
             user = user + line;
             redUser = redUser + line;
         }
+        call = call.withPrompt(redSystem, redUser, canary);
         String wireSystem = rawExposure ? system : redSystem;
         String wireUser = rawExposure ? user : redUser;
+        Meter estimatedPrompt = new Meter(tokens(redSystem + redUser), 0, "estimate");
+
+        if (routeFailure != null) {
+            record(call, primary, null, "", estimatedPrompt, 0L, "error", null);
+            throw routeFailure;
+        }
+        ModelRoute served = primary;
+        String fallbackFrom = null;
         long started = System.nanoTime();
-        String outcome = "ok";
-        String raw = "";
+        LlmCompletion answer;
         try {
-            raw = llm.complete(tier, wireSystem, wireUser);
+            answer = primary.adapter().completeWithUsage(tier, wireSystem, wireUser);
         } catch (RuntimeException e) {
-            outcome = "error";
-            record(tenant, useCase, tier, exposure, redSystem, redUser, "",
-                    tokens(redSystem + redUser), 0, 0L, outcome, null, null, null, canary,
-                    rawExposure, map.count());
-            throw e;
+            record(call, primary, null, "", estimatedPrompt, 0L, "error", null);
+            Optional<ModelRoute> fallback = retryable(e) ? fallbackFor(tier) : Optional.empty();
+            if (fallback.isEmpty()) {
+                throw e;
+            }
+            served = fallback.get();
+            fallbackFrom = primary.provider();
+            if (!residency.permits(served.jurisdiction())) {
+                // never fall back across the residency rule: the first failure stands
+                record(call, served, fallbackFrom, "", Meter.NONE, 0L, "refused-residency", null);
+                log.warn("ai fallback refused for {} ({}): {} is in jurisdiction {}, tenant is {}",
+                        useCase, tier, served.provider(), served.jurisdiction(), residency);
+                throw e;
+            }
+            log.warn("ai provider {} failed for {} ({}): {} — trying fallback {}",
+                    primary.provider(), useCase, tier, e.getMessage(), served.provider());
+            started = System.nanoTime();
+            try {
+                answer = served.adapter().completeWithUsage(tier, wireSystem, wireUser);
+            } catch (RuntimeException second) {
+                record(call, served, fallbackFrom, "", estimatedPrompt, 0L, "error", null);
+                throw second;
+            }
         }
         int latencyMs = (int) ((System.nanoTime() - started) / 1_000_000);
-        int promptTokens = tokens(redSystem + redUser);
-        int completionTokens = tokens(raw);
-        long cost = cost(promptTokens + completionTokens, safe(() -> llm.model(tier)));
+        String raw = answer.text() == null ? "" : answer.text();
+        Meter meter = answer.usage() != null
+                ? new Meter(answer.usage().inputTokens(), answer.usage().outputTokens(), "provider")
+                : new Meter(tokens(redSystem + redUser), tokens(raw), "estimate");
+        long cost = cost(meter.promptTokens() + meter.completionTokens(), served.model());
         // the ledger copy of the answer is redacted with the same map (a raw
         // answer names the same people; a redacted one still gets anything
         // the model produced on its own masked)
         String ledgerResponse = redactor.redact(raw, map);
-        record(tenant, useCase, tier, exposure, redSystem, redUser, ledgerResponse,
-                promptTokens, completionTokens, cost, outcome, latencyMs, null, null, canary,
-                rawExposure, map.count());
+        record(call, served, fallbackFrom, ledgerResponse, meter, cost, "ok", latencyMs);
         return rawExposure ? raw : map.restore(raw);
+    }
+
+    /** The words of a residency refusal: what the rule is, what broke it, what to change. */
+    private static String residencyRefusal(Jurisdiction.Residency residency,
+            com.bss.intelligence.security.TenantRegistry.TenantEntry entry, ModelRoute route, LlmAdapter.Tier tier) {
+        if (residency == Jurisdiction.Residency.INVALID) {
+            return "ai-data-residency '" + entry.getAiDataResidency().trim()
+                    + "' is not a residency rule this BSS knows — write 'eu', or leave it unset;"
+                    + " until then no AI call leaves for this tenant";
+        }
+        return "this tenant's AI must stay in the EU, and its "
+                + (tier == null ? "" : tier.name().toLowerCase(java.util.Locale.ROOT) + " ") + "model (" + route.provider() + ") is in jurisdiction " + route.jurisdiction()
+                + " — route it to an EU or self-hosted endpoint and declare it with ai-jurisdiction: EU";
+    }
+
+    /** The provider was down, slow or shedding load: worth one try elsewhere. A 4xx
+     * other than 429 is the caller's or the config's fault and would fail there too. */
+    static boolean retryable(RuntimeException e) {
+        if (e instanceof ResourceAccessException) {
+            return true; // connection refused, reset, read/connect timeout
+        }
+        if (e instanceof RestClientResponseException r) {
+            return r.getStatusCode().is5xxServerError() || r.getStatusCode().value() == 429;
+        }
+        return false;
+    }
+
+    private Optional<ModelRoute> fallbackFor(LlmAdapter.Tier tier) {
+        try {
+            return llm.fallbackRoute(tier);
+        } catch (RuntimeException e) {
+            // a misconfigured fallback must not mask the first failure
+            log.warn("ai fallback for {} could not be built: {}", tier, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     /** An agent DID something — a write, an adoption, a submission. On the
      * same ledger, so governance sees actions, not only conversations. */
     public void recordAction(String useCase, String action, String resourceRef, String outcome) {
         String tenant = tenantScope.currentTenantId();
-        record(tenant, useCase, null, null, "", "", "", 0, 0, 0,
-                outcome == null ? "ok" : outcome, null, action, resourceRef, null, false, 0);
+        try {
+            AiAudit audit = row(tenant, useCase, safe(() -> llm.provider(null)), safe(() -> llm.model(null)),
+                    "", "", "", Meter.NONE, 0L, outcome == null ? "ok" : outcome, null);
+            audit.setAction(action);
+            audit.setResourceRef(resourceRef);
+            audit.setRawExposure(false);
+            audit.setRedactedFields(0);
+            save(audit);
+        } catch (RuntimeException auditFailure) {
+            log.warn("ai audit write failed ({} {}): {}", useCase, outcome, auditFailure.getMessage());
+        }
     }
 
     /** True when this tenant's trailing-window spend has crossed its ceiling. */
@@ -234,41 +335,50 @@ public class AiGovernor {
         return (long) tokens * per1k / 1000L;
     }
 
-    private void record(String tenant, String useCase, LlmAdapter.Tier tier, String exposure,
-            String system, String user, String response, int promptTokens,
-            int completionTokens, long costMicros, String outcome, Integer latencyMs,
-            String action, String resourceRef, String canary, boolean rawExposure,
-            int redactedFields) {
+    /** One completion's ledger row: the route that answered (or refused), and what it cost. */
+    private void record(Call c, ModelRoute route, String fallbackFrom, String response, Meter meter,
+            long costMicros, String outcome, Integer latencyMs) {
         try {
-            AiAudit audit = new AiAudit();
-            audit.setId(UUID.randomUUID().toString());
-            audit.setTenantId(tenant);
-            audit.setUseCase(useCase);
-            audit.setProvider(safe(() -> llm.provider(tier)));
-            audit.setModel(safe(() -> llm.model(tier)));
-            if (tier != null) { // action rows are not completions — no exposure
-                audit.setExposure(exposure);
-                audit.setJurisdiction(jurisdictionOf(tier));
-            }
-            audit.setCanary(canary);
-            audit.setPrompt(truncate(system + (user.isEmpty() ? "" : "\n---\n" + user)));
-            audit.setResponse(truncate(response));
-            audit.setCreatedAt(OffsetDateTime.now());
-            audit.setTier(tier == null ? null : tier.name());
-            audit.setPromptTokens(promptTokens);
-            audit.setCompletionTokens(completionTokens);
-            audit.setCostMicros(costMicros);
-            audit.setLatencyMs(latencyMs);
-            audit.setOutcome(outcome);
-            audit.setAction(action);
-            audit.setResourceRef(resourceRef);
-            audit.setRawExposure(rawExposure);
-            audit.setRedactedFields(redactedFields);
-            newTx.executeWithoutResult(tx -> audits.save(audit));
+            AiAudit audit = row(c.tenant(), c.useCase(), route.provider(), route.model(),
+                    c.system(), c.user(), response, meter, costMicros, outcome, latencyMs);
+            audit.setTier(c.tier() == null ? null : c.tier().name());
+            audit.setExposure(c.exposure());
+            audit.setJurisdiction(route.jurisdiction());
+            audit.setCanary(c.canary());
+            // a refusal sent nothing, so nothing left raw
+            audit.setRawExposure(c.rawExposure() && !outcome.startsWith("refused"));
+            audit.setRedactedFields(c.redactedFields());
+            audit.setFallbackFrom(fallbackFrom);
+            save(audit);
         } catch (RuntimeException auditFailure) {
             // an audit write must never break the caller's work
-            log.warn("ai audit write failed ({} {}): {}", useCase, outcome, auditFailure.getMessage());
+            log.warn("ai audit write failed ({} {}): {}", c.useCase(), outcome, auditFailure.getMessage());
         }
+    }
+
+    private static AiAudit row(String tenant, String useCase, String provider, String model,
+            String system, String user, String response, Meter meter, long costMicros, String outcome,
+            Integer latencyMs) {
+        AiAudit audit = new AiAudit();
+        audit.setId(UUID.randomUUID().toString());
+        audit.setTenantId(tenant);
+        audit.setUseCase(useCase);
+        audit.setProvider(provider);
+        audit.setModel(model);
+        audit.setPrompt(truncate(system + (user.isEmpty() ? "" : "\n---\n" + user)));
+        audit.setResponse(truncate(response));
+        audit.setCreatedAt(OffsetDateTime.now());
+        audit.setPromptTokens(meter.promptTokens());
+        audit.setCompletionTokens(meter.completionTokens());
+        audit.setTokenSource(meter.source());
+        audit.setCostMicros(costMicros);
+        audit.setLatencyMs(latencyMs);
+        audit.setOutcome(outcome);
+        return audit;
+    }
+
+    private void save(AiAudit audit) {
+        newTx.executeWithoutResult(tx -> audits.save(audit));
     }
 
     private String safe(java.util.function.Supplier<String> s) {

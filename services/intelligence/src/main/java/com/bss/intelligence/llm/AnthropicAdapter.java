@@ -31,8 +31,13 @@ public class AnthropicAdapter implements LlmAdapter {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public String complete(String system, String user) {
+        return completeWithUsage(null, system, user).text();
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public LlmCompletion completeWithUsage(Tier tier, String system, String user) {
         Map<String, Object> response = restClient.post().uri("/v1/messages")
                 .header("Content-Type", "application/json")
                 .body(Map.of(
@@ -55,7 +60,31 @@ public class AnthropicAdapter implements LlmAdapter {
                 }
             }
         }
-        return text.toString();
+        return new LlmCompletion(text.toString(), usage(response));
+    }
+
+    /** Messages API usage: input, plus the cached-prompt tokens it billed apart; null when absent. */
+    static LlmCompletion.Usage usage(Map<?, ?> response) {
+        Object u = response == null ? null : response.get("usage");
+        if (!(u instanceof Map<?, ?> usage)) {
+            return null;
+        }
+        Integer in = count(usage.get("input_tokens"));
+        Integer out = count(usage.get("output_tokens"));
+        if (in == null && out == null) {
+            return null;
+        }
+        int cached = orZero(count(usage.get("cache_creation_input_tokens")))
+                + orZero(count(usage.get("cache_read_input_tokens")));
+        return new LlmCompletion.Usage(orZero(in) + cached, orZero(out));
+    }
+
+    static Integer count(Object v) {
+        return v instanceof Number n ? n.intValue() : null;
+    }
+
+    private static int orZero(Integer v) {
+        return v == null ? 0 : v;
     }
 
     @Override
