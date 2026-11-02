@@ -214,7 +214,7 @@ export class GenAlpha {
    * Who may: anyone holding ordering:write.
    * Before it happens:
    *   - the benefit must be on offer
-   * @param {{ customerId: string } & { benefitOfferingId: string }} inputs
+   * @param {{ customerId: string } & { benefitOfferingId: string } & { lineId?: string }} inputs
    */
   async pickBenefit(inputs) {
     const r = await this.call('POST', '/ontology/v1/actions/pickBenefit/execute', inputs);
