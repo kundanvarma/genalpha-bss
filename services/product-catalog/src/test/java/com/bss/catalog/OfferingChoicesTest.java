@@ -55,6 +55,25 @@ class OfferingChoicesTest {
     }
 
     @Test
+    void aPerLineBenefit_roundTrips_andAPlanCannotBePerLine() throws Exception {
+        String body = mockMvc.perform(post(BASE).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Priority on my line\", \"lifecycleStatus\": \"Active\", \"choiceCost\": 1, \"choicePerLine\": true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.choicePerLine").value(true))
+                .andReturn().getResponse().getContentAsString();
+        String id = objectMapper.readTree(body).get("id").asString();
+        mockMvc.perform(patch(BASE + "/" + id).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"choicePerLine\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.choicePerLine").value(false));
+        mockMvc.perform(post(BASE).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Odd plan\", \"choicesGranted\": 2, \"choicePerLine\": true}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void aZeroOrNegativeCount_isRefused() throws Exception {
         mockMvc.perform(post(BASE).with(jwt().authorities(new SimpleGrantedAuthority("catalog:write")))
                         .contentType(MediaType.APPLICATION_JSON)

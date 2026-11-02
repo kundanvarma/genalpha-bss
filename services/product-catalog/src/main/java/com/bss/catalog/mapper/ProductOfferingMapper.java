@@ -39,6 +39,7 @@ public class ProductOfferingMapper {
         dto.setChoicesGranted(entity.getChoicesGranted());
         dto.setChoiceCost(entity.getChoiceCost());
         dto.setChoiceHoldMonths(entity.getChoiceHoldMonths());
+        dto.setChoicePerLine(entity.getChoicePerLine());
         dto.setChoicePartner(entity.getChoicePartner());
         dto.setChoicePartnerTerms(entity.getChoicePartnerTerms());
         dto.setChoiceWholesaleCost(entity.getChoiceWholesaleCost());
@@ -74,6 +75,7 @@ public class ProductOfferingMapper {
         entity.setChoicesGranted(dto.getChoicesGranted());
         entity.setChoiceCost(dto.getChoiceCost());
         entity.setChoiceHoldMonths(dto.getChoiceHoldMonths());
+        entity.setChoicePerLine(dto.getChoicePerLine());
         entity.setChoicePartner(dto.getChoicePartner());
         entity.setChoicePartnerTerms(dto.getChoicePartnerTerms());
         entity.setChoiceWholesaleCost(dto.getChoiceWholesaleCost());
@@ -124,6 +126,9 @@ public class ProductOfferingMapper {
         }
         if (patch.getChoiceHoldMonths() != null) {
             entity.setChoiceHoldMonths(patch.getChoiceHoldMonths());
+        }
+        if (patch.getChoicePerLine() != null) {
+            entity.setChoicePerLine(patch.getChoicePerLine());
         }
         if (patch.getChoicePartner() != null) {
             entity.setChoicePartner(patch.getChoicePartner());

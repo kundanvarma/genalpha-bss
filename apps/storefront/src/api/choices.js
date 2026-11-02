@@ -8,8 +8,11 @@ export async function myChoices() {
   return json(await authFetch(`${CHOICES}/pool`));
 }
 
-/** Pick a benefit: an ordinary TMF622 order; ordering holds its Choices (409 when too few are left). */
-export async function pickBenefit(offering) {
+/**
+ * Pick a benefit: an ordinary TMF622 order; ordering holds its Choices (409 when too few are left).
+ * A per-line benefit (#420) names the line it is for — the line's service id, as a characteristic.
+ */
+export async function pickBenefit(offering, lineId) {
   return json(await authFetch(`${ORDERING}/productOrder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -18,6 +21,7 @@ export async function pickBenefit(offering) {
       productOrderItem: [{
         id: '1', action: 'add', quantity: 1,
         productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
+        ...(lineId ? { product: { productCharacteristic: [{ name: 'lineServiceId', value: lineId }] } } : {}),
       }],
     }),
   }));
@@ -49,6 +53,7 @@ export async function swapBenefit(productId, offering) {
 }
 
 /** "Can I pick this?" — ordering's answer before an order, from the order's own checks; holds nothing (#392). */
-export async function choicePreview(offeringId) {
-  return json(await authFetch(`${ORDERING}/choicePreview?offeringId=${encodeURIComponent(offeringId)}`));
+export async function choicePreview(offeringId, lineId) {
+  const line = lineId ? `&lineId=${encodeURIComponent(lineId)}` : '';
+  return json(await authFetch(`${ORDERING}/choicePreview?offeringId=${encodeURIComponent(offeringId)}${line}`));
 }

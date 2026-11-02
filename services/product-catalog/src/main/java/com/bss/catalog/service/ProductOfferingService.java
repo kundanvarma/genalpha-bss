@@ -345,5 +345,8 @@ public class ProductOfferingService {
         if (dto.getChoiceCost() != null && dto.getChoiceCost() < 1) {
             throw new BadRequestException("choiceCost must be 1 or more (leave it out for an offering that is not a benefit)");
         }
+        if (Boolean.TRUE.equals(dto.getChoicePerLine()) && dto.getChoicesGranted() != null) {
+            throw new BadRequestException("choicePerLine is for a benefit, not for a plan that grants Choices");
+        }
     }
 }

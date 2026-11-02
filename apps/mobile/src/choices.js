@@ -46,14 +46,23 @@ export async function productOfPick(allocation) {
  * own checks (Choices left, already picked, the operator's eligibility rules).
  * The party is my token. The app shows the answer; it never works it out.
  */
-export const choicePreview = (offeringId) =>
-  call(`/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${encodeURIComponent(offeringId)}`);
+export const choicePreview = (offeringId, lineId) =>
+  call(`/tmf-api/productOrderingManagement/v4/choicePreview?offeringId=${encodeURIComponent(offeringId)}${lineId ? `&lineId=${encodeURIComponent(lineId)}` : ''}`);
+
+/** My numbered lines — what a per-line benefit (#420) is picked for. The party is my token. */
+export async function myLines() {
+  const all = await call('/tmf-api/serviceInventory/v4/service');
+  return (all || []).filter((sv) => sv.state === 'active' && (sv.supportingResource || []).some((r) => r.value))
+    .map((sv) => ({ id: sv.id, name: sv.name, number: sv.supportingResource.find((r) => r.value).value }));
+}
 
 /** Pick a benefit: an order; ordering holds its Choices (refused with the numbers when too few are left). */
-export const pickBenefit = (offering) => call(ORDERS, { method: 'POST', body: JSON.stringify({
+export const pickBenefit = (offering, lineId) => call(ORDERS, { method: 'POST', body: JSON.stringify({
   description: offering.name,
   productOrderItem: [{ id: '1', action: 'add', quantity: 1,
-    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' } }],
+    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
+    // a per-line benefit (#420) names the line it is for
+    ...(lineId ? { product: { productCharacteristic: [{ name: 'lineServiceId', value: lineId }] } } : {}) }],
 }) });
 
 /** Give a benefit back: ending its product frees the Choice. */

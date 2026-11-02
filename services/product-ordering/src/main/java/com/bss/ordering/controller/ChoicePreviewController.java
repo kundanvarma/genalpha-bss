@@ -32,13 +32,14 @@ public class ChoicePreviewController {
 
     @GetMapping
     public ChoicePreview.Answer preview(@RequestParam String offeringId,
-            @RequestParam(required = false) String partyId) {
+            @RequestParam(required = false) String partyId,
+            @RequestParam(required = false) String lineId) {
         String owner = partyScope.scopedPartyId().orElse(partyId);
         if (owner == null || owner.isBlank()) {
             throw new OrderValidationException("name the household (partyId)");
         }
         // the same organization wall order creation applies — never trust the named party
         orders.requireSameOrgForBusinessAdmin(owner);
-        return preview.preview(owner, offeringId);
+        return preview.preview(owner, offeringId, lineId);
     }
 }

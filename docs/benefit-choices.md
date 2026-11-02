@@ -147,6 +147,38 @@ The first build left a list of honest limits; the follow-on closed most of it:
   the line back its plan's profile when released. (#393)
 
 
+## Once per line (#420)
+
+Most benefits belong to the household: one streaming service, one audiobook
+account, picked once. Some belong to a **phone** — priority on a line, an
+upgrade pass for a handset — and a family wants one on each line. Decided with
+the operator: those are picked **once per line**; everything else stays once
+per household.
+
+- **The product manager** ticks *One per line* when making a benefit; the
+  benefits table says *once per line* or *once per household*. Seeded: *Priority
+  on my line* and the *PhoneCo Upgrade Pass*.
+- **The household** chooses the line: the shop shows a line picker (the number
+  and the plan, never an id) on a per-line benefit, the app offers *Pick … for
+  +47…* once per line, and the care desk does the same. Each line's pick costs
+  its own Choices from the household's pool, and is owed to the partner per line.
+- **Ordering** refuses a per-line pick that names no line ("Choose which line …
+  is for") or a line that is not one of the household's active lines — checked
+  against inventory, never trusted from the request. *Can I pick this?* answers
+  per line, at the same point in the sequence, so the two never disagree.
+- **The ledger** records the line on the pick; *already picked* means the same
+  benefit on the same line.
+- **Priority** lands on the line that was named, and releasing it from one line
+  leaves the other's priority alone.
+- **An AI agent or the care desk** names the line through the governed
+  `pickBenefit` action's optional `lineId`.
+
+The proof is the *priority per line* step of `benefit_choices_test.js`: two
+lines, priority on line A and not B, line B may pick it too, line A not twice,
+no line named is refused in the same words by preview and order, and a release
+from A leaves B on priority. With the benefit switched back to once per household
+the step fails, as it should.
+
 ## Honest limits
 
 - **The pool is per household, not per billing account.** The design asked for
@@ -195,5 +227,12 @@ The first build left a list of honest limits; the follow-on closed most of it:
 - **The bus does not keep a household's events in order** (they are keyed by
   event id), so the *Choices left* trait keeps the newest by event time and
   ignores an older one that arrives late.
+- **Per line (#420) leaves four gaps.** Ceasing a line does not yet end the
+  per-line benefits *on that line* first — a cease still ends the household's
+  newest benefits. One per-line pick per order (a line's priority is owned by the
+  order that set it). A per-line benefit cannot be swapped *into*; it is picked
+  for a line instead, so the swap lists leave it out. A pick made before #420
+  carries no line, so it does not stop the same benefit being picked again for a
+  named line.
 - **Nothing here is on the hosted demo box** beyond the first build: the follow-on
   reaches it with the next deploy.

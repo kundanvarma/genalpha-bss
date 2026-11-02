@@ -8,6 +8,7 @@ concept: Subscription
 inputs:
   - { name: customerId, type: ref, concept: Customer, required: true, meaning: the household whose Choice is spent }
   - { name: benefitOfferingId, type: ref, concept: ProductOffering, required: true, meaning: the benefit to pick }
+  - { name: lineId, type: ref, concept: Service, required: false, meaning: "for a benefit picked once per line (#420): which of the household's lines it is for — ordering refuses a per-line pick without one, or with a line that is not the household's" }
 preconditions:
   - id: benefit-on-sale
     check: state
@@ -33,6 +34,9 @@ executes:
         action: add
         quantity: 1
         productOffering: { id: "${benefitOfferingId}" }
+        product:
+          productCharacteristic:
+            - { name: lineServiceId, value: "${lineId}" }
     relatedParty:
       - { id: "${customerId}", role: customer }
 effects:

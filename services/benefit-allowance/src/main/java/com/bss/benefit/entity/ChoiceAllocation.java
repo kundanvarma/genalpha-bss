@@ -31,6 +31,10 @@ public class ChoiceAllocation {
     @Column(name = "offering_id", nullable = false)
     private String offeringId;
 
+    /** The line a per-line benefit was picked for (#420); null for a household-wide benefit. */
+    @Column(name = "line_id", length = 64)
+    private String lineId;
+
     @Column(name = "offering_name", nullable = false)
     private String offeringName;
 
@@ -202,5 +206,13 @@ public class ChoiceAllocation {
 
     public void setWholesaleCost(java.math.BigDecimal wholesaleCost) {
         this.wholesaleCost = wholesaleCost;
+    }
+
+    public String getLineId() {
+        return lineId;
+    }
+
+    public void setLineId(String lineId) {
+        this.lineId = lineId;
     }
 }
