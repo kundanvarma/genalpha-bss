@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pick a benefit</title>
+<!--
+  MCP Apps card (SEP-1865), served as ui://genalpha-ontology/pick-benefit-confirm.
+  Self-contained: no external script, style, font or image, no network access
+  (connectDomains is empty). Everything shown arrives from the host as data and
+  is written with textContent, never as markup. The card decides nothing: Confirm
+  asks the host to call pick_benefit, and the ontology checks everything again.
+-->
+<style>
+  :root { color-scheme: light dark; --ink: #1d2433; --muted: #5b6475; --line: #d8dde6; --go: #1f6f4a; --stop: #9b2c2c; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e8ebf1; --muted: #a3abba; --line: #3a4252; --go: #5fc795; --stop: #f08a8a; } }
+  body { margin: 0; padding: 16px; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: transparent; }
+  h1 { font-size: 13px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  #benefit { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  #cost { margin: 0 0 12px; color: var(--muted); }
+  #verdict { margin: 0 0 14px; }
+  #verdict.refused { color: var(--stop); }
+  #verdict.done { color: var(--go); }
+  button { font: inherit; padding: 8px 18px; border-radius: 6px; border: 1px solid var(--go); background: var(--go); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+</style>
+</head>
+<body>
+<h1>Pick a benefit</h1>
+<p id="benefit">Waiting for the dry run…</p>
+<p id="cost"></p>
+<p id="verdict">Nothing is picked until you confirm.</p>
+<button id="confirm" type="button" disabled>Confirm</button>
+<script>
+(function () {
+  'use strict';
+  var CARD_KEY = 'bss.genalpha/confirmCard';
+  var nextId = 1;
+  var pending = {};
+  var card = null;
+  var busy = false;
+  var finished = false;
+
+  function el(id) { return document.getElementById(id); }
+
+  function say(text, tone) {
+    var v = el('verdict');
+    v.textContent = text;
+    v.className = tone || '';
+  }
+
+  // The view is an MCP client of its host over postMessage (SEP-1865).
+  function request(method, params) {
+    var id = nextId++;
+    window.parent.postMessage({ jsonrpc: '2.0', id: id, method: method, params: params || {} }, '*');
+    return new Promise(function (resolve, reject) { pending[id] = { resolve: resolve, reject: reject }; });
+  }
+
+  function notify(method, params) {
+    window.parent.postMessage({ jsonrpc: '2.0', method: method, params: params || {} }, '*');
+  }
+
+  function choices(n) {
+    if (typeof n !== 'number') { return 'Its cost in Choices is not stated in the catalog.'; }
+    return n === 1 ? 'Costs 1 Choice.' : 'Costs ' + n + ' Choices.';
+  }
+
+  function show(c) {
+    card = c;
+    el('benefit').textContent = c.benefitName || 'the benefit you chose';
+    el('cost').textContent = choices(c.choiceCost);
+    if (c.allowed) {
+      say('Ready to pick. Nothing happens until you confirm.');
+      el('confirm').disabled = finished;
+    } else {
+      say('This benefit cannot be picked: ' + (c.refusal || 'a condition does not hold') + '.', 'refused');
+      el('confirm').disabled = true;
+    }
+  }
+
+  function refusalOf(result) {
+    var s = result && result.structuredContent;
+    if (s && typeof s.refusal === 'string') { return s.refusal; }
+    if (s && typeof s.error === 'string') { return s.error; }
+    return 'the action was refused';
+  }
+
+  window.addEventListener('message', function (event) {
+    if (event.source !== window.parent) { return; }
+    var m = event.data;
+    if (!m || m.jsonrpc !== '2.0') { return; }
+    if (m.id != null && pending[m.id] && (m.result !== undefined || m.error !== undefined)) {
+      var p = pending[m.id];
+      delete pending[m.id];
+      if (m.error) { p.reject(m.error); } else { p.resolve(m.result); }
+      return;
+    }
+    if (m.method === 'ui/notifications/tool-result') {
+      var meta = m.params && m.params._meta;
+      if (meta && meta[CARD_KEY]) { show(meta[CARD_KEY]); }
+    }
+  });
+
+  el('confirm').addEventListener('click', function () {
+    if (!card || !card.allowed || busy || finished) { return; }
+    busy = true;
+    el('confirm').disabled = true;
+    say('Picking…');
+    request('tools/call', { name: card.confirmTool, arguments: card.arguments }).then(function (result) {
+      busy = false;
+      if (result && result.isError) {
+        say('Not picked: ' + refusalOf(result) + '.', 'refused');
+        el('confirm').disabled = false;
+      } else {
+        finished = true;
+        say('Picked. The Choice is held until the benefit is active.', 'done');
+      }
+    }, function (error) {
+      busy = false;
+      say('Not picked: ' + ((error && error.message) || 'the host did not make the call') + '.', 'refused');
+      el('confirm').disabled = false;
+    });
+  });
+
+  request('ui/initialize', { appInfo: { name: 'genalpha-pick-benefit', version: '1.0.0' }, appCapabilities: {} })
+    .then(function () { notify('ui/notifications/initialized', {}); }, function () { /* a host without MCP Apps: the card stays inert */ });
+})();
+</script>
+</body>
+</html>

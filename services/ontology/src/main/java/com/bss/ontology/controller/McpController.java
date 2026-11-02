@@ -16,10 +16,13 @@ import com.bss.ontology.service.ActionExecuteService;
 import com.bss.ontology.service.Caller;
 import com.bss.ontology.service.ContextService;
 import com.bss.ontology.service.ExplainService;
+import com.bss.ontology.service.McpApps;
+import com.bss.ontology.service.McpResources;
 import com.bss.ontology.service.RecommendationService;
 import com.bss.ontology.service.UpgradeService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,12 +43,25 @@ import java.util.Map;
  * meaning, preconditions and permissions as its description — and calls it
  * with the delegated token of the person it acts for. Writes go through
  * actions only; reads are the registry and the derived views.
+ *
+ * Dual-era (MCP 2026-07-28): a modern client sends every request on its own,
+ * version and capabilities in {@code _meta}, mirrored in headers a gateway can
+ * route on — no session, no handshake; a 2025-06-18 client still opens with
+ * {@code initialize}. {@link McpEnvelope} holds the envelope rules. Resources are
+ * the ontology's concepts and the MCP Apps cards ({@link McpResources}, {@link McpApps}).
  */
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH + "/mcp")
 public class McpController {
 
-    private static final String PROTOCOL = "2025-06-18";
+    private static final McpMessages.ServerInfo SERVER = new McpMessages.ServerInfo("genalpha-ontology", "1.1.0");
+    private static final String INSTRUCTIONS = "Every tool is a governed business action or a read of the ontology. "
+            + "Writes are refused with the failed condition named; read it back to the person. "
+            + "The resources are the ontology's concepts: read one to learn what a thing is before acting on it.";
+    private static final McpMessages.Capabilities CAPABILITIES = new McpMessages.Capabilities(
+            new McpMessages.Capabilities.Tools(false), new McpMessages.Capabilities.Resources(false, false),
+            new McpMessages.Capabilities.Prompts(false),
+            Map.of("io.modelcontextprotocol/ui", new McpMessages.Capabilities.AppsExtension(List.of(McpApps.MIME))));
 
     private final Registry registry;
     private final ActionCheckService checks;
@@ -56,10 +72,14 @@ public class McpController {
     private final ObjectMapper json;
     private final ContextService context;
     private final RecommendationService recommendations;
+    private final McpResources resources;
+    private final McpApps apps;
 
     public McpController(Registry registry, ActionCheckService checks, ActionExecuteService executes,
             UpgradeService upgrades, ExplainService explain, TenantScope tenantScope, ObjectMapper json,
-            ContextService context, RecommendationService recommendations) {
+            ContextService context, RecommendationService recommendations, McpResources resources, McpApps apps) {
+        this.resources = resources;
+        this.apps = apps;
         this.recommendations = recommendations;
         this.context = context;
         this.registry = registry;
@@ -74,7 +94,7 @@ public class McpController {
     /** A plain description for people who open the URL. */
     @GetMapping
     public McpMessages.Description describe() {
-        return new McpMessages.Description("genalpha-ontology", PROTOCOL,
+        return new McpMessages.Description(SERVER.name(), String.join(", ", McpEnvelope.SUPPORTED),
                 "JSON-RPC 2.0 over HTTP POST, bearer token of the person the agent acts for",
                 tools().stream().map(Tool::name).toList());
     }
@@ -82,52 +102,79 @@ public class McpController {
     @PostMapping
     public ResponseEntity<Object> rpc(@RequestBody JsonNode body, HttpServletRequest request) {
         if (body.isArray()) {
+            // a legacy batch: each member answered on its own; the HTTP status says only that the batch was read
             List<Object> replies = new ArrayList<>();
             for (JsonNode one : body) {
-                Object r = handle(one, request);
-                if (r != null) {
-                    replies.add(r);
+                Answer a = handle(one, request);
+                if (a.body() != null) {
+                    replies.add(a.body());
                 }
             }
             return ResponseEntity.ok(replies);
         }
-        Object r = handle(body, request);
-        return r == null ? ResponseEntity.accepted().build() : ResponseEntity.ok(r);
+        Answer a = handle(body, request);
+        return a.body() == null ? ResponseEntity.accepted().build() : ResponseEntity.status(a.status()).body(a.body());
     }
 
-    private Object handle(JsonNode req, HttpServletRequest request) {
+    /** One JSON-RPC message answered: the HTTP status the transport requires, and the reply (null for a notification). */
+    private record Answer(int status, Object body) {
+    }
+
+    private Answer handle(JsonNode req, HttpServletRequest request) {
         JsonNode id = req.get("id");
-        String method = req.path("method").asString();
+        String method = req.path("method").asString("");
         JsonNode params = req.path("params");
+        McpEnvelope.Era era;
+        try {
+            era = McpEnvelope.validate(req, request);
+        } catch (McpEnvelope.Refusal r) {
+            return new Answer(r.status, error(id, r.code, r.getMessage(), r.data));
+        }
         if (method.startsWith("notifications/")) {
-            return null;
+            return new Answer(202, null);
         }
         try {
             Object result = switch (method) {
-                case "initialize" -> new McpMessages.Initialize(PROTOCOL,
-                        new McpMessages.Initialize.Capabilities(new McpMessages.Initialize.Tools(false)),
-                        new McpMessages.Initialize.ServerInfo("genalpha-ontology", "1.0.0"),
-                        "Every tool is a governed business action or a read of the ontology. Writes are refused with the failed condition named; read it back to the person.");
+                case "initialize" -> new McpMessages.Initialize(
+                        McpEnvelope.negotiate(params.path("protocolVersion").isString() ? params.path("protocolVersion").asString() : null),
+                        CAPABILITIES, SERVER, INSTRUCTIONS);
+                case "server/discover" -> new McpMessages.Discover(McpEnvelope.SUPPORTED, CAPABILITIES, INSTRUCTIONS);
                 case "ping" -> Map.of();
                 case "tools/list" -> new McpMessages.ToolList(tools());
                 case "tools/call" -> call(params, request);
-                case "resources/list" -> Map.of("resources", List.of());
+                case "resources/list" -> resources.list(tenantScope.currentTenantId());
+                case "resources/read" -> resources.read(params.path("uri").asString(""), tenantScope.currentTenantId());
                 case "prompts/list" -> Map.of("prompts", List.of());
                 default -> null;
             };
             if (result == null) {
-                return error(id, -32601, "method not found: " + method);
+                // a modern client tells "no such method" from "no MCP here" by the 404 together with the JSON-RPC body
+                return new Answer(era.modern() ? 404 : 200, error(id, -32601, "method not found: " + method, null));
             }
-            return new McpMessages.Reply("2.0", id, result);
+            return new Answer(200, new McpMessages.Reply("2.0", id, era.modern() ? modern(result) : result));
         } catch (IllegalArgumentException e) {
-            return error(id, -32602, e.getMessage());
+            return new Answer(200, error(id, McpEnvelope.INVALID_PARAMS, e.getMessage(), null));
         } catch (RuntimeException e) {
-            return error(id, -32603, e.getMessage());
+            return new Answer(200, error(id, -32603, e.getMessage(), null));
         }
     }
 
-    private static McpMessages.ErrorReply error(JsonNode id, int code, String message) {
-        return new McpMessages.ErrorReply("2.0", id, new McpMessages.ErrorReply.Error(code, message));
+    /**
+     * A 2026-07-28 result says what kind of result it is ({@code resultType}) and who
+     * answered ({@code _meta} serverInfo), because no handshake told the client either.
+     * A legacy client gets its result exactly as before.
+     */
+    private JsonNode modern(Object result) {
+        JsonNode tree = json.valueToTree(result);
+        ObjectNode node = tree instanceof ObjectNode o ? o : json.createObjectNode();
+        node.put("resultType", "complete");
+        ObjectNode meta = node.get("_meta") instanceof ObjectNode m ? m : node.putObject("_meta");
+        meta.set(McpEnvelope.META_SERVER_INFO, json.valueToTree(SERVER));
+        return node;
+    }
+
+    private static McpMessages.ErrorReply error(JsonNode id, int code, String message, Object data) {
+        return new McpMessages.ErrorReply("2.0", id, new McpMessages.ErrorReply.Error(code, message, data));
     }
 
     /* ------------------------------------------------------------------ tools, generated */
@@ -164,7 +211,9 @@ public class McpController {
                 }
             }
             String description = a.path("meaning").asString() + " Who may: " + ExplainService.who(a) + ".";
-            tools.add(tool("check_" + snake, "Dry run of " + snake + ": may it happen for these inputs, and if not, which condition fails? " + description, props, required));
+            String check = "check_" + snake;
+            tools.add(new Tool(check, "Dry run of " + snake + ": may it happen for these inputs, and if not, which condition fails? " + description,
+                    new InputSchema("object", props, required.isEmpty() ? null : required), apps.metaFor(check)));
             tools.add(tool(snake, description + " Executes through " + a.path("executes").path("capability").asString()
                     + " with the caller's own rights after preconditions, permission and policy; writes a decision receipt.", props, required));
         }
@@ -196,6 +245,7 @@ public class McpController {
         Registry.Layer l = registry.forTenant(tenant);
         Object result;
         boolean isError = false;
+        McpMessages.ToolResultMeta card = null;
         if ("list_actions".equals(name)) {
             List<ActionRow> rows = new ArrayList<>();
             for (JsonNode a : l.actions().values()) {
@@ -243,6 +293,7 @@ public class McpController {
                 Check c = checks.check(action, inputs, caller);
                 result = c;
                 isError = !c.allowed();
+                card = apps.cardFor(name, inputs, c);
             } else {
                 ActionExecuteService.Outcome o = executes.execute(action, inputs, caller);
                 result = o.body();
@@ -255,7 +306,7 @@ public class McpController {
         } catch (Exception e) {
             text = String.valueOf(result);
         }
-        return new ToolResult(List.of(new ToolResult.Content("text", text)), McpMessages.structured(result), isError);
+        return new ToolResult(List.of(new ToolResult.Content("text", text)), McpMessages.structured(result), isError, card);
     }
 
     static String snake(String camel) {

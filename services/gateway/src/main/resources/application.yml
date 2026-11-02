@@ -366,6 +366,15 @@ spring:
               uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
               predicates:
                 - Path=/rcs/**
+            # RFC 9728 for the ontology's MCP endpoint (MCP 2026-07-28): an agent with no
+            # token yet asks here which authorization server to use. The path-suffixed form
+            # names THIS resource, so it cannot collide with another component's metadata.
+            # Anonymous by design; the ontology answers with the tenant's issuer from the
+            # hostname stamp below, and the MCP endpoint itself still requires a token.
+            - id: ontology-mcp-resource-metadata
+              uri: ${ONTOLOGY_URL:http://localhost:8160}
+              predicates:
+                - Path=/.well-known/oauth-protected-resource/ontology/v1/mcp
             # the Operational Semantic Registry: concepts, governed actions, check/execute, explain, MCP
             - id: ontology
               uri: ${ONTOLOGY_URL:http://localhost:8160}
