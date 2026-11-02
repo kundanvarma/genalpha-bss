@@ -122,6 +122,8 @@ public class AiGovernor {
      * drafted reply.
      */
     public String complete(String useCase, LlmAdapter.Tier tier, String system, String user) {
+        // every system prompt carries the rule about fenced, untrusted text (#422)
+        system = Untrusted.withRule(system);
         String tenant = tenantScope.currentTenantId();
         AiBudget budget = budgets.findByTenantId(tenant).orElse(null);
         Redaction map = redactor.begin();

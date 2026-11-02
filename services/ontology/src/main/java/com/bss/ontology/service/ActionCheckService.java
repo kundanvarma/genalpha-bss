@@ -107,6 +107,11 @@ public class ActionCheckService {
      */
     /* package-private and static: the rule is pure, and a control with no test
      * that goes red when it is deleted is not a control. */
+    /** A digital worker (badged) or an agent that names itself — a machine, not a person at a screen. */
+    static boolean isMachine(Caller caller) {
+        return caller.has(WORKFORCE_BADGE) || (caller.agent() != null && !caller.agent().isBlank());
+    }
+
     static Verdict autonomy(JsonNode action, Caller caller, Registry.Layer layer) {
         String declared = action.path("governance").path("autonomy").asString("medium");
         boolean badged = caller.has(WORKFORCE_BADGE);

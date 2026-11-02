@@ -43,4 +43,8 @@ public interface ActionReceiptRepository extends JpaRepository<ActionReceiptRow,
 
     /** Whole-chain read for the verifier, oldest first. */
     List<ActionReceiptRow> findByTenantIdOrderByRecordedAtAscIdAsc(String tenantId);
+
+    /** Attempts of one action in a tenant since a moment — the machine value budget reads these (#422). */
+    List<ActionReceiptRow> findByTenantIdAndActionAndPhaseAndRecordedAtAfter(String tenantId, String action,
+            String phase, java.time.OffsetDateTime after);
 }

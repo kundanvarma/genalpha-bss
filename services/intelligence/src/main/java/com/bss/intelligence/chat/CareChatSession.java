@@ -30,6 +30,10 @@ public class CareChatSession {
     @Column(name = "ticket_id")
     private String ticketId;
 
+    /** When the customer was told they are talking to an AI (Art. 50(1), #422): at open, before any answer. */
+    @Column(name = "ai_disclosed_at")
+    private Instant aiDisclosedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
@@ -50,4 +54,12 @@ public class CareChatSession {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void touch() { this.updatedAt = Instant.now(); }
+
+    public Instant getAiDisclosedAt() {
+        return aiDisclosedAt;
+    }
+
+    public void setAiDisclosedAt(Instant aiDisclosedAt) {
+        this.aiDisclosedAt = aiDisclosedAt;
+    }
 }

@@ -91,7 +91,8 @@ class AiGovernorRedactionTest {
                 .doesNotContain("anna@example.com", "912 34 567", "8601 1117 947",
                         "8947000000000000001", "01019912345", "Storgata")
                 .contains("<email#1>", "<phone#1>", "<iban#1>", "<iccid#1>", "<nid#1>", "<address#1>");
-        assertThat(provider.system).isEqualTo(SYSTEM);
+        // the system prompt goes as written, plus the rule about fenced untrusted text (#422)
+        assertThat(provider.system).startsWith(SYSTEM).contains("<untrusted source=");
         // the caller still gets the real values back in the answer
         assertThat(answer).isEqualTo(
                 "Reply to anna@example.com at +47 912 34 567 about the SIM 8947000000000000001.");

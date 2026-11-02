@@ -50,7 +50,7 @@ public class CareChatController {
 
     @PostMapping("/guest/session")
     public ChatSessionOpened guestOpen() {
-        return new ChatSessionOpened(chat.open(null).getId());
+        return ChatSessionOpened.of(chat.open(null));
     }
 
     @PostMapping("/guest/session/{id}/message")
@@ -75,7 +75,7 @@ public class CareChatController {
 
     @PostMapping("/session")
     public ChatSessionOpened open() {
-        return new ChatSessionOpened(chat.open(subject()).getId());
+        return ChatSessionOpened.of(chat.open(subject()));
     }
 
     @PostMapping("/session/{id}/message")
