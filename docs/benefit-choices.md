@@ -134,7 +134,10 @@ The first build left a list of honest limits; the follow-on closed most of it:
   the settlement — the partner payable against cash — once. (#390)
 - **Eligibility is a rule.** "No new picks while in collections" is policy data
   the operator edits: ordering tells policy that an order picks a new benefit and
-  whether the household has an open collections case. (#391)
+  whether the household has an open collections case. A case that something
+  pauses — a promise to pay, a disputed amount, or hardship — does not count:
+  such a household can still pick (decided with the operator, November 2026).
+  (#391)
 - **"Can I pick this?"** Ordering answers before an order, from the order's own
   checks in the order's own sequence, holding nothing; the shop's cards say why
   a benefit cannot be picked instead of doing their own arithmetic. A benefit
