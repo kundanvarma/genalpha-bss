@@ -37,6 +37,8 @@ async function token(ctx, user, pass) {
   const gs = await (await ctx.post(`${CHAT}/guest/session`, {
     headers: { 'Content-Type': 'application/json' }, data: {} })).json();
   if (!gs.id) fail('guest session not created: ' + JSON.stringify(gs));
+  // the session itself carries the disclosure and records when it was given (#422)
+  if (!/AI assistant/.test(gs.aiDisclosure || '') || !gs.aiDisclosedAt) fail('the session should carry and record the AI disclosure: ' + JSON.stringify(gs));
   const gReply = await (await ctx.post(`${CHAT}/guest/session/${gs.id}/message`, {
     headers: { 'Content-Type': 'application/json' },
     data: { text: 'Which mobile plans do you offer?' } })).json();
@@ -134,11 +136,19 @@ async function token(ctx, user, pass) {
   await page.waitForSelector('[data-testid=chat-bubble]', { timeout: 20000 })
     .catch(() => fail('chat bubble missing from the shop'));
   await page.click('[data-testid=chat-bubble]');
+  // EU AI Act Art. 50(1) (#422): told it is an AI BEFORE any answer — visible the moment the chat opens
+  const told = await page.locator('[data-testid=chat-ai-disclosure]').innerText({ timeout: 10000 })
+    .catch(() => fail('the chat must say it is an AI before the customer types'));
+  if (!/AI assistant, not a person/.test(told)) fail('the AI disclosure should say plainly it is an AI: ' + told);
   await page.fill('[data-testid=chat-input]', 'Do you have fiber?');
   await page.click('[data-testid=chat-send]');
   await page.waitForSelector('[data-testid=chat-msg-bot]', { timeout: 60000 })
     .catch(() => fail('no bot message rendered in the widget'));
   console.log('OK WIDGET: bubble on the shop, guest message sent, bot bubble rendered');
+  const bots = await page.locator('[data-testid=chat-msg-bot]').count();
+  const labelled = await page.locator('[data-testid=chat-msg-bot] [data-testid=chat-ai-label]').count();
+  if (bots === 0 || labelled !== bots) fail(`every bot reply should be labelled as AI: ${labelled} of ${bots}`);
+  console.log(`OK AI DISCLOSURE: "${told}" shown before the first message; ${labelled} of ${bots} bot replies labelled`);
   await browser.close();
 
   console.log('\nALL CARE-CHAT CHECKS PASSED — guest shelf-chat, self-scoped customer chat, '

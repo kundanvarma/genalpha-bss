@@ -10,8 +10,23 @@ public final class ChatViews {
     private ChatViews() {
     }
 
-    /** A freshly opened session: the id IS the guest's capability. */
-    public record ChatSessionOpened(String id) {
+    /**
+     * A freshly opened session: the id IS the guest's capability. {@code aiDisclosure}
+     * is what the customer is told before the first answer — that they are talking
+     * to an AI (EU AI Act Art. 50(1), #422) — and {@code aiDisclosedAt} when the
+     * session recorded it.
+     */
+    @JsonPropertyOrder({"id", "aiDisclosure", "aiDisclosedAt"})
+    public record ChatSessionOpened(String id, String aiDisclosure, String aiDisclosedAt) {
+
+        /** Said before any answer, in every customer chat; channels translate it. */
+        public static final String DISCLOSURE =
+                "You are chatting with an AI assistant, not a person. Ask for a human at any time.";
+
+        public static ChatSessionOpened of(CareChatSession s) {
+            return new ChatSessionOpened(s.getId(), DISCLOSURE,
+                    s.getAiDisclosedAt() == null ? null : s.getAiDisclosedAt().toString());
+        }
     }
 
     /** One customer turn answered: the bot's reply (null once a human has

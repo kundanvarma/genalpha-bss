@@ -10,8 +10,11 @@ const BASE = '/ai/v1/careChat';
  * about THEIR OWN account (the backend fetches with their token's subject,
  * so the bot structurally cannot discuss anyone else). "Talk to a human"
  * raises a real ticket with the transcript, and if an agent picks the chat
- * up in the CSR desk, their replies land here live.
+ * up in the CSR desk, their replies land here live. Before any answer the
+ * customer is told it is an AI, and every bot reply says so (EU AI Act
+ * Art. 50(1), #422); the session records when that was shown.
  */
+const DISCLOSURE = 'You are chatting with an AI assistant, not a person. Ask for a human at any time.';
 export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [session, setSession] = useState(null);
@@ -107,8 +110,12 @@ export default function ChatWidget() {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{t('Chat with us')}</span>
             <span style={{ fontSize: 11, color: '#888' }} data-testid="chat-status">
-              {status === 'agent' ? t('agent connected') : status === 'escalated' ? t('ticket raised') : t('assistant')}
+              {status === 'agent' ? t('agent connected') : status === 'escalated' ? t('ticket raised') : t('AI assistant')}
             </span>
+          </div>
+          <div data-testid="chat-ai-disclosure" role="note"
+            style={{ padding: '6px 14px', fontSize: 12, background: 'rgba(127,127,127,.08)', borderBottom: '1px solid var(--line, #eee)' }}>
+            {t(DISCLOSURE)}
           </div>
           <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 12 }} data-testid="chat-body">
             {msgs.map((m, i) => (
@@ -118,6 +125,7 @@ export default function ChatWidget() {
                   background: m.author === 'customer' ? 'var(--accent, #2563eb)' : 'rgba(127,127,127,.12)',
                   color: m.author === 'customer' ? '#fff' : 'inherit' }}>
                   {m.author === 'agent' && <b style={{ display: 'block', fontSize: 11 }}>{t('Agent')}</b>}
+                  {m.author === 'bot' && <b style={{ display: 'block', fontSize: 11, fontWeight: 600 }} data-testid="chat-ai-label">{t('AI assistant')}</b>}
                   {m.body}
                 </span>
               </div>

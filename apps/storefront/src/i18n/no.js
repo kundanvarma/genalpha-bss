@@ -208,6 +208,8 @@ export const NO_SHOP = {
   'Line for': 'Linje for',
   'You need a mobile line for this one.': 'Denne krever et mobilabonnement.',
   'Your lines could not be read just now.': 'Linjene dine kunne ikke leses akkurat nå.',
+  'AI assistant': 'AI-assistent',
+  'You are chatting with an AI assistant, not a person. Ask for a human at any time.': 'Du chatter med en AI-assistent, ikke et menneske. Be om et menneske når som helst.',
   'Picked': 'Valgt',
   'Picking…': 'Velger…',
   'Release': 'Gi tilbake',

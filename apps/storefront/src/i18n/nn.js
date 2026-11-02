@@ -231,6 +231,8 @@ export const NN = {
   'Line for': 'Linje for',
   'You need a mobile line for this one.': 'Denne krev eit mobilabonnement.',
   'Your lines could not be read just now.': 'Linjene dine kunne ikkje lesast akkurat no.',
+  'AI assistant': 'KI-assistent',
+  'You are chatting with an AI assistant, not a person. Ask for a human at any time.': 'Du chattar med ein KI-assistent, ikkje eit menneske. Be om eit menneske når som helst.',
   'Picked': 'Valt',
   'Picking…': 'Vel…',
   'Swap for…': 'Byt til…',

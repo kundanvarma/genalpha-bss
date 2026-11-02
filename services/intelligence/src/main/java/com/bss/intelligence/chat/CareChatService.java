@@ -76,6 +76,8 @@ public class CareChatService {
         s.setTenantId(tenantScope.currentTenantId());
         s.setPartyId(partyIdOrNull);
         s.setChannel(partyIdOrNull == null ? "guest" : "authed");
+        // the customer is told it is an AI before any answer; the session keeps when (#422)
+        s.setAiDisclosedAt(java.time.Instant.now());
         if (partyIdOrNull == null) {
             // warm the shelf while the visitor is still typing their first
             // message — the crawl must never sit inside a reply
