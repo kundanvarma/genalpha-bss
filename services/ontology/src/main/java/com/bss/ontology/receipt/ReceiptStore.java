@@ -88,6 +88,7 @@ public class ReceiptStore {
         row.setTarget(target);
         row.setIdempotencyKey(idempotencyKey);
         row.setAttemptNo(1);
+        traced(row);
         chain(row);
         rows.saveAndFlush(row);
         return new Attempt(receiptId, 1);
@@ -114,6 +115,7 @@ public class ReceiptStore {
             row.setEffects(effectsJson);
             row.setEmits(emitsJson);
             row.setRefusal(refusal);
+            traced(row);
             chain(row);
             rows.saveAndFlush(row);
             return true;
@@ -153,6 +155,7 @@ public class ReceiptStore {
             row.setCheckVerdict(checkJson);
             row.setStatus(ActionReceiptRow.REFUSED);
             row.setRefusal(refusal);
+            traced(row);
             chain(row);
             rows.saveAndFlush(row);
             return true;
@@ -161,6 +164,18 @@ public class ReceiptStore {
                     oneLine(action), oneLine(tenant), oneLine(e.toString()));
             return false;
         }
+    }
+
+    /**
+     * #422: stamp the current trace on the row, and the receipt on the span.
+     *
+     * <p>The trace id is deliberately NOT in {@link #canonical}: it is a pointer
+     * to telemetry, not evidence of what was done, and adding a field to the
+     * hashed bytes would make every row written before it unverifiable.
+     */
+    private static void traced(ActionReceiptRow row) {
+        row.setTraceId(com.bss.ontology.tracing.ActionTracing.currentTraceId());
+        com.bss.ontology.tracing.ActionTracing.receipt(row.getReceiptId());
     }
 
     /**

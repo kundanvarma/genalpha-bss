@@ -81,6 +81,9 @@ Concepts, actions and capabilities carry `version` and `introduced`; a retired a
 - **There is no receipt store.** Receipts are published to `bss.ontology.events`; two components consume it by pattern — event-hub (fan-out to TMF688 subscribers) and flow (journey triggers) — and neither is an archive. The ontology service has no migrations, so there is no receipt table anywhere, and the durable record of a governed action is Kafka retention plus whatever a subscriber happened to keep. Issue #234.
 - A receipt that fails to send **after** the action completed still cannot be undone. The service now refuses to start when it cannot write receipts at all (`ontology.receipts-required` (`ONTOLOGY_RECEIPTS_REQUIRED`), true by default — the Boot 4 migration proved why: one missing autoconfigure module and every receipt silently vanished while the service reported healthy), and a send that fails anyway is logged at ERROR and counted on `bss.ontology.receipts.dropped`. That makes the loss visible, not impossible; making it impossible needs the store above.
 
+## Tracing (#422)
+
+Each execute is an OpenTelemetry `execute_tool <action>` span; the receipt rows carry its trace id (`action_receipt.trace_id`, outside the hash chain) and the decision carries it as `context.traceId`, so a trace, a receipt and a decision-log row join on one key. No input or refusal wording goes on the span. How to point it at a collector, and its limits: [ai-control-plane-plan.md](ai-control-plane-plan.md#tracing--one-key-for-a-trace-a-ledger-row-a-receipt-and-a-decision-422).
 
 ## Agents — the registry of AI actors
 

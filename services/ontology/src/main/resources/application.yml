@@ -51,6 +51,17 @@ spring:
         max.block.ms: 2000
 
 management:
+  # #422 tracing. Spans are made in-process always; they LEAVE only when an
+  # operator names a collector: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+  # (e.g. http://otel-collector:4318/v1/traces). Unset = no exporter bean, no
+  # network call, nothing fails at startup without a collector. Sampling is
+  # parent-based (a caller's traceparent decides); 1.0 at the root here rather
+  # than Boot's 0.1, because a ledger row or receipt carries the trace id, and a
+  # join key that points at a dropped trace nine times in ten is not a key.
+  # These two components see a few calls a second at most.
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
   endpoints:
     web:
       exposure:

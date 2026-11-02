@@ -58,6 +58,8 @@ public class AiGovernor {
      * (overridable as data: bss.ai.exposure.<useCase>=…); anything
      * undeclared is RAW — the honest default, and raw is tenant-gated. */
     private final Map<String, String> exposureByUseCase;
+    /** #422: one GenAI span per model call; its trace id is the ledger row's join key. */
+    private final com.bss.intelligence.tracing.GenAiTracing tracing;
 
     public AiGovernor(LlmAdapter llm, AiAuditRepository audits, AiBudgetRepository budgets,
             com.bss.intelligence.audit.AiContractRepository contracts,
@@ -65,7 +67,9 @@ public class AiGovernor {
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             @Value("${bss.ai.default-price-per-1k-micros:2000}") long defaultPricePer1kMicros,
             com.bss.intelligence.security.TenantRegistry tenants,
-            org.springframework.core.env.Environment env) {
+            org.springframework.core.env.Environment env,
+            com.bss.intelligence.tracing.GenAiTracing tracing) {
+        this.tracing = tracing;
         this.tenants = tenants;
         this.llm = llm;
         this.audits = audits;
@@ -216,6 +220,10 @@ public class AiGovernor {
             record(call, primary, null, "", estimatedPrompt, 0L, "error", null);
             throw routeFailure;
         }
+        // #422: the model call is a span, current while the ledger rows are written, so
+        // each row carries its trace id. Names and numbers only, never the prompt or answer.
+        io.opentelemetry.api.trace.Span span = tracing.startChat(primary.provider(), primary.model(), tenant, useCase);
+        try (io.opentelemetry.context.Scope ignored = span.makeCurrent()) {
         ModelRoute served = primary;
         String fallbackFrom = null;
         long started = System.nanoTime();
@@ -224,6 +232,7 @@ public class AiGovernor {
             answer = primary.adapter().completeWithUsage(tier, wireSystem, wireUser);
         } catch (RuntimeException e) {
             record(call, primary, null, "", estimatedPrompt, 0L, "error", null);
+            com.bss.intelligence.tracing.GenAiTracing.failed(span, e.getClass().getName(), "error");
             Optional<ModelRoute> fallback = retryable(e) ? fallbackFor(tier) : Optional.empty();
             if (fallback.isEmpty()) {
                 throw e;
@@ -257,8 +266,13 @@ public class AiGovernor {
         // answer names the same people; a redacted one still gets anything
         // the model produced on its own masked)
         String ledgerResponse = redactor.redact(raw, map);
+        com.bss.intelligence.tracing.GenAiTracing.usage(span, meter.promptTokens(), meter.completionTokens(),
+                "estimate".equals(meter.source()), "ok");
         record(call, served, fallbackFrom, ledgerResponse, meter, cost, "ok", latencyMs);
         return rawExposure ? raw : map.restore(raw);
+        } finally {
+            span.end();
+        }
     }
 
     /** The words of a residency refusal: what the rule is, what broke it, what to change. */
@@ -349,6 +363,9 @@ public class AiGovernor {
             audit.setRawExposure(c.rawExposure() && !outcome.startsWith("refused"));
             audit.setRedactedFields(c.redactedFields());
             audit.setFallbackFrom(fallbackFrom);
+            // the model call's span when there was one, else the request's own
+            // trace (a refusal, an agent action); null when tracing is absent
+            audit.setTraceId(com.bss.intelligence.tracing.GenAiTracing.currentTraceId());
             save(audit);
         } catch (RuntimeException auditFailure) {
             // an audit write must never break the caller's work

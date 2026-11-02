@@ -72,6 +72,7 @@ public class ModelDoorService {
     private final Redactor redactor;
     private final RestClient.Builder http;
     private final ObjectMapper json;
+    private final com.bss.intelligence.tracing.GenAiTracing tracing;
     private final SecureRandom random = new SecureRandom();
 
     public ModelDoorService(WorkerDoorKeyRepository keys, AiAuditRepository audits, AiBudgetRepository budgets,
@@ -80,7 +81,9 @@ public class ModelDoorService {
             // the small model a provider's agent framework uses for its own side calls
             // (titles, compression) — served beside the tenant's worker model, and metered
             @Value("${bss.ai.door-side-models.anthropic:claude-haiku-4-5-20251001}") String anthropicSideModels,
-            @Value("${bss.ai.door-side-models.openai:}") String openAiSideModels) {
+            @Value("${bss.ai.door-side-models.openai:}") String openAiSideModels,
+            com.bss.intelligence.tracing.GenAiTracing tracing) {
+        this.tracing = tracing;
         this.keys = keys;
         this.audits = audits;
         this.budgets = budgets;
@@ -191,20 +194,35 @@ public class ModelDoorService {
             Exposure exposure = new Exposure(raw ? "raw" : "raw-redacted", raw, map.count());
             long started = System.nanoTime();
             DoorRequests.DoorReply reply;
-            try {
-                reply = forward(protocol, tenant, outbound, passthrough);
-            } catch (RuntimeException e) {
-                log.warn("model door: upstream call failed for {}: {}", key.getBadge(), e.getMessage());
-                ledger(protocol, key, model, new DoorPricing.Usage(0, 0, 0, 0), null, "upstream-error",
-                        elapsedMs(started), "no response", exposure);
-                return error(protocol, 502, DoorProtocol.Refusal.UPSTREAM, "the worker model provider could not be reached");
+            JsonNode answer;
+            // #422: the worker's model call is a GenAI span like the governor's
+            // own; the ledger row is written while it is current
+            io.opentelemetry.api.trace.Span span = tracing.startChat(protocol.name(), model,
+                    key.getTenantId(), "workforce:" + (key.getJob() == null ? "worker" : key.getJob()));
+            try (io.opentelemetry.context.Scope inSpan = span.makeCurrent()) {
+                try {
+                    reply = forward(protocol, tenant, outbound, passthrough);
+                } catch (RuntimeException e) {
+                    log.warn("model door: upstream call failed for {}: {}", key.getBadge(), e.getMessage());
+                    com.bss.intelligence.tracing.GenAiTracing.failed(span, e.getClass().getName(), "upstream-error");
+                    ledger(protocol, key, model, new DoorPricing.Usage(0, 0, 0, 0), null, "upstream-error",
+                            elapsedMs(started), "no response", exposure);
+                    return error(protocol, 502, DoorProtocol.Refusal.UPSTREAM, "the worker model provider could not be reached");
+                }
+                answer = readOrNull(reply.body());
+                DoorPricing.Usage usage = answer == null ? new DoorPricing.Usage(0, 0, 0, 0) : protocol.usage(answer);
+                DoorPricing.Priced priced = pricing.price(model, usage);
+                String outcome = reply.status() < 300 ? "ok" : "http-" + reply.status();
+                com.bss.intelligence.tracing.GenAiTracing.usage(span, usage.allInput(), usage.outputTokens(), false, outcome);
+                if (reply.status() >= 300) {
+                    com.bss.intelligence.tracing.GenAiTracing.failed(span, String.valueOf(reply.status()), outcome);
+                }
+                ledger(protocol, key, model, usage, priced, outcome,
+                        elapsedMs(started), answer == null ? "unreadable provider response" : cap(protocol.summary(answer)),
+                        exposure);
+            } finally {
+                span.end();
             }
-            JsonNode answer = readOrNull(reply.body());
-            DoorPricing.Usage usage = answer == null ? new DoorPricing.Usage(0, 0, 0, 0) : protocol.usage(answer);
-            DoorPricing.Priced priced = pricing.price(model, usage);
-            ledger(protocol, key, model, usage, priced, reply.status() < 300 ? "ok" : "http-" + reply.status(),
-                    elapsedMs(started), answer == null ? "unreadable provider response" : cap(protocol.summary(answer)),
-                    exposure);
             // and restore on the way back, so the worker only ever holds real values
             if (!raw && map.count() > 0 && reply.status() < 300 && answer != null) {
                 protocol.restore(answer, map);
@@ -347,6 +365,9 @@ public class ModelDoorService {
             row.setResourceRef("doorKey:" + key.getId() + (priced != null && priced.defaulted() ? " price=default" : ""));
             row.setActorId(key.getWorkerId() != null ? key.getWorkerId() : key.getId());
             row.setActorName(key.getBadge());
+            // #422: the door's call is traced as the inbound HTTP request; its
+            // trace id keys the row the same way the governor's rows are keyed
+            row.setTraceId(com.bss.intelligence.tracing.GenAiTracing.currentTraceId());
             audits.save(row);
         } catch (RuntimeException e) {
             // the call already happened; a lost row is logged loudly rather than failing the worker

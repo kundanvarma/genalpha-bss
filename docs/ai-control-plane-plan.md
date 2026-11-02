@@ -232,3 +232,125 @@ arc: the fleet has no stand-in provider that can be told to fail on demand.
   against loopback providers, not end to end through the gateway.
 - **No tenant uses any of it yet.** No key was added to `tenants.yml`; every
   tenant runs exactly as before until an operator writes one.
+
+## Tracing — one key for a trace, a ledger row, a receipt and a decision (#422)
+
+*Built 2026-11-02.* Every model call and every governed action now leaves an
+OpenTelemetry span, and the span's **trace id** is written beside the evidence
+the BSS already kept. One 32-character id answers "show me everything that
+happened for this request": the trace in a collector, the AI ledger row
+(`ai_audit.trace_id`), the ontology's receipt rows (`action_receipt.trace_id`)
+and the decision in insight's log (`context.traceId`).
+
+**What is traced.**
+
+- *intelligence* — each model call through the governor is a span named
+  `chat <model>` (for example `chat claude-sonnet-4-5`), carrying the
+  provider, the model, the token counts, the tenant and the use case. A
+  digital worker's call through the model door is the same kind of span, with
+  the provider's own token counts. A failed call is marked as an error with
+  the error's *class* only.
+- *ontology* — each governed action execute is a span named
+  `execute_tool <action>` (for example `execute_tool changePlan`), carrying the
+  action, the tenant, the agent, the channel, how it ended (executed, refused,
+  refused by the component, filed for approval, uncertain, not attempted), the
+  status the caller got, and the decision, receipt and approval ids.
+- Both components' inbound requests and their outbound calls to other
+  components are traced by Spring Boot itself, and the outbound calls carry a
+  W3C `traceparent` header, so a caller's trace continues through them.
+
+**What is never recorded.** No prompt, no answer, no system instruction, no
+action input, no refusal sentence. The OpenTelemetry conventions offer opt-in
+attributes for message content; this code has no path that writes them, and a
+test fails if one appears. Content stays where the redactor and the RLS wall
+already govern it: the ledger and the receipt.
+
+**Pointing it at a collector.** Nothing leaves the process until an operator
+names one. Set either of these on the `intelligence` and `ontology`
+containers (both were tried against a stand-in collector):
+
+```
+MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces
+# or the OpenTelemetry-standard name, which Spring Boot 4.1 maps to the same setting
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
+```
+
+Unset — the application default, and how the laptop fleet and CI run — there
+is no exporter at all: no network call, and no startup failure for want of a
+collector. Spans are still made in-process, so ledger rows and receipts still
+get a trace id. Sampling follows the caller's decision when a `traceparent`
+arrives and otherwise keeps every trace (`TRACING_SAMPLING_PROBABILITY`,
+default `1.0` here rather than Spring Boot's `0.1`, because a ledger row that
+points at a dropped trace nine times in ten is not a join key).
+
+**Finding the rest of a trace by hand.**
+
+```sql
+-- intelligence
+SELECT created_at, use_case, model, outcome FROM ai_audit WHERE trace_id = '…';
+-- ontology
+SELECT recorded_at, phase, action, status FROM action_receipt WHERE trace_id = '…';
+-- insight
+SELECT decided_at, decision_point, action FROM decision_log WHERE context::jsonb ->> 'traceId' = '…';
+```
+
+**Which conventions.** The OpenTelemetry GenAI semantic conventions are in
+"Development" status and have no tagged release. This follows
+`open-telemetry/semantic-conventions-genai` at commit `16f31308`
+(2026-11-02): `docs/gen-ai/client-inference.md` for the model call
+(`gen_ai.operation.name=chat`, `gen_ai.provider.name`, `gen_ai.request.model`,
+`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `error.type`) and
+`docs/gen-ai/gen-ai-spans.md` "Execute tool span" for the action
+(`gen_ai.operation.name=execute_tool`, `gen_ai.tool.name`,
+`gen_ai.tool.type=extension`). House facts ride beside them under `bss.*`
+(`bss.tenant`, `bss.use_case`, `bss.decision_id`, `bss.receipt_id`, …), never
+instead of them. The pin is in `GenAiTracing.SEMCONV_PIN` and
+`ActionTracing.SEMCONV_PIN`.
+
+**Proof.** `AiCallTracingTest` (intelligence) runs a governed call against an
+in-memory exporter: one `chat` span with the standard attributes, no content
+in any attribute, error spans with the class and not the message, and the
+ledger row keyed by the span's trace id (and no id, rather than zeros, when
+tracing is absent). It was seen to fail when a prompt was put on the span.
+`ExecuteToolSpanTest` (ontology) runs an executed and a refused action: one
+`execute_tool` span each, both receipt rows and the decision's `context`
+carrying its trace id, the span naming the receipt and the decision, and no
+input or refusal wording on the span.
+
+### Honest limits
+
+- **Only two components are traced.** The gateway and every other
+  component still make no spans of their own, so a trace today starts at
+  intelligence or ontology (or at whoever sent the `traceparent`), and the
+  Kafka hop — the decision travelling to insight — is not part of the trace:
+  the join to the decision log is the `context.traceId` value, not a span
+  link. The fleet-wide row in `production-acceptance.md` stays open.
+- **The conventions are not stable.** Attribute names have already moved once
+  (`gen_ai.system` became `gen_ai.provider.name`); when they move again the
+  pin above is what to compare against, and a backend that reads the older
+  names will not see these spans as GenAI spans.
+- **Token counts on governor spans are estimates** — the ledger's own chars/4
+  meter, flagged `bss.usage.estimated=true` — because the HTTP adapters still
+  discard the provider's `usage`. The model door's counts are the provider's.
+- **The provider name is the house name** (`anthropic`, `openai`,
+  `openai-compatible`, `stub`). The first two match the conventions'
+  well-known values; the others are custom values the conventions allow.
+- **The outbound `traceparent` reaches the model providers too**, because the
+  adapters use the same instrumented HTTP client as every other call. It is a
+  random id with no customer in it, but it is a correlation id leaving the
+  box. Suppressing it per destination is not built; an operator who objects
+  today can turn tracing off for the component (`MANAGEMENT_TRACING_ENABLED=false`,
+  not tried here), at the price of the join key.
+- **The trace id is outside the receipt hash chain** on purpose — it is a
+  pointer to telemetry, not evidence, and rows hashed before it existed must
+  stay verifiable — so it can be edited without breaking the chain.
+- **The decision log has no `trace_id` column.** The id rides in the
+  decision's `context`, as the idempotency key does, so insight needed no
+  migration and no consumer changed; the cost is that the decision's
+  "Context used" sentence now lists `traceId` too, and a lookup reads JSON
+  rather than an index. A column plus an index in insight is the next step if
+  the lookup becomes routine.
+- No numbered browser suite proves this through the gateway yet: the
+  evidence is the two unit tests and a manual run of the built ontology jar
+  against a stand-in collector (spans exported only once an endpoint was set;
+  a caller's `traceparent` continued on its outbound calls).
