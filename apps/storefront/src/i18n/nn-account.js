@@ -27,4 +27,17 @@ export const NN_ACCOUNT = {
   'You can ask why, and ask a person to look again, from': 'Du kan spørje kvifor, og be om at ein person ser på det igjen, frå',
   'Sending…': 'Sender…',
   'The score band the credit bureau gives you.': 'Scoreklassen kredittbyrået gjev deg.',
+  // what happened to the order, and the notice before checkout (#422 review)
+  'A credit decline is never final without a way to a person: a declined order waits on hold for a person to decide, and if this shop\'s own rules refused the order, you can still ask a person to review the decision.': 'Eit kredittavslag er aldri endeleg utan ein veg til ein person: ei avslått bestilling ventar på at ein person avgjer ho, og viss butikken sine eigne reglar avviste bestillinga, kan du likevel be om at ein person vurderer avgjerda.',
+  'Your order is on hold until a person reviews it.': 'Bestillinga di står på vent til ein person har sett på ho.',
+  'A person reviewed your order and let it go ahead.': 'Ein person har sett på bestillinga di og late ho gå vidare.',
+  'Your order was cancelled.': 'Bestillinga di vart kansellert.',
+  'Your order was not placed: this shop\'s own rules refused it.': 'Bestillinga di vart ikkje lagd inn: butikken sine eigne reglar avviste ho.',
+  'Your order was not placed.': 'Bestillinga di vart ikkje lagd inn.',
+  'Your order went ahead.': 'Bestillinga di gjekk vidare.',
+  'Your order went ahead; the credit bureau\'s answer was close to the line.': 'Bestillinga di gjekk vidare; svaret frå kredittbyrået låg nær grensa.',
+  'The order could not be placed while your credit information is frozen.': 'Bestillinga kunne ikkje leggjast inn medan kredittopplysingane dine er sperra.',
+  'A person in customer care will look at the decision and the reason, and contact you. Your order was not placed, so nothing is waiting — if the decision changes, they will help you order again.': 'Ein person i kundeservice ser på avgjerda og grunngivinga, og tek kontakt med deg. Bestillinga di vart ikkje lagd inn, så ingenting ventar — viss avgjerda vert endra, hjelper dei deg å bestille på nytt.',
+  'About the credit check': 'Om kredittsjekken',
+  'The check is automated, but a decline is never final without a way to a person.': 'Sjekken er automatisk, men eit avslag er aldri endeleg utan ein veg til ein person.',
 };
