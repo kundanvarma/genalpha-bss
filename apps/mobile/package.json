@@ -6,7 +6,7 @@
     "@expo/metro-runtime": "~58.0.15",
     "@react-navigation/bottom-tabs": "^7.21.0",
     "@react-navigation/native": "^7.5.1",
-    "expo": "~58.0.21",
+    "expo": "~58.0.22",
     "expo-auth-session": "~58.0.16",
     "expo-crypto": "~58.0.7",
     "expo-status-bar": "~58.0.4",
@@ -14,7 +14,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
-    "react-native-safe-area-context": "~5.11.0",
+    "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.0",
     "react-native-web": "^0.21.4"
   },
