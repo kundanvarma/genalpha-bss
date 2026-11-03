@@ -237,6 +237,9 @@ ontology framework:/logout
 ontology "/actuator/health/**"
 ontology "/actuator/prometheus"
 ontology ApiConstants.WELL_KNOWN
+# A2A 1.0 Agent Card (#426), /.well-known/agent-card.json: read before a partner's agent
+# has a token, by the protocol's design. Skills, endpoint URL, the tenant's issuer; no data.
+ontology ApiConstants.AGENT_CARD
 # The framework:/.well-known/oauth-protected-resource/** entry above is the one
 # place the RFC 9728 document is MEANT to be public (#422): the ontology fills it
 # with the tenant's issuer so an MCP client learns where to get a token, and the

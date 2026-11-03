@@ -22,6 +22,32 @@ public class OntologyProperties {
      * deliberate choice to run actions that cannot be proved.
      */
     private boolean receiptsRequired = true;
+    /** The A2A server face (#426): which skills a partner's agent may delegate, and how the Agent Card is signed. */
+    private A2a a2a = new A2a();
+
+    public A2a getA2a() { return a2a; }
+    public void setA2a(A2a a2a) { this.a2a = a2a; }
+
+    /**
+     * The A2A door. {@code executeEnabled} is FALSE by default: a partner's agent
+     * may ask (dry run, explain) and nothing more until an operator opens the one
+     * executing skill — which then runs through the same execute path, receipts and
+     * autonomy gate as every other caller. The signing key is a deployment secret
+     * (PEM, PKCS#8, EC P-256 or RSA) read from the environment, never from the repo;
+     * empty = the card is served unsigned and says nothing about a signature.
+     */
+    public static class A2a {
+        private boolean executeEnabled = false;
+        private String signingKey = "";
+        private String signingKeyId = "";
+
+        public boolean isExecuteEnabled() { return executeEnabled; }
+        public void setExecuteEnabled(boolean executeEnabled) { this.executeEnabled = executeEnabled; }
+        public String getSigningKey() { return signingKey; }
+        public void setSigningKey(String signingKey) { this.signingKey = signingKey; }
+        public String getSigningKeyId() { return signingKeyId; }
+        public void setSigningKeyId(String signingKeyId) { this.signingKeyId = signingKeyId; }
+    }
 
     public String getDir() { return dir; }
     public void setDir(String dir) { this.dir = dir; }

@@ -1,0 +1,20 @@
+agent: external-a2a
+version: 1
+introduced: "2026-11-03"
+status: live
+kind: external
+meaning: A partner's agent that delegates a task through the A2A door (Agent2Agent 1.0) — it may ask whether a household can pick a benefit, have an action explained, and, only where the operator has switched it on, pick the benefit; every task runs with the bearer of the person it acts for.
+intent: Let another company's agent hand this BSS a task without a second permission model, and get back an answer it can prove.
+runsAs: caller
+autonomy: supervised
+reads: [productCatalog.offerings]
+actions:
+  check: [pickBenefit]
+  execute: [pickBenefit]
+uses: []
+tools: []
+component: ontology
+contract: "the caller's rights and the action's governance — the door adds no rights and removes none; executing is off unless ontology.a2a.execute-enabled"
+memory: "the task answers, in memory, for GetTask; the receipts and the decision log are the record"
+pages: []
+tests: [services/ontology/src/test/java/com/bss/ontology/A2aServerTest.java]

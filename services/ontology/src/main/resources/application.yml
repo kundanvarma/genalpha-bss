@@ -90,6 +90,14 @@ ontology:
   outcome-after-days: ${ONTOLOGY_OUTCOME_AFTER_DAYS:90}
   outcome-sweep-ms: ${ONTOLOGY_OUTCOME_SWEEP_MS:300000}
   outcome-sweep-initial-ms: ${ONTOLOGY_OUTCOME_SWEEP_INITIAL_MS:60000}
+  # The A2A server face (#426, docs/a2a.md). A partner's agent may dry-run and ask
+  # for explanations; the one executing skill (pick a benefit) is OFF unless the
+  # operator turns it on. The Agent Card is signed only when a key is supplied by
+  # the deployment (PEM PKCS#8, EC P-256 -> ES256 or RSA -> RS256); never commit one.
+  a2a:
+    execute-enabled: ${ONTOLOGY_A2A_EXECUTE_ENABLED:false}
+    signing-key: ${ONTOLOGY_A2A_SIGNING_KEY:}
+    signing-key-id: ${ONTOLOGY_A2A_SIGNING_KEY_ID:}
   components:
     gateway: ${GATEWAY_BASE_URL:http://localhost:8080}
     # the registry's own face, for self-conformance (inside the container it listens on 8080)

@@ -375,6 +375,14 @@ spring:
               uri: ${ONTOLOGY_URL:http://localhost:8160}
               predicates:
                 - Path=/.well-known/oauth-protected-resource/ontology/v1/mcp
+            # A2A 1.0 Agent Card (#426): a partner's agent reads it before it has a token, to
+            # learn the endpoint (/ontology/v1/a2a, routed by "ontology" below), the tenant's
+            # issuer and the skills served. Anonymous by the protocol's design; the ontology
+            # builds it per tenant from the hostname stamp, and the endpoint needs a token.
+            - id: ontology-a2a-agent-card
+              uri: ${ONTOLOGY_URL:http://localhost:8160}
+              predicates:
+                - Path=/.well-known/agent-card.json
             # the Operational Semantic Registry: concepts, governed actions, check/execute, explain, MCP
             - id: ontology
               uri: ${ONTOLOGY_URL:http://localhost:8160}

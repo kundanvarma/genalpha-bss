@@ -47,6 +47,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", ApiConstants.WELL_KNOWN).permitAll()
+                        // A2A 1.0 (#426): the Agent Card is read BEFORE a partner's agent has a token —
+                        // that is what it is for (where the endpoint is, which issuer, which skills).
+                        // It carries no one's data. The A2A endpoint it names is under BASE_PATH below
+                        // and needs a token like everything else. Declared in public-paths.txt.
+                        .requestMatchers(ApiConstants.AGENT_CARD).permitAll()
                         .requestMatchers(ApiConstants.BASE_PATH + "/**").authenticated()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
