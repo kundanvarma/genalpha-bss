@@ -549,6 +549,14 @@ server:
   port: 8080
 
 bss:
+  # Signed agents at the edge (#427, docs/agent-identity.md). Agent operators
+  # whose Web Bot Auth signatures (RFC 9421, Ed25519) this deployment trusts.
+  # EMPTY by default: nobody is trusted until an operator is written here.
+  # Each entry: name, signature-agent (the https URL its agents send in
+  # Signature-Agent), directory (its key directory URL, fetched and cached),
+  # and/or keys (static public JWKs: { kty: OKP, crv: Ed25519, x: ... }).
+  web-bot-auth:
+    operators: []
   # White-label host map: anonymous traffic on these hostnames belongs to
   # these tenants (X-Tenant-Id stamped by TenantHostFilter); the issuer feeds
   # /shop/tenant-config.js so one storefront build logs in per tenant.
