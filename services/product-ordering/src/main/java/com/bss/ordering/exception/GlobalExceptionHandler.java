@@ -37,6 +37,7 @@ public class GlobalExceptionHandler {
         // The message is the rule's customer-facing text.
         ErrorResponse body = new ErrorResponse(
                 "POLICY_DENIED", "Unprocessable Entity", ex.getMessage(), "422");
+        body.setCreditDecision(ex.creditDecision());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
     }
 

@@ -18,6 +18,8 @@ export async function json(res) {
     // TMF error bodies carry a machine code (e.g. CREDIT_FROZEN) — keep it so
     // the UI can branch on WHY, not just the words.
     err.code = problem.code || null;
+    // a refusal that left a credit decision to explain points at it (#422)
+    err.creditDecision = problem.creditDecision || null;
     err.status = res.status;
     throw err;
   }

@@ -52,7 +52,19 @@ public class ProductOrderDto {
     @JsonProperty("@type")
     private String type = "ProductOrder";
 
+    /** House field (#422): set on reads only, when ordering says the credit decision should be explained. */
+    @JsonProperty(value = "creditDecision", access = JsonProperty.Access.READ_ONLY)
+    private CreditDecisionLink creditDecision;
+
     public ProductOrderDto() {
+    }
+
+    public CreditDecisionLink getCreditDecision() {
+        return creditDecision;
+    }
+
+    public void setCreditDecision(CreditDecisionLink creditDecision) {
+        this.creditDecision = creditDecision;
     }
 
     public String getId() {

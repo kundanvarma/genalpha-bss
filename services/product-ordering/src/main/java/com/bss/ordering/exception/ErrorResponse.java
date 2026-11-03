@@ -1,5 +1,7 @@
 package com.bss.ordering.exception;
 
+import com.bss.ordering.dto.CreditDecisionLink;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
@@ -22,7 +24,24 @@ public class ErrorResponse {
     @JsonProperty("@type")
     private String type = "Error";
 
+    /**
+     * House field beside the TMF Error (#422 review): a refusal that left a
+     * credit decision behind points at it, so the customer can still read why
+     * and ask a person. Absent on every other error.
+     */
+    @JsonProperty("creditDecision")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private CreditDecisionLink creditDecision;
+
     public ErrorResponse() {
+    }
+
+    public CreditDecisionLink getCreditDecision() {
+        return creditDecision;
+    }
+
+    public void setCreditDecision(CreditDecisionLink creditDecision) {
+        this.creditDecision = creditDecision;
     }
 
     public ErrorResponse(String code, String reason, String message, String status) {

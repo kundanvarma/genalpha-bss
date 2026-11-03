@@ -101,7 +101,7 @@ public class CreditDecisionService {
      * rejection — the audit trail IS the point of storing decisions.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(String partyId, String orderId, CreditDecisionPort.Decision decision) {
+    public String record(String partyId, String orderId, CreditDecisionPort.Decision decision) {
         CreditReason reason = CreditReason.of(decision);
         CreditDecision row = new CreditDecision();
         row.setId(UUID.randomUUID().toString());
@@ -134,6 +134,62 @@ public class CreditDecisionService {
         resource.put("reason", reason.sentence());
         resource.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         events.publish("CreditDecisionRecordedEvent", "creditDecision", resource);
+        return row.getId();
+    }
+
+    /**
+     * The operator's policy rule refused the order this decision was taken for
+     * (#422 review). The order rolls back; this survives it (REQUIRES_NEW, like
+     * {@link #record}), so the decision says what happened and stays
+     * explainable and contestable by its own id. Answers the link the 422
+     * should carry — only when the customer has something to ask a person
+     * about; null otherwise.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public com.bss.ordering.dto.CreditDecisionLink refusedByRule(String decisionId, String ruleMessage) {
+        CreditDecision row = repository.findById(decisionId)
+                .filter(d -> d.getTenantId().equals(tenantScope.currentTenantId()))
+                .orElse(null);
+        if (row == null) {
+            return null;
+        }
+        row.setOrderRefusedAt(OffsetDateTime.now());
+        row.setOrderRefusal(ruleMessage == null || ruleMessage.length() <= 400 ? ruleMessage
+                : ruleMessage.substring(0, 400));
+        repository.save(row);
+        return worthExplaining(row) ? new com.bss.ordering.dto.CreditDecisionLink(row.getId(),
+                com.bss.ordering.api.ApiConstants.BASE_PATH + "/creditDecision/" + row.getId()) : null;
+    }
+
+    /**
+     * Whether a channel should show this decision's explanation to the customer
+     * unprompted: a decline or a borderline answer (the two a person can be
+     * asked about), or one they already asked about. The one place this is
+     * decided — the shop only reads the answer (#422 review, finding 12).
+     */
+    public static boolean worthExplaining(CreditDecision d) {
+        return CreditDecisionPort.DECLINE.equals(d.getDecision()) || CreditDecisionPort.REVIEW.equals(d.getDecision())
+                || d.getReviewRequestedAt() != null;
+    }
+
+    /** For a page of orders: the link to each one's explanation, where it is worth showing. */
+    @Transactional(readOnly = true)
+    public Map<String, com.bss.ordering.dto.CreditDecisionLink> explanationLinks(java.util.Collection<String> orderIds) {
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, com.bss.ordering.dto.CreditDecisionLink> links = new LinkedHashMap<>();
+        Set<String> seen = new java.util.HashSet<>();
+        // newest first: an order is judged by its latest decision, as the explanation reads it
+        for (CreditDecision d : repository.findByTenantIdAndOrderIdInOrderByDecidedAtDesc(
+                tenantScope.currentTenantId(), orderIds)) {
+            if (seen.add(d.getOrderId()) && worthExplaining(d)) {
+                links.put(d.getOrderId(), new com.bss.ordering.dto.CreditDecisionLink(d.getId(),
+                        com.bss.ordering.api.ApiConstants.BASE_PATH + "/productOrder/" + d.getOrderId()
+                                + "/creditDecision"));
+            }
+        }
+        return links;
     }
 
     @Transactional(readOnly = true)
@@ -161,6 +217,11 @@ public class CreditDecisionService {
                     }
                     if (row.getReviewRequestedAt() != null) {
                         out.put("reviewRequestedAt", row.getReviewRequestedAt().toString());
+                    }
+                    // #422 review: the operator's rule refused the order, so there is no order to open
+                    if (row.getOrderRefusedAt() != null) {
+                        out.put("orderRefusedAt", row.getOrderRefusedAt().toString());
+                        out.put("orderRefusal", row.getOrderRefusal());
                     }
                     return out;
                 }).toList();

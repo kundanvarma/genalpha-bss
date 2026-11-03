@@ -12,7 +12,7 @@ import { monthlyTotal, oneTimeTotal, pricesOf, fmtAmount } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 import { freshDevicePlan, FinancingChooser, TradeInPanel } from './cart/DevicePanels.jsx';
-import CreditNotice from './cart/CreditNotice.jsx';
+import CreditNotice, { CreditRefusal } from './cart/CreditNotice.jsx';
 // How a payment method reads to the shopper (the API gives the machine name).
 const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal', mmg: 'MMG mobile money', vipps: 'Vipps' };
 
@@ -537,7 +537,7 @@ export default function Cart() {
         setBusy(false);
         return;
       }
-      setError(e.message);
+      setError(e.creditDecision ? e : e.message); // a refusal ordering says to explain keeps its link
       setBusy(false);
     }
   }
@@ -557,7 +557,7 @@ export default function Cart() {
           <button className="ghost" onClick={() => setCreditFrozen(false)}>Try again</button>
         </div>
       )}
-      {error && <p className="error">{error}</p>}
+      {error && (error.creditDecision ? <CreditRefusal error={error} /> : <p className="error">{error}</p>)}
       <div className="rows">
         {lines.map((line, idx) => {
           const monthly = lineMonthly(line);

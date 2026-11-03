@@ -272,6 +272,7 @@ export function CreditDecisions({ creditDecisions, down }) {
               </div>
               {cd.reason && <div className="small" data-testid="credit-reason">{cd.reason}</div>}
               {cd.reviewRequestedAt && <div className="small">Customer asked for a person to review this · {dt(cd.reviewRequestedAt)}</div>}
+              {cd.orderRefusedAt && <div className="small" data-testid="credit-refused">Order not placed — refused by the operator's rule{cd.orderRefusal ? `: ${cd.orderRefusal}` : ''} · {dt(cd.orderRefusedAt)}</div>}
             </div>
             <span className="dim small">{dt(cd.decidedAt)}</span>
           </div>
