@@ -1,6 +1,7 @@
 package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
+import com.bss.intelligence.llm.GovernedAnswer;
 import com.bss.intelligence.llm.LlmAdapter;
 import com.bss.intelligence.service.CopilotRequests.JourneyBrief;
 import com.bss.intelligence.service.JourneyDraft.JourneyStep;
@@ -25,7 +26,6 @@ import java.util.List;
 @Service
 public class JourneyDraftService {
 
-    private final LlmAdapter llm;
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final com.bss.intelligence.llm.TenantVoice voice;
@@ -36,10 +36,9 @@ public class JourneyDraftService {
             new String[] {"Activate", "nudge the customer to add or activate their first service"},
             new String[] {"Follow-up", "check in about a week later and offer help"});
 
-    public JourneyDraftService(LlmAdapter llm, Redactor redactor,
+    public JourneyDraftService(Redactor redactor,
             com.bss.intelligence.llm.AiGovernor governor,
             com.bss.intelligence.llm.TenantVoice voice) {
-        this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
         this.voice = voice;
@@ -67,41 +66,50 @@ public class JourneyDraftService {
         if (stages.isEmpty()) stages.addAll(DEFAULT_STAGES);
 
         List<JourneyStep> steps = new ArrayList<>();
+        // who wrote the copy, as served: a stage the fallback wrote names the fallback
+        java.util.Set<String> providers = new java.util.LinkedHashSet<>();
+        java.util.Set<String> models = new java.util.LinkedHashSet<>();
         for (int i = 0; i < stages.size(); i++) {
             String stage = stages.get(i)[0];
             String intent = stages.get(i)[1];
-            String[] copy = draftStageCopy(brandName, brief, stage, intent);
-            steps.add(JourneyStep.message(stage, copy[0], copy[1]));
+            StageCopy copy = draftStageCopy(brandName, brief, stage, intent);
+            providers.add(copy.writtenBy().provider());
+            models.add(copy.writtenBy().model());
+            steps.add(JourneyStep.message(stage, copy.subject(), copy.body()));
             if (i < stages.size() - 1) {
                 steps.add(JourneyStep.wait(stage, 3));
             }
         }
 
         return new JourneyDraft("Journey: " + trim(brief, 48), "IndividualCreateEvent", 10, steps,
-                llm.provider(), llm.model(),
+                String.join(", ", providers), String.join(", ", models),
                 "AI draft — review the stages and copy, then Create. Nothing is live until you do.");
     }
 
-    private String[] draftStageCopy(String brandName, String brief, String stage, String intent) {
+    /** One stage's copy and the answer that wrote it. */
+    private record StageCopy(String subject, String body, GovernedAnswer writtenBy) {
+    }
+
+    private StageCopy draftStageCopy(String brandName, String brief, String stage, String intent) {
         String system = "You write short, warm lifecycle marketing messages for " + brandName
                 + ", a telecom brand. Respond with ONLY two lines and nothing else, exactly:\n"
                 + "SUBJECT: <subject, max 60 characters>\n"
                 + "BODY: <body, max 300 characters, no emojis>" + voice.instruction();
         String user = "Journey brief: " + brief + "\n"
                 + "This message is the '" + stage + "' stage. Its job: " + intent + ".";
-        String raw = governor.complete("journey-draft", LlmAdapter.Tier.FAST, system, user);
-        String subject = lineAfter(raw, "SUBJECT:");
-        String body = lineAfter(raw, "BODY:");
+        GovernedAnswer answer = governor.answer("journey-draft", LlmAdapter.Tier.FAST, system, user);
+        String subject = lineAfter(answer.text(), "SUBJECT:");
+        String body = lineAfter(answer.text(), "BODY:");
         if (subject == null || body == null) {
-            raw = governor.complete("journey-draft-retry", LlmAdapter.Tier.FAST, system,
+            answer = governor.answer("journey-draft-retry", LlmAdapter.Tier.FAST, system,
                     user + "\nRespond again with ONLY the two lines 'SUBJECT:' and 'BODY:'.");
-            subject = lineAfter(raw, "SUBJECT:");
-            body = lineAfter(raw, "BODY:");
+            subject = lineAfter(answer.text(), "SUBJECT:");
+            body = lineAfter(answer.text(), "BODY:");
         }
         // safe fallback: never hand back a blank stage, even if the model misbehaves
         if (subject == null || subject.isBlank()) subject = stage;
         if (body == null || body.isBlank()) body = "Hi! " + intent;
-        return new String[] {subject, body};
+        return new StageCopy(subject, body, answer);
     }
 
     private static String trim(String s, int max) {

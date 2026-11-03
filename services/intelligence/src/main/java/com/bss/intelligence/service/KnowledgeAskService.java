@@ -2,7 +2,6 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.client.KnowledgeArticle;
 import com.bss.intelligence.client.KnowledgeClient;
-import com.bss.intelligence.llm.LlmAdapter;
 import com.bss.intelligence.service.KnowledgeAnswer.KnowledgeSource;
 import org.springframework.stereotype.Service;
 
@@ -29,7 +28,6 @@ public class KnowledgeAskService {
     private static final int CACHE_MAX = 2000;
 
     private final KnowledgeClient knowledge;
-    private final LlmAdapter llm;
 
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final com.bss.intelligence.knowledge.KnowledgeGapRepository gaps;
@@ -49,14 +47,13 @@ public class KnowledgeAskService {
 
     private final com.bss.intelligence.client.OntologyClient ontology;
 
-    public KnowledgeAskService(KnowledgeClient knowledge, LlmAdapter llm,
+    public KnowledgeAskService(KnowledgeClient knowledge,
             com.bss.intelligence.llm.AiGovernor governor,
             com.bss.intelligence.knowledge.KnowledgeGapRepository gaps,
             com.bss.intelligence.security.TenantScope tenantScope,
             com.bss.intelligence.client.OntologyClient ontology) {
         this.ontology = ontology;
         this.knowledge = knowledge;
-        this.llm = llm;
         this.governor = governor;
         this.gaps = gaps;
         this.tenantScope = tenantScope;
@@ -118,9 +115,11 @@ public class KnowledgeAskService {
                 + " fences. If the articles do not cover it, say so"
                 + " plainly and suggest raising a ticket. Never invent policies or prices.\n\n"
                 + "ARTICLES:\n" + context;
-        String answer = governor.complete("knowledge-ask",
+        // the answer names the model that wrote it — FAST, or the fallback that stood in
+        com.bss.intelligence.llm.GovernedAnswer served = governor.answer("knowledge-ask",
                 com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, question);
-        KnowledgeAnswer out = new KnowledgeAnswer(gap, answer, sources, llm.provider(), llm.model(), false);
+        KnowledgeAnswer out = new KnowledgeAnswer(gap, served.text(), sources, served.provider(), served.model(),
+                false);
         cache.put(key, new Cached(fp.toString(), out, System.currentTimeMillis()));
         return out;
     }

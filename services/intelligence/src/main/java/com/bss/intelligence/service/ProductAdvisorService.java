@@ -194,7 +194,8 @@ public class ProductAdvisorService {
                     out.add(0, narrative);
                 }
             } catch (Exception e) {
-                log.debug("no narrative — the receipts stand alone: {}", e.getMessage());
+                log.debug("no narrative — the receipts stand alone: {}",
+                        com.bss.intelligence.llm.ProviderErrors.describe(e));
             }
         }
         // the proposal the console posts back to /adopt carries the finding's decision id

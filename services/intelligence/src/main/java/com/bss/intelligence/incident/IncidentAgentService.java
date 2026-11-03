@@ -210,7 +210,8 @@ public class IncidentAgentService {
                             .map(t -> "- " + t.getHypothesis() + " => " + t.getProposedAction())
                             .reduce("", (a, b) -> a + b + "\n"));
         } catch (Exception e) {
-            log.warn("runbook draft failed for {}: {}", signature, e.getMessage());
+            log.warn("runbook draft failed for {}: {}", signature,
+                    com.bss.intelligence.llm.ProviderErrors.describe(e));
             return;
         }
         int version = runbooks.findByTenantIdAndSignatureOrderByVersionDesc(tenant, signature)

@@ -262,8 +262,11 @@ public class ModelDoorService {
         // customer text as much as a copilot's. 403 is not retried by the SDK.
         com.bss.intelligence.llm.Jurisdiction.Residency residency =
                 com.bss.intelligence.llm.Jurisdiction.Residency.of(tenant.getAiDataResidency());
+        // decided from the URL the call will REALLY go to: a blank base URL is the
+        // provider's public endpoint, and a public US endpoint is US whatever was declared
         String where = com.bss.intelligence.llm.Jurisdiction.of(tenant.getWorkerAiJurisdiction(),
-                nullToEmpty(tenant.getWorkerAiProvider()).toLowerCase(java.util.Locale.ROOT));
+                nullToEmpty(tenant.getWorkerAiProvider()).toLowerCase(java.util.Locale.ROOT),
+                effectiveBase(protocol, tenant));
         if (!residency.permits(where)) {
             return refuse(protocol, key, model, "refused-residency", 403, DoorProtocol.Refusal.INVALID,
                     residency == com.bss.intelligence.llm.Jurisdiction.Residency.INVALID
@@ -307,11 +310,19 @@ public class ModelDoorService {
                 "the model door does not list models");
     }
 
+    /** The base URL a tenant's worker call goes to: its own, else the provider's public endpoint. */
+    private static String effectiveBase(DoorProtocol protocol, TenantRegistry.TenantEntry tenant) {
+        String base = nullToEmpty(tenant.getWorkerAiBaseUrl()).isBlank() ? protocol.defaultBase()
+                : tenant.getWorkerAiBaseUrl().trim();
+        return base.replaceAll("/+$", "");
+    }
+
     private DoorRequests.DoorReply forward(DoorProtocol protocol, TenantRegistry.TenantEntry tenant, String body,
             Map<String, String> passthrough) {
-        String base = nullToEmpty(tenant.getWorkerAiBaseUrl()).isBlank() ? protocol.defaultBase()
-                : tenant.getWorkerAiBaseUrl();
-        return http.baseUrl(base.replaceAll("/+$", "")).build()
+        // a COPY of the builder per call: baseUrl() mutates a builder, and on the one
+        // shared instance two tenants' concurrent calls raced — one tenant's key and
+        // prompt could leave for the other tenant's provider (the #430 class, here)
+        return http.clone().baseUrl(effectiveBase(protocol, tenant)).build()
                 .post().uri(protocol.path())
                 .contentType(MediaType.APPLICATION_JSON)
                 .headers(h -> protocol.authenticate(h, tenant.getWorkerAiApiKey(), passthrough))

@@ -34,9 +34,14 @@ public final class Untrusted {
         return "<untrusted source=\"" + source + "\">\n" + body + "\n</untrusted>";
     }
 
-    /** A system prompt with the rule about untrusted blocks, once. */
+    /**
+     * A system prompt with the rule about untrusted blocks, once. Decided by
+     * the exact constant the governor appends — never by searching the prompt
+     * for the tag, which a quoted knowledge article can carry and so drop the
+     * rule.
+     */
     public static String withRule(String system) {
         String s = system == null ? "" : system;
-        return s.contains("<untrusted source=") ? s : s + RULE;
+        return s.endsWith(RULE) ? s : s + RULE;
     }
 }

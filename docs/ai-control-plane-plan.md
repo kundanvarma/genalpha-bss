@@ -145,7 +145,10 @@ redacted, same canary — goes once to the fallback. Anything else (a 400, a
 bad key) is not retried, because it would fail there too. The AI audit page
 then shows two rows: the failed attempt (`error`, as before) and the answer,
 whose `fallbackFrom` names the provider it stood in for. With no fallback
-configured nothing changes: the call fails exactly as it did.
+configured nothing changes: the call fails exactly as it did. The warning
+logged when the fallback is tried names the failed provider's error class and
+HTTP status only — never the error's text, which a provider may fill with the
+prompt it could not process.
 
 ```yaml
       - id: <tenant>
@@ -170,13 +173,28 @@ model door applies the same rule to digital workers (`worker-ai-jurisdiction`).
 Any other word than `eu` refuses every call — a residency rule with a typo must
 not quietly mean "anywhere".
 
-Jurisdiction is still derived from the provider kind when nobody declares it,
-exactly as before: `anthropic` = US, `openai-compatible` = self-hosted, the
-stub = none. An operator declares it with `ai-jurisdiction` (shared, or
-`ai-jurisdiction-fast` / `-smart`), using one of three words: `EU`, `US`,
-`self-hosted`. The shared declaration covers a tier only while that tier uses
-the shared provider and address; a tier moved to another provider does not
-inherit "EU" from the one it left.
+A route's jurisdiction is decided in this order:
+
+1. **The address the call really goes to.** A call to a known public endpoint
+   — `api.openai.com` or `api.anthropic.com` — is US, whatever the provider
+   kind and whatever was declared: a declaration cannot move a public
+   endpoint. A blank base URL counts as the provider's public endpoint,
+   because that is where the call goes (`anthropic` with no `ai-base-url`
+   calls `api.anthropic.com`; at the model door, `openai-compatible` with no
+   `worker-ai-base-url` calls `api.openai.com`).
+2. **The operator's declaration**, `ai-jurisdiction` (shared, or
+   `ai-jurisdiction-fast` / `-smart`), using one of three words: `EU`, `US`,
+   `self-hosted`. The shared declaration covers a tier only while that tier
+   uses the shared provider and address; a tier moved to another provider
+   does not inherit "EU" from the one it left.
+3. **The provider kind's default**: `anthropic` = US, `openai-compatible` =
+   self-hosted, the stub = none (the stub sends nothing, whatever is declared).
+
+The deployment's shared default model — the one every tenant without its own
+stack uses — follows the same order. Its declaration is `AI_JURISDICTION`
+(`bss.intelligence.jurisdiction`), blank by default; so `AI_PROVIDER=openai-compatible`
+with `AI_BASE_URL=https://api.openai.com` is US, and an EU-only tenant without
+its own stack is refused rather than sent there.
 
 ```yaml
         ai-data-residency: eu
@@ -200,20 +218,33 @@ carried the earlier provider's key to its own endpoint. Each adapter now gets
 its own copy; `AiFallbackResidencyTest` asserts the fallback never sees the
 first provider's key, and went red when the copy was removed.
 
-Proof: `AiFallbackResidencyTest` (13 tests, two loopback stand-in providers
-behind the real router and adapters), `ModelDoorResidencyTest` (1), and the
-audit view's new keys pinned in `DtoRoundTripTest`. Each new guarantee was
-seen to fail with its code switched off. There is no browser suite for this
+Proof: `AiFallbackResidencyTest` (18 tests, two loopback stand-in providers
+behind the real router and adapters, plus a request factory that records where
+a call would have gone and sends nothing), `ModelDoorResidencyTest` (1),
+`ModelDoorIsolationTest` (the door's blank-URL case), and the audit view's new
+keys pinned in `DtoRoundTripTest`. Each new guarantee was seen to fail with
+its code switched off. Of the five added on 2026-11-03, the three endpoint
+tests and the log test were written against the old code first and failed
+there; the `AI_JURISDICTION` test needs a setting the old code did not have,
+and was seen to fail with the setting ignored. There is no browser suite for this
 arc: the fleet has no stand-in provider that can be told to fail on demand.
 
 ### Honest limits
 
-- **Jurisdiction is a declaration, not a measurement.** The BSS does not
-  look up where an endpoint really runs. `openai-compatible` defaults to
-  "self-hosted" as it always has — so an operator who points it at a public
-  US API and declares nothing passes the EU-only rule. Declare
-  `ai-jurisdiction: US` for such endpoints; the default is kept only so that
-  nothing changes for tenants that have not asked for residency.
+- **Jurisdiction is a declaration, not a measurement — except for two hosts.**
+  The BSS knows exactly two public endpoints by name (`api.openai.com`,
+  `api.anthropic.com`, both US). Any other address is what the operator
+  declares, else the provider kind's default — and `openai-compatible` still
+  defaults to "self-hosted", so an operator who points it at some *other*
+  public API (Mistral, Groq, Azure OpenAI, a US region of anything) and
+  declares nothing passes the EU-only rule. Declare `ai-jurisdiction: US` for
+  such endpoints. The table is matched on the exact host: a proxy or gateway
+  in front of OpenAI is whatever its own address says.
+- **No EU arrangement on the two public hosts can be declared.** Because the
+  host wins over the word, an operator with a contractual EU processing term
+  on `api.openai.com` or `api.anthropic.com` cannot label it EU; it must use a
+  regional endpoint address (which is then a declaration like any other).
+  That is deliberate — the rule fails closed.
 - **EU means the EU word.** EEA or UK endpoints are not a fourth word; an
   operator decides whether to declare them `EU`, and owns that decision.
 - **One retry, one fallback.** No backoff, no circuit breaker: while the main
@@ -249,7 +280,12 @@ and the decision in insight's log (`context.traceId`).
   provider, the model, the token counts, the tenant and the use case. A
   digital worker's call through the model door is the same kind of span, with
   the provider's own token counts. A failed call is marked as an error with
-  the error's *class* only.
+  the error's *class* only. When the tenant's fallback answers, the span is
+  renamed for the model that served (`gen_ai.provider.name`,
+  `gen_ai.request.model`, as the ledger's served row says), keeps the one it
+  stood in for in `bss.fallback_from` with that failure's class in
+  `bss.fallback_error_type`, and is not an error; only a fallback that fails
+  too marks the span as an error.
 - *ontology* — each governed action execute is a span named
   `execute_tool <action>` (for example `execute_tool changePlan`), carrying the
   action, the tenant, the agent, the channel, how it ended (executed, refused,
@@ -309,7 +345,8 @@ instead of them. The pin is in `GenAiTracing.SEMCONV_PIN` and
 
 **Proof.** `AiCallTracingTest` (intelligence) runs a governed call against an
 in-memory exporter: one `chat` span with the standard attributes, no content
-in any attribute, error spans with the class and not the message, and the
+in any attribute, error spans with the class and not the message, a fallback
+span that names the provider that served and is not an error, and the
 ledger row keyed by the span's trace id (and no id, rather than zeros, when
 tracing is absent). It was seen to fail when a prompt was put on the span.
 `ExecuteToolSpanTest` (ontology) runs an executed and a refused action: one
@@ -329,9 +366,14 @@ input or refusal wording on the span.
   (`gen_ai.system` became `gen_ai.provider.name`); when they move again the
   pin above is what to compare against, and a backend that reads the older
   names will not see these spans as GenAI spans.
-- **Token counts on governor spans are estimates** — the ledger's own chars/4
-  meter, flagged `bss.usage.estimated=true` — because the HTTP adapters still
-  discard the provider's `usage`. The model door's counts are the provider's.
+- **Token counts on governor spans are the ledger's**: the provider's own
+  `usage` when its answer carries it, else the chars/4 estimate flagged
+  `bss.usage.estimated=true` (the stub, a server that leaves `usage` off).
+  The model door's counts are always the provider's.
+- **A fallback leaves one span, not two.** The first attempt and the
+  fallback share the call's span; the first attempt's duration is inside it
+  and its failure is the `bss.fallback_error_type` attribute, not a child
+  span of its own.
 - **The provider name is the house name** (`anthropic`, `openai`,
   `openai-compatible`, `stub`). The first two match the conventions'
   well-known values; the others are custom values the conventions allow.

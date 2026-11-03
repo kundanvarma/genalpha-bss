@@ -39,6 +39,13 @@ public interface LlmAdapter {
         return java.util.Optional.empty();
     }
 
+    /** The base URL this adapter actually sends to, defaults resolved; null when it
+     * sends nothing (the stub) or cannot say. Jurisdiction reads it: a call to a
+     * known public endpoint is that endpoint's jurisdiction, whatever was declared. */
+    default String endpoint() {
+        return null;
+    }
+
     /** Which provider/model answered — recorded in the audit ledger. */
     String provider();
 

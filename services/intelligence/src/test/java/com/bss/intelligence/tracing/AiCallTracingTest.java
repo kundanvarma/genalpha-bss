@@ -55,7 +55,7 @@ class AiCallTracingTest {
         otel.close();
     }
 
-    static final class Model implements LlmAdapter {
+    static class Model implements LlmAdapter {
         RuntimeException failWith;
 
         @Override
@@ -160,6 +160,67 @@ class AiCallTracingTest {
         assertThat(span.getEvents()).isEmpty(); // no recordException: its message could quote the prompt
         assertThat(String.valueOf(span.getAttributes().asMap().values())).doesNotContain("anna@example.com");
         assertThat(ledgerRow().getTraceId()).isEqualTo(span.getTraceId());
+    }
+
+    /** A primary that is down (503) and names the tenant's fallback as its second choice. */
+    static final class DownWithFallback extends Model {
+        final Model fallback = new Model() {
+            @Override
+            public String provider() {
+                return "openai-compatible";
+            }
+
+            @Override
+            public String model() {
+                return "mistral-small";
+            }
+        };
+
+        DownWithFallback() {
+            failWith = org.springframework.web.client.HttpServerErrorException.create(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Service Unavailable",
+                    org.springframework.http.HttpHeaders.EMPTY, new byte[0], null);
+        }
+
+        @Override
+        public Optional<com.bss.intelligence.llm.ModelRoute> fallbackRoute(Tier tier) {
+            return Optional.of(new com.bss.intelligence.llm.ModelRoute(fallback, "openai-compatible",
+                    "mistral-small", "self-hosted"));
+        }
+    }
+
+    @Test
+    void whenTheFallbackAnswersTheSpanNamesItAndIsNotAnError() {
+        governor(new DownWithFallback()).complete("ticket-reply", LlmAdapter.Tier.FAST, SYSTEM, USER);
+
+        assertThat(spans.getFinishedSpanItems()).hasSize(1);
+        SpanData span = spans.getFinishedSpanItems().get(0);
+        // the span names who answered, as the ledger's served row does
+        assertThat(span.getName()).isEqualTo("chat mistral-small");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("gen_ai.provider.name"))).isEqualTo("openai-compatible");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("gen_ai.request.model"))).isEqualTo("mistral-small");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("bss.fallback_from"))).isEqualTo("anthropic");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("bss.fallback_error_type")))
+                .isEqualTo("org.springframework.web.client.HttpServerErrorException$ServiceUnavailable");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("bss.ai.outcome"))).isEqualTo("ok");
+        // error.type means "this operation failed" in the conventions — it did not
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("error.type"))).isNull();
+        // a successful call's status, as the spec asks instrumentation to leave it
+        assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.UNSET);
+    }
+
+    @Test
+    void whenTheFallbackFailsTooTheSpanIsAnErrorNamingTheSecondFailure() {
+        DownWithFallback model = new DownWithFallback();
+        model.fallback.failWith = new IllegalStateException("second");
+
+        assertThatThrownBy(() -> governor(model).complete("ticket-reply", LlmAdapter.Tier.FAST, SYSTEM, USER))
+                .isInstanceOf(IllegalStateException.class);
+
+        SpanData span = spans.getFinishedSpanItems().get(0);
+        assertThat(span.getStatus().getStatusCode()).isEqualTo(StatusCode.ERROR);
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("error.type"))).isEqualTo("java.lang.IllegalStateException");
+        assertThat(span.getAttributes().get(AttributeKey.stringKey("bss.fallback_from"))).isEqualTo("anthropic");
     }
 
     @Test

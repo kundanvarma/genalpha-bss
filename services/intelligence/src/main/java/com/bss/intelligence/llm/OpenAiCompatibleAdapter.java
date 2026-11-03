@@ -19,11 +19,13 @@ public class OpenAiCompatibleAdapter implements LlmAdapter {
 
     private final RestClient restClient;
     private final String model;
+    private final String endpoint;
 
     public OpenAiCompatibleAdapter(RestClient.Builder builder,
             @Value("${bss.intelligence.base-url}") String baseUrl,
             @Value("${bss.intelligence.api-key:}") String apiKey,
             @Value("${bss.intelligence.model}") String model) {
+        this.endpoint = baseUrl;
         RestClient.Builder b = builder.baseUrl(baseUrl);
         if (!apiKey.isBlank()) {
             b = b.defaultHeader("Authorization", "Bearer " + apiKey);
@@ -65,6 +67,11 @@ public class OpenAiCompatibleAdapter implements LlmAdapter {
             return null;
         }
         return new LlmCompletion.Usage(in == null ? 0 : in, out == null ? 0 : out);
+    }
+
+    @Override
+    public String endpoint() {
+        return endpoint;
     }
 
     @Override

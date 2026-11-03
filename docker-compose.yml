@@ -873,6 +873,7 @@ services:
       AI_MODEL_FAST: ${AI_MODEL_FAST:-}
       AI_MODEL_SMART: ${AI_MODEL_SMART:-}
       AI_API_KEY: ${AI_API_KEY:-}
+      AI_JURISDICTION: ${AI_JURISDICTION:-}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:

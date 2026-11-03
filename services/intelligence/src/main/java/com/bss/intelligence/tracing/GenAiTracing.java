@@ -48,6 +48,9 @@ public class GenAiTracing {
     public static final AttributeKey<String> OUTCOME = AttributeKey.stringKey("bss.ai.outcome");
     /** True when the token counts are the ledger's chars/4 estimate, not the provider's own usage. */
     public static final AttributeKey<Boolean> TOKENS_ESTIMATED = AttributeKey.booleanKey("bss.usage.estimated");
+    /** On a fallback: the provider the answering one stood in for, and the class of its failure. */
+    public static final AttributeKey<String> FALLBACK_FROM = AttributeKey.stringKey("bss.fallback_from");
+    public static final AttributeKey<String> FALLBACK_ERROR_TYPE = AttributeKey.stringKey("bss.fallback_error_type");
 
     private final Tracer tracer;
 
@@ -89,6 +92,25 @@ public class GenAiTracing {
         span.setAttribute(ERROR_TYPE, errorType);
         span.setAttribute(OUTCOME, outcome);
         span.setStatus(StatusCode.ERROR);
+    }
+
+    /**
+     * The first choice failed and the tenant's fallback is being tried: the span
+     * now names the provider and model that will answer (as the ledger's served
+     * row does), and keeps the one it stood in for, with that failure's CLASS, in
+     * house attributes. {@code error.type} and ERROR status are left for a call
+     * that actually failed — the fallback's own failure sets them via
+     * {@link #failed}. When the fallback answers, the status stays UNSET, as for
+     * any successful call: the OpenTelemetry spec asks instrumentation not to
+     * set OK itself.
+     */
+    public static void fellBack(Span span, String fromProvider, String failureType, String provider, String model) {
+        String m = model == null || model.isBlank() ? "unknown" : model;
+        span.updateName("chat " + m);
+        span.setAttribute(PROVIDER, provider == null ? "unknown" : provider);
+        span.setAttribute(REQUEST_MODEL, m);
+        span.setAttribute(FALLBACK_FROM, fromProvider == null ? "unknown" : fromProvider);
+        span.setAttribute(FALLBACK_ERROR_TYPE, failureType);
     }
 
     /**

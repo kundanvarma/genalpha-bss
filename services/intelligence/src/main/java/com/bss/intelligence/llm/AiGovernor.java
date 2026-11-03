@@ -144,6 +144,15 @@ public class AiGovernor {
      * a row, and the fallback's row names the provider it stood in for.
      */
     public String complete(String useCase, LlmAdapter.Tier tier, String system, String user) {
+        return answer(useCase, tier, system, user).text();
+    }
+
+    /**
+     * {@link #complete}, and the provider and model that WROTE the answer — the
+     * route that served it, fallback included. A draft's AI-content marker reads
+     * these (#422), never the tenant's configured model for some other tier.
+     */
+    public GovernedAnswer answer(String useCase, LlmAdapter.Tier tier, String system, String user) {
         // every system prompt carries the rule about fenced, untrusted text (#422)
         system = Untrusted.withRule(system);
         String tenant = tenantScope.currentTenantId();
@@ -232,27 +241,34 @@ public class AiGovernor {
             answer = primary.adapter().completeWithUsage(tier, wireSystem, wireUser);
         } catch (RuntimeException e) {
             record(call, primary, null, "", estimatedPrompt, 0L, "error", null);
-            com.bss.intelligence.tracing.GenAiTracing.failed(span, e.getClass().getName(), "error");
             Optional<ModelRoute> fallback = retryable(e) ? fallbackFor(tier) : Optional.empty();
             if (fallback.isEmpty()) {
+                com.bss.intelligence.tracing.GenAiTracing.failed(span, e.getClass().getName(), "error");
                 throw e;
             }
             served = fallback.get();
             fallbackFrom = primary.provider();
             if (!residency.permits(served.jurisdiction())) {
                 // never fall back across the residency rule: the first failure stands
+                com.bss.intelligence.tracing.GenAiTracing.failed(span, e.getClass().getName(), "error");
                 record(call, served, fallbackFrom, "", Meter.NONE, 0L, "refused-residency", null);
                 log.warn("ai fallback refused for {} ({}): {} is in jurisdiction {}, tenant is {}",
                         useCase, tier, served.provider(), served.jurisdiction(), residency);
                 throw e;
             }
+            // the error's class and status, never its message: a provider's error
+            // body can quote the prompt, and Spring puts that body in the message
             log.warn("ai provider {} failed for {} ({}): {} — trying fallback {}",
-                    primary.provider(), useCase, tier, e.getMessage(), served.provider());
+                    primary.provider(), useCase, tier, ProviderErrors.describe(e), served.provider());
+            // the span now names who will answer, as the served ledger row does
+            com.bss.intelligence.tracing.GenAiTracing.fellBack(span, fallbackFrom, e.getClass().getName(),
+                    served.provider(), served.model());
             started = System.nanoTime();
             try {
                 answer = served.adapter().completeWithUsage(tier, wireSystem, wireUser);
             } catch (RuntimeException second) {
                 record(call, served, fallbackFrom, "", estimatedPrompt, 0L, "error", null);
+                com.bss.intelligence.tracing.GenAiTracing.failed(span, second.getClass().getName(), "error");
                 throw second;
             }
         }
@@ -269,7 +285,7 @@ public class AiGovernor {
         com.bss.intelligence.tracing.GenAiTracing.usage(span, meter.promptTokens(), meter.completionTokens(),
                 "estimate".equals(meter.source()), "ok");
         record(call, served, fallbackFrom, ledgerResponse, meter, cost, "ok", latencyMs);
-        return rawExposure ? raw : map.restore(raw);
+        return new GovernedAnswer(rawExposure ? raw : map.restore(raw), served.provider(), served.model());
         } finally {
             span.end();
         }

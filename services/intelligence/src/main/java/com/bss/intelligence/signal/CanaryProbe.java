@@ -46,7 +46,8 @@ public class CanaryProbe {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
                 probeCurrentTenant(3);
             } catch (Exception e) {
-                log.warn("canary probe skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+                log.warn("canary probe skipped tenant '{}': {}", tenant.getId(),
+                        com.bss.intelligence.llm.ProviderErrors.describe(e));
             }
         }
     }

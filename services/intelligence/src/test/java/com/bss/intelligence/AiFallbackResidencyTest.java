@@ -101,6 +101,12 @@ class AiFallbackResidencyTest {
     }
 
     private AiGovernor governor(Consumer<TenantRegistry.TenantEntry> config) {
+        return governor(new StubAdapter(), RestClient.builder(), config);
+    }
+
+    /** The governor over the real router, with this default model and this HTTP builder. */
+    private AiGovernor governor(LlmAdapter defaultModel, RestClient.Builder http,
+            Consumer<TenantRegistry.TenantEntry> config) {
         TenantRegistry.TenantEntry entry = new TenantRegistry.TenantEntry();
         entry.setId("t1");
         config.accept(entry);
@@ -112,7 +118,7 @@ class AiFallbackResidencyTest {
         when(budgets.findByTenantId(anyString())).thenReturn(Optional.empty());
         AiContractRepository contracts = mock(AiContractRepository.class);
         when(contracts.findByTenantIdAndUseCase(anyString(), anyString())).thenReturn(Optional.empty());
-        LlmRouter router = new LlmRouter(List.of(new StubAdapter()), registry, scope, RestClient.builder());
+        LlmRouter router = new LlmRouter(List.of(defaultModel), registry, scope, http);
         return new AiGovernor(router, audits, budgets, contracts, scope, new Redactor(),
                 mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment(),
                 new com.bss.intelligence.tracing.GenAiTracing(io.opentelemetry.api.OpenTelemetry.noop()));
@@ -236,6 +242,36 @@ class AiFallbackResidencyTest {
         assertThat(shared.calls).hasValue(1);
     }
 
+    @Test
+    void aProviderErrorThatQuotesThePromptNeverReachesTheLog() {
+        String secret = "the customer's private complaint about invoice 4471";
+        // a provider whose error body quotes the prompt back — common in 4xx/5xx detail text
+        Provider primary = provider(503, "{\"error\":{\"message\":\"overloaded while reading: " + secret + "\"}}");
+        Provider fallback = provider(200, OPENAI_OK);
+        AiGovernor governor = governor(anthropicAt(primary).andThen(t -> {
+            t.setAiRawExposure(true); // raw exposure: the prompt leaves unredacted
+            t.setAiFallbackProvider("openai-compatible");
+            t.setAiFallbackBaseUrl(fallback.url());
+            t.setAiFallbackModel("mistral-small");
+        }));
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AiGovernor.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> logs =
+                new ch.qos.logback.core.read.ListAppender<>();
+        logs.start();
+        logger.addAppender(logs);
+        try {
+            assertThat(governor.complete("ticket-reply", LlmAdapter.Tier.FAST, "sys", secret))
+                    .isEqualTo("fallback says hi");
+        } finally {
+            logger.detachAppender(logs);
+        }
+        assertThat(logs.list).isNotEmpty(); // the fallback is still logged…
+        assertThat(logs.list).extracting(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+                .allMatch(m -> m.contains("503")) // …with the provider's status…
+                .noneMatch(m -> m.contains(secret) || m.contains("invoice")); // …and never its words
+    }
+
     /* ------------------------------------------------------------ residency */
 
     @Test
@@ -330,6 +366,96 @@ class AiFallbackResidencyTest {
                 .hasMessageContaining("not a residency rule this BSS knows");
         assertThat(primary.calls).hasValue(0);
         assertThat(ledger().get(0).getOutcome()).isEqualTo("refused-residency");
+    }
+
+    /* ------------------------------------- residency follows the endpoint (#2, #9) */
+
+    /** A builder whose requests record where they would have gone, and send nothing. */
+    private static RestClient.Builder offline(List<java.net.URI> attempted) {
+        return RestClient.builder().requestFactory((uri, method) -> {
+            attempted.add(uri);
+            throw new IOException("offline: the test sends nothing");
+        });
+    }
+
+    @Test
+    void anOpenAiCompatibleStackAtOpenAisPublicEndpointIsUsAndAnEuOnlyTenantIsRefused() {
+        List<java.net.URI> attempted = new ArrayList<>();
+        AiGovernor governor = governor(new StubAdapter(), offline(attempted), t -> {
+            t.setAiDataResidency("eu");
+            t.setAiProvider("openai-compatible");
+            t.setAiBaseUrl("https://api.openai.com");
+            t.setAiApiKey("tenant-key");
+            t.setAiModel("gpt-4o-mini");
+        });
+
+        assertThatThrownBy(() -> governor.complete("ticket-reply", LlmAdapter.Tier.FAST, "sys", "u"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("403")
+                .hasMessageContaining("jurisdiction US");
+        assertThat(attempted).isEmpty();
+        AiAudit row = ledger().get(0);
+        assertThat(row.getOutcome()).isEqualTo("refused-residency");
+        assertThat(row.getJurisdiction()).isEqualTo("US");
+    }
+
+    @Test
+    void aDeclarationCannotMoveAPublicUsEndpointIntoTheEu() {
+        List<java.net.URI> attempted = new ArrayList<>();
+        AiGovernor governor = governor(new StubAdapter(), offline(attempted), t -> {
+            t.setAiDataResidency("eu");
+            t.setAiProvider("anthropic"); // no ai-base-url: the adapter calls https://api.anthropic.com
+            t.setAiApiKey("tenant-key");
+            t.setAiModel("claude-test");
+            t.setAiJurisdiction("EU");
+        });
+
+        assertThatThrownBy(() -> governor.complete("ticket-reply", LlmAdapter.Tier.SMART, "sys", "u"))
+                .hasMessageContaining("jurisdiction US");
+        assertThat(attempted).isEmpty();
+    }
+
+    @Test
+    void theSharedDefaultModelAtOpenAisPublicEndpointIsUsForATenantWithoutItsOwnStack() {
+        List<java.net.URI> attempted = new ArrayList<>();
+        // the deployment's default: AI_PROVIDER=openai-compatible, AI_BASE_URL=https://api.openai.com
+        LlmAdapter shared = new com.bss.intelligence.llm.OpenAiCompatibleAdapter(offline(attempted),
+                "https://api.openai.com", "deployment-key", "gpt-4o-mini");
+        AiGovernor governor = governor(shared, RestClient.builder(), t -> t.setAiDataResidency("eu"));
+
+        assertThatThrownBy(() -> governor.complete("ticket-reply", LlmAdapter.Tier.FAST, "sys", "u"))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("jurisdiction US");
+        assertThat(attempted).isEmpty();
+        assertThat(ledger().get(0).getJurisdiction()).isEqualTo("US");
+    }
+
+    @Test
+    void theSharedDefaultModelDeclaresItsJurisdictionWithOneSetting() {
+        TenantRegistry registry = new TenantRegistry();
+        TenantRegistry.TenantEntry entry = new TenantRegistry.TenantEntry();
+        entry.setId("t1");
+        registry.setRegistry(List.of(entry));
+        TenantScope scope = mock(TenantScope.class);
+        when(scope.currentTenantId()).thenReturn("t1");
+        // a hosted endpoint the BSS cannot recognise: the operator says where it is
+        LlmAdapter hosted = new com.bss.intelligence.llm.OpenAiCompatibleAdapter(RestClient.builder(),
+                "https://llm.example-eu-host.test", "", "mistral-small");
+
+        assertThat(new LlmRouter(List.of(hosted), registry, scope, RestClient.builder(), "")
+                .route(LlmAdapter.Tier.FAST).jurisdiction()).isEqualTo("self-hosted"); // undeclared: the kind's default
+        assertThat(new LlmRouter(List.of(hosted), registry, scope, RestClient.builder(), "eu")
+                .route(LlmAdapter.Tier.FAST).jurisdiction()).isEqualTo("EU");
+        assertThat(new LlmRouter(List.of(hosted), registry, scope, RestClient.builder(), "US")
+                .route(LlmAdapter.Tier.SMART).jurisdiction()).isEqualTo("US");
+        // and no declaration moves a public US endpoint
+        LlmAdapter openAi = new com.bss.intelligence.llm.OpenAiCompatibleAdapter(RestClient.builder(),
+                "https://api.openai.com", "", "gpt-4o-mini");
+        assertThat(new LlmRouter(List.of(openAi), registry, scope, RestClient.builder(), "EU")
+                .route(LlmAdapter.Tier.FAST).jurisdiction()).isEqualTo("US");
+        // the stub sends nothing, whatever is declared
+        assertThat(new LlmRouter(List.of(new StubAdapter()), registry, scope, RestClient.builder(), "US")
+                .route(LlmAdapter.Tier.FAST).jurisdiction()).isEqualTo("none");
     }
 
     /* ------------------------------------------------------------ metering */

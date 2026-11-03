@@ -31,15 +31,26 @@ public class LlmRouter implements LlmAdapter {
     private final TenantScope tenantScope;
     private final RestClient.Builder builder;
     private final Map<String, LlmAdapter> cache = new ConcurrentHashMap<>();
+    /** The shared default model's declared jurisdiction (bss.intelligence.jurisdiction); null = none declared. */
+    private final String defaultJurisdiction;
 
     public LlmRouter(java.util.List<LlmAdapter> adapters, TenantRegistry tenants,
             TenantScope tenantScope, RestClient.Builder builder) {
+        this(adapters, tenants, tenantScope, builder, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public LlmRouter(java.util.List<LlmAdapter> adapters, TenantRegistry tenants,
+            TenantScope tenantScope, RestClient.Builder builder,
+            @org.springframework.beans.factory.annotation.Value("${bss.intelligence.jurisdiction:}")
+            String defaultJurisdiction) {
         // Exactly one provider bean exists (the @ConditionalOnProperty pick).
         this.defaultAdapter = adapters.stream().filter(a -> !(a instanceof LlmRouter))
                 .findFirst().orElseThrow(() -> new IllegalStateException("no default LLM provider bean"));
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.builder = builder;
+        this.defaultJurisdiction = defaultJurisdiction;
     }
 
     /** One provider configuration, resolved for one tier. */
@@ -78,13 +89,21 @@ public class LlmRouter implements LlmAdapter {
     }
 
     /**
-     * A tier's jurisdiction: the tier's own declaration, else the shared one
-     * — but the shared one only while the tier really uses the shared provider
-     * and URL (a tier that moved to another provider must not inherit "EU"
-     * from the endpoint it left) — else the provider kind's default.
+     * A tier's jurisdiction: the endpoint the call really goes to when that is
+     * a known public one (no declaration moves it); else the tier's own
+     * declaration, else the shared one — but the shared one only while the
+     * tier really uses the shared provider and URL (a tier that moved to
+     * another provider must not inherit "EU" from the endpoint it left) — else
+     * the provider kind's default.
      */
     private static String jurisdiction(String tierDeclared, String sharedDeclared,
-            String tierProvider, String tierBaseUrl, String provider) {
+            String tierProvider, String tierBaseUrl, String provider, String baseUrl) {
+        if (!"stub".equals(provider)) {
+            String known = Jurisdiction.ofEndpoint(Jurisdiction.effectiveUrl(provider, baseUrl));
+            if (known != null) {
+                return known;
+            }
+        }
         String own = Jurisdiction.declared(tierDeclared);
         if (own != null) {
             return own;
@@ -106,12 +125,13 @@ public class LlmRouter implements LlmAdapter {
         String tierProvider = fast ? t.getAiProviderFast() : t.getAiProviderSmart();
         String tierBase = fast ? t.getAiBaseUrlFast() : t.getAiBaseUrlSmart();
         String provider = coalesce(tierProvider, t.getAiProvider());
+        String baseUrl = coalesce(tierBase, t.getAiBaseUrl());
         return new Stack(provider,
-                coalesce(tierBase, t.getAiBaseUrl()),
+                baseUrl,
                 coalesce(fast ? t.getAiApiKeyFast() : t.getAiApiKeySmart(), t.getAiApiKey()),
                 coalesce(fast ? t.getAiModelFast() : t.getAiModelSmart(), t.getAiModel()),
                 jurisdiction(fast ? t.getAiJurisdictionFast() : t.getAiJurisdictionSmart(), t.getAiJurisdiction(),
-                        tierProvider, tierBase, provider));
+                        tierProvider, tierBase, provider, baseUrl));
     }
 
     /** The tenant's fallback for a tier, the same shape: tier keys first, shared fallback keys second. */
@@ -123,12 +143,13 @@ public class LlmRouter implements LlmAdapter {
         if (provider.isBlank()) {
             return Optional.empty();
         }
+        String baseUrl = coalesce(tierBase, t.getAiFallbackBaseUrl());
         return Optional.of(new Stack(provider,
-                coalesce(tierBase, t.getAiFallbackBaseUrl()),
+                baseUrl,
                 coalesce(fast ? t.getAiFallbackApiKeyFast() : t.getAiFallbackApiKeySmart(), t.getAiFallbackApiKey()),
                 coalesce(fast ? t.getAiFallbackModelFast() : t.getAiFallbackModelSmart(), t.getAiFallbackModel()),
                 jurisdiction(fast ? t.getAiFallbackJurisdictionFast() : t.getAiFallbackJurisdictionSmart(),
-                        t.getAiFallbackJurisdiction(), tierProvider, tierBase, provider)));
+                        t.getAiFallbackJurisdiction(), tierProvider, tierBase, provider, baseUrl)));
     }
 
     private LlmAdapter build(TenantRegistry.TenantEntry tenant, Stack s) {
@@ -156,7 +177,7 @@ public class LlmRouter implements LlmAdapter {
     public ModelRoute route(Tier tier) {
         TenantRegistry.TenantEntry tenant = currentTenant();
         if (!hasOwnStack(tenant)) {
-            return ModelRoute.of(defaultAdapter, tier);
+            return ModelRoute.of(defaultAdapter, tier, defaultJurisdiction);
         }
         LlmAdapter adapter = resolve(tier);
         return new ModelRoute(adapter, adapter.provider(), adapter.model(), primary(tenant, tier).jurisdiction());
