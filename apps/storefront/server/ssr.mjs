@@ -189,6 +189,12 @@ async function fetchJson(url, headers) {
 }
 
 /** The tenant manifest the gateway stamps into every page, fetched the same way. */
+/** The first of a comma-joined forwarded header, trimmed; undefined when absent. */
+function first(value) {
+  const v = Array.isArray(value) ? value[0] : value;
+  return v ? v.split(',')[0].trim() || undefined : undefined;
+}
+
 async function tenantConfig(host) {
   const js = await ask(`${GATEWAY}/shop/tenant-config.js`,
     host ? { Host: host, 'X-Forwarded-Host': host } : {})
@@ -290,9 +296,12 @@ async function resolve(page, host) {
  * regression, and rebuilding them here from the React page's data would have
  * made a second authority for which price leads.
  */
-async function offeringMeta(id, host) {
-  const got = await fetchJson(`${CATALOG}/seo/offering/${encodeURIComponent(id)}/meta`,
-    host ? { 'X-Forwarded-Host': host, Host: host } : {});
+async function offeringMeta(id, host, proto) {
+  // the catalogue builds the canonical and the JSON-LD urls from these, so it
+  // needs the scheme the visitor used as well as the host
+  const headers = host ? { 'X-Forwarded-Host': host, Host: host } : {};
+  if (proto) headers['X-Forwarded-Proto'] = proto;
+  const got = await fetchJson(`${CATALOG}/seo/offering/${encodeURIComponent(id)}/meta`, headers);
   // a title OR a redirect: a withdrawn offering answers with the latter and no
   // title at all, and requiring one here swallowed the redirect entirely
   return got.json && (got.json.title || got.json.redirect) ? got.json : null;
@@ -363,7 +372,12 @@ createServer(async (req, res) => {
     res.end('ok');
     return;
   }
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  // Every proxy on the way ADDS its value: behind a front proxy and the gateway
+  // the header reads "shop.example,shop.example". The first is what the visitor
+  // typed. Used whole it named no tenant (the default's shop on another brand's
+  // domain), 404'd every product page and wrote a comma into the canonical.
+  const host = first(req.headers['x-forwarded-host']) || req.headers.host;
+  const proto = first(req.headers['x-forwarded-proto']);
   try {
     const page = classify(url.pathname);
     if (page.kind === 'unknown') {
@@ -383,7 +397,7 @@ createServer(async (req, res) => {
     const config = await tenantConfig(host);
     let meta = null;
     if (page.kind === 'offering') {
-      meta = await offeringMeta(page.id, host);
+      meta = await offeringMeta(page.id, host, proto);
       if (meta && meta.redirect) {
         // a product that is no longer sold MOVED; 301 keeps what the URL earned
         res.writeHead(301, { Location: meta.redirect, 'Cache-Control': 'no-cache' });
@@ -399,7 +413,7 @@ createServer(async (req, res) => {
     // a title and a canonical, and deliberately no product JSON-LD — claiming
     // a single Product for a page that lists many would be a lie a crawler
     // acts on.
-    const base = `http${req.headers['x-forwarded-proto'] === 'https' || !host ? 's' : ''}://${host || 'localhost'}`;
+    const base = `http${proto === 'https' || !host ? 's' : ''}://${host || 'localhost'}`;
     const brand = config.brandName || 'the operator';
     let headTags = '';
     if (status === 200 && page.kind === 'offering') {

@@ -351,6 +351,23 @@ async function untilRendered(path, tries = 24) {
     }
     ok('the hydration seed rides in a JSON block, which the content policy permits');
 
+    /* ---------- 6e. BEHIND A FRONT PROXY, AS ON A HOSTED BOX ---------- */
+    // The hosted box puts a proxy in front of the gateway; it sends one
+    // X-Forwarded-Host and the gateway appends its own, so the renderer sees
+    // "host,host". Read whole, that named no tenant: the default operator's shop on
+    // another brand's domain, every product page a 404, a comma in the canonical.
+    // The laptop has no front proxy, so only this leg ever sends the header.
+    {
+      const r = await fetch(`${API}/shop/offering/${mobile.id}`, { headers: { 'User-Agent': HUMAN,
+        'Cache-Control': 'no-cache', 'X-Forwarded-Host': 'localhost:8080', 'X-Forwarded-Proto': 'https' } });
+      const html = await r.text();
+      if (r.status !== 200) fail(`behind a front proxy the product page answered ${r.status}, not 200`);
+      const canon = (html.match(/<link rel="canonical" href="([^"]*)"/) || [])[1] || '';
+      if (canon.includes(',')) fail(`behind a front proxy the canonical carries a doubled host: ${canon}`);
+      if (!canon.startsWith('https://localhost:8080/')) fail(`behind a TLS proxy the canonical should be https on the visitor's host, got ${canon}`);
+      ok('behind a front proxy: the product page renders, on the visitor\'s host, over https');
+    }
+
     /* ---------- 6d. a browser hydrates it, with no complaints ---------- */
     const { chromium } = require('playwright');
     const browser = await chromium.launch();
