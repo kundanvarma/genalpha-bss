@@ -52,6 +52,67 @@ in compose and realm files ("billing-secret", admin/admin, partner
 tokens) are deliberate stand-ins — every one of them is an env seam
 (`.env.example` lists them) and none may carry a real value in git.
 
+### The anonymous surface, including what Spring answers by itself
+Every component validates its own tokens, and everything a component
+answers without one is declared in `ops/security/public-paths.txt`.
+`ops/security/security_config_drift.py` (run by the claims gate) reads the
+`permitAll` lines of every `SecurityConfig` and fails when one opens a path
+that file does not declare.
+
+Reading `permitAll` lines misses the paths Spring Security answers from its
+own filters, before authorization runs (#428). Measured on 3 Nov 2026, in a
+test and on every running component of the laptop fleet, two such paths are
+answered without a token by **every** component:
+
+| Path | Who answers | What comes back |
+|---|---|---|
+| `/.well-known/oauth-protected-resource/**` (GET) | the RFC 9728 metadata filter, which `oauth2ResourceServer()` switches on in Spring Security 7, with no setting to switch it off | 200 and a small JSON document. Only the ontology fills it in (the tenant's issuer, for MCP clients), and only the ontology's copy is routed by the gateway |
+| `/logout` (any method) | the logout filter every `HttpSecurity` carries | 302 to a `/login` page that does not exist. Sessions are stateless, so there is nothing to log out of |
+
+Both are now declared as `framework:` entries, 2 per component and 80 in
+total. Two checks keep them honest:
+
+- **`FrameworkSurfaceTest`** (agreement, and a copy in the ontology for its
+  customised resource server) starts the component's real filter chain. It
+  fails when a filter appears that nobody has measured, which is how a Spring
+  upgrade that adds one shows up. It also requests the declared paths plus a
+  list of the paths Spring answers when other features are on (form login,
+  one-time tokens, WebAuthn, OAuth2 login, SAML, the authorization server,
+  the error page), and fails unless exactly the declared ones answer without
+  a token.
+- **The drift check** holds every other component to the agreement's
+  `framework:` entries. It fails when a component configures anything outside
+  the shape the test measured (`formLogin`, `httpBasic`, `logout`, a custom
+  filter, a second filter chain and so on), because the test's result no
+  longer applies to that component.
+
+**Seen red:** taking `billing framework:/logout` out of the file fails the
+drift check. Adding `.formLogin()` to the agreement's config fails the drift
+check and both tests: four unmeasured filters, and `/login` and
+`/default-ui.css` answering. Declaring a path that does not answer fails the
+test too.
+
+**Honest limits.**
+- Only two of the 40 components are measured directly. The other 38 are
+  covered by inference: same configurer shape, so same filters. The live probe
+  of 3 Nov reached the 32 components running on the laptop at the time. It is
+  not a committed check.
+- The probe can only find paths it is told to request. A new filter is caught
+  by the filter count, but a filter we already know about that starts
+  answering a new path would only be caught if that path is on the canary
+  list.
+- MockMvc does not run the servlet container's error dispatch. `/error`
+  measured 401 on real Tomcat in the live probe, but the test does not prove
+  that.
+- Servlet filters outside Spring Security, and actuator endpoints beyond the
+  ones declared, are outside this check.
+- Every component except the ontology serves Spring's default document. It
+  names the component's internal URL, names no authorization server, and says
+  `tls_client_certificate_bound_access_tokens: true`, which nothing in this
+  fleet uses (TLS ends before the components). It is not reachable through the
+  gateway (only the ontology's is), but it is not accurate either. Filling it
+  in or removing it is follow-up work, not part of this change.
+
 ## What a REAL deployment must add (a laptop cannot prove these)
 
 ### Secrets
