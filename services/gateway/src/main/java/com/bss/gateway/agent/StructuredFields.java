@@ -60,27 +60,27 @@ final class StructuredFields {
 
     static String serialize(Member member) {
         return switch (member) {
-            case Item item -> serialize(item);
-            case InnerList list -> serialize(list);
+            case Item item -> serializeItem(item);
+            case InnerList list -> serializeInnerList(list);
         };
     }
 
-    static String serialize(Item item) {
-        return bare(item.value()) + serialize(item.params());
+    static String serializeItem(Item item) {
+        return bare(item.value()) + serializeParams(item.params());
     }
 
-    static String serialize(InnerList list) {
+    static String serializeInnerList(InnerList list) {
         StringBuilder sb = new StringBuilder("(");
         for (int i = 0; i < list.items().size(); i++) {
             if (i > 0) {
                 sb.append(' ');
             }
-            sb.append(serialize(list.items().get(i)));
+            sb.append(serializeItem(list.items().get(i)));
         }
-        return sb.append(')').append(serialize(list.params())).toString();
+        return sb.append(')').append(serializeParams(list.params())).toString();
     }
 
-    static String serialize(Params params) {
+    static String serializeParams(Params params) {
         StringBuilder sb = new StringBuilder();
         params.values().forEach((k, v) -> {
             sb.append(';').append(k);

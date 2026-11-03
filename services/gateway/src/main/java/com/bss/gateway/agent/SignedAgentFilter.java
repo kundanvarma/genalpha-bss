@@ -75,16 +75,15 @@ public class SignedAgentFilter implements GlobalFilter, Ordered {
                             .headers(h -> {
                                 h.remove(VERIFIED_AGENT);
                                 h.remove(VERIFIED_AGENT_KEY);
-                                switch (outcome) {
-                                    case WebBotAuthVerifier.Verified v -> {
-                                        h.remove(DECLARED_AGENT);
-                                        h.set(VERIFIED_AGENT, v.operator());
-                                        h.set(VERIFIED_AGENT_KEY, v.keyid());
-                                    }
-                                    case WebBotAuthVerifier.Refused r -> h.remove(DECLARED_AGENT);
-                                    case WebBotAuthVerifier.Absent a -> {
-                                    }
+                                if (outcome instanceof WebBotAuthVerifier.Verified v) {
+                                    h.remove(DECLARED_AGENT);
+                                    h.set(VERIFIED_AGENT, v.operator());
+                                    h.set(VERIFIED_AGENT_KEY, v.keyid());
+                                } else if (outcome instanceof WebBotAuthVerifier.Refused) {
+                                    // a broken signature proves nothing, so it keeps nothing, not even the declaration
+                                    h.remove(DECLARED_AGENT);
                                 }
+                                // Absent: no signature, so the declared header passes as the agent's own word
                             })
                             .build();
                     return chain.filter(exchange.mutate().request(request).build());

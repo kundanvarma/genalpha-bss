@@ -73,7 +73,7 @@ class SignedAgentFilterTest {
                 .header("Signature-Input", s.signatureInput())
                 .header("Signature", s.signature())
                 .header("Signature-Agent", s.signatureAgent());
-        for (int i = 0; i < extra.length; i += 2) {
+        for (int i = 0; i + 1 < extra.length; i += 2) {
             b = b.header(extra[i], extra[i + 1]);
         }
         return b.build();
