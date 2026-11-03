@@ -18,8 +18,32 @@
 # Five appear in nearly every component and are infrastructure, not API:
 #   /actuator/health/**  /actuator/prometheus   (probes and scraping)
 #   /v3/api-docs/**  /swagger-ui/**  /swagger-ui.html   (discovery)
+#
+# FRAMEWORK-SERVED PATHS (#428), written "framework:<path>". These have NO
+# permitAll line: a Spring Security filter answers them itself, BEFORE the
+# authorization filter runs, so reading the configs could never find them.
+# They were MEASURED, not inferred: FrameworkSurfaceTest (agreement, ontology)
+# boots the real filter chain and probes, and on 3 Nov 2026 every running
+# component on the laptop fleet answered both without a token. Two, in every
+# component that has a SecurityConfig:
+#   framework:/.well-known/oauth-protected-resource/**   GET -> 200
+#       OAuth2ProtectedResourceMetadataFilter, switched on by oauth2ResourceServer()
+#       since Spring Security 7 with no switch to turn it off. An RFC 9728
+#       document naming the pod's own URL and no authorization server; only the
+#       ontology fills it in, and only the ontology's MCP document is routed by
+#       the gateway.
+#   framework:/logout                                    any method -> 302
+#       LogoutFilter, on in every HttpSecurity unless .logout() is disabled;
+#       any method because CSRF is off. Stateless, so there is nothing to log
+#       out: it clears an empty context and redirects to a /login that does
+#       not exist (401).
+# The drift check requires every copy with the measured configurer shape to
+# declare exactly the framework paths the measured reference (agreement)
+# declares, and refuses a configurer the probe has never measured.
 
 # ---- agreement ----   (infrastructure only)
+agreement framework:/.well-known/oauth-protected-resource/**
+agreement framework:/logout
 agreement "/actuator/health/**"
 agreement "/actuator/prometheus"
 agreement "/swagger-ui.html"
@@ -27,6 +51,8 @@ agreement "/swagger-ui/**"
 agreement "/v3/api-docs/**"
 
 # ---- appointment ----
+appointment framework:/.well-known/oauth-protected-resource/**
+appointment framework:/logout
 appointment "/actuator/health/**"
 appointment "/actuator/prometheus"
 appointment "/swagger-ui.html"
@@ -35,6 +61,8 @@ appointment "/v3/api-docs/**"
 appointment ApiConstants.BASE_PATH+"/searchTimeSlot"
 
 # ---- assurance ----   (infrastructure only)
+assurance framework:/.well-known/oauth-protected-resource/**
+assurance framework:/logout
 assurance "/actuator/health/**"
 assurance "/actuator/prometheus"
 assurance "/swagger-ui.html"
@@ -42,6 +70,8 @@ assurance "/swagger-ui/**"
 assurance "/v3/api-docs/**"
 
 # ---- base-migration ----   (infrastructure only)
+base-migration framework:/.well-known/oauth-protected-resource/**
+base-migration framework:/logout
 base-migration "/actuator/health/**"
 base-migration "/actuator/prometheus"
 base-migration "/swagger-ui.html"
@@ -49,6 +79,8 @@ base-migration "/swagger-ui/**"
 base-migration "/v3/api-docs/**"
 
 # ---- benefit-allowance ----   (infrastructure only)
+benefit-allowance framework:/.well-known/oauth-protected-resource/**
+benefit-allowance framework:/logout
 benefit-allowance "/actuator/health/**"
 benefit-allowance "/actuator/prometheus"
 benefit-allowance "/swagger-ui.html"
@@ -56,6 +88,8 @@ benefit-allowance "/swagger-ui/**"
 benefit-allowance "/v3/api-docs/**"
 
 # ---- billing ----
+billing framework:/.well-known/oauth-protected-resource/**
+billing framework:/logout
 billing "/.well-known/genalpha-component.json"
 billing "/actuator/health/**"
 billing "/actuator/prometheus"
@@ -66,6 +100,8 @@ billing "/swagger-ui/**"
 billing "/v3/api-docs/**"
 
 # ---- campaign ----   (infrastructure only)
+campaign framework:/.well-known/oauth-protected-resource/**
+campaign framework:/logout
 campaign "/actuator/health/**"
 campaign "/actuator/prometheus"
 campaign "/swagger-ui.html"
@@ -73,6 +109,8 @@ campaign "/swagger-ui/**"
 campaign "/v3/api-docs/**"
 
 # ---- communication ----
+communication framework:/.well-known/oauth-protected-resource/**
+communication framework:/logout
 communication "/actuator/health/**"
 communication "/actuator/prometheus"
 communication "/esp/v1/event"
@@ -82,6 +120,8 @@ communication "/swagger-ui/**"
 communication "/v3/api-docs/**"
 
 # ---- device-commerce ----   (infrastructure only)
+device-commerce framework:/.well-known/oauth-protected-resource/**
+device-commerce framework:/logout
 device-commerce "/actuator/health/**"
 device-commerce "/actuator/prometheus"
 device-commerce "/swagger-ui.html"
@@ -89,6 +129,8 @@ device-commerce "/swagger-ui/**"
 device-commerce "/v3/api-docs/**"
 
 # ---- device-entitlement ----
+device-entitlement framework:/.well-known/oauth-protected-resource/**
+device-entitlement framework:/logout
 device-entitlement "/.well-known/genalpha-component.json"
 device-entitlement "/actuator/health/**"
 device-entitlement "/actuator/prometheus"
@@ -101,6 +143,8 @@ device-entitlement ApiConstants.TS43_PATH
 device-entitlement ApiConstants.TS43_PATH+"/**"
 
 # ---- document ----
+document framework:/.well-known/oauth-protected-resource/**
+document framework:/logout
 document "/actuator/health/**"
 document "/actuator/prometheus"
 document "/swagger-ui.html"
@@ -112,6 +156,8 @@ document ApiConstants.BASE_PATH+"/document/brand-logo"
 document ApiConstants.BASE_PATH+"/webhook/**"
 
 # ---- event-hub ----   (infrastructure only)
+event-hub framework:/.well-known/oauth-protected-resource/**
+event-hub framework:/logout
 event-hub "/actuator/health/**"
 event-hub "/actuator/prometheus"
 event-hub "/swagger-ui.html"
@@ -119,6 +165,8 @@ event-hub "/swagger-ui/**"
 event-hub "/v3/api-docs/**"
 
 # ---- fulfilment ----
+fulfilment framework:/.well-known/oauth-protected-resource/**
+fulfilment framework:/logout
 fulfilment "/actuator/health/**"
 fulfilment "/actuator/prometheus"
 fulfilment "/swagger-ui.html"
@@ -129,6 +177,8 @@ fulfilment ApiConstants.BASE_PATH+"/carrier/pickupPoints"
 fulfilment ApiConstants.BASE_PATH+"/carrierEvent"
 
 # ---- geographic-address ----
+geographic-address framework:/.well-known/oauth-protected-resource/**
+geographic-address framework:/logout
 geographic-address "/actuator/health/**"
 geographic-address "/actuator/prometheus"
 geographic-address "/swagger-ui.html"
@@ -137,6 +187,8 @@ geographic-address "/v3/api-docs/**"
 geographic-address ApiConstants.BASE_PATH+"/geographicAddressValidation"
 
 # ---- insight ----
+insight framework:/.well-known/oauth-protected-resource/**
+insight framework:/logout
 insight "/actuator/health/**"
 insight "/actuator/prometheus"
 insight "/swagger-ui.html"
@@ -150,6 +202,8 @@ insight ApiConstants.BASE_PATH+"/landing/*/lead"
 insight ApiConstants.BASE_PATH+"/landing/*/view"
 
 # ---- intelligence ----
+intelligence framework:/.well-known/oauth-protected-resource/**
+intelligence framework:/logout
 intelligence "/actuator/health/**"
 intelligence "/actuator/prometheus"
 intelligence "/swagger-ui.html"
@@ -159,6 +213,8 @@ intelligence ApiConstants.BASE_PATH+"/careChat/guest/**"
 intelligence ApiConstants.BASE_PATH+"/modelDoor/**"
 
 # ---- knowledge ----   (infrastructure only)
+knowledge framework:/.well-known/oauth-protected-resource/**
+knowledge framework:/logout
 knowledge ApiConstants.BASE_PATH+"/publicArticle"
 knowledge "/actuator/health/**"
 knowledge "/actuator/prometheus"
@@ -167,6 +223,8 @@ knowledge "/swagger-ui/**"
 knowledge "/v3/api-docs/**"
 
 # ---- loyalty ----   (infrastructure only)
+loyalty framework:/.well-known/oauth-protected-resource/**
+loyalty framework:/logout
 loyalty "/actuator/health/**"
 loyalty "/actuator/prometheus"
 loyalty "/swagger-ui.html"
@@ -174,21 +232,21 @@ loyalty "/swagger-ui/**"
 loyalty "/v3/api-docs/**"
 
 # ---- ontology ----
+ontology framework:/.well-known/oauth-protected-resource/**
+ontology framework:/logout
 ontology "/actuator/health/**"
 ontology "/actuator/prometheus"
 ontology ApiConstants.WELL_KNOWN
-# NOT A permitAll, SO NOT AN ENTRY — but anonymous all the same (#422):
-#   /.well-known/oauth-protected-resource[/**]   RFC 9728 metadata for the MCP endpoint
-# Spring Security 7's oauth2ResourceServer() serves it from its own filter,
-# before authorization, with no matcher this check can see. Measured on
-# 2026-11-02 (McpServerTest with the customizer removed): the document is served
-# anyway. The other components configure oauth2ResourceServer() the same way, so
-# they very likely answer it too (naming no authorization server, and their
-# internal URL) — inferred, not yet measured per component. The ontology fills
-# it with the tenant's issuer on purpose. Teaching the drift check about
-# framework-served paths is a follow-up.
+# The framework:/.well-known/oauth-protected-resource/** entry above is the one
+# place the RFC 9728 document is MEANT to be public (#422): the ontology fills it
+# with the tenant's issuer so an MCP client learns where to get a token, and the
+# gateway routes /.well-known/oauth-protected-resource/ontology/v1/mcp here.
+# Every other component serves the same document only because Spring does
+# (#428, measured — see the head of this file).
 
 # ---- party-account ----   (infrastructure only)
+party-account framework:/.well-known/oauth-protected-resource/**
+party-account framework:/logout
 party-account "/actuator/health/**"
 party-account "/actuator/prometheus"
 party-account "/swagger-ui.html"
@@ -196,6 +254,8 @@ party-account "/swagger-ui/**"
 party-account "/v3/api-docs/**"
 
 # ---- party-interaction ----   (infrastructure only)
+party-interaction framework:/.well-known/oauth-protected-resource/**
+party-interaction framework:/logout
 party-interaction "/actuator/health/**"
 party-interaction "/actuator/prometheus"
 party-interaction "/swagger-ui.html"
@@ -203,6 +263,8 @@ party-interaction "/swagger-ui/**"
 party-interaction "/v3/api-docs/**"
 
 # ---- payment ----
+payment framework:/.well-known/oauth-protected-resource/**
+payment framework:/logout
 payment "/actuator/health/**"
 payment "/actuator/prometheus"
 payment "/swagger-ui.html"
@@ -212,6 +274,8 @@ payment ApiConstants.BASE_PATH+"/payment/methods"
 payment ApiConstants.BASE_PATH+"/webhook/**"
 
 # ---- payment-method ----   (infrastructure only)
+payment-method framework:/.well-known/oauth-protected-resource/**
+payment-method framework:/logout
 payment-method "/actuator/health/**"
 payment-method "/actuator/prometheus"
 payment-method "/swagger-ui.html"
@@ -219,6 +283,8 @@ payment-method "/swagger-ui/**"
 payment-method "/v3/api-docs/**"
 
 # ---- policy ----
+policy framework:/.well-known/oauth-protected-resource/**
+policy framework:/logout
 policy "/actuator/health/**"
 policy "/actuator/prometheus"
 policy "/swagger-ui.html"
@@ -228,6 +294,8 @@ policy ApiConstants.BASE_PATH+"/price/indicative"
 policy ApiConstants.BASE_PATH+"/price/teaser"
 
 # ---- porting ----   (infrastructure only)
+porting framework:/.well-known/oauth-protected-resource/**
+porting framework:/logout
 porting "/actuator/health/**"
 porting "/actuator/prometheus"
 porting "/swagger-ui.html"
@@ -235,6 +303,8 @@ porting "/swagger-ui/**"
 porting "/v3/api-docs/**"
 
 # ---- process ----   (infrastructure only)
+process framework:/.well-known/oauth-protected-resource/**
+process framework:/logout
 process "/actuator/health/**"
 process "/actuator/prometheus"
 process "/swagger-ui.html"
@@ -242,6 +312,8 @@ process "/swagger-ui/**"
 process "/v3/api-docs/**"
 
 # ---- product-catalog ----
+product-catalog framework:/.well-known/oauth-protected-resource/**
+product-catalog framework:/logout
 product-catalog "/.well-known/genalpha-component.json"
 product-catalog "/acp/product_feed"
 product-catalog "/actuator/health/**"
@@ -258,6 +330,8 @@ product-catalog ApiConstants.SERVICE_CATALOG_BASE_PATH+"/**"
 product-catalog ApiConstants.SERVICE_CATALOG_V3_BASE_PATH+"/**"
 
 # ---- product-inventory ----
+product-inventory framework:/.well-known/oauth-protected-resource/**
+product-inventory framework:/logout
 product-inventory "/.well-known/genalpha-component.json"
 product-inventory "/actuator/health/**"
 product-inventory "/actuator/prometheus"
@@ -266,6 +340,8 @@ product-inventory "/swagger-ui/**"
 product-inventory "/v3/api-docs/**"
 
 # ---- product-ordering ----
+product-ordering framework:/.well-known/oauth-protected-resource/**
+product-ordering framework:/logout
 product-ordering "/.well-known/genalpha-component.json"
 product-ordering "/actuator/health/**"
 product-ordering "/actuator/prometheus"
@@ -274,6 +350,8 @@ product-ordering "/swagger-ui/**"
 product-ordering "/v3/api-docs/**"
 
 # ---- product-stock ----
+product-stock framework:/.well-known/oauth-protected-resource/**
+product-stock framework:/logout
 product-stock "/actuator/health/**"
 product-stock "/actuator/prometheus"
 product-stock "/swagger-ui.html"
@@ -282,6 +360,8 @@ product-stock "/v3/api-docs/**"
 product-stock ApiConstants.BASE_PATH+"/**"
 
 # ---- promotion ----
+promotion framework:/.well-known/oauth-protected-resource/**
+promotion framework:/logout
 promotion "/actuator/health/**"
 promotion "/actuator/prometheus"
 promotion "/swagger-ui.html"
@@ -290,6 +370,8 @@ promotion "/v3/api-docs/**"
 promotion ApiConstants.BASE_PATH+"/checkPromotion"
 
 # ---- qualification ----
+qualification framework:/.well-known/oauth-protected-resource/**
+qualification framework:/logout
 qualification "/actuator/health/**"
 qualification "/actuator/prometheus"
 qualification "/swagger-ui.html"
@@ -303,6 +385,8 @@ qualification ApiConstants.BASE_PATH+"/**"
 qualification ApiConstants.BASE_PATH+"/checkProductOfferingQualification"
 
 # ---- quote ----
+quote framework:/.well-known/oauth-protected-resource/**
+quote framework:/logout
 quote "/actuator/health/**"
 quote "/actuator/prometheus"
 quote "/swagger-ui.html"
@@ -311,6 +395,8 @@ quote "/v3/api-docs/**"
 quote ApiConstants.SALES_BASE+"/salesLead"
 
 # ---- recommendation ----
+recommendation framework:/.well-known/oauth-protected-resource/**
+recommendation framework:/logout
 recommendation "/actuator/health/**"
 recommendation "/actuator/prometheus"
 recommendation "/swagger-ui.html"
@@ -319,6 +405,8 @@ recommendation "/v3/api-docs/**"
 recommendation ApiConstants.BASE_PATH+"/affinity"
 
 # ---- revenue ----   (infrastructure only)
+revenue framework:/.well-known/oauth-protected-resource/**
+revenue framework:/logout
 revenue "/actuator/health/**"
 revenue "/actuator/prometheus"
 revenue "/swagger-ui.html"
@@ -326,6 +414,8 @@ revenue "/swagger-ui/**"
 revenue "/v3/api-docs/**"
 
 # ---- service-orchestration ----
+service-orchestration framework:/.well-known/oauth-protected-resource/**
+service-orchestration framework:/logout
 service-orchestration "/.well-known/genalpha-component.json"
 service-orchestration "/actuator/health/**"
 service-orchestration "/actuator/prometheus"
@@ -338,6 +428,8 @@ service-orchestration "/v3/api-docs/**"
 service-orchestration org.springframework.http.HttpMethod.GET
 
 # ---- shopping-cart ----
+shopping-cart framework:/.well-known/oauth-protected-resource/**
+shopping-cart framework:/logout
 shopping-cart "/acp/checkout_sessions"
 shopping-cart "/acp/checkout_sessions/**"
 shopping-cart "/actuator/health/**"
@@ -348,6 +440,8 @@ shopping-cart "/v3/api-docs/**"
 shopping-cart ApiConstants.BASE_PATH+"/**"
 
 # ---- trouble-ticket ----   (infrastructure only)
+trouble-ticket framework:/.well-known/oauth-protected-resource/**
+trouble-ticket framework:/logout
 trouble-ticket "/actuator/health/**"
 trouble-ticket "/actuator/prometheus"
 trouble-ticket "/swagger-ui.html"
@@ -355,6 +449,8 @@ trouble-ticket "/swagger-ui/**"
 trouble-ticket "/v3/api-docs/**"
 
 # ---- usage ----
+usage framework:/.well-known/oauth-protected-resource/**
+usage framework:/logout
 usage "/actuator/health/**"
 usage "/actuator/prometheus"
 usage "/internal/ocs/**"
@@ -363,6 +459,8 @@ usage "/swagger-ui/**"
 usage "/v3/api-docs/**"
 
 # ---- user-roles ----   (infrastructure only)
+user-roles framework:/.well-known/oauth-protected-resource/**
+user-roles framework:/logout
 user-roles "/actuator/health/**"
 user-roles "/actuator/prometheus"
 user-roles "/swagger-ui.html"
