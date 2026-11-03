@@ -55,7 +55,8 @@ management:
   # operator names a collector: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
   # (e.g. http://otel-collector:4318/v1/traces). Unset = no exporter bean, no
   # network call, nothing fails at startup without a collector. Sampling is
-  # parent-based (a caller's traceparent decides); 1.0 at the root here rather
+  # parent-based (a calling component's traceparent decides; the gateway drops
+  # one sent from outside, TraceHeaderFilter); 1.0 at the root here rather
   # than Boot's 0.1, because a ledger row or receipt carries the trace id, and a
   # join key that points at a dropped trace nine times in ten is not a key.
   # These two components see a few calls a second at most.

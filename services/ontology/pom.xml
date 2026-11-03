@@ -19,6 +19,9 @@
 
     <properties>
         <java.version>21</java.version>
+        <!-- as in the other components: the version Boot manages negotiates a Docker
+             API version modern daemons refuse -->
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -85,6 +88,23 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- the receipt store on real Postgres (PostgresMigrationTest): the migrations, and
+             the machine budget's per-target lock under real concurrency, which no mock can prove -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- MockMvc for the MCP door's tests (McpServerTest) -->

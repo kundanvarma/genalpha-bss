@@ -189,12 +189,9 @@ public class ActionExecuteService {
         JsonNode governance = action.path("governance");
         String approverRole = governance.path("approverRole").asString("");
         boolean isApprover = !approverRole.isEmpty() && caller.has(approverRole);
-        boolean needsHuman = "human".equals(governance.path("approval").asString()) && !isApprover;
-        if (needsHuman && governance.has("approvalAbove")) {
-            needsHuman = valueNeedsHuman(action, inputs, caller, store, name);
-        }
-        if (needsHuman) {
-            return fileForApproval(action, cap, pathVars, body, inputs, caller, check, out);
+        Ladder ladder = ladder(action, inputs, caller, isApprover);
+        if (ladder.human()) {
+            return fileForApproval(action, cap, pathVars, body, inputs, caller, check, out, ladder.why());
         }
         boolean asRegistry = "registry".equals(action.path("executes").path("as").asString("caller")) && !isApprover;
         Object payload = template.isMissingNode() || template.isNull() ? null : body;
@@ -209,19 +206,35 @@ public class ActionExecuteService {
          * exist is worse than no evidence, because people believe it. */
         String target = cap.path("component").asString() + " / " + cap.path("id").asString() + " / "
                 + cap.path("route").path("method").asString() + " " + cap.path("route").path("path").asString();
-        ReceiptStore.Attempt attempt;
+        ReceiptStore.Attempt attempt = null;
+        String overBudget = null;
+        // the authority names how the agent is known: by the token, or only by its own word (#422)
+        String authority = String.join(",", caller.roles())
+                + (caller.agent() == null ? "" : ",agent:" + caller.agentEvidence());
         try {
-            attempt = store.recordAttempt(caller.tenant(), name, caller.subject(), caller.agent(),
-                    // the authority names how the agent is known: by the token, or only by its own word (#422)
-                    agentVersion(caller), String.join(",", caller.roles())
-                            + (caller.agent() == null ? "" : ",agent:" + caller.agentEvidence()),
-                    String.valueOf(action.path("version").asInt(1)),
-                    writeJson(inputs), writeJson(check), target,
-                    idempotencyKey(caller, action, inputs));
+            if (ladder.budget() == null) {
+                attempt = store.recordAttempt(caller.tenant(), name, caller.subject(), caller.agent(),
+                        agentVersion(caller), authority, String.valueOf(action.path("version").asInt(1)),
+                        writeJson(inputs), writeJson(check), target, idempotencyKey(caller, action, inputs));
+            } else {
+                // a machine under the line: the budget is checked and the intent committed under
+                // one lock per target, so concurrent calls cannot all read "nothing spent yet"
+                ReceiptStore.BudgetedAttempt b = store.recordAttemptWithinBudget(ladder.budget(), caller.tenant(), name,
+                        caller.subject(), caller.agent(), agentVersion(caller), authority,
+                        String.valueOf(action.path("version").asInt(1)),
+                        writeJson(inputs), writeJson(check), target, idempotencyKey(caller, action, inputs));
+                attempt = b.attempt();
+                if (attempt == null) {
+                    overBudget = overBudget(ladder.budget(), b.spent());
+                }
+            }
         } catch (RuntimeException e) {
             // Deliberately a refusal, not a 500: nothing was dispatched.
             return out.refused(503, "the action was not attempted because its receipt could not be "
                     + "recorded first — evidence is a precondition of acting (ADR 0025)");
+        }
+        if (overBudget != null) {
+            return fileForApproval(action, cap, pathVars, body, inputs, caller, check, out, overBudget);
         }
 
         ComponentClient.Reply reply;
@@ -290,7 +303,7 @@ public class ActionExecuteService {
      * their own token. The receipt records the ask; the execution gets its own receipt in the desk.
      */
     private Outcome fileForApproval(JsonNode action, JsonNode cap, Map<String, String> pathVars, JsonNode body,
-            Map<String, String> inputs, Caller caller, Check check, Draft out) {
+            Map<String, String> inputs, Caller caller, Check check, Draft out, String why) {
         String name = action.path("action").asString();
         Registry.Layer layer = registry.forTenant(caller.tenant());
         JsonNode filer = layer.capabilities().get("workforce.fileApproval");
@@ -300,19 +313,21 @@ public class ActionExecuteService {
         request.put("method", cap.path("route").path("method").asString());
         request.put("path", path);
         request.put("body", json.convertValue(body, Map.class));
+        // the real reason, in words (review finding 17): the single amount may well be under
+        // the line, and an approver told "above the threshold" would be told something false
         request.put("reason", name + " asked by " + caller.subject() + " (" + (caller.isCustomer() ? "customer" : "staff")
-                + ") with " + inputs + " — above the threshold of " + action.path("governance").path("approvalAbove").path("amount").asString("?")
+                + ") with " + inputs + " — " + why
                 + "; needs " + action.path("governance").path("approverRole").asString("an approver"));
         ComponentClient.Reply reply = filer == null ? null
                 : client.callAsMachine(filer.path("component").asString(), "POST", filer.path("route").path("path").asString(), Map.of(), request, Map.of());
         String decisionId = receipt(action, inputs, caller, check, null, "filed-for-approval",
-                "above the threshold — filed for " + action.path("governance").path("approverRole").asString("an approver"));
+                why + " — filed for " + action.path("governance").path("approverRole").asString("an approver"));
         out.done = false;
         out.filed = reply != null && reply.ok();
         out.decisionId = decisionId;
         if (reply != null && reply.ok()) {
             out.approvalId = reply.body().path("id").asString();
-            out.said = "Filed for approval: " + name + " is above the threshold this caller may decide alone; someone holding "
+            out.said = "Filed for approval: " + name + " is not one this caller may decide alone — " + why + ". Someone holding "
                     + action.path("governance").path("approverRole").asString("the approver role")
                     + " decides it under AI & Automation › Workforce and it executes with their token.";
             return new Outcome(false, 202, out.receipt());
@@ -630,27 +645,83 @@ public class ActionExecuteService {
      */
     static boolean valueNeedsHuman(JsonNode action, Map<String, String> inputs, Caller caller,
             com.bss.ontology.receipt.ReceiptStore store, String name) {
-        JsonNode above = action.path("governance").path("approvalAbove");
-        String input = above.path("input").asString();
-        try {
-            java.math.BigDecimal value = new java.math.BigDecimal(inputs.getOrDefault(input, ""));
-            java.math.BigDecimal threshold = new java.math.BigDecimal(above.path("amount").asString("0"));
-            if (value.compareTo(threshold) > 0) {
-                return true;
-            }
-            if (!ActionCheckService.isMachine(caller)) {
-                return false;
-            }
-            String key = firstRefInput(action);
-            String target = key == null ? null : inputs.get(key);
-            if (target == null) {
-                return true;   // a machine moving value on an unnamed target: a person decides
-            }
-            java.math.BigDecimal before = store.machineAutoTotal(caller.tenant(), name, key, target,
-                    input, java.time.OffsetDateTime.now().minusDays(30));
-            return before.add(value).compareTo(threshold) > 0;
-        } catch (NumberFormatException e) {
-            return true;
+        Ladder l = ladder(action, inputs, caller, false);
+        if (l.budget() == null) {
+            return l.human();
         }
+        ReceiptStore.Budget b = l.budget();
+        return !b.allows(store.machineAutoTotal(caller.tenant(), name, b.keyInput(), b.key(), b.amountInput(), b.since()));
+    }
+
+    /**
+     * Where a request stands on the approval ladder: a person decides it now ({@code human},
+     * with the reason in words for the approver), it may go ahead, or — a machine under the
+     * line — it may go ahead only within its {@code budget}, which the receipt store checks
+     * atomically with the attempt it writes.
+     */
+    record Ladder(boolean human, String why, ReceiptStore.Budget budget) {
+        static final Ladder ACT = new Ladder(false, null, null);
+
+        static Ladder person(String why) {
+            return new Ladder(true, why, null);
+        }
+    }
+
+    /** The budget window: what machines moved on one target without a person in the last 30 days. */
+    static final int BUDGET_DAYS = 30;
+
+    static Ladder ladder(JsonNode action, Map<String, String> inputs, Caller caller, boolean isApprover) {
+        JsonNode governance = action.path("governance");
+        if (!"human".equals(governance.path("approval").asString())) {
+            return Ladder.ACT;
+        }
+        boolean machine = ActionCheckService.isMachine(caller);
+        // An approver PERSON decides it themselves. An approver's token driven by a machine
+        // (a badge, or an agent named) does not: it meets the machine's budget like any other
+        // machine (review finding 8) — the role says who may approve, not that a robot may.
+        if (isApprover && !machine) {
+            return Ladder.ACT;
+        }
+        if (!governance.has("approvalAbove")) {
+            return isApprover ? Ladder.ACT : Ladder.person("this action always needs a person holding "
+                    + governance.path("approverRole").asString("the approver role"));
+        }
+        JsonNode above = governance.path("approvalAbove");
+        String input = above.path("input").asString();
+        String raw = inputs.getOrDefault(input, "");
+        java.math.BigDecimal value;
+        java.math.BigDecimal threshold;
+        try {
+            value = new java.math.BigDecimal(raw);
+            threshold = new java.math.BigDecimal(above.path("amount").asString("0"));
+        } catch (NumberFormatException e) {
+            return Ladder.person("the " + input + " \"" + raw + "\" could not be read as an amount");
+        }
+        if (value.compareTo(threshold) > 0) {
+            return Ladder.person("the " + input + " " + value.toPlainString() + " is above the threshold of "
+                    + threshold.toPlainString() + " that may be decided without an approver");
+        }
+        if (!machine) {
+            return Ladder.ACT;
+        }
+        String key = firstRefInput(action);
+        String target = key == null ? null : inputs.get(key);
+        if (target == null) {
+            return Ladder.person("a machine is moving value without naming what it is on");
+        }
+        return new Ladder(false, null, new ReceiptStore.Budget(key, target, input, value, threshold,
+                OffsetDateTime.now().minusDays(BUDGET_DAYS)));
+    }
+
+    /** Why a machine's request under the line still goes to a person: its budget on the target is spent. */
+    static String overBudget(ReceiptStore.Budget b, java.math.BigDecimal spent) {
+        String already = spent.compareTo(new java.math.BigDecimal("1E9")) >= 0
+                ? "an earlier machine attempt on " + b.keyInput() + " " + b.key()
+                        + " could not be read, so its budget is counted as spent"
+                : "machines have already moved " + spent.toPlainString() + " on " + b.keyInput() + " " + b.key()
+                        + " without a person in the last " + BUDGET_DAYS + " days; with this " + b.amountInput() + " of "
+                        + b.amount().toPlainString() + " that would be " + spent.add(b.amount()).toPlainString();
+        return already + ", over a machine's budget of " + b.limit().toPlainString() + " per " + b.keyInput()
+                + " in " + BUDGET_DAYS + " days";
     }
 }

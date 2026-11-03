@@ -75,6 +75,58 @@ public class ReceiptStore {
                                  String agentVersion, String authority, String actionVersion,
                                  String inputsJson, String checkJson, String target,
                                  String idempotencyKey) {
+        return attempt(tenant, action, principal, agent, agentVersion, authority, actionVersion,
+                inputsJson, checkJson, target, idempotencyKey);
+    }
+
+    /**
+     * What a machine may still move through one action on one target without a person
+     * (#422): {@code amount} of {@code amountInput}, on the target named by
+     * {@code keyInput} = {@code key}, against {@code limit} over what machines already
+     * moved there since {@code since}.
+     */
+    public record Budget(String keyInput, String key, String amountInput, java.math.BigDecimal amount,
+            java.math.BigDecimal limit, OffsetDateTime since) {
+
+        public boolean allows(java.math.BigDecimal spent) {
+            return spent.add(amount).compareTo(limit) <= 0;
+        }
+    }
+
+    /** An attempt written inside a budget, or not written ({@code attempt} null) because the budget is spent. */
+    public record BudgetedAttempt(Attempt attempt, java.math.BigDecimal spent) {
+    }
+
+    /**
+     * Check a machine's budget AND commit the intent, as one step (review finding 6).
+     *
+     * <p>Read-then-write without a lock let N concurrent credits of 25 on one bill all
+     * read "0 spent" before any of them had written its attempt, and all go through.
+     * Here the budget key is locked first, in the same transaction that writes the
+     * attempt: the second caller waits for the first to commit, then counts it. When
+     * the budget does not allow the amount nothing is written and the caller files the
+     * request for a person instead. Throws like {@link #recordAttempt} when the store
+     * will not take the row — the caller must not dispatch.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public BudgetedAttempt recordAttemptWithinBudget(Budget budget, String tenant, String action, String principal,
+                                                     String agent, String agentVersion, String authority,
+                                                     String actionVersion, String inputsJson, String checkJson,
+                                                     String target, String idempotencyKey) {
+        rows.lockBudget(tenant + '\u001f' + action + '\u001f' + budget.keyInput() + '\u001f' + budget.key());
+        java.math.BigDecimal spent = machineAutoTotal(tenant, action, budget.keyInput(), budget.key(),
+                budget.amountInput(), budget.since());
+        if (!budget.allows(spent)) {
+            return new BudgetedAttempt(null, spent);
+        }
+        return new BudgetedAttempt(attempt(tenant, action, principal, agent, agentVersion, authority, actionVersion,
+                inputsJson, checkJson, target, idempotencyKey), spent);
+    }
+
+    private Attempt attempt(String tenant, String action, String principal, String agent,
+                            String agentVersion, String authority, String actionVersion,
+                            String inputsJson, String checkJson, String target,
+                            String idempotencyKey) {
         String receiptId = UUID.randomUUID().toString();
         ActionReceiptRow row = new ActionReceiptRow(UUID.randomUUID().toString(), receiptId,
                 ActionReceiptRow.ATTEMPT, tenant, action, OffsetDateTime.now());

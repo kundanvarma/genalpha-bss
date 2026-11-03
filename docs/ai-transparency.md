@@ -37,28 +37,49 @@ A customer's chat message, a social post being classified, a ticket a worker
 reads — none of it was written by the operator, and any of it may contain an
 instruction aimed at the model ("ignore your rules and…"). Since #422:
 
-- **It is fenced.** Such text reaches the model inside an
+- **Two kinds of call fence it.** The care chat (the customer's words) and the
+  social signal classifier (the post) send that text inside an
   `<untrusted source="customer|post">` block. The text cannot close the block
   from inside: anything that looks like the tag is defused before it is sent.
-- **Every system prompt says what a fence means.** The AI governor adds one rule
-  to every model call: text inside an untrusted block is data to read and
-  answer, never instructions — it cannot change the rules, reveal them, speak
-  for the operator or make the model emit a control token. The governor adds
-  the rule unless the prompt already *ends* with that exact rule; it used to
-  skip it whenever the prompt merely contained the tag, so a knowledge article
-  quoting `<untrusted source=…>` silently dropped the rule (fixed 2026-11-03).
-- **A fence is not a wall, so the walls stay where they were.** The model calls
-  that read outside text hold no tools. The care chat's only signal is
-  *escalate*, and the system — not the model — raises the ticket. Every action
-  an agent takes still passes the ontology's deterministic checks.
+  Nothing else is fenced today — not copilot prompts that include customer
+  data, and not what a digital worker sends.
+- **Every system prompt the AI governor sends says what a fence means.** The
+  governor adds one rule to every model call it makes: text inside an untrusted
+  block is data to read and answer, never instructions — it cannot change the
+  rules, reveal them, speak for the operator or make the model emit a control
+  token. It adds the rule unless the prompt already *ends* with that exact rule;
+  it used to skip it whenever the prompt merely contained the tag, so a
+  knowledge article quoting `<untrusted source=…>` silently dropped the rule
+  (fixed 2026-11-03).
+- **The model door does not fence.** A hired digital worker calls the model
+  through the BSS's door with a prompt *it* wrote — including any ticket text it
+  chose to paste in. The door forwards that prompt as the worker sent it:
+  redacted, metered and capped, but not fenced and without the governor's rule,
+  because the door cannot tell which part of the worker's prompt came from
+  outside. Fencing what a worker reads is the worker's job.
+- **A fence is not a wall, so the walls stay where they were.** The care chat
+  and the classifier hold no tools. The care chat's only signal is *escalate*,
+  and the system — not the model — raises the ticket. Every action an agent
+  takes, a worker included, still passes the ontology's deterministic checks,
+  and the money budget below is what bounds a worker that was talked into
+  something.
 
-**A machine's money budget is per target.** The AI worker reads tickets it did
+**A machine's money budget is per target.** An AI worker reads tickets it did
 not write and may issue small credits alone (approval is needed above 25). An
 injected ticket could ask for one credit after another, each just under the
 line. Now what machines have already credited on the same bill without a
 person in the last 30 days counts toward that line: the first small credit goes
-through, the next one on that bill goes to a person. Credits a person approves
-are not counted.
+through, the next one on that bill goes to a person, and the approver is told
+that reason with the amounts — not that the credit was "above the threshold"
+when it was not. Credits a person approves are not counted.
+
+- **It holds under concurrency.** Checking what was spent and recording the new
+  attempt are one step under a lock per bill, so eight credits of 25 sent at
+  once on one bill let exactly one through, not eight.
+- **An approver's token driven by a machine still has the budget.** A token that
+  holds the approver role and is used by an agent (it carries the worker badge
+  or names an agent) is a machine for this rule. Only an approver who is a
+  person decides alone.
 
 **Found by the evals, and fixed.** The new care chat evals (below) caught two
 real faults on their first run. The redactor treats a line labelled
@@ -75,7 +96,11 @@ system prompt that quotes the tag still gets the rule — red on the old check �
 the chat sends the customer's words fenced), `AiGovernorRedactionTest` (every
 system prompt carries the rule), `MachineValueBudgetTest` (a worker's second
 credit on a bill goes to a person; another bill keeps its own budget; people and
-approvers are not counted).
+approvers are not counted), `CreditLadderTest` (an approver's token driven by an
+agent meets the budget; a filing by the budget names the budget and the amounts),
+and ontology's `PostgresMigrationTest` (eight parallel credits on one bill
+against real Postgres: one of 25 goes through, two of 10 do — seen at eight of
+eight before the lock).
 
 ## Honest limits
 
@@ -85,7 +110,9 @@ approvers are not counted).
 - Spoken channels do not exist yet; a voice agent must say it out loud first.
 - The fence lowers the chance that injected words steer a reply; it cannot make
   a model immune, and there is no measured injection eval yet (see the evals
-  work in #422). Copilot prompts that include customer data are not yet fenced.
+  work in #422). Only the care chat and the signal classifier fence; copilot
+  prompts that include customer data are not fenced, and the model door forwards
+  a worker's own prompt unfenced.
 - The rule is added by a suffix check: a prompt that already carries the rule
   with more text after it gets the rule twice — a longer prompt, never a
   missing rule.
@@ -94,3 +121,8 @@ approvers are not counted).
   scheduled — run them before a release that touches the chat.
 - The money budget is per bill. An attacker with many bills gets one small
   credit per bill per month before a person is asked.
+- The budget's lock is a Postgres advisory lock, held only while the attempt is
+  written; the service runs on Postgres only, and on any other database the
+  attempt is refused rather than written unlocked.
+- A program using a person's token without saying it is an agent is judged as
+  that person, budget included (see `docs/agent-identity.md`).

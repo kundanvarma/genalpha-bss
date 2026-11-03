@@ -132,4 +132,43 @@ class AutonomyGateTest {
                 .as("a badge alone is not a registered agent")
                 .isFalse();
     }
+
+    /** A badged worker that names a registered agent in the header — only its own word. */
+    private static Caller badgedDeclaring(String agent) {
+        return new Caller("t", "worker-1", Set.of("agent", "workforce:use"), "console", "genalpha", agent);
+    }
+
+    /** A badged worker whose token's act claim names the agent — the identity server's word. */
+    private static Caller badgedVerifiedAs(String agent) {
+        return new Caller("t", "worker-1", Set.of("agent", "workforce:use"), "console", "genalpha", agent, true);
+    }
+
+    @Test
+    void aDeclaredAgentNameNeverLoosensTheGate_aBadgedWorkerIsJudgedOnItsBadge() {
+        // THE REVIEW FINDING. A worker refused on issueCredit (badge, no agent) used to
+        // pass by adding X-GenAlpha-Agent: hermes-worker — a registered, policy-autonomous
+        // agent. The header is the caller's own word, so it may only ever make the
+        // decision STRICTER: the verdict is the stricter of "as if no agent were named"
+        // and "as the named agent".
+        Registry.Layer layer = layerWith("hermes-worker", "policy-autonomous");
+        Verdict v = ActionCheckService.autonomy(action("issueCredit", "medium"), badgedDeclaring("hermes-worker"), layer);
+        assertThat(v.ok()).as("a declared name does not lift a badged worker past medium").isFalse();
+
+        // the same name proven by the token is evidence, and is judged as that agent
+        assertThat(ActionCheckService.autonomy(action("issueCredit", "medium"), badgedVerifiedAs("hermes-worker"), layer).ok())
+                .as("a verified agent is judged as itself").isTrue();
+
+        // and the header still tightens: high lets the badge act; low refuses it either way
+        assertThat(ActionCheckService.autonomy(action("restartRouter", "high"), badgedDeclaring("hermes-worker"), layer).ok()).isTrue();
+        assertThat(ActionCheckService.autonomy(action("replaceSim", "low"), badgedDeclaring("hermes-worker"), layer).ok()).isFalse();
+    }
+
+    @Test
+    void aPersonNamingAnAgentIsStillJudgedAsThatAgent() {
+        // a person's token with the header: "as if no agent" says nothing (a person),
+        // "as the agent" decides — the header can only have made it stricter
+        Registry.Layer layer = layerWith("care-assist", "supervised");
+        assertThat(ActionCheckService.autonomy(action("issueCredit", "medium"), declaring("care-assist"), layer).ok()).isTrue();
+        assertThat(ActionCheckService.autonomy(action("replaceSim", "low"), declaring("care-assist"), layer).ok()).isFalse();
+    }
 }

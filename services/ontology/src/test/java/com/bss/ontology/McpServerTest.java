@@ -266,6 +266,24 @@ class McpServerTest {
                 .andExpect(jsonPath("$.result._meta['bss.genalpha/confirmCard'].allowed").value(true));
     }
 
+    // ---------------------------------------------------------------- internal errors
+
+    @Test
+    void anInternalErrorReachesTheClientAsAReference_neverAsItsOwnText() throws Exception {
+        // what a failing store or seam says internally: SQL, a JDBC URL, an issuer
+        when(context.customer(any(), any())).thenThrow(new IllegalStateException(
+                "could not execute statement [ERROR: relation \"action_receipt\" does not exist] "
+                        + "jdbc:postgresql://postgres:5432/ontology https://idp.genalpha.test/realms/bss"));
+        rpc(legacy("tools/call", "{\"name\":\"customer_context\",\"arguments\":{\"customerId\":\"cust-1\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error.code").value(-32603))
+                .andExpect(jsonPath("$.error.message", org.hamcrest.Matchers.not(containsString("jdbc"))))
+                .andExpect(jsonPath("$.error.message", org.hamcrest.Matchers.not(containsString("relation"))))
+                .andExpect(jsonPath("$.error.message", org.hamcrest.Matchers.not(containsString("idp."))))
+                .andExpect(jsonPath("$.error.message", containsString("internal error")))
+                .andExpect(jsonPath("$.error.data.reference", org.hamcrest.Matchers.matchesPattern("[0-9a-f-]{36}")));
+    }
+
     // ---------------------------------------------------------------- RFC 9728
 
     @Test

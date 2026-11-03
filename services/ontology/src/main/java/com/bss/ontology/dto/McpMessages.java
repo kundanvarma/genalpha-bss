@@ -38,6 +38,10 @@ public final class McpMessages {
         }
     }
 
+    /** {@code data} of an internal error (-32603): the reference the server's log carries the fault under. */
+    public record InternalErrorData(String reference) {
+    }
+
     /** {@code data} of an UnsupportedProtocolVersion error (-32022, MCP 2026-07-28): what we speak, and what was asked. */
     @JsonPropertyOrder({"supported", "requested"})
     public record UnsupportedVersion(List<String> supported, String requested) {
