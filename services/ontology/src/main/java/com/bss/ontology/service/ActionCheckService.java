@@ -115,7 +115,7 @@ public class ActionCheckService {
     static Verdict autonomy(JsonNode action, Caller caller, Registry.Layer layer) {
         boolean badged = caller.has(WORKFORCE_BADGE);
         Verdict asNamed = judge(action, badged, caller.agent(), layer);
-        if (caller.agentVerified() || caller.agent() == null || caller.agent().isBlank()) {
+        if (caller.agentProvenByToken() || caller.agent() == null || caller.agent().isBlank()) {
             return asNamed;   // no name, or one the token proves: the caller is judged as what it is
         }
         /* A name in the header is the caller's own word (review finding 7). It may make
@@ -127,7 +127,7 @@ public class ActionCheckService {
         Verdict v = stricter(asUnnamed, asNamed);
         if (v == asUnnamed && Boolean.FALSE.equals(v.ok()) && !Boolean.FALSE.equals(asNamed.ok())) {
             return new Verdict(v.id(), v.says(), false, v.detail() + "; '" + caller.agent()
-                    + "' is only named by a header, not proven by the token, so it cannot widen what the badge allows");
+                    + "' is not proven by the token, so it cannot widen what the badge allows");
         }
         return v;
     }

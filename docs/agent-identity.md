@@ -140,6 +140,10 @@ the draft's authors and not only with our own signer.
   verified agent are not built.
 - The ontology is the only component that reads `X-Verified-Agent`. It trusts it
   because requests reach it through the gateway; a caller already inside the
-  fleet's network could set it, as it could set the tenant header.
+  fleet's network could set it, as it could set the tenant header. So a signed
+  name is *verified* on the receipt, but at the autonomy gate it only narrows,
+  like a declared one: only a name the token proves (an `act` claim) is judged as
+  that agent alone. A badged worker cannot sign its way past its badge
+  (`AutonomyGateTest.aGatewaySignedNameNarrowsButNeverWidens`).
 - Only the ontology reads the actor; other components see the delegated token's
   subject and roles, as before.

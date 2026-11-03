@@ -171,4 +171,18 @@ class AutonomyGateTest {
         assertThat(ActionCheckService.autonomy(action("issueCredit", "medium"), declaring("care-assist"), layer).ok()).isTrue();
         assertThat(ActionCheckService.autonomy(action("replaceSim", "low"), declaring("care-assist"), layer).ok()).isFalse();
     }
+
+    @Test
+    void aGatewaySignedNameNarrowsButNeverWidens() {
+        // X-Verified-Agent is trusted because requests arrive through the gateway, which
+        // strips any client copy — but a caller already inside the fleet's network could
+        // set it. So a signature is verified for the receipt, yet at the gate it counts
+        // like a declared name: a badged worker cannot sign its way past its badge.
+        Registry.Layer layer = layerWith("hermes-worker", "policy-autonomous");
+        Caller signed = new Caller("t", "worker-1", Set.of("agent", "workforce:use"), "console", "genalpha",
+                "hermes-worker", true, true);
+        assertThat(signed.agentEvidence()).isEqualTo("verified");
+        assertThat(ActionCheckService.autonomy(action("issueCredit", "medium"), signed, layer).ok())
+                .as("a gateway-signed name does not lift a badged worker past medium").isFalse();
+    }
 }

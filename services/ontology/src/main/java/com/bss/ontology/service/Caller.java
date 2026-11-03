@@ -16,11 +16,28 @@ import java.util.stream.Collectors;
  * only, whatever else it holds.
  */
 public record Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent,
-        boolean agentVerified) {
+        boolean agentVerified, boolean agentSigned) {
 
     /** A caller whose agent, if any, only named itself (a header) — not proven by the token. */
     public Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent) {
-        this(bearer, subject, roles, channel, tenant, agent, false);
+        this(bearer, subject, roles, channel, tenant, agent, false, false);
+    }
+
+    /** A caller whose agent, if any, the token proves ({@code agentVerified}) or only names. */
+    public Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent,
+            boolean agentVerified) {
+        this(bearer, subject, roles, channel, tenant, agent, agentVerified, false);
+    }
+
+    /**
+     * Whether the token itself proves the agent (an {@code act} claim). Only this may
+     * judge the caller as the agent alone: a gateway-signed name is verified for the
+     * receipt, but the ontology trusts that header only because requests arrive through
+     * the gateway, and a caller inside the fleet's network could set it — so for the
+     * autonomy gate it narrows, like a declared name, and never widens.
+     */
+    public boolean agentProvenByToken() {
+        return agentVerified && !agentSigned;
     }
 
     public static final String CHANNEL_HEADER = "X-Channel";
@@ -33,7 +50,7 @@ public record Caller(String bearer, String subject, Set<String> roles, String ch
     public static final String VERIFIED_AGENT_HEADER = "X-Verified-Agent";
 
     public Caller withAgent(String name) {
-        return new Caller(bearer, subject, roles, channel, tenant, name, false);
+        return new Caller(bearer, subject, roles, channel, tenant, name, false, false);
     }
 
     /**
@@ -71,16 +88,18 @@ public record Caller(String bearer, String subject, Set<String> roles, String ch
         // token's own act claim. That is proof; the header is only a claim, so when the token
         // names an actor, the token wins and the header cannot rename it (#422).
         String actor = auth instanceof JwtAuthenticationToken jwt ? actorOf(jwt) : null;
+        boolean signedOnly = false;
         if (actor == null && request != null) {
             // Next best: the gateway verified the agent's Web Bot Auth signature (#427) and
             // stamped the operator's name. The gateway strips this header from every inbound
             // request, so a client cannot set it; it outranks the self-declared header.
             String signed = request.getHeader(VERIFIED_AGENT_HEADER);
             actor = signed == null || signed.isBlank() ? null : signed.trim();
+            signedOnly = actor != null;
         }
         boolean verified = actor != null;
         return new Caller(bearer, subject, roles, channel == null || channel.isBlank() ? "web" : channel.trim(), tenant,
-                verified ? actor : agent, verified);
+                verified ? actor : agent, verified, signedOnly);
     }
 
     /** The acting party in an RFC 8693 {@code act} claim — its client id or subject — or null. */
