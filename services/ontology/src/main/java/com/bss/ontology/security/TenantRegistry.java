@@ -66,6 +66,14 @@ public class TenantRegistry {
         private String machineClientId;
         private String machineClientSecret;
 
+        /** The operator's own name (tenants.yml `brand-name`), shown where the
+         * BSS speaks for the operator in public — the A2A Agent Card. Absent = no
+         * name, never the product's. */
+        private String brandName;
+
+        public String getBrandName() { return brandName; }
+        public void setBrandName(String v) { this.brandName = v; }
+
         /** The tenant's AUC (tenants.yml `auc-base-url` / `auc-token`): the
          * HSS/UDM adapter that answers authentication vectors — an MVNO's is
          * its host MNO's. Absent = the deployment default (AUC_BASE_URL). */

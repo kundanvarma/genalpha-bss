@@ -53,6 +53,16 @@ public class AgentCardService {
         this.json = json;
     }
 
+    /**
+     * The operator's name, from its own brand: the card is published on the
+     * operator's domain, so it speaks for the operator, never for the software
+     * underneath. No brand configured = a plain description.
+     */
+    static String cardName(TenantRegistry.TenantEntry entry) {
+        String brand = entry == null || entry.getBrandName() == null ? "" : entry.getBrandName().strip();
+        return brand.isEmpty() ? "Governed actions" : brand + " — governed actions";
+    }
+
     /** The card for {@code tenant} as seen through {@code request}'s origin, signed when a key is configured. */
     public AgentCard card(String tenant, HttpServletRequest request) {
         String origin = ProtectedResourceMetadata.origin(request);
@@ -72,7 +82,7 @@ public class AgentCardService {
             requirements = List.of(new SecurityRequirement(Map.of("oauth2", new StringList(List.of()))));
         }
         AgentCard card = new AgentCard(
-                "GenAlpha BSS — governed actions",
+                cardName(entry),
                 "Delegate a task to this operator's BSS: ask whether a household can pick a benefit, or have a governed "
                         + "action explained. Every task runs through the operator's registry of governed actions — each "
                         + "condition checked with the caller's own token, refused in words when it fails — and anything "

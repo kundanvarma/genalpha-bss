@@ -35,6 +35,9 @@ then a partner can ask, and only ask.
 - **Which operator** is decided by the hostname, exactly as for the shop: the
   gateway stamps the tenant, never the request. One operator's card names its
   own identity server; a partner of one operator is never sent to another's login.
+  The card is named after the operator's brand (`brand-name` in `tenants.yml`,
+  e.g. "Taranga — governed actions"), never after the software underneath; an
+  operator with no brand gets the plain "Governed actions".
 - **Signing in** is OAuth 2.0 authorization code at that operator's realm (the
   card names the authorization, token and discovery URLs). The partner's agent
   then calls the endpoint with the **person's** access token. That is the only
