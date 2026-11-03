@@ -22,25 +22,27 @@ public record CampaignRequest(
         Integer holdoutPercent) {
 
     /**
-     * The one message a campaign speaks when it has no arms. {@code aiGenerated}
-     * and {@code aiModel} say the copy came from the AI copy assistant (the
-     * console passes them along with the text it drafted); a model name alone
-     * marks it too. Editing the draft keeps the mark — it is AI-assisted copy.
+     * The one message a campaign speaks when it has no arms. {@code aiDraft} is
+     * the receipt the AI copy assistant issued with the draft: with it the server
+     * marks the copy itself and names the model, and {@code aiGenerated: false}
+     * cannot clear the mark — editing the draft keeps it, because it is still
+     * AI-assisted copy. Without a receipt, {@code aiGenerated}/{@code aiModel}
+     * are a declaration (a model name alone marks it too); with neither the copy
+     * is human. See {@code AiProvenance}.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Message(String subject, String content, Boolean aiGenerated, String aiModel) {
+    public record Message(String subject, String content, Boolean aiGenerated, String aiModel, String aiDraft) {
 
         @JsonCreator
         public Message {
         }
 
-        public Message(String subject, String content) {
-            this(subject, content, null, null);
+        public Message(String subject, String content, Boolean aiGenerated, String aiModel) {
+            this(subject, content, aiGenerated, aiModel, null);
         }
 
-        /** True when the copy is declared AI-written, by the flag or by naming a model. */
-        public boolean aiWritten() {
-            return Boolean.TRUE.equals(aiGenerated) || (aiModel != null && !aiModel.isBlank());
+        public Message(String subject, String content) {
+            this(subject, content, null, null, null);
         }
     }
 }

@@ -1,9 +1,11 @@
 // Norwegian Nynorsk — the storefront's strings, English key -> translation. Edited by
-// operators' teams more than by developers; one file per language on purpose.
+// operators' teams more than by developers. Part 1 of 2; nn-account.js is the signed-in
+// half, as no-account.js is for bokmål (the 300-line rule is the same for every file).
 /* Nynorsk (nn): built OVER bokmål — strings identical in both standards are
  * inherited; only the forms that differ are overridden. Vestlandet-ready. */
 import { NO_SHOP } from './no.js';
 import { NO_ACCOUNT } from './no-account.js';
+import { NN_ACCOUNT } from './nn-account.js';
 
 export const NN = {
   // Nynorsk starts from Bokmål and overrides what differs — the spread comes FIRST,
@@ -251,28 +253,29 @@ export const NN = {
   'stays active until': 'held fram som aktiv til',
   'yet. Plans that do:': 'enno. Abonnement som gjer det:',
   'AI-written': 'Skrive av KI',
-  // Credit explanations (#422) — only where nynorsk differs from bokmål
-  'The credit bureau reported a registered payment remark (an unpaid debt on record).': 'Kredittbyrået har registrert ein betalingsmerknad på deg (ei ubetalt gjeld).',
-  'The credit bureau\'s score band for you is below what this plan needs.': 'Kredittbyrået har gitt deg ein scoreklasse som er lågare enn det dette abonnementet krev.',
-  'The credit bureau\'s score band for you is close to what this plan needs.': 'Kredittbyrået har gitt deg ein scoreklasse som ligg nær det dette abonnementet krev.',
-  'The credit bureau\'s score band for you meets what this plan needs.': 'Kredittbyrået har gitt deg ein scoreklasse som oppfyller det dette abonnementet krev.',
-  'Your credit information is frozen at the credit bureau, so it could not be assessed.': 'Kredittopplysingane dine er sperra hos kredittbyrået, så dei kunne ikkje vurderast.',
-  'Who you are: your customer record, which the credit bureau matches to its own register.': 'Kven du er: kundeopplysingane dine, som kredittbyrået koplar til sitt eige register.',
-  'Whether the credit bureau holds a registered payment remark (an unpaid debt) for you.': 'Om kredittbyrået har ein registrert betalingsmerknad (ei ubetalt gjeld) på deg.',
-  'What the check is for: signing up to a plan you pay for after use.': 'Kva sjekken gjeld: å teikne eit abonnement du betaler for etter bruk.',
-  'A person reviews every credit decline: a decline puts the order on hold for a person to decide, it never refuses the order on its own.': 'Ein person vurderer kvart kredittavslag: eit avslag set bestillinga på vent til ein person avgjer ho, det avviser aldri bestillinga på eiga hand.',
-  'We never receive or keep the credit bureau\'s report — only its decision, the score band and whether a payment remark exists.': 'Vi tek aldri imot eller lagrar rapporten frå kredittbyrået — berre avgjerda, scoreklassen og om det finst ein betalingsmerknad.',
-  'Ask for a person to review the decision, and add a note if something is wrong — for example a debt that has since been paid. You can also ask the credit bureau for a copy of what it holds about you, and have it corrected.': 'Be om at ein person vurderer avgjerda på nytt, og legg gjerne ved ein merknad viss noko er feil — til dømes ei gjeld som er betalt. Du kan òg be kredittbyrået om ein kopi av det dei har registrert om deg, og få det retta.',
-  'A person in customer care will look at your order and the reason, and contact you. Your order stays on hold until then — you do not need to order again.': 'Ein person i kundeservice ser på bestillinga og grunngivinga, og tek kontakt med deg. Bestillinga står på vent til då — du treng ikkje bestille på nytt.',
-  'A person in customer care will look at the decision and the reason, and contact you.': 'Ein person i kundeservice ser på avgjerda og grunngivinga, og tek kontakt med deg.',
-  'We could not fetch the reason for the credit check right now — try again shortly.': 'Vi fekk ikkje henta grunngivinga for kredittsjekken akkurat no — prøv igjen om litt.',
-  'Why your order is waiting': 'Kvifor bestillinga di ventar',
-  'Score band from the credit bureau': 'Scoreklasse frå kredittbyrået',
-  'What the credit check used': 'Kva kredittsjekken brukte',
-  'You asked a person to review this.': 'Du har bede om at ein person ser på dette.',
-  'Anything we should know? (optional)': 'Noko vi bør vite? (valfritt)',
-  'Ask a person to review': 'Be om at ein person ser på det',
-  'Before we accept a plan you pay for after use, we check your credit with': 'Før vi godtek eit abonnement du betaler for etter bruk, sjekkar vi kreditten din hos',
-  'The check is automated, but it never refuses you on its own: a person reviews every decline.': 'Sjekken er automatisk, men han avviser deg aldri på eiga hand: ein person vurderer kvart avslag.',
-  'You can ask why, and ask a person to look again, from': 'Du kan spørje kvifor, og be om at ein person ser på det igjen, frå',
+  // The #422 review: every string on the Choices, credit, chat and AI-mark screens is written
+  // out in nynorsk, even where it matches bokmål — the spread above would otherwise show bokmål
+  // and nobody would have chosen it (ops/arch/choices_i18n_check.py fails on a missing one)
+  'Activating…': 'Aktiverer…',
+  'Active': 'Aktiv',
+  'Held until': 'Bunden til',
+  'In use': 'I bruk',
+  'in use': 'i bruk',
+  'Release': 'Gi tilbake',
+  'You have': 'Du har',
+  'is.': 'er klar.',
+  'of': 'av',
+  'of your': 'av dine',
+  'Hi! Ask me about your bills, usage or orders — or say "human" and I\'ll raise a ticket.': 'Hei! Spør meg om fakturaer, forbruk eller bestillingar — eller sei «menneske», så opprettar eg ei sak.',
+  'Hi! I can help you pick a plan. For account questions, please sign in.': 'Hei! Eg kan hjelpe deg å velje abonnement. Logg inn for spørsmål om kontoen din.',
+  'Something went wrong — try again?': 'Noko gjekk gale — prøve igjen?',
+  'Ticket raised': 'Sak oppretta',
+  'a human will pick this up.': 'eit menneske tek ho vidare.',
+  'Chat with us': 'Chat med oss',
+  'agent connected': 'kundebehandlar tilkopla',
+  'ticket raised': 'sak oppretta',
+  'Agent': 'Kundebehandlar',
+  'Type a message…': 'Skriv ei melding…',
+  'Talk to a human instead': 'Snakk med eit menneske i staden',
+  ...NN_ACCOUNT,
 };

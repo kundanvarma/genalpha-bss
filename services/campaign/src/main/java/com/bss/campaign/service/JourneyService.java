@@ -82,6 +82,7 @@ public class JourneyService {
     private double tuneZ = 1.64;
     private final com.bss.campaign.repository.ArbitrationDecisionRepository arbitration;
     private final com.bss.campaign.decision.DecisionPoints decisions;
+    private final AiProvenance provenance;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
@@ -89,8 +90,9 @@ public class JourneyService {
             FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog,
             com.bss.campaign.tick.TickGuard tickGuard,
             com.bss.campaign.repository.ArbitrationDecisionRepository arbitration,
-            com.bss.campaign.decision.DecisionPoints decisions) {
+            com.bss.campaign.decision.DecisionPoints decisions, AiProvenance provenance) {
         this.decisions = decisions;
+        this.provenance = provenance;
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -113,6 +115,7 @@ public class JourneyService {
         }
         List<Map<String, Object>> steps = parseSteps(dto.steps());
         validateSteps(steps);
+        provenance.stampSteps(steps); // the server sets the AI mark from each piece of copy's receipt
         Journey entity = new Journey();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
@@ -289,6 +292,7 @@ public class JourneyService {
         if (!absent(patch.steps())) {
             List<Map<String, Object>> steps = parseSteps(patch.steps());
             validateSteps(steps);
+            provenance.stampSteps(steps);
             String serialized = serializeSteps(steps);
             if (!serialized.equals(entity.getSteps())) {
                 entity.setSteps(serialized);
@@ -694,14 +698,16 @@ public class JourneyService {
     }
 
     /** A message step the AI drafted carries {@code aiGenerated: true} and
-     * {@code aiModel} (the console stamps them on the copilot's draft and the
-     * step builder keeps them through edits): that becomes the AI mark on the
-     * send. A step without them is human copy and goes out unmarked. */
+     * {@code aiModel} — set on the server from the draft's receipt
+     * ({@link AiProvenance#stampSteps}) — and the receipt itself as
+     * {@code aiDraft}: that becomes the AI mark on the send. A stored receipt
+     * marks the send even if the flag was cleared. A step with none of them is
+     * human copy and goes out unmarked. */
     public static com.bss.campaign.client.CommunicationClient.AiMark aiMarkOf(Map<String, Object> message) {
         Object flag = message.get("aiGenerated");
         String model = textOf(message, "aiModel");
         boolean marked = Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag))
-                || (model != null && !model.isBlank());
+                || (model != null && !model.isBlank()) || message.get("aiDraft") != null;
         return marked ? new com.bss.campaign.client.CommunicationClient.AiMark(
                 model == null || model.isBlank() ? null : model) : null;
     }
@@ -1065,6 +1071,7 @@ public class JourneyService {
 
     private void applyArms(Journey entity, JsonNode raw, boolean resetWeights) {
         List<Map<String, Object>> arms = parseArms(raw);
+        provenance.stampArms(arms);
         try {
             entity.setArms(arms.isEmpty() ? null : objectMapper.writeValueAsString(arms));
         } catch (Exception e) {
@@ -1157,23 +1164,15 @@ public class JourneyService {
         return -1;
     }
 
-    /** The step, spoken in the enrolment's arm: the arm's subject/content replace the step's, the channel stays. */
+    /** The step, spoken in the enrolment's arm: the arm's subject/content replace the step's, the channel
+     * stays, and the AI mark follows the text actually sent ({@link AiProvenance#spokenInArm}). */
     private Map<String, Object> withArm(Journey journey, JourneyEnrollment enrollment, Map<String, Object> step) {
         if (enrollment.getArm() == null) {
             return step;
         }
         for (Map<String, Object> a : armsOf(journey)) {
             if (enrollment.getArm().equals(str(a.get("name")))) {
-                Map<String, Object> spoken = new LinkedHashMap<>(step);
-                // the arm's own copy replaces the step's: so does its provenance
-                spoken.remove("aiGenerated");
-                spoken.remove("aiModel");
-                if (a.get("aiGenerated") != null) spoken.put("aiGenerated", a.get("aiGenerated"));
-                if (a.get("aiModel") != null) spoken.put("aiModel", a.get("aiModel"));
-                if (a.get("subject") != null) spoken.put("subject", a.get("subject"));
-                if (a.get("content") != null) spoken.put("content", a.get("content"));
-                if (a.get("templateRef") != null) spoken.put("templateRef", a.get("templateRef"));
-                return spoken;
+                return AiProvenance.spokenInArm(step, a);
             }
         }
         return step;

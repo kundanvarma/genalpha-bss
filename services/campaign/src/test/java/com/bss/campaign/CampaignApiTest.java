@@ -99,6 +99,60 @@ class CampaignApiTest {
                 .andExpect(jsonPath("$.message.aiModel").doesNotExist());
     }
 
+    /** Finding 10: the server sets the mark from the receipt; a body cannot clear it. */
+    @Test
+    void aDraftReceiptMarksTheCampaignAndTheBodyCannotClearIt() throws Exception {
+        mockMvc.perform(post(BASE + "/campaign").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"name": "Drafted, flag cleared", "triggerEventType": "ProductOrderCreateEvent",
+                                 "message": {"subject": "Hi", "content": "Edited after the draft.",
+                                             "aiGenerated": false, "aiModel": "",
+                                             "aiDraft": "%s"}}
+                                """.formatted(com.bss.campaign.service.AiProvenanceTest.VECTOR)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message.aiGenerated").value(true))
+                .andExpect(jsonPath("$.message.aiModel").value("anthropic/claude-sonnet-4"));
+        mockMvc.perform(post(BASE + "/campaign").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"name": "Forged receipt", "triggerEventType": "ProductOrderCreateEvent",
+                                 "message": {"subject": "Hi", "content": "x", "aiDraft": "aid1.e30.forged"}}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Findings 10 and 20: every piece of journey copy with a receipt is marked on the server, branches too. */
+    @Test
+    void aJourneysDraftedCopyIsMarkedOnTheServerAndStaysMarkedThroughAnEdit() throws Exception {
+        String steps = """
+                [{"type":"message","subject":"Hi","content":"Welcome","aiGenerated":false,"aiDraft":"%1$s"},
+                 {"type":"decision","inSegment":"Gamers",
+                  "then":{"subject":"Play","content":"On","aiDraft":"%1$s"},
+                  "else":{"subject":"Plain","content":"Typed by a person"}}]
+                """.formatted(com.bss.campaign.service.AiProvenanceTest.VECTOR);
+        String id = com.jayway.jsonpath.JsonPath.read(mockMvc.perform(post(BASE + "/journey").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Drafted journey\",\"triggerEventType\":\"X\",\"steps\":" + steps + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.steps[0].aiGenerated").value(true))
+                .andExpect(jsonPath("$.steps[0].aiModel").value("anthropic/claude-sonnet-4"))
+                .andExpect(jsonPath("$.steps[1].then.aiGenerated").value(true))
+                .andExpect(jsonPath("$.steps[1].then.aiModel").value("anthropic/claude-sonnet-4"))
+                .andExpect(jsonPath("$.steps[1].else.aiGenerated").doesNotExist())
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        // an edit that clears the flag but keeps the receipt keeps the mark
+        mockMvc.perform(patch(BASE + "/journey/" + id).with(staff())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"steps\":" + steps.replace("\"Welcome\"", "\"Welcome, edited\"") + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.steps[0].content").value("Welcome, edited"))
+                .andExpect(jsonPath("$.steps[0].aiGenerated").value(true));
+        mockMvc.perform(post(BASE + "/journey").with(staff())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Forged\",\"triggerEventType\":\"X\",\"steps\":"
+                                + "[{\"type\":\"message\",\"subject\":\"s\",\"content\":\"c\",\"aiDraft\":\"aid1.e30.forged\"}]}"))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void rejectsIncompleteAndUnknownStatus() throws Exception {
         mockMvc.perform(post(BASE + "/campaign").with(staff())

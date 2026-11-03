@@ -88,6 +88,12 @@ async function token(ctx, client, user, pass) {
   if (!made) fail('Create in the copilot did not make a real journey');
   if (!Array.isArray(made.steps) || made.steps.length < 3) fail('the created journey lost its steps');
   console.log(`OK Create applied the proposal — a real ${made.steps.length}-step journey now exists`);
+  // EU AI Act Art. 50(2): the model wrote this copy, so every message step is marked —
+  // by the server, from the receipt the proposal carried, not by the console
+  const unmarked = made.steps.filter((s) => s.type === 'message' && s.aiGenerated !== true);
+  if (unmarked.length) fail('the copilot\'s copy went in unmarked: ' + unmarked.map((s) => s.subject).join(' | '));
+  if (!/AI-written/.test(cardText)) fail('the proposal card does not say the copy is AI-written');
+  console.log('OK every message step the copilot wrote is marked AI-written');
 
   await apictx.delete(`${JOURNEY}/${made.id}`, { headers: H(staff) });
   await browser.close();

@@ -19,13 +19,15 @@ public class CopyAssistantService {
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final com.bss.intelligence.llm.TenantVoice voice;
+    private final AiDraftProvenance provenance;
 
     public CopyAssistantService(Redactor redactor,
             com.bss.intelligence.llm.AiGovernor governor,
-            com.bss.intelligence.llm.TenantVoice voice) {
+            com.bss.intelligence.llm.TenantVoice voice, AiDraftProvenance provenance) {
         this.redactor = redactor;
         this.governor = governor;
         this.voice = voice;
+        this.provenance = provenance;
     }
 
     @Transactional
@@ -81,7 +83,10 @@ public class CopyAssistantService {
             body = body + " Use code {code}.";
         }
 
-        return new CampaignCopy(subject, body, answer.provider(), answer.model());
+        // the receipt the campaign component verifies to mark this copy itself (Art. 50(2)),
+        // issued for the model that actually served the call
+        return new CampaignCopy(subject, body, answer.provider(), answer.model(),
+                provenance.issue(answer.provider(), answer.model()));
     }
 
     /** Tolerant of markdown-happy models: "**SUBJECT:** hi" still parses. */

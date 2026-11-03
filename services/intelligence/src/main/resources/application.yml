@@ -120,6 +120,11 @@ bss:
     # endpoint (api.openai.com, api.anthropic.com) is US whatever is written here.
     jurisdiction: ${AI_JURISDICTION:}
   ai:
+    # EU AI Act Art. 50(2): every AI draft leaves with a receipt signed under
+    # this key, and the campaign component (same key) verifies it to set the AI
+    # mark itself. Empty = no receipts (copy carries only the declared mark);
+    # the fleet sets a dev key in docker-compose.yml. docs/ai-content-marking.md
+    provenance-key: ${AI_PROVENANCE_KEY:}
     # The model door's price list (#283): micro-dollars per MILLION tokens, the
     # way providers publish them — input and output apart, prompt-cache writes
     # and reads at their own rates. A model that is not listed is charged at

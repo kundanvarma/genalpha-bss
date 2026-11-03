@@ -17,6 +17,8 @@ spring:
 
 
 bss:
+  ai:
+    provenance-key: test-provenance-key
   events:
     enabled: false
   campaign:

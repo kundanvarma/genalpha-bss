@@ -95,8 +95,10 @@ class ServedModelMarkerTest {
                 new Redactor(), mock(PlatformTransactionManager.class), 2000L, registry, new MockEnvironment(),
                 new com.bss.intelligence.tracing.GenAiTracing(io.opentelemetry.api.OpenTelemetry.noop()));
         TenantVoice voice = new TenantVoice(scope, registry);
-        return new Desk(new CopyAssistantService(new Redactor(), governor, voice),
-                new JourneyDraftService(new Redactor(), governor, voice));
+        // receipts off (no key): this test is about which model is named, not the signature
+        com.bss.intelligence.service.AiDraftProvenance provenance = new com.bss.intelligence.service.AiDraftProvenance("", scope);
+        return new Desk(new CopyAssistantService(new Redactor(), governor, voice, provenance),
+                new JourneyDraftService(new Redactor(), governor, voice, provenance));
     }
 
     /** FAST on a local endpoint, SMART on another provider and model entirely. */

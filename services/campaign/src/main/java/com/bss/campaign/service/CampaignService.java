@@ -62,13 +62,16 @@ public class CampaignService {
     private final com.bss.campaign.client.CatalogClient catalog;
     private final com.bss.campaign.decision.DecisionPoints decisions;
 
+    private final AiProvenance provenance;
+
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.campaign.client.InsightClient insight,
             tools.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency,
             com.bss.campaign.client.CatalogClient catalog,
-            com.bss.campaign.decision.DecisionPoints decisions) {
+            com.bss.campaign.decision.DecisionPoints decisions, AiProvenance provenance) {
         this.decisions = decisions;
+        this.provenance = provenance;
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
@@ -105,9 +108,13 @@ public class CampaignService {
         entity.setTriggerState(dto.triggerState());
         entity.setMessageSubject(subject);
         entity.setMessageContent(content);
-        if (dto.message() != null && dto.message().aiWritten()) {
+        // the server decides the AI mark: from the draft's receipt when there is one
+        // (a body's aiGenerated:false cannot clear it), else from what the body declares
+        CommunicationClient.AiMark ai = dto.message() == null ? null : provenance.markFor(
+                dto.message().aiDraft(), dto.message().aiGenerated(), dto.message().aiModel());
+        if (ai != null) {
             entity.setAiGenerated(true);
-            entity.setAiModel(clip(dto.message().aiModel(), 128));
+            entity.setAiModel(clip(ai.model(), 128));
         }
         entity.setPromotionCode(dto.promotionCode());
         entity.setConversionEvent(dto.conversionEvent());

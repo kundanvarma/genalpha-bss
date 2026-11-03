@@ -233,4 +233,16 @@ export const NO_SHOP = {
   'stays active until': 'forblir aktiv til',
   'yet. Plans that do:': 'ennå. Abonnementer som gjør det:',
   'AI-written': 'Skrevet av KI',
+  // The care chat (#422 review): the rest of the chat, around the AI disclosure
+  'Hi! Ask me about your bills, usage or orders — or say "human" and I\'ll raise a ticket.': 'Hei! Spør meg om fakturaer, forbruk eller bestillinger — eller si «menneske», så oppretter jeg en sak.',
+  'Hi! I can help you pick a plan. For account questions, please sign in.': 'Hei! Jeg kan hjelpe deg å velge abonnement. Logg inn for spørsmål om kontoen din.',
+  'Something went wrong — try again?': 'Noe gikk galt — prøve igjen?',
+  'Ticket raised': 'Sak opprettet',
+  'a human will pick this up.': 'et menneske tar den videre.',
+  'Chat with us': 'Chat med oss',
+  'agent connected': 'kundebehandler tilkoblet',
+  'ticket raised': 'sak opprettet',
+  'Agent': 'Kundebehandler',
+  'Type a message…': 'Skriv en melding…',
+  'Talk to a human instead': 'Snakk med et menneske i stedet',
 };

@@ -360,6 +360,8 @@ services:
     extraEnv:
       OIDC_CLIENT_ID: bss-campaign
       OIDC_CLIENT_SECRET: campaign-secret
+      # AI-draft receipts: the same key as intelligence. Dev value — override per environment.
+      AI_PROVENANCE_KEY: dev-ai-provenance-key
       COMMUNICATION_BASE_URL: http://communication:8080
       INSIGHT_BASE_URL: http://insight:8080
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -415,6 +417,8 @@ services:
     machineIdentity: true
     extraEnv:
       AI_PROVIDER: stub
+      # signs AI-draft receipts; campaign verifies with the same key. Dev value — override per environment.
+      AI_PROVENANCE_KEY: dev-ai-provenance-key
       OIDC_CLIENT_ID: bss-intelligence
       OIDC_CLIENT_SECRET: intelligence-secret
       AGREEMENT_BASE_URL: http://agreement:8080
