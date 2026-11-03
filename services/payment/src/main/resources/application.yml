@@ -17,7 +17,7 @@ spring:
   # auto-configured builder; the PSP adapters build their own and take their
   # timeouts from bss.payment.psp below, where a card authorization needs room.
   http:
-    client:
+    clients:
       connect-timeout: 5s
       read-timeout: 20s
   datasource:

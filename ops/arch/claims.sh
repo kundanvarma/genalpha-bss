@@ -504,6 +504,20 @@ untranslated=$(python3 ops/arch/choices_i18n_check.py) || fail "the Choices i18n
 [ -z "$untranslated" ] || fail "Choices/credit/chat strings with no Norwegian entry ('nn:' = no nynorsk entry of its own): $(echo "$untranslated" | paste -sd'|' -)" \
   "fix: add bokmål to apps/storefront/src/i18n/no.js and nynorsk to nn.js — write the nn entry even where it matches bokmål"
 
+# CLAUDE.md names how many components meet real Postgres in a test; count them.
+pg_real=$(find services -path '*src/test*' -name PostgresMigrationTest.java | cut -d/ -f2 | sort -u | wc -l | tr -d ' ')
+pg_said=$(grep -oE '`PostgresMigrationTest`, [0-9]+ components' CLAUDE.md | grep -oE '[0-9]+' || true)
+[ "$pg_said" = "$pg_real" ] || fail "CLAUDE.md says ${pg_said:-no number of} components carry PostgresMigrationTest; the tree has $pg_real" \
+  "fix: write $pg_real in CLAUDE.md"
+
+# Outbound HTTP timeouts live under spring.http.CLIENTS. Boot 4 stopped binding the
+# old spring.http.client.* keys without a word, so 41 components carried timeouts
+# that did nothing: a 400 ms read timeout let a 1.5 s answer through (#422 review).
+stale_http=$(grep -rln --include='application*.yml' -E '^    client:' services 2>/dev/null \
+  | xargs -r grep -l -E '^  http:' 2>/dev/null || true)
+[ -z "$stale_http" ] || fail "spring.http.client.* is not bound since Boot 4, so these timeouts do nothing: $(echo "$stale_http" | paste -sd' ' -)" \
+  "fix: rename to spring.http.clients (factory moves under imperative:)"
+
 # react and react-dom are ONE version or the app is a blank page: React refuses
 # to render a mismatched pair (error #527). Dependabot bumps them as two PRs,
 # and merging one half blanked the CSR console and the mobile app on 25 Sep.
