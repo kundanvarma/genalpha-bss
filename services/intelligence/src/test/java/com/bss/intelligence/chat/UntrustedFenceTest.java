@@ -53,6 +53,16 @@ class UntrustedFenceTest {
     }
 
     @Test
+    void aSystemPromptThatQuotesTheTagStillGetsTheRule() {
+        // a knowledge article pasted into a system prompt can quote the fence's tag;
+        // that must not read as "the rule is already here"
+        String article = "Help article: agents see customer text as <untrusted source=\"customer\"> blocks.";
+        assertThat(Untrusted.withRule(article)).endsWith(Untrusted.RULE).startsWith(article);
+        // and the rule is still added once, however often the prompt passes through
+        assertThat(Untrusted.withRule(Untrusted.withRule(article))).isEqualTo(article + Untrusted.RULE);
+    }
+
+    @Test
     void aCustomersMessageReachesTheModelFenced() {
         given(bss.offeringsFirstPage()).willReturn(List.of());
         given(governor.complete(anyString(), any(), anyString(), anyString())).willReturn("Happy to help.");

@@ -12,9 +12,26 @@ public record ModelRoute(LlmAdapter adapter, String provider, String model, Stri
         return new ModelRoute(null, Jurisdiction.UNKNOWN, Jurisdiction.UNKNOWN, Jurisdiction.UNKNOWN);
     }
 
-    /** The plain adapter's own route: its self-report and today's jurisdiction tag. */
+    /** The plain adapter's own route, nothing declared. */
     public static ModelRoute of(LlmAdapter adapter, LlmAdapter.Tier tier) {
+        return of(adapter, tier, null);
+    }
+
+    /**
+     * The plain adapter's own route: its self-report, and its jurisdiction — the
+     * endpoint it calls when that is a known public one, else the operator's
+     * declared word ({@code bss.intelligence.jurisdiction} for the shared
+     * default), else the provider kind's default.
+     */
+    public static ModelRoute of(LlmAdapter adapter, LlmAdapter.Tier tier, String declared) {
         String provider = adapter.provider(tier);
-        return new ModelRoute(adapter, provider, adapter.model(tier), Jurisdiction.defaultFor(provider));
+        String jurisdiction;
+        if ("stub".equals(provider)) {
+            jurisdiction = Jurisdiction.NONE;
+        } else {
+            String known = Jurisdiction.ofEndpoint(adapter.endpoint());
+            jurisdiction = known != null ? known : Jurisdiction.of(declared, provider);
+        }
+        return new ModelRoute(adapter, provider, adapter.model(tier), jurisdiction);
     }
 }

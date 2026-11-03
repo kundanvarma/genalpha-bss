@@ -15,6 +15,7 @@ public class AnthropicAdapter implements LlmAdapter {
 
     private final RestClient restClient;
     private final String model;
+    private final String endpoint;
 
     public AnthropicAdapter(RestClient.Builder builder,
             @Value("${bss.intelligence.base-url:}") String baseUrl,
@@ -22,7 +23,8 @@ public class AnthropicAdapter implements LlmAdapter {
             @Value("${bss.intelligence.model:}") String model) {
         // Deployment env often sets these to "" rather than leaving them unset
         // (compose passthrough) — blank must mean "use the default" too.
-        String base = baseUrl == null || baseUrl.isBlank() ? "https://api.anthropic.com" : baseUrl;
+        String base = Jurisdiction.effectiveUrl("anthropic", baseUrl);
+        this.endpoint = base;
         this.restClient = builder.baseUrl(base)
                 .defaultHeader("x-api-key", apiKey)
                 .defaultHeader("anthropic-version", "2023-06-01")
@@ -85,6 +87,11 @@ public class AnthropicAdapter implements LlmAdapter {
 
     private static int orZero(Integer v) {
         return v == null ? 0 : v;
+    }
+
+    @Override
+    public String endpoint() {
+        return endpoint;
     }
 
     @Override

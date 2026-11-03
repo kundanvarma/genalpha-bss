@@ -1,7 +1,7 @@
 package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
-import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.llm.GovernedAnswer;
 import com.bss.intelligence.service.CopilotRequests.CopyBrief;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,15 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CopyAssistantService {
 
-    private final LlmAdapter llm;
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final com.bss.intelligence.llm.TenantVoice voice;
 
-    public CopyAssistantService(LlmAdapter llm, Redactor redactor,
+    public CopyAssistantService(Redactor redactor,
             com.bss.intelligence.llm.AiGovernor governor,
             com.bss.intelligence.llm.TenantVoice voice) {
-        this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
         this.voice = voice;
@@ -61,17 +59,18 @@ public class CopyAssistantService {
         // Small models drift from the contract; one corrective retry fixes
         // most of it. Every attempt rides the governor — metered, budgeted
         // and audited in one place (a retry lands as its own ledger row).
-        String raw = governor.complete("campaign-copy",
+        // the answer carries the model that WROTE it — the marker on the draft (#422)
+        GovernedAnswer answer = governor.answer("campaign-copy",
                 com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user.toString());
-        String subject = lineAfter(raw, "SUBJECT:");
-        String body = lineAfter(raw, "BODY:");
+        String subject = lineAfter(answer.text(), "SUBJECT:");
+        String body = lineAfter(answer.text(), "BODY:");
         if (subject == null || body == null) {
-            raw = governor.complete("campaign-copy-retry",
+            answer = governor.answer("campaign-copy-retry",
                     com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again with"
                     + " ONLY the two lines, starting with 'SUBJECT:' and 'BODY:'.");
-            subject = lineAfter(raw, "SUBJECT:");
-            body = lineAfter(raw, "BODY:");
+            subject = lineAfter(answer.text(), "SUBJECT:");
+            body = lineAfter(answer.text(), "BODY:");
         }
         if (subject == null || body == null) {
             throw new BadRequestException("the model did not follow the SUBJECT/BODY contract");
@@ -82,7 +81,7 @@ public class CopyAssistantService {
             body = body + " Use code {code}.";
         }
 
-        return new CampaignCopy(subject, body, llm.provider(), llm.model());
+        return new CampaignCopy(subject, body, answer.provider(), answer.model());
     }
 
     /** Tolerant of markdown-happy models: "**SUBJECT:** hi" still parses. */

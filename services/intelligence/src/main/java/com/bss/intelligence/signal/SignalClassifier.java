@@ -66,18 +66,15 @@ public class SignalClassifier {
 
     private final BssApiClient bss;
     private final AiGovernor governor;
-    private final com.bss.intelligence.llm.LlmAdapter llm;
     private final TenantRegistry tenants;
     private final ObjectMapper objectMapper;
     private final int batchCap;
 
-    public SignalClassifier(BssApiClient bss, AiGovernor governor,
-            com.bss.intelligence.llm.LlmAdapter llm, TenantRegistry tenants,
+    public SignalClassifier(BssApiClient bss, AiGovernor governor, TenantRegistry tenants,
             ObjectMapper objectMapper,
             @Value("${bss.intelligence.signal.batch-cap:20}") int batchCap) {
         this.bss = bss;
         this.governor = governor;
-        this.llm = llm;
         this.tenants = tenants;
         this.objectMapper = objectMapper;
         this.batchCap = batchCap;
@@ -125,16 +122,16 @@ public class SignalClassifier {
                 String user = "Source: " + signal.get("source")
                         + (signal.get("lang") != null ? " · language: " + signal.get("lang") : "")
                         + "\nSignal text:\n" + Untrusted.fence("post", text);
-                String answer = governor.complete("signal-classification",
+                com.bss.intelligence.llm.GovernedAnswer answer = governor.answer("signal-classification",
                         LlmAdapter.Tier.FAST, SYSTEM, user);
-                Map<String, Object> parsed = parse(answer);
+                Map<String, Object> parsed = parse(answer.text());
                 if (parsed == null || !quotesHold(parsed, text)) {
                     dropped++;
                     continue;
                 }
-                // who ACTUALLY spoke: the FAST tier's resolved adapter
-                parsed.put("provider", llm.provider(LlmAdapter.Tier.FAST));
-                parsed.put("model", llm.model(LlmAdapter.Tier.FAST));
+                // who ACTUALLY spoke: the route that served the call, fallback included
+                parsed.put("provider", answer.provider());
+                parsed.put("model", answer.model());
                 if (twinned) {
                     parsed.put("evidenceSpace", "twin");
                 }
@@ -145,7 +142,8 @@ public class SignalClassifier {
                     dropped++;
                 }
             } catch (Exception e) {
-                log.warn("signal {} left unclassified: {}", id, e.getMessage());
+                log.warn("signal {} left unclassified: {}", id,
+                        com.bss.intelligence.llm.ProviderErrors.describe(e));
                 dropped++;
             }
         }

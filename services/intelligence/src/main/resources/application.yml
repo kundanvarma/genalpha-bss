@@ -114,6 +114,11 @@ bss:
     base-url: ${AI_BASE_URL:}
     api-key: ${AI_API_KEY:}
     model: ${AI_MODEL:}
+    # Where the shared default model processes prompts (#422): EU | US |
+    # self-hosted. Blank = the provider kind's default (anthropic US,
+    # openai-compatible self-hosted, stub none). A base URL on a known public
+    # endpoint (api.openai.com, api.anthropic.com) is US whatever is written here.
+    jurisdiction: ${AI_JURISDICTION:}
   ai:
     # The model door's price list (#283): micro-dollars per MILLION tokens, the
     # way providers publish them — input and output apart, prompt-cache writes

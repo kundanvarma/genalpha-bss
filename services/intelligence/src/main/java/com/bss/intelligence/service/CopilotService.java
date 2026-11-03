@@ -1,7 +1,7 @@
 package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
-import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.llm.GovernedAnswer;
 import com.bss.intelligence.service.CopilotRequests.IntentAsk;
 import com.bss.intelligence.service.IntentDraft.IntentExpression;
 import tools.jackson.databind.JsonNode;
@@ -23,13 +23,10 @@ public class CopilotService {
 
     private static final int CONTEXT_CHARS = 3000;
 
-    private final LlmAdapter llm;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
 
-    public CopilotService(LlmAdapter llm,
-            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
-        this.llm = llm;
+    public CopilotService(com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
         this.governor = governor;
         this.objectMapper = objectMapper;
     }
@@ -46,7 +43,8 @@ public class CopilotService {
                 + "NEXT: <another action (1 to 3 NEXT lines total)>";
         String user = "Customer data (JSON):\n" + context;
 
-        String raw = completeWithRetry(system, user, "customer-summary");
+        GovernedAnswer served = completeWithRetry(system, user, "customer-summary");
+        String raw = served.text();
         String summary = lineAfter(raw, "SUMMARY:");
         List<String> next = new ArrayList<>();
         for (String line : raw.split("\\R")) {
@@ -59,7 +57,7 @@ public class CopilotService {
             throw new BadRequestException("the model did not follow the SUMMARY/NEXT contract");
         }
         return new CustomerSummary(summary, next.subList(0, Math.min(3, next.size())),
-                llm.provider(), llm.model());
+                served.provider(), served.model());
     }
 
     /**
@@ -84,7 +82,8 @@ public class CopilotService {
                 + "LATENCY_MS: <integer round-trip budget>\n"
                 + "BANDWIDTH_MBPS: <integer>\n"
                 + "AI_TOKENS_MILLIONS: <integer, or 0 if no AI workload>";
-        String raw = completeWithRetry(system, "Ask: " + ask, "intent-draft");
+        GovernedAnswer served = completeWithRetry(system, "Ask: " + ask, "intent-draft");
+        String raw = served.text();
         String place = lineAfter(raw, "PLACE:");
         String latency = lineAfter(raw, "LATENCY_MS:");
         if (place == null || latency == null) {
@@ -95,7 +94,7 @@ public class CopilotService {
                 digits(lineAfter(raw, "BANDWIDTH_MBPS:"), 1000), tokens > 0 ? tokens : null);
         return new IntentDraft(
                 lineAfter(raw, "NAME:") == null ? "B2B network intent" : lineAfter(raw, "NAME:"),
-                expression, llm.provider(), llm.model());
+                expression, served.provider(), served.model());
     }
 
     private static long digits(String value, long fallback) {
@@ -116,12 +115,13 @@ public class CopilotService {
                 + " is metered if token allowances appear. Respond with ONLY one labeled line:\n"
                 + "NARRATIVE: <max 500 characters>";
         String user = "Quote (JSON):\n" + contextOf(request);
-        String raw = completeWithRetry(system, user, "quote-narrative");
+        GovernedAnswer served = completeWithRetry(system, user, "quote-narrative");
+        String raw = served.text();
         String narrative = lineAfter(raw, "NARRATIVE:");
         if (narrative == null) {
             throw new BadRequestException("the model did not follow the NARRATIVE contract");
         }
-        return new QuoteNarrative(narrative, llm.provider(), llm.model());
+        return new QuoteNarrative(narrative, served.provider(), served.model());
     }
 
     @Transactional
@@ -136,12 +136,13 @@ public class CopilotService {
                 + "REPLY: <the reply, max 400 characters>";
         String user = "Ticket (JSON):\n" + contextOf(request);
 
-        String raw = completeWithRetry(system, user, "ticket-reply");
+        GovernedAnswer served = completeWithRetry(system, user, "ticket-reply");
+        String raw = served.text();
         String reply = lineAfter(raw, "REPLY:");
         if (reply == null) {
             throw new BadRequestException("the model did not follow the REPLY contract");
         }
-        return new TicketReplyDraft(reply, llm.provider(), llm.model());
+        return new TicketReplyDraft(reply, served.provider(), served.model());
     }
 
     /** Live intent on a care chat: what the customer is really asking, from the
@@ -161,7 +162,8 @@ public class CopilotService {
                 + "SUMMARY: <one sentence, what they want, in the agent's words>\n"
                 + "REPLY: <a short, empathetic next message the agent could send, max 300 characters, no promises>";
         String user = "Conversation (JSON, oldest first):\n" + contextOf(request);
-        String raw = completeWithRetry(system, user, "chat-intent");
+        GovernedAnswer served = completeWithRetry(system, user, "chat-intent");
+        String raw = served.text();
         String intent = lineAfter(raw, "INTENT:");
         String summary = lineAfter(raw, "SUMMARY:");
         String reply = lineAfter(raw, "REPLY:");
@@ -175,7 +177,7 @@ public class CopilotService {
             confidence = 0.5;
         }
         return new ChatIntent(intent.trim().toLowerCase().replaceAll("[^a-z-]", ""), confidence,
-                summary, reply, llm.provider(), llm.model());
+                summary, reply, served.provider(), served.model());
     }
 
     /** After-call work drafted from what actually happened: the situation the
@@ -191,7 +193,8 @@ public class CopilotService {
                 + "DISPOSITION: <one of: resolved, follow-up, escalated, informational>\n"
                 + "FOLLOWUP: <one concrete follow-up or 'none'>";
         String user = "Call record (JSON):\n" + contextOf(request);
-        String raw = completeWithRetry(system, user, "wrap-up");
+        GovernedAnswer served = completeWithRetry(system, user, "wrap-up");
+        String raw = served.text();
         String note = lineAfter(raw, "NOTE:");
         if (note == null) {
             throw new BadRequestException("the model did not follow the NOTE contract");
@@ -200,7 +203,7 @@ public class CopilotService {
         return new WrapUp(note,
                 String.valueOf(lineAfter(raw, "DISPOSITION:") == null ? "informational" : lineAfter(raw, "DISPOSITION:")).trim().toLowerCase(),
                 follow == null || follow.trim().equalsIgnoreCase("none") ? null : follow.trim(),
-                llm.provider(), llm.model());
+                served.provider(), served.model());
     }
 
     /** Serialize and cap whatever slice of the 360 the console sent. Personal
@@ -221,17 +224,18 @@ public class CopilotService {
         }
     }
 
-    private String completeWithRetry(String system, String user, String useCase) {
-        // through the governor: metered, budgeted, audited in one place
-        String raw = governor.complete(useCase,
+    /** Through the governor: metered, budgeted, audited in one place — and the
+     * answer names the model that wrote it, which the draft's marker carries. */
+    private GovernedAnswer completeWithRetry(String system, String user, String useCase) {
+        GovernedAnswer answer = governor.answer(useCase,
                 com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user);
-        if (looksUnlabeled(raw)) {
-            raw = governor.complete(useCase + "-retry",
+        if (looksUnlabeled(answer.text())) {
+            answer = governor.answer(useCase + "-retry",
                     com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again using"
                     + " ONLY the labeled lines from the instructions.");
         }
-        return raw;
+        return answer;
     }
 
     private static boolean looksUnlabeled(String raw) {

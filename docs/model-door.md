@@ -95,6 +95,14 @@ and ledger.
   key as a door key, and it refuses an Anthropic tenant before anything is sent.
 - `ModelDoorApiTest` (11 tests), `ModelDoorOpenAiTest` (4) and `DoorPriceListTest` (1). Each guarantee was seen to fail
   when broken on purpose.
+- `ModelDoorIsolationTest` (4): two tenants on two stand-in providers, 400 calls at once
+  through one door, and each provider sees only its own tenant's key. Before the fix it
+  failed — the door set the base URL on one shared HTTP builder per call, so a call could
+  leave for the other tenant's provider carrying its own tenant's key and prompt (the
+  same class #430 fixed in the copilots' router); each call now builds from a copy. It
+  also proves an EU-only tenant's `openai-compatible` worker with no base URL is refused
+  with nothing sent, and that a provider error quoting the prompt never reaches the log
+  (the door logs the error class; its upstream branch never carried the provider's body).
 
 ## Honest limits
 
@@ -117,8 +125,14 @@ and ledger.
   turns off the one side call it would make.
 - **The EU-only rule holds here, the fallback does not.** A tenant with
   `ai-data-residency: eu` has its workers refused (403, a `refused-residency` row)
-  unless the worker model is declared EU or self-hosted (`worker-ai-jurisdiction`;
-  undeclared `anthropic` reads as US, `openai` as unknown). The copilots' fallback
+  unless the worker model is EU or self-hosted. The rule reads the address the call
+  will really go to: a worker model on `api.openai.com` or `api.anthropic.com` is US
+  whatever is declared, and a blank `worker-ai-base-url` *is* that public address (the
+  door forwards there), so `openai-compatible` with no base URL is US, not self-hosted.
+  Any other address is what `worker-ai-jurisdiction` declares, else the provider kind's
+  default (`anthropic` US, `openai-compatible` self-hosted, `openai` unknown). An
+  `openai-compatible` worker model at some other public API, undeclared, still reads as
+  self-hosted — declare it. The copilots' fallback
   provider (#422, [ai-control-plane-plan.md](ai-control-plane-plan.md)) is not
   offered at the door: a worker whose provider is down gets the 502 it always got.
 - **No streaming.** The door answers whole responses; workers are configured not to

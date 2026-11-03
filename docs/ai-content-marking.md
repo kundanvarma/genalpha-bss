@@ -30,7 +30,13 @@ instead of the step's.
 ## How it flows
 
 1. The console asks the copy assistant (`/ai/v1/campaignCopy`) or the journey
-   copilot (`/ai/v1/journeyDraft`). Both answers name `provider` and `model`.
+   copilot (`/ai/v1/journeyDraft`). Both answers name `provider` and `model`
+   — the ones that actually wrote the copy, as the AI governor served the
+   call: the FAST tier the copy runs on, or the tenant's fallback when the
+   first choice was down. (Until 2026-11-03 they named the tenant's SMART-tier
+   configuration, which for a tenant with split tiers is a different model.) A
+   journey whose stages were written by different models names each one,
+   comma-separated.
 2. The console puts the copy in the form and the model name beside it. On
    Create it sends `message: {subject, content, aiGenerated: true, aiModel}`
    (campaign) or the marked steps (journey).
@@ -58,6 +64,10 @@ instead of the step's.
   lists by Query-by-Example, so a primitive `false` on the entity would have
   filtered every AI-written message out of every inbox. The column is TRUE or
   empty for that reason.
+- `services/intelligence` — `ServedModelMarkerTest`: with FAST and SMART on
+  different providers, campaign copy, a journey draft and a care-desk ticket
+  reply name the FAST model that wrote them, and copy the fallback wrote names
+  the fallback. The copy and journey tests failed on the old code.
 - `ops/e2e/for_you_test.js` now also asserts the shop caption carries
   `data-ai-generated="true"` and the label, and the app caption carries the label.
 
@@ -76,6 +86,12 @@ instead of the step's.
   card and wrap-up already say *Drafted by <provider> (<model>) — verify before
   acting* / *— edit before logging*; they are not customer-facing until a person
   acts on them, and they are not marked further here.
+- **Three SMART-tier copilots still name the configured model.** The journey
+  copilot, the product copilot and next-best-offer report the tenant's SMART
+  configuration rather than the route that served; that is the right model
+  unless the fallback answered, in which case they name the one that was down.
+  Campaign copy, journey drafts, the care desk's drafts, knowledge answers and
+  signal classification name the served model.
 - **Templated sends are not marked.** A message rendered from a message
   template is the template author's copy; if a template was itself drafted by
   a model, nothing records that.
