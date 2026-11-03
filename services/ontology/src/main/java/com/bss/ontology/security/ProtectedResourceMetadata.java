@@ -70,7 +70,7 @@ public class ProtectedResourceMetadata {
         return entryPoint;
     }
 
-    static String origin(HttpServletRequest request) {
+    public static String origin(HttpServletRequest request) {
         String proto = first(request.getHeader("X-Forwarded-Proto"));
         String host = first(request.getHeader("X-Forwarded-Host"));
         if (host == null) {
