@@ -61,4 +61,37 @@ class AgentIdentityTest {
         assertThat(c.agentEvidence()).isEqualTo("declared");
         assertThat(Caller.current(withAgentHeader(null), "genalpha").agentEvidence()).isEqualTo("none");
     }
+
+    /** The gateway verified a Web Bot Auth signature and stamped the operator (#427). */
+    private static HttpServletRequest gatewayVerified(String operator, String declared) {
+        HttpServletRequest req = withAgentHeader(declared);
+        given(req.getHeader(Caller.VERIFIED_AGENT_HEADER)).willReturn(operator);
+        return req;
+    }
+
+    @Test
+    void aGatewayVerifiedSignatureIsVerifiedEvidence_andOutranksTheHeader() {
+        signIn(Map.of());
+        Caller c = Caller.current(gatewayVerified("example-agents", "care-assist"), "genalpha");
+        assertThat(c.agent()).isEqualTo("example-agents");
+        assertThat(c.agentVerified()).isTrue();
+        assertThat(c.agentEvidence()).isEqualTo("verified");
+        assertThat(c.subject()).isEqualTo("paula");
+    }
+
+    @Test
+    void theTokensActorStillWinsOverTheGatewayStamp() {
+        signIn(Map.of("act", Map.of("client_id", "shopping-agent-7")));
+        Caller c = Caller.current(gatewayVerified("example-agents", null), "genalpha");
+        assertThat(c.agent()).isEqualTo("shopping-agent-7");
+        assertThat(c.agentEvidence()).isEqualTo("verified");
+    }
+
+    @Test
+    void aBlankGatewayStampIsNoEvidence() {
+        signIn(Map.of());
+        Caller c = Caller.current(gatewayVerified("  ", "care-assist"), "genalpha");
+        assertThat(c.agent()).isEqualTo("care-assist");
+        assertThat(c.agentEvidence()).isEqualTo("declared");
+    }
 }
