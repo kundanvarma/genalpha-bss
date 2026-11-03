@@ -513,7 +513,8 @@ pg_said=$(grep -oE '`PostgresMigrationTest`, [0-9]+ components' CLAUDE.md | grep
 # Outbound HTTP timeouts live under spring.http.CLIENTS. Boot 4 stopped binding the
 # old spring.http.client.* keys without a word, so 41 components carried timeouts
 # that did nothing: a 400 ms read timeout let a 1.5 s answer through (#422 review).
-stale_http=$(grep -rln --include='application*.yml' -E '^    client:' services 2>/dev/null \
+# sources only: a laptop's stale target/ copies are not what ships
+stale_http=$(grep -rln --include='application*.yml' -E '^    client:' services/*/src/main/resources 2>/dev/null \
   | xargs -r grep -l -E '^  http:' 2>/dev/null || true)
 [ -z "$stale_http" ] || fail "spring.http.client.* is not bound since Boot 4, so these timeouts do nothing: $(echo "$stale_http" | paste -sd' ' -)" \
   "fix: rename to spring.http.clients (factory moves under imperative:)"

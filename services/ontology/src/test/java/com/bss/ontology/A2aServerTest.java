@@ -79,6 +79,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "bss.tenants.registry[0].issuer=https://idp.genalpha.test/realms/bss",
         "bss.tenants.registry[1].id=nova",
         "bss.tenants.registry[1].issuer=https://idp.nova.test/realms/nova",
+        "bss.tenants.registry[1].brand-name=MyNova",
         "ontology.a2a.execute-enabled=true",
         "ontology.a2a.signing-key-id=card-key-1"})
 @Import({SecurityConfig.class, TenantScope.class, TenantRegistry.class, ClaimAuthoritiesConverter.class,
@@ -169,6 +170,16 @@ class A2aServerTest {
                 .andExpect(jsonPath("$.securitySchemes.oauth2.oauth2SecurityScheme.oauth2MetadataUrl")
                         .value("https://idp.nova.test/realms/nova/.well-known/openid-configuration"))
                 .andExpect(jsonPath("$.securityRequirements[0].schemes.oauth2").isMap());
+    }
+
+    @Test
+    void theCardSpeaksForTheOperator_byItsBrand_neverForTheSoftware() throws Exception {
+        // the card is published on the operator's own domain (#452 deploy: it read "GenAlpha BSS" on another brand's shop)
+        mvc.perform(get(CARD).header("X-Tenant-Id", "nova"))
+                .andExpect(jsonPath("$.name").value("MyNova — governed actions"));
+        mvc.perform(get(CARD))
+                .andExpect(jsonPath("$.name").value("Governed actions"))
+                .andExpect(jsonPath("$.name", org.hamcrest.Matchers.not(containsString("GenAlpha"))));
     }
 
     @Test
