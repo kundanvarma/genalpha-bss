@@ -20,7 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <ul>
  *   <li>GET  creditDecision/notice — the notice the shop shows before a credit-checked order;</li>
  *   <li>GET  productOrder/{id}/creditDecision — why, for the order's owner (404 for anyone else's);</li>
- *   <li>POST productOrder/{id}/creditDecision/review — ask a person to look again (201 filed, 200 already filed).</li>
+ *   <li>POST productOrder/{id}/creditDecision/review — ask a person to look again (201 filed, 200 already filed);</li>
+ *   <li>GET  creditDecision/{decisionId} and POST creditDecision/{decisionId}/review — the same two by the
+ *       decision's id, for a decision whose order the operator's rule refused (the 422 links here).</li>
  * </ul>
  */
 @RestController
@@ -45,8 +47,22 @@ public class CreditExplanationController {
     @PostMapping(ApiConstants.BASE_PATH + "/productOrder/{id}/creditDecision/review")
     public ResponseEntity<CreditReviewReceipt> review(@PathVariable("id") String id,
             @RequestBody(required = false) CreditReviewRequest body) {
-        CreditExplanationService.Result result = service.requestReview(id,
-                body == null ? CreditReviewRequest.EMPTY : body);
+        return answer(service.requestReview(id, body == null ? CreditReviewRequest.EMPTY : body));
+    }
+
+    /** Why, by the decision's own id — the door when the operator's rule refused the order (#422 review). */
+    @GetMapping(ApiConstants.BASE_PATH + "/creditDecision/{decisionId}")
+    public CreditExplanation explainDecision(@PathVariable("decisionId") String decisionId) {
+        return service.explainDecision(decisionId);
+    }
+
+    @PostMapping(ApiConstants.BASE_PATH + "/creditDecision/{decisionId}/review")
+    public ResponseEntity<CreditReviewReceipt> reviewDecision(@PathVariable("decisionId") String decisionId,
+            @RequestBody(required = false) CreditReviewRequest body) {
+        return answer(service.requestDecisionReview(decisionId, body == null ? CreditReviewRequest.EMPTY : body));
+    }
+
+    private static ResponseEntity<CreditReviewReceipt> answer(CreditExplanationService.Result result) {
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.receipt());
     }
 }

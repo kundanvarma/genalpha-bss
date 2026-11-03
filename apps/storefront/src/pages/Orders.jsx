@@ -297,7 +297,7 @@ export default function Orders() {
                     ))}
                   </div>
                 )}
-                {es === 'held' && <CreditExplanation orderId={o.id} />}
+                {o.creditDecision && <CreditExplanation orderId={o.id} />}
                 {!TERMINAL.includes(es) && (
                   <button className="linkish small" data-testid="why-toggle"
                           onClick={() => toggleJourney(o.id)}>

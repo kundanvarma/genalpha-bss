@@ -194,10 +194,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     if (why.decision !== 'decline' || why.reasonCode !== 'PAYMENT_REMARK' || !why.reason) {
       fail('the reason is missing: ' + JSON.stringify(why));
     }
-    if (!(why.humanReview || '').includes('A person reviews every credit decline')) fail('no human-review statement');
+    if (!(why.humanReview || '').includes('never final without a way to a person')) fail('no human-review statement');
+    // ordering, not the shop, says the explanation is shown — and what happened to the order
+    if (!why.show || why.outcomeCode !== 'held') fail('a held decline must be shown as held: ' + JSON.stringify(why));
+    const heldView = await (await ctx.get(`${ORDERS}/productOrder/${held.id}`, { headers: H })).json();
+    if (!heldView.creditDecision || !heldView.creditDecision.href) fail('the order does not link its credit decision');
     if ((why.dataUsed || []).length !== 4) fail('data categories missing: ' + JSON.stringify(why.dataUsed));
     const notice = await (await ctx.get(`${ORDERS}/creditDecision/notice`, { headers: H })).json();
-    if (!notice.checked || !(notice.notice || '').includes('a person reviews every decline')) {
+    if (!notice.checked || !(notice.notice || '').includes('a decline is never final without a way to a person')) {
       fail('checkout notice: ' + JSON.stringify(notice));
     }
     const review = `${ORDERS}/productOrder/${held.id}/creditDecision/review`;
@@ -213,6 +217,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const ticket = await ctx.get(`${API}/tmf-api/troubleTicket/v4/troubleTicket/${filed.ticketId}`, { headers: H });
     if (ticket.status() !== 200) fail('the review ticket is not in the care queue: ' + ticket.status());
     await ctx.patch(`${ORDERS}/productOrder/${held.id}`, { headers: H, data: { state: 'cancelled' } });
+    const afterCancel = await (await ctx.get(`${ORDERS}/productOrder/${held.id}/creditDecision`, { headers: H })).json();
+    if (afterCancel.outcomeCode !== 'cancelled' || !afterCancel.show) {
+      fail('a cancelled decline must still explain itself, as cancelled: ' + JSON.stringify(afterCancel));
+    }
     console.log(`OK CREDIT WHY: decline held the order with "${why.reason}"; one review ticket, replayed on a second ask`);
 
     console.log('\nALL PART-A LEGS GREEN');

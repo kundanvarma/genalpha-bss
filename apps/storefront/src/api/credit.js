@@ -13,6 +13,20 @@ export async function orderCreditDecision(orderId) {
   return json(await authFetch(`${ORDERING}/productOrder/${encodeURIComponent(orderId)}/creditDecision`));
 }
 
+/** Why, by the decision's own id — when the shop's own rules refused the order, the 422 links here. */
+export async function creditDecisionById(decisionId) {
+  return json(await authFetch(`${ORDERING}/creditDecision/${encodeURIComponent(decisionId)}`));
+}
+
+/** Ask a person about a decision whose order was never placed; a second click answers the same receipt. */
+export async function askCreditDecisionReview(decisionId, note) {
+  return json(await authFetch(`${ORDERING}/creditDecision/${encodeURIComponent(decisionId)}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(note && note.trim() ? { note: note.trim() } : {}),
+  }));
+}
+
 /** Ask a person to review the decision; one request per order, a second click answers the same receipt. */
 export async function askCreditReview(orderId, note) {
   return json(await authFetch(`${ORDERING}/productOrder/${encodeURIComponent(orderId)}/creditDecision/review`, {

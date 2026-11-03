@@ -110,7 +110,16 @@ public class ProductOrderService {
         // Customers see their own orders only, whatever else they filter on.
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<ProductOrder> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+        return new PagedResult<>(withCreditLinks(page.getContent().stream().map(mapper::toDto).toList()),
+                page.getTotalElements());
+    }
+
+    /** #422 review: ordering, not the channel, says which orders carry a credit decision to explain. */
+    private List<ProductOrderDto> withCreditLinks(List<ProductOrderDto> dtos) {
+        Map<String, com.bss.ordering.dto.CreditDecisionLink> links =
+                creditService.explanationLinks(dtos.stream().map(ProductOrderDto::getId).toList());
+        dtos.forEach(d -> d.setCreditDecision(links.get(d.getId())));
+        return dtos;
     }
 
     /**
@@ -147,7 +156,7 @@ public class ProductOrderService {
         ProductOrder entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
-        return mapper.toDto(entity);
+        return withCreditLinks(List.of(mapper.toDto(entity))).get(0);
     }
 
     @Transactional
@@ -202,15 +211,26 @@ public class ProductOrderService {
         // a rejected order still leaves its audit trail.
         com.bss.ordering.credit.CreditDecisionPort.Decision credit =
                 hasAddItem(dto) ? creditService.assessParty(entity.getOwnerPartyId()) : null;
+        String creditDecisionId = null;
         if (credit != null) {
-            creditService.record(entity.getOwnerPartyId(), id, credit);
+            creditDecisionId = creditService.record(entity.getOwnerPartyId(), id, credit);
             if (com.bss.ordering.credit.CreditDecisionPort.FROZEN.equals(credit.decision())) {
                 throw new com.bss.ordering.exception.CreditFrozenException(
                         "credit information is frozen at the bureau — lift the freeze"
                                 + " or continue with the prepaid path");
             }
         }
-        enforcePolicy(dto, entity.getOwnerPartyId(), credit);
+        try {
+            enforcePolicy(dto, entity.getOwnerPartyId(), credit);
+        } catch (com.bss.ordering.exception.PolicyDeniedException denied) {
+            if (creditDecisionId == null) {
+                throw denied;
+            }
+            // #422 review: the order rolls back, the decision does not — it records that the
+            // operator's rule refused, and the 422 points the customer at it (a person to ask)
+            throw new com.bss.ordering.exception.PolicyDeniedException(denied.getMessage(),
+                    creditService.refusedByRule(creditDecisionId, denied.getMessage()));
+        }
         if (credit != null && com.bss.ordering.credit.CreditDecisionPort.DECLINE.equals(credit.decision())
                 && !STATE_HELD.equals(entity.getState())) {
             // the existing hold path: the order stands but waits for a human

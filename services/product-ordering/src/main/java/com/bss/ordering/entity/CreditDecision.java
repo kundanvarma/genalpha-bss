@@ -57,6 +57,19 @@ public class CreditDecision {
     @Column(name = "review_ticket_id", length = 64)
     private String reviewTicketId;
 
+    /** When the operator's policy rule refused the order this decision was taken for (V14); null otherwise. */
+    @Column(name = "order_refused_at")
+    private OffsetDateTime orderRefusedAt;
+
+    /** The refusing rule's customer-facing words, as the policy component gave them. */
+    @Column(name = "order_refusal", length = 400)
+    private String orderRefusal;
+
+    public OffsetDateTime getOrderRefusedAt() { return orderRefusedAt; }
+    public void setOrderRefusedAt(OffsetDateTime orderRefusedAt) { this.orderRefusedAt = orderRefusedAt; }
+    public String getOrderRefusal() { return orderRefusal; }
+    public void setOrderRefusal(String orderRefusal) { this.orderRefusal = orderRefusal; }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }

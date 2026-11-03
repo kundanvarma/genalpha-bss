@@ -12,11 +12,17 @@ spring:
   # Outbound HTTP has an end. The JDK client waits forever by default, so a
   # dependency that accepts the connection and then goes quiet holds a request
   # thread until something kills it.
+  #
+  # spring.http.CLIENTS since Boot 4: the old `spring.http.client.*` keys are
+  # deprecated and NOT bound any more — measured 2026-11-03: with the old key a
+  # 400 ms read timeout let a 1.5 s answer through; with this one it fired
+  # (CreditReviewTicketIdempotencyTest). Other components still carry the old key.
   http:
-    client:
+    clients:
       # the JDK client, which several clients here used to select by hand to get
       # PATCH; selecting it here means they inherit these timeouts instead
-      factory: jdk
+      imperative:
+        factory: jdk
       connect-timeout: 5s
       read-timeout: 30s
   application:
