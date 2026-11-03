@@ -63,6 +63,12 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  ai:
+    # EU AI Act Art. 50(2): the key intelligence signs AI-draft receipts with.
+    # Copy that arrives with a receipt is marked here, whatever the body says.
+    # Empty = receipts cannot be checked (they still mark; the model is as
+    # declared). Same key as intelligence; docs/ai-content-marking.md
+    provenance-key: ${AI_PROVENANCE_KEY:}
   events:
     topic: bss.campaign.events
   campaign:

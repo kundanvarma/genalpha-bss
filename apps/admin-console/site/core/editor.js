@@ -106,6 +106,7 @@ function renderEditor() {
       wrap.append(tokenChips(parts[0])); // personalization chips + {{ autocomplete
     }
     wrap.dataset.field = f.name;
+    if (f.kind === 'hidden') wrap.hidden = true; // carried with the form, never shown (an AI draft's receipt)
     return wrap;
   }));
   // presets the desk learned for this form: one click prefills the shared values

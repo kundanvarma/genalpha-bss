@@ -28,13 +28,16 @@ public class JourneyCopilotService {
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
+    private final AiDraftProvenance provenance;
 
     public JourneyCopilotService(LlmAdapter llm, Redactor redactor,
-            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
+            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper,
+            AiDraftProvenance provenance) {
         this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
         this.objectMapper = objectMapper;
+        this.provenance = provenance;
     }
 
     public CopilotReply chat(CopilotChatRequest request) {
@@ -94,7 +97,15 @@ public class JourneyCopilotService {
         if (parsed == null) {
             throw new BadRequestException("the model did not follow the copilot JSON contract");
         }
-        return reply(parsed, llm.provider(), llm.model(), null, objectMapper);
+        CopilotReply reply = reply(parsed, llm.provider(), llm.model(), null, objectMapper);
+        // the console posts the proposal straight to the campaign API on Create, so
+        // every piece of copy in it leaves here marked, with its receipt (Art. 50(2))
+        if (reply.proposal() != null) {
+            AiDraftProvenance.markProposal(reply.proposal(),
+                    AiDraftProvenance.modelName(llm.provider(), llm.model()),
+                    provenance.issue(llm.provider(), llm.model()));
+        }
+        return reply;
     }
 
     /** The model's document becomes the wire record: the contract keys typed, the proposal and

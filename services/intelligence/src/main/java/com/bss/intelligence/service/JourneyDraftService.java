@@ -29,6 +29,7 @@ public class JourneyDraftService {
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final com.bss.intelligence.llm.TenantVoice voice;
+    private final AiDraftProvenance provenance;
 
     /** The default plan when the author doesn't specify stages. */
     private static final List<String[]> DEFAULT_STAGES = List.of(
@@ -38,10 +39,11 @@ public class JourneyDraftService {
 
     public JourneyDraftService(Redactor redactor,
             com.bss.intelligence.llm.AiGovernor governor,
-            com.bss.intelligence.llm.TenantVoice voice) {
+            com.bss.intelligence.llm.TenantVoice voice, AiDraftProvenance provenance) {
         this.redactor = redactor;
         this.governor = governor;
         this.voice = voice;
+        this.provenance = provenance;
     }
 
     @Transactional
@@ -75,7 +77,10 @@ public class JourneyDraftService {
             StageCopy copy = draftStageCopy(brandName, brief, stage, intent);
             providers.add(copy.writtenBy().provider());
             models.add(copy.writtenBy().model());
-            steps.add(JourneyStep.message(stage, copy.subject(), copy.body()));
+            // each stage marked with, and receipted for, the model that actually wrote it
+            steps.add(JourneyStep.message(stage, copy.subject(), copy.body(),
+                    AiDraftProvenance.modelName(copy.writtenBy().provider(), copy.writtenBy().model()),
+                    provenance.issue(copy.writtenBy().provider(), copy.writtenBy().model())));
             if (i < stages.size() - 1) {
                 steps.add(JourneyStep.wait(stage, 3));
             }

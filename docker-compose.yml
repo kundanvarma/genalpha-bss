@@ -750,6 +750,10 @@ services:
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-campaign
       OIDC_CLIENT_SECRET: campaign-secret
+      # AI-draft receipts (EU AI Act Art. 50(2)): the SAME key as intelligence —
+      # campaign marks copy by the receipt intelligence signed. Demo opt-in; the
+      # application default is empty. Set your own outside the laptop fleet.
+      AI_PROVENANCE_KEY: ${AI_PROVENANCE_KEY:-dev-ai-provenance-key}
       DB_URL: jdbc:postgresql://postgres:5432/campaign
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: campaign_app
@@ -874,6 +878,8 @@ services:
       AI_MODEL_SMART: ${AI_MODEL_SMART:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_JURISDICTION: ${AI_JURISDICTION:-}
+      # signs every AI draft's receipt; campaign verifies with the same key (Art. 50(2))
+      AI_PROVENANCE_KEY: ${AI_PROVENANCE_KEY:-dev-ai-provenance-key}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=256m"
     volumes:

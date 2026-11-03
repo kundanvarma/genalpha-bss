@@ -16,6 +16,8 @@ spring:
     password: ""
 
 bss:
+  ai:
+    provenance-key: test-provenance-key
   events:
     enabled: false
   intelligence:

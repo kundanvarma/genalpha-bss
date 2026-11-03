@@ -37,21 +37,24 @@ function stepBuilderControl(field) {
   const row = (label, el, wide) => { const l = document.createElement('label'); l.className = 'stepfield' + (wide ? ' wide' : ''); const s = document.createElement('span'); s.textContent = label; l.append(s, el); return l; };
 
   // ---- model <-> steps ----
+  // EU AI Act Art. 50(2): a piece of copy keeps its AI mark and its draft receipt through edits —
+  // the message itself and a branch's then/else or a wait's onTimeout copy alike (the server marks by the receipt)
+  const markOf = (o) => Object.fromEntries(['aiGenerated', 'aiModel', 'aiDraft'].filter((k) => o && o[k] != null && o[k] !== false).map((k) => [k, o[k]]));
   function toStep(n) {
     const s = { type: n.type };
     if (n.type !== 'exit' && n.stage) s.stage = n.stage;
-    if (n.type === 'message') { s.channel = n.channel || 'inApp'; if (n.subject) s.subject = n.subject; if (n.content) s.content = n.content; if (n.aiGenerated) { s.aiGenerated = true; if (n.aiModel) s.aiModel = n.aiModel; } }
+    if (n.type === 'message') { s.channel = n.channel || 'inApp'; if (n.subject) s.subject = n.subject; if (n.content) s.content = n.content; Object.assign(s, n.mark); }
     else if (n.type === 'wait') { if (n.days) s.days = Number(n.days); if (n.hours) s.hours = Number(n.hours); }
-    else if (n.type === 'waitForEvent') { if (n.event) s.event = n.event; if (n.state) s.state = n.state; if (n.days) s.days = Number(n.days); if (n.tsub || n.tcon) s.onTimeout = { subject: n.tsub, content: n.tcon }; }
-    else if (n.type === 'decision') { if (n.inSegment) s.inSegment = n.inSegment; if (n.tsub || n.tcon) s.then = { subject: n.tsub, content: n.tcon }; if (n.esub || n.econ) s.else = { subject: n.esub, content: n.econ }; }
+    else if (n.type === 'waitForEvent') { if (n.event) s.event = n.event; if (n.state) s.state = n.state; if (n.days) s.days = Number(n.days); if (n.tsub || n.tcon) s.onTimeout = { subject: n.tsub, content: n.tcon, ...n.tmark }; }
+    else if (n.type === 'decision') { if (n.inSegment) s.inSegment = n.inSegment; if (n.tsub || n.tcon) s.then = { subject: n.tsub, content: n.tcon, ...n.tmark }; if (n.esub || n.econ) s.else = { subject: n.esub, content: n.econ, ...n.emark }; }
     return s;
   }
   function fromStep(s, i) {
     const n = { id: nid(), type: s.type || 'message', stage: s.stage, x: 24, y: 20 + i * 118 };
-    if (n.type === 'message') { n.channel = s.channel || 'inApp'; n.subject = s.subject; n.content = s.content; n.aiGenerated = s.aiGenerated === true; n.aiModel = s.aiModel; } // the AI mark survives edits
+    if (n.type === 'message') { n.channel = s.channel || 'inApp'; n.subject = s.subject; n.content = s.content; n.mark = markOf(s); } // the AI mark survives edits
     else if (n.type === 'wait') { n.days = s.days; n.hours = s.hours; }
-    else if (n.type === 'waitForEvent') { n.event = s.event; n.state = s.state; n.days = s.days; n.tsub = s.onTimeout && s.onTimeout.subject; n.tcon = s.onTimeout && s.onTimeout.content; }
-    else if (n.type === 'decision') { n.inSegment = s.inSegment; n.tsub = s.then && s.then.subject; n.tcon = s.then && s.then.content; n.esub = s.else && s.else.subject; n.econ = s.else && s.else.content; }
+    else if (n.type === 'waitForEvent') { n.event = s.event; n.state = s.state; n.days = s.days; n.tsub = s.onTimeout && s.onTimeout.subject; n.tcon = s.onTimeout && s.onTimeout.content; n.tmark = markOf(s.onTimeout); }
+    else if (n.type === 'decision') { n.inSegment = s.inSegment; n.tsub = s.then && s.then.subject; n.tcon = s.then && s.then.content; n.esub = s.else && s.else.subject; n.econ = s.else && s.else.content; n.tmark = markOf(s.then); n.emark = markOf(s.else); }
     return n;
   }
   function serialize() { const steps = model.map(toStep); hidden.value = JSON.stringify(steps); jsonArea.value = JSON.stringify(steps, null, 2); }

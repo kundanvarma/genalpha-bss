@@ -58,7 +58,9 @@ function growthProposalCard(reply, bubble) {
   meta.textContent = (obj.triggerEventType ? 'Trigger: ' + obj.triggerEventType
     : obj.segmentName ? 'Segment: ' + obj.segmentName : '')
     + (obj.holdoutPercent != null ? ' · holdout ' + obj.holdoutPercent + '%' : '')
-    + (isJourney && obj.steps ? ' · ' + obj.steps.length + ' steps' : '');
+    + (isJourney && obj.steps ? ' · ' + obj.steps.length + ' steps' : '')
+    // the copy arrives marked by the server, with its receipt, and Create posts it as it came (Art. 50(2))
+    + ' · AI-written' + (reply.provider ? ' by ' + [reply.provider, reply.model].filter(Boolean).join('/') : '');
   card.append(h, meta);
   if (isJourney && Array.isArray(obj.steps)) {
     const ul = document.createElement('ul'); ul.style.cssText = 'margin:8px 0;padding-left:18px;font-size:12.5px';

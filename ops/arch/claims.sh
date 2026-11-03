@@ -495,12 +495,14 @@ badneeds=$(python3 ops/arch/suite_needs_check.py)
 [ -z "$badneeds" ] || fail "ops/e2e/suite-needs.txt names services docker-compose.yml does not define: $badneeds" \
   "fix: use the compose service name — docker compose config --services"
 
-# Benefit Choices speak Norwegian (#387). No Norwegian-language tenant offers
-# Choices yet, so an English string on a Norwegian page would be seen first by a
-# customer. Every t('…') on the Choices screens needs a bokmål entry.
+# Benefit Choices, credit, the care chat and the AI mark speak Norwegian (#387,
+# #422). No Norwegian-language tenant offers them yet, so an English string on a
+# Norwegian page would be seen first by a customer. Every t('…') on those screens
+# needs a bokmål entry AND its own nynorsk entry: nn.js spreads bokmål underneath,
+# so a key missing there reads bokmål on a nynorsk page (the #422 review).
 untranslated=$(python3 ops/arch/choices_i18n_check.py) || fail "the Choices i18n check could not run" "fix: see ops/arch/choices_i18n_check.py"
-[ -z "$untranslated" ] || fail "Choices/credit strings with no Norwegian entry: $(echo "$untranslated" | paste -sd'|' -)" \
-  "fix: add them to apps/storefront/src/i18n/no.js (nn inherits; override in nn.js where nynorsk differs)"
+[ -z "$untranslated" ] || fail "Choices/credit/chat strings with no Norwegian entry ('nn:' = no nynorsk entry of its own): $(echo "$untranslated" | paste -sd'|' -)" \
+  "fix: add bokmål to apps/storefront/src/i18n/no.js and nynorsk to nn.js — write the nn entry even where it matches bokmål"
 
 # react and react-dom are ONE version or the app is a blank page: React refuses
 # to render a mismatched pair (error #527). Dependabot bumps them as two PRs,
