@@ -113,9 +113,41 @@ public class ActionCheckService {
     }
 
     static Verdict autonomy(JsonNode action, Caller caller, Registry.Layer layer) {
-        String declared = action.path("governance").path("autonomy").asString("medium");
         boolean badged = caller.has(WORKFORCE_BADGE);
-        String named = caller.agent();
+        Verdict asNamed = judge(action, badged, caller.agent(), layer);
+        if (caller.agentVerified() || caller.agent() == null || caller.agent().isBlank()) {
+            return asNamed;   // no name, or one the token proves: the caller is judged as what it is
+        }
+        /* A name in the header is the caller's own word (review finding 7). It may make
+         * the decision STRICTER, never looser: judge the caller as if it had named no
+         * agent and as the agent it named, and keep the stricter. A badged worker that
+         * names a registered agent is therefore still a badged worker with a badge's
+         * limits; a person who names one is judged as that agent. */
+        Verdict asUnnamed = judge(action, badged, null, layer);
+        Verdict v = stricter(asUnnamed, asNamed);
+        if (v == asUnnamed && Boolean.FALSE.equals(v.ok()) && !Boolean.FALSE.equals(asNamed.ok())) {
+            return new Verdict(v.id(), v.says(), false, v.detail() + "; '" + caller.agent()
+                    + "' is only named by a header, not proven by the token, so it cannot widen what the badge allows");
+        }
+        return v;
+    }
+
+    /** Refused beats allowed beats no verdict (a person at a screen). */
+    private static Verdict stricter(Verdict a, Verdict b) {
+        if (a == null) {
+            return b;
+        }
+        if (b == null) {
+            return a;
+        }
+        if (Boolean.FALSE.equals(a.ok())) {
+            return a;
+        }
+        return b;
+    }
+
+    private static Verdict judge(JsonNode action, boolean badged, String named, Registry.Layer layer) {
+        String declared = action.path("governance").path("autonomy").asString("medium");
         boolean machine = badged || (named != null && !named.isBlank());
         if (!machine) {
             return null;   // a person at a screen; autonomy says nothing about them

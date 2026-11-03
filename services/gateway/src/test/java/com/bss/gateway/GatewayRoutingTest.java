@@ -110,6 +110,22 @@ class GatewayRoutingTest {
     }
 
     @Test
+    void aCallersTraceContextIsDroppedOnTheWayThrough() throws Exception {
+        // review finding 16, end to end: the filter is in the running chain, not only in a unit test
+        downstream.enqueue(new MockResponse().setHeader("Content-Type", "application/json").setBody("[]"));
+        webTestClient.get()
+                .uri("/tmf-api/productCatalogManagement/v4/productOffering")
+                .header("traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-00")
+                .header("tracestate", "vendor=chosen-by-the-caller")
+                .exchange()
+                .expectStatus().isOk();
+        RecordedRequest received = downstream.takeRequest(5, TimeUnit.SECONDS);
+        assertThat(received).isNotNull();
+        assertThat(received.getHeader("traceparent")).isNull();
+        assertThat(received.getHeader("tracestate")).isNull();
+    }
+
+    @Test
     void unknownPath_returns404() {
         webTestClient.get()
                 .uri("/tmf-api/noSuchManagement/v4/thing")

@@ -44,6 +44,19 @@ public interface ActionReceiptRepository extends JpaRepository<ActionReceiptRow,
     /** Whole-chain read for the verifier, oldest first. */
     List<ActionReceiptRow> findByTenantIdOrderByRecordedAtAscIdAsc(String tenantId);
 
+    /**
+     * Serialise a machine's budget check per target (review finding 6): a Postgres
+     * transaction-scoped advisory lock on the key, released at commit or rollback.
+     * The second of two concurrent credits on one bill waits here until the first
+     * has committed its attempt row, and then counts it. A hash collision between
+     * two keys only makes them wait for each other; it never lets one through.
+     * Postgres only, as the service is — on any other database this throws, the
+     * attempt is not recorded and the action is refused, which is the closed side.
+     */
+    @Query(value = "SELECT count(*) FROM (SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))) AS budget_lock",
+            nativeQuery = true)
+    Long lockBudget(@Param("key") String key);
+
     /** Attempts of one action in a tenant since a moment — the machine value budget reads these (#422). */
     List<ActionReceiptRow> findByTenantIdAndActionAndPhaseAndRecordedAtAfter(String tenantId, String action,
             String phase, java.time.OffsetDateTime after);

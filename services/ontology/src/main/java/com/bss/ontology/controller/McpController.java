@@ -155,8 +155,24 @@ public class McpController {
         } catch (IllegalArgumentException e) {
             return new Answer(200, error(id, McpEnvelope.INVALID_PARAMS, e.getMessage(), null));
         } catch (RuntimeException e) {
-            return new Answer(200, error(id, -32603, e.getMessage(), null));
+            // An internal fault's own text (SQL, a JDBC URL, an issuer) is for the operator,
+            // not the client (review finding 24): the client gets a reference it can quote,
+            // the log gets the fault under the same reference. Never the params — they can
+            // carry a person's words or a prompt.
+            String reference = java.util.UUID.randomUUID().toString();
+            log.error("mcp {} failed, reference {}", oneLine(method), reference, e);
+            return new Answer(200, error(id, -32603, "internal error — quote reference " + reference
+                    + " to the operator", new McpMessages.InternalErrorData(reference)));
         }
+    }
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(McpController.class);
+
+    /** A caller-chosen method name reaches the log on one line. */
+    private static String oneLine(String value) {
+        return value == null ? null : value
+                .replace('\n', '_').replace('\r', '_')
+                .replace('\u0085', '_').replace(' ', '_').replace(' ', '_');
     }
 
     /**

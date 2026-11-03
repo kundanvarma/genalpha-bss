@@ -314,10 +314,16 @@ OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
 Unset — the application default, and how the laptop fleet and CI run — there
 is no exporter at all: no network call, and no startup failure for want of a
 collector. Spans are still made in-process, so ledger rows and receipts still
-get a trace id. Sampling follows the caller's decision when a `traceparent`
-arrives and otherwise keeps every trace (`TRACING_SAMPLING_PROBABILITY`,
+get a trace id. Sampling follows the parent's decision when a `traceparent`
+arrives from another component and otherwise keeps every trace (`TRACING_SAMPLING_PROBABILITY`,
 default `1.0` here rather than Spring Boot's `0.1`, because a ledger row that
-points at a dropped trace nine times in ten is not a join key).
+points at a dropped trace nine times in ten is not a join key). A caller
+outside the platform cannot choose either: the gateway drops any inbound
+`traceparent`, `tracestate`, `baggage` and B3 header (`TraceHeaderFilter`), so
+a client can neither file its actions under a trace id of its choosing nor
+switch export off with a sampled flag of `00` — the first traced component
+behind the gateway starts the trace (`TraceHeaderFilterTest`, and a routed
+request in `GatewayRoutingTest`).
 
 **Finding the rest of a trace by hand.**
 
@@ -358,7 +364,8 @@ input or refusal wording on the span.
 
 - **Only two components are traced.** The gateway and every other
   component still make no spans of their own, so a trace today starts at
-  intelligence or ontology (or at whoever sent the `traceparent`), and the
+  intelligence or ontology (or at the internal component that sent the
+  `traceparent`; the gateway drops one sent from outside), and the
   Kafka hop — the decision travelling to insight — is not part of the trace:
   the join to the decision log is the `context.traceId` value, not a span
   link. The fleet-wide row in `production-acceptance.md` stays open.
