@@ -13,7 +13,7 @@ spring:
   # dependency that accepts the connection and then goes quiet holds a request
   # thread until something kills it.
   http:
-    client:
+    clients:
       connect-timeout: 5s
       read-timeout: 30s
   application:

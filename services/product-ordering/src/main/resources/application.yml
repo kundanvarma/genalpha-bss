@@ -16,7 +16,7 @@ spring:
   # spring.http.CLIENTS since Boot 4: the old `spring.http.client.*` keys are
   # deprecated and NOT bound any more — measured 2026-11-03: with the old key a
   # 400 ms read timeout let a 1.5 s answer through; with this one it fired
-  # (CreditReviewTicketIdempotencyTest). Other components still carry the old key.
+  # (CreditReviewTicketIdempotencyTest). ops/arch/claims.sh refuses the old key.
   http:
     clients:
       # the JDK client, which several clients here used to select by hand to get
