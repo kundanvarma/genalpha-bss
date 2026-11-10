@@ -7,7 +7,7 @@
     "@react-navigation/bottom-tabs": "^7.21.0",
     "@react-navigation/native": "^7.5.1",
     "expo": "~58.0.22",
-    "expo-auth-session": "~58.0.16",
+    "expo-auth-session": "~58.0.17",
     "expo-crypto": "~58.0.7",
     "expo-status-bar": "~58.0.4",
     "expo-web-browser": "~58.0.7",
