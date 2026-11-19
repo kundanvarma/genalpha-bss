@@ -1,7 +1,5 @@
 package com.bss.campaign.decision;
 
-import com.bss.campaign.decision.policy.HoldoutThenWeightedHashPolicy;
-import com.bss.campaign.decision.policy.ZThresholdTunerPolicy;
 import com.bss.campaign.dto.DecisionView;
 import com.bss.campaign.events.DomainEventPublisher;
 import org.junit.jupiter.api.Test;
@@ -48,22 +46,6 @@ class DecisionPointsTest {
         assertThat(published.eligibleActions()).isEqualTo(List.of("holdout", "A", "B"));
         assertThat(published.autonomy()).isEqualTo("high");
         assertThat(published.type()).isEqualTo("Decision");
-    }
-
-    @Test
-    void theSplitMatchesTheHashesThatDealtEveryExistingEnrolment() {
-        // the pre-seam rule: holdout by hash(seed+party) < percent; arm by bucket of hash(seed:party:arm)
-        HoldoutThenWeightedHashPolicy policy = new HoldoutThenWeightedHashPolicy();
-        for (int i = 0; i < 200; i++) {
-            String party = "party-" + i;
-            boolean holdout = Math.floorMod(("j9" + party).hashCode(), 100) < 20;
-            int bucket = Math.floorMod(("j9:" + party + ":arm").hashCode(), 100);
-            String expected = holdout ? "holdout" : bucket < 50 ? "A" : "B";
-            Decision d = policy.decide(new DecisionRequest(DecisionPoints.JOURNEY_ENROLMENT, "party", party,
-                    Map.of("seed", "j9", "partyId", party, "holdoutPercent", 20, "weights", Map.of("A", 50, "B", 50)),
-                    List.of("holdout", "A", "B")));
-            assertThat(d.action()).as(party).isEqualTo(expected);
-        }
     }
 
     @Test
@@ -116,25 +98,6 @@ class DecisionPointsTest {
     }
 
     @Test
-    void tunerWaitsHoldsAndShiftsExactlyAsTheLedgerRuleSays() {
-        ZThresholdTunerPolicy tuner = new ZThresholdTunerPolicy();
-        Map<String, Object> thin = Map.of("rows", List.of(row("A", 5, 2), row("B", 30, 3)),
-                "before", Map.of("A", 50, "B", 50), "minPerArm", 20, "floorPercent", 10, "threshold", 1.64);
-        assertThat(tuner.decide(req(thin)).action()).isEqualTo("waiting");
-
-        Map<String, Object> clear = Map.of("rows", List.of(row("A", 60, 30), row("B", 60, 6)),
-                "before", Map.of("A", 50, "B", 50), "minPerArm", 20, "floorPercent", 10, "threshold", 1.64);
-        Decision shift = tuner.decide(req(clear));
-        assertThat(shift.action()).isEqualTo("shift");
-        assertThat(shift.evidence().get("after")).isEqualTo(Map.of("A", 90, "B", 10));
-        assertThat(((Number) shift.evidence().get("z")).doubleValue()).isGreaterThan(1.64);
-
-        Map<String, Object> even = Map.of("rows", List.of(row("A", 60, 12), row("B", 60, 11)),
-                "before", Map.of("A", 50, "B", 50), "minPerArm", 20, "floorPercent", 10, "threshold", 1.64);
-        assertThat(tuner.decide(req(even)).action()).isEqualTo("hold");
-    }
-
-    @Test
     void outcomeJoinsBackByIdAndIgnoresRowsFromBeforeTheLog() {
         points.outcome("d-1", "conversion", 349);
         points.outcome(null, "conversion", 349);
@@ -175,14 +138,5 @@ class DecisionPointsTest {
                 Map.of("seed", "j6", "partyId", "p-9", "holdoutPercent", 0), List.of("holdout", "message"), "holdout");
         assertThat(r.action()).isEqualTo("message");
         Mockito.verifyNoInteractions(events);
-    }
-
-    private static Map<String, Object> row(String name, long enrolled, long converted) {
-        return Map.of("name", name, "enrolled", enrolled, "converted", converted,
-                "rate", Math.round(1000.0 * converted / enrolled) / 10.0);
-    }
-
-    private static DecisionRequest req(Map<String, Object> ctx) {
-        return new DecisionRequest(DecisionPoints.JOURNEY_ARM_WEIGHTS, "journey", "j", ctx, List.of("shift", "hold", "waiting"));
     }
 }

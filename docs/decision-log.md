@@ -37,10 +37,10 @@ calls the point does not change.
 
 | DecisionPoint | Subject | Policy today | Autonomy | Outcome |
 |---|---|---|---|---|
-| `journey.enrolment` | party | `holdout-then-weighted-hash` v1 — holdout by hash, then the arm by the current weights; propensity = holdout % or (1 − holdout %) × weight | high | `conversion` |
+| `journey.enrolment` | party | `holdout-then-weighted-hash` v2 — holdout by a SHA-256 draw over (experiment, purpose, customer), then the arm by the current weights; propensity = holdout % or (1 − holdout %) × weight | high | `conversion` |
 | `campaign.treatment` | party | same policy, uniform arms | high | `conversion` |
 | `journey.nextBestAction` | party | `priority-first` v1 — the higher-priority journey speaks (deterministic) | medium | — |
-| `journey.armWeights` | journey | `z-threshold-tuner` v1 — waiting / hold / shift, the rule from `journey-auto-tuning.md` | medium | — |
+| `journey.armWeights` | journey | `always-valid-tuner` v1 — waiting / hold / shift, the rule from `journey-auto-tuning.md` | medium | — |
 | `catalog.advisorProposal` | offering | `advisor-arithmetic` v1 (intelligence) | medium | `adopted` |
 | `desk.suggestion` | desk target | `desk-rules` v1 (insight) | medium | `accepted` / `dismissed` |
 

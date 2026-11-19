@@ -2,6 +2,7 @@ package com.bss.campaign.service;
 
 import com.bss.campaign.api.ApiConstants;
 import com.bss.campaign.client.CommunicationClient;
+import com.bss.campaign.decision.policy.AlwaysValid;
 import com.bss.campaign.client.SegmentMember;
 import com.bss.campaign.dto.ArmSpec;
 import com.bss.campaign.dto.CampaignExecutionView;
@@ -224,6 +225,7 @@ public class CampaignService {
                 .filter(e -> "holdout".equals(e.getVariant()) && e.getConvertedAt() != null).count();
         Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
         Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
+        com.bss.campaign.dto.LiftInterval liftInterval = LiftReadout.interval(treated, treatedConv, heldOut, holdoutConv);
         // ATTRIBUTED REVENUE: the monthly money conversions carry, read per
         // EXPOSED customer (incrementality is per person reached, not per
         // converter) — the revenue lift is what one more treated customer
@@ -246,9 +248,9 @@ public class CampaignService {
                 holdoutRate == null ? null : Math.round(holdoutRate * 1000) / 10.0,
                 treatedRate == null || holdoutRate == null ? null
                         : Math.round((treatedRate - holdoutRate) * 1000) / 10.0,
+                liftInterval,
                 campaign.getConversionWindowDays(),
-                heldOut > 0 && heldOut < 5
-                        ? "holdout under 5 people — the lift is an anecdote, not a measurement" : null,
+                LiftReadout.note(heldOut, liftInterval),
                 revenue,
                 arms == null ? null : armStats(arms, all));
     }
@@ -298,26 +300,32 @@ public class CampaignService {
             leader = best.name();
             if (sorted.size() >= 2) {
                 verdict = verdictOf(sorted.get(0).sent(), sorted.get(0).conversions(),
-                        sorted.get(1).sent(), sorted.get(1).conversions(), best.name());
+                        sorted.get(1).sent(), sorted.get(1).conversions(), best.name(), sorted.size());
             }
         }
         return new CampaignStats.ArmReadout(rows, leader, verdict);
     }
 
-    private String verdictOf(long n1, long c1, long n2, long c2, String leader) {
+    /**
+     * A marketer reads this whenever the page is open, so it is the always-valid
+     * test, not a z-test that is honest only if read once. The leader was picked
+     * after seeing the data, out of every pair of arms — the bar rises with them.
+     */
+    private String verdictOf(long n1, long c1, long n2, long c2, String leader, int arms) {
         if (n1 < 30 || n2 < 30) {
             return "arms under 30 people — the split is an anecdote, keep the test running";
         }
-        double p1 = (double) c1 / n1, p2 = (double) c2 / n2;
-        double pooled = (double) (c1 + c2) / (n1 + n2);
-        double se = Math.sqrt(pooled * (1 - pooled) * (1.0 / n1 + 1.0 / n2));
-        if (se == 0) {
+        if (c1 + c2 == 0) {
             return "no conversions yet — nothing to compare";
         }
-        double z = (p1 - p2) / se;
-        return Math.abs(z) >= 1.96
-                ? "arm " + leader + " wins at 95% confidence"
-                : "the gap is inside the noise (not significant at 95%) — keep the test running";
+        AlwaysValid.Read read = AlwaysValid.compare(n1, c1, n2, c2,
+                AlwaysValid.DEFAULT_EFFECT_SD, AlwaysValid.DEFAULT_ALPHA);
+        double bar = arms * (arms - 1) / 2.0 / AlwaysValid.DEFAULT_ALPHA;
+        String odds = AlwaysValid.oddsWords(read.odds());
+        return read.odds() >= bar
+                ? "arm " + leader + " wins — " + odds + " that the difference is real, however often you look"
+                : "the gap is inside the noise (" + odds + " that it is real, it takes "
+                        + AlwaysValid.oddsWords(bar) + ") — keep the test running";
     }
 
     /**

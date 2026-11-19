@@ -1,7 +1,7 @@
 /* #117 journey_autotune_test — journey auto-tuning: two message variants behind a
  * holdout; each treated customer is dealt an arm; the first message speaks in that
  * arm; conversions read per arm; the tuner shifts traffic to the winner ONLY when
- * the evidence clears a z-threshold, keeps a floor on every arm, and writes every
+ * the evidence clears a bar that holds however often it is read, keeps a floor on every arm, and writes every
  * decision (waiting / hold / shift) to a ledger with the numbers it saw. Taranga tenant. */
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -37,13 +37,13 @@ const J = '/tmf-api/campaignManagement/v4/journey';
   if (early.decision !== 'waiting') fail(`expected waiting: ${JSON.stringify(early)}`);
   console.log(`  no data yet → "${early.decision}": ${early.why}`);
 
-  /* 3. 120 customers enrolled by hand; every treated one is dealt an arm */
-  const parties = Array.from({ length: 120 }, (_, i) => `p-${run}-${i}`);
+  /* 3. 240 customers enrolled by hand; every treated one is dealt an arm */
+  const parties = Array.from({ length: 240 }, (_, i) => `p-${run}-${i}`);
   const en = (await call('POST', `${J}/${id}/enrollments`, staff, { partyIds: parties })).body;
-  if (en.enrolled !== 120 || !en.dealt) fail(`enrol: ${JSON.stringify(en).slice(0, 200)}`);
+  if (en.enrolled !== 240 || !en.dealt) fail(`enrol: ${JSON.stringify(en).slice(0, 200)}`);
   const inA = parties.filter((p) => en.dealt[p] === 'A'), inB = parties.filter((p) => en.dealt[p] === 'B'), held = parties.filter((p) => en.dealt[p] === 'holdout');
-  if (inA.length < 30 || inB.length < 30 || held.length < 4) fail(`split odd: A ${inA.length} B ${inB.length} holdout ${held.length}`);
-  console.log(`  enrolled 120: A ${inA.length} · B ${inB.length} · holdout ${held.length}`);
+  if (inA.length < 70 || inB.length < 70 || held.length < 8) fail(`split odd: A ${inA.length} B ${inB.length} holdout ${held.length}`);
+  console.log(`  enrolled 240: A ${inA.length} · B ${inB.length} · holdout ${held.length}`);
 
   /* 4. the first message speaks in the arm: one A customer's inbox message carries A's subject */
   let spoke = null;
@@ -67,7 +67,7 @@ const J = '/tmf-api/campaignManagement/v4/journey';
 
   /* 6. the tuner shifts traffic to A, keeps B's floor, and logs the evidence */
   const t = (await call('POST', `${J}/${id}/tune`, staff)).body;
-  if (t.decision !== 'shift' || t.after.A !== 90 || t.after.B !== 10 || !(t.z >= 1.64)) fail(`tune: ${JSON.stringify(t)}`);
+  if (t.decision !== 'shift' || t.after.A !== 90 || t.after.B !== 10 || !(t.odds >= t.bar) || t.bar !== 20) fail(`tune: ${JSON.stringify(t)}`);
   const after = (await call('GET', `${J}/${id}/stats`, staff)).body;
   if (after.arms.find((x) => x.name === 'A').weight !== 90) fail('weights not applied to stats');
   if (!(after.tuningLog || []).find((e) => e.decision === 'shift')) fail('shift not in the ledger');

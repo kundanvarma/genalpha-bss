@@ -24,6 +24,7 @@ import com.bss.campaign.dto.EraseReceipt;
 import com.bss.campaign.dto.ExecutionReceipt;
 import com.bss.campaign.dto.JourneyRequest;
 import com.bss.campaign.dto.JourneyStats;
+import com.bss.campaign.dto.LiftInterval;
 import com.bss.campaign.dto.JourneyView;
 import com.bss.campaign.dto.LearningContractRequest;
 import com.bss.campaign.dto.LearningContractView;
@@ -143,7 +144,7 @@ class DtoRoundTripTest {
         JourneyStats a = new JourneyStats("j1", 3, 3, 0, atStep, byStage,
                 List.of(new JourneyStats.FunnelNode(0, "message", "Welcome", 3, 1),
                         new JourneyStats.FunnelNode(1, "exit", null, 0, 0)),
-                0, new Conversions(2, 0), null, null, null, 66.7, null, null, null,
+                0, new Conversions(2, 0), null, null, null, 66.7, null, null, null, null,
                 new JourneyStats.Revenue(new BigDecimal("49.90"), BigDecimal.ZERO, null,
                         "monthly recurring value of converting orders"),
                 T, "steps were edited after launch — earlier enrollees walked a different version");
@@ -159,12 +160,12 @@ class DtoRoundTripTest {
         // with arms: the arm block sits between conversions and the rates; an empty stage funnel is left off
         TuneEntry waiting = new TuneEntry("2026-09-22T10:00:00Z",
                 List.of(new ArmRow("A", 50, 1, 0, 0.0, BigDecimal.ZERO), new ArmRow("B", 50, 3, 0, 0.0, BigDecimal.ZERO)),
-                weights(50, 50), null, null, "every arm needs at least 20 treated enrolments before it is judged",
+                weights(50, 50), null, null, null, null, "every arm needs at least 20 treated enrolments before it is judged",
                 "waiting", weights(50, 50), "d1");
         JourneyStats b = new JourneyStats("j1", 6, 4, 2, atStep, new LinkedHashMap<>(), List.of(), 0,
                 new Conversions(1, 0),
                 List.of(new ArmRow("A", 50, 1, 0, 0.0, BigDecimal.ZERO), new ArmRow("B", 50, 3, 1, 33.3, new BigDecimal("20.00"))),
-                true, List.of(waiting), 25.0, 0.0, 25.0,
+                true, List.of(waiting), 25.0, 0.0, 25.0, new LiftInterval(-31.5, 81.5),
                 "holdout under 5 people — the lift is an anecdote, not a measurement",
                 new JourneyStats.Revenue(new BigDecimal("20.00"), BigDecimal.ZERO, new BigDecimal("5.00"),
                         "monthly recurring value of converting orders"), null, null);
@@ -177,7 +178,7 @@ class DtoRoundTripTest {
                 + "{\"name\":\"B\",\"weight\":50,\"enrolled\":3,\"converted\":0,\"rate\":0.0,\"revenue\":0}],"
                 + "\"before\":{\"A\":50,\"B\":50},\"why\":\"every arm needs at least 20 treated enrolments before it is judged\","
                 + "\"decision\":\"waiting\",\"after\":{\"A\":50,\"B\":50},\"decisionId\":\"d1\"}],"
-                + "\"treatedRate\":25.0,\"holdoutRate\":0.0,\"liftPoints\":25.0,"
+                + "\"treatedRate\":25.0,\"holdoutRate\":0.0,\"liftPoints\":25.0,\"liftInterval\":{\"low\":-31.5,\"high\":81.5},"
                 + "\"note\":\"holdout under 5 people — the lift is an anecdote, not a measurement\","
                 + "\"revenue\":{\"treated\":20.00,\"holdout\":0,\"liftPerCustomer\":5.00,"
                 + "\"basis\":\"monthly recurring value of converting orders\"}}", write(b));
@@ -189,13 +190,16 @@ class DtoRoundTripTest {
                 + "\"converted\":30,\"rate\":50.0,\"revenue\":120.00}],\"before\":{\"A\":50,\"B\":50},\"z\":4.71,"
                 + "\"threshold\":1.64,\"why\":\"\\\"A\\\" converts at 50.0 % vs 10.0 % for \\\"B\\\" (z 4.71 ≥ 1.64)\","
                 + "\"decision\":\"shift\",\"after\":{\"A\":90,\"B\":10},\"decisionId\":\"d2\"},"
+                // a row judged by the always-valid rule carries odds against a bar, and no z threshold
+                + "{\"at\":\"2026-11-19T10:00:00Z\",\"arms\":[],\"before\":{\"A\":50,\"B\":50},\"z\":3.31,"
+                + "\"odds\":59.5,\"bar\":20.0,\"why\":\"w\",\"decision\":\"shift\",\"after\":{\"A\":90,\"B\":10},\"decisionId\":\"d3\"},"
                 // a row from before the decision log existed has no decisionId
                 + "{\"at\":\"2026-09-21T10:00:00Z\",\"arms\":[],\"before\":{},\"why\":\"fewer than two arms\","
                 + "\"decision\":\"hold\",\"after\":{}}]";
         List<TuneEntry> rows = json.readValue(stored, json.getTypeFactory().constructCollectionType(List.class, TuneEntry.class));
         assertEquals(stored, write(rows));
         assertEquals(new BigDecimal("120.00"), rows.get(0).arms().get(0).revenue());
-        TuneResult result = new TuneResult(rows.get(1), "j1");
+        TuneResult result = new TuneResult(rows.get(2), "j1");
         assertEquals("{\"at\":\"2026-09-21T10:00:00Z\",\"arms\":[],\"before\":{},\"why\":\"fewer than two arms\","
                 + "\"decision\":\"hold\",\"after\":{},\"journeyId\":\"j1\"}", write(result));
     }
@@ -249,12 +253,12 @@ class DtoRoundTripTest {
 
     @Test
     void campaignStats_writesTheArmReadoutWithANullRate_andTheVerdictOnlyWhenJudged() throws Exception {
-        CampaignStats s = new CampaignStats("c2", 0, 0, new Conversions(0, 0), null, null, null, 7, null, null,
+        CampaignStats s = new CampaignStats("c2", 0, 0, new Conversions(0, 0), null, null, null, null, 7, null, null,
                 new CampaignStats.ArmReadout(List.of(new CampaignStats.ArmStat("A", "sa", 0, 0, null)), null, null));
         assertEquals("{\"campaignId\":\"c2\",\"reached\":0,\"heldOut\":0,\"conversions\":{\"treated\":0,\"holdout\":0},"
                 + "\"conversionWindowDays\":7,\"arms\":{\"arms\":[{\"name\":\"A\",\"subject\":\"sa\",\"sent\":0,"
                 + "\"conversions\":0,\"rate\":null}]}}", write(s));
-        CampaignStats measured = new CampaignStats("c1", 40, 4, new Conversions(10, 1), 25.0, 25.0, 0.0, 7,
+        CampaignStats measured = new CampaignStats("c1", 40, 4, new Conversions(10, 1), 25.0, 25.0, 0.0, null, 7,
                 "holdout under 5 people — the lift is an anecdote, not a measurement",
                 new CampaignStats.Revenue(new BigDecimal("349.00"), new BigDecimal("49.90"), new BigDecimal("8.73"),
                         new BigDecimal("12.48"), new BigDecimal("-3.75"), "monthly recurring value of converting orders"),

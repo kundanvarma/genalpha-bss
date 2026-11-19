@@ -11,7 +11,7 @@ import java.util.List;
  * the attributed revenue per exposed customer, and — when the campaign has
  * arms — the A/B readout with its honest z-test verdict.
  */
-@JsonPropertyOrder({"campaignId", "reached", "heldOut", "conversions", "treatedRate", "holdoutRate", "liftPoints",
+@JsonPropertyOrder({"campaignId", "reached", "heldOut", "conversions", "treatedRate", "holdoutRate", "liftPoints", "liftInterval",
         "conversionWindowDays", "note", "revenue", "arms"})
 public record CampaignStats(
         String campaignId,
@@ -21,6 +21,7 @@ public record CampaignStats(
         @JsonInclude(JsonInclude.Include.NON_NULL) Double treatedRate,
         @JsonInclude(JsonInclude.Include.NON_NULL) Double holdoutRate,
         @JsonInclude(JsonInclude.Include.NON_NULL) Double liftPoints,
+        @JsonInclude(JsonInclude.Include.NON_NULL) LiftInterval liftInterval,
         int conversionWindowDays,
         @JsonInclude(JsonInclude.Include.NON_NULL) String note,
         @JsonInclude(JsonInclude.Include.NON_NULL) Revenue revenue,
@@ -37,7 +38,7 @@ public record CampaignStats(
             String basis) {
     }
 
-    /** Per-arm sent / conversions / rate, a leader, and the verdict of a two-proportion z-test at 95 %. */
+    /** Per-arm sent / conversions / rate, a leader, and a verdict that holds however often it is read. */
     @JsonPropertyOrder({"arms", "leader", "verdict"})
     public record ArmReadout(
             List<ArmStat> arms,

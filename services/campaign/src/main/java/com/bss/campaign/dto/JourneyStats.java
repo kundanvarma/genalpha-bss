@@ -16,7 +16,7 @@ import java.util.Map;
  */
 @JsonPropertyOrder({"journeyId", "entered", "treated", "heldOut", "activeAtStep", "stageFunnel", "funnel",
         "completedUnconverted", "conversions", "arms", "autoTune", "tuningLog", "treatedRate", "holdoutRate",
-        "liftPoints", "note", "revenue", "stepsEditedAt", "editNote"})
+        "liftPoints", "liftInterval", "note", "revenue", "stepsEditedAt", "editNote"})
 public record JourneyStats(
         String journeyId,
         long entered,
@@ -33,6 +33,7 @@ public record JourneyStats(
         @JsonInclude(JsonInclude.Include.NON_NULL) Double treatedRate,
         @JsonInclude(JsonInclude.Include.NON_NULL) Double holdoutRate,
         @JsonInclude(JsonInclude.Include.NON_NULL) Double liftPoints,
+        @JsonInclude(JsonInclude.Include.NON_NULL) LiftInterval liftInterval,
         @JsonInclude(JsonInclude.Include.NON_NULL) String note,
         @JsonInclude(JsonInclude.Include.NON_NULL) Revenue revenue,
         @JsonInclude(JsonInclude.Include.NON_NULL) OffsetDateTime stepsEditedAt,

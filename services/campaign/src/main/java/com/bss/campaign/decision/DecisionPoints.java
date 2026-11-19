@@ -2,7 +2,7 @@ package com.bss.campaign.decision;
 
 import com.bss.campaign.decision.policy.HoldoutThenWeightedHashPolicy;
 import com.bss.campaign.decision.policy.PriorityFirstPolicy;
-import com.bss.campaign.decision.policy.ZThresholdTunerPolicy;
+import com.bss.campaign.decision.policy.AlwaysValidTunerPolicy;
 import com.bss.campaign.dto.DecisionPointView;
 import com.bss.campaign.events.DomainEventPublisher;
 import org.slf4j.Logger;
@@ -58,7 +58,7 @@ public class DecisionPoints {
                 new PriorityFirstPolicy()));
         register(new DecisionPointSpec(JOURNEY_ARM_WEIGHTS, "journey", "medium",
                 "the tuner judges a journey's arms: shift traffic, hold, or wait for evidence",
-                new ZThresholdTunerPolicy()));
+                new AlwaysValidTunerPolicy()));
     }
 
     public void register(DecisionPointSpec spec) {

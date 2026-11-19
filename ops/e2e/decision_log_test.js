@@ -60,7 +60,7 @@ const D = '/insight/v1/decisions';
   if (dec.action !== en.dealt[treated]) fail(`log says ${dec.action}, the journey dealt ${en.dealt[treated]}`);
   if (!['holdout', 'A', 'B'].every((a) => dec.eligibleActions.includes(a))) fail(`eligible set: ${JSON.stringify(dec.eligibleActions)}`);
   if (typeof dec.propensity !== 'number' || dec.propensity <= 0 || dec.propensity >= 1) fail(`propensity: ${dec.propensity}`);
-  if (dec.policy !== 'holdout-then-weighted-hash' || dec.policyVersion !== '1' || dec.source !== 'campaign') fail(`policy: ${dec.policy} v${dec.policyVersion} from ${dec.source}`);
+  if (dec.policy !== 'holdout-then-weighted-hash' || dec.policyVersion !== '2' || dec.source !== 'campaign') fail(`policy: ${dec.policy} v${dec.policyVersion} from ${dec.source}`);
   if (dec.fallback !== false || dec.autonomy !== 'high') fail(`fallback/autonomy: ${dec.fallback}/${dec.autonomy}`);
   const expected = (1 - 0.2) * 0.5;
   if (Math.abs(dec.propensity - expected) > 0.001) fail(`propensity ${dec.propensity} ≠ (1 − holdout) × weight = ${expected}`);
@@ -88,14 +88,14 @@ const D = '/insight/v1/decisions';
   const t = (await call('POST', `${J}/${id}/tune`, staff)).body;
   if (!t.decisionId || !['waiting', 'hold'].includes(t.decision)) fail(`tune: ${JSON.stringify(t)}`);
   const tuneRec = await until('the tuner decision', async () => { const r = await call('GET', `${D}/${t.decisionId}`, staff); return r.status === 200 ? r.body : null; });
-  if (tuneRec.decisionPoint !== 'journey.armWeights' || tuneRec.action !== t.decision || tuneRec.propensity !== null || tuneRec.policy !== 'z-threshold-tuner') fail(`tuner record: ${JSON.stringify(tuneRec).slice(0, 300)}`);
+  if (tuneRec.decisionPoint !== 'journey.armWeights' || tuneRec.action !== t.decision || tuneRec.propensity !== null || tuneRec.policy !== 'always-valid-tuner') fail(`tuner record: ${JSON.stringify(tuneRec).slice(0, 300)}`);
   if (!tuneRec.eligibleActions.includes('shift') || tuneRec.eligibleActions.length !== 3) fail(`tuner eligible set: ${JSON.stringify(tuneRec.eligibleActions)}`);
   if (!tuneRec.context.rows || !tuneRec.evidence.after) fail('tuner record lacks rows/after');
   console.log(`  tuner: "${tuneRec.action}" by ${tuneRec.policy} (deterministic) — ${tuneRec.reason}`);
 
   /* 6. the summary: propensity coverage and outcome rate per point */
   const sum = (await call('GET', `${D}/summary`, staff)).body;
-  const ep = (sum.points || []).find((p) => p.decisionPoint === 'journey.enrolment' && p.policy === 'holdout-then-weighted-hash');
+  const ep = (sum.points || []).find((p) => p.decisionPoint === 'journey.enrolment' && p.policy === 'holdout-then-weighted-hash' && p.policyVersion === '2');
   if (!ep || ep.decisions < 60 || ep.withPropensity !== ep.decisions || ep.withOutcome < 1) fail(`summary: ${JSON.stringify(ep)}`);
   console.log(`  summary: journey.enrolment ${ep.decisions} decisions, ${ep.withPropensity} with propensity, ${ep.withOutcome} with outcome (${ep.outcomeRate} %)`);
 
