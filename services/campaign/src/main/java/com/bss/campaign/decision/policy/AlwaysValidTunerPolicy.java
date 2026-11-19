@@ -10,20 +10,25 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The auto-tuning rule (docs/journey-auto-tuning.md), moved behind the seam
- * unchanged: judge only after {@code minPerArm} treated enrolments per arm,
- * compare best with runner-up by one-sided two-proportion z, and on
- * {@code z ≥ threshold} give the best arm everything above the floor.
+ * The auto-tuning rule (docs/journey-auto-tuning.md): judge only after
+ * {@code minPerArm} treated enrolments per arm, compare the best arm with the
+ * runner-up, and give the best arm everything above the floor only when the
+ * odds that the difference is real reach the bar. The bar is
+ * {@code pairs / alpha} — {@link AlwaysValid}'s sequential test, so it holds
+ * however often the clock looks, with the bar raised for every pair of arms
+ * that could have been the one compared. It replaces the fixed one-sided z of
+ * 1.64, which was a 5 % test only if read once and was read every ten minutes.
  * Context: {@code rows} ([{name, enrolled, converted, rate}]), {@code before}
- * (name → weight), {@code minPerArm}, {@code floorPercent}, {@code threshold}.
- * Actions: {@code shift | hold | waiting}. Evidence carries {@code after},
- * {@code z}, {@code why} — exactly what the ledger used to hold.
+ * (name → weight), {@code minPerArm}, {@code floorPercent}, {@code alpha},
+ * {@code effectSd}. Actions: {@code shift | hold | waiting}. Evidence carries
+ * {@code after}, {@code z} (descriptive only), {@code odds}, {@code bar},
+ * {@code low}/{@code high} (the difference in points) and {@code why}.
  */
-public class ZThresholdTunerPolicy implements DecisionPolicy {
+public class AlwaysValidTunerPolicy implements DecisionPolicy {
 
     @Override
     public String name() {
-        return "z-threshold-tuner";
+        return "always-valid-tuner";
     }
 
     @Override
@@ -41,7 +46,8 @@ public class ZThresholdTunerPolicy implements DecisionPolicy {
         }
         int minPerArm = r.ctxInt("minPerArm", 20);
         int floor = r.ctxInt("floorPercent", 10);
-        double threshold = r.ctxDouble("threshold", 1.64);
+        double alpha = r.ctxDouble("alpha", AlwaysValid.DEFAULT_ALPHA);
+        double effectSd = r.ctxDouble("effectSd", AlwaysValid.DEFAULT_EFFECT_SD);
         Map<String, Object> evidence = new LinkedHashMap<>();
         Map<String, Integer> after = new LinkedHashMap<>(before);
         evidence.put("after", after);
@@ -60,24 +66,33 @@ public class ZThresholdTunerPolicy implements DecisionPolicy {
         Map<String, Object> second = sorted.get(1);
         long n1 = num(best.get("enrolled")), c1 = num(best.get("converted"));
         long n2 = num(second.get("enrolled")), c2 = num(second.get("converted"));
-        double p1 = (double) c1 / n1, p2 = (double) c2 / n2, p = (double) (c1 + c2) / (n1 + n2);
+        double p = (double) (c1 + c2) / (n1 + n2);
         double se = Math.sqrt(p * (1 - p) * (1.0 / n1 + 1.0 / n2));
-        double z = se == 0 ? 0 : (p1 - p2) / se;
-        double zr = Math.round(z * 100) / 100.0;
-        evidence.put("z", zr);
-        evidence.put("threshold", threshold);
-        if (z >= threshold) {
+        double z = se == 0 ? 0 : ((double) c1 / n1 - (double) c2 / n2) / se;
+        AlwaysValid.Read read = AlwaysValid.compare(n1, c1, n2, c2, effectSd, alpha);
+        // the best and the runner-up were picked after seeing the data, out of
+        // this many possible pairs — the bar rises with them
+        int pairs = rows.size() * (rows.size() - 1) / 2;
+        double bar = pairs / alpha;
+        evidence.put("z", Math.round(z * 100) / 100.0);
+        evidence.put("odds", Math.round(read.odds() * 10) / 10.0);
+        evidence.put("bar", Math.round(bar * 10) / 10.0);
+        evidence.put("low", AlwaysValid.points(read.low()));
+        evidence.put("high", AlwaysValid.points(read.high()));
+        String said = AlwaysValid.oddsWords(read.odds()) + " that the difference is real; the bar is "
+                + AlwaysValid.oddsWords(bar) + " and holds however often we look";
+        if (read.odds() >= bar) {
             for (Map<String, Object> row : rows) {
                 after.put(String.valueOf(row.get("name")), floor);
             }
             after.put(String.valueOf(best.get("name")), 100 - floor * (rows.size() - 1));
             String why = "\"" + best.get("name") + "\" converts at " + best.get("rate") + " % vs " + second.get("rate")
-                    + " % for \"" + second.get("name") + "\" (z " + zr + " ≥ " + threshold + ")";
+                    + " % for \"" + second.get("name") + "\" (" + said + ")";
             evidence.put("why", why);
             return Decision.deterministic(after.equals(before) ? "hold" : "shift", why, evidence);
         }
         String why = "the difference between \"" + best.get("name") + "\" and \"" + second.get("name")
-                + "\" is not evidence yet (z " + zr + " < " + threshold + ")";
+                + "\" is not evidence yet (" + said + ")";
         evidence.put("why", why);
         return Decision.deterministic("hold", why, evidence);
     }

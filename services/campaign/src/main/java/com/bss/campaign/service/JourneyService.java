@@ -77,9 +77,12 @@ public class JourneyService {
     /** The traffic floor every arm keeps, so the desk keeps learning. */
     @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-floor-percent:10}")
     private int tuneFloorPercent = 10;
-    /** One-sided z at which a difference counts as evidence (1.64 ≈ 95 %). */
-    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-z:1.64}")
-    private double tuneZ = 1.64;
+    /** The chance of ever shifting traffic to an arm that is no better — over every look, not per look. */
+    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-alpha:0.05}")
+    private double tuneAlpha = com.bss.campaign.decision.policy.AlwaysValid.DEFAULT_ALPHA;
+    /** How large a real difference between arms is expected to be, as a fraction (0.10 = ten points). */
+    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-effect-sd:0.10}")
+    private double tuneEffectSd = com.bss.campaign.decision.policy.AlwaysValid.DEFAULT_EFFECT_SD;
     private final com.bss.campaign.repository.ArbitrationDecisionRepository arbitration;
     private final com.bss.campaign.decision.DecisionPoints decisions;
     private final AiProvenance provenance;
@@ -414,8 +417,8 @@ public class JourneyService {
             return false;
         }
         // THE DECISION: holdout, or which arm — one choice, one record, one id;
-        // the conversion later joins back to it. Same hashes as always, so a
-        // customer keeps the bucket they were dealt before the log existed.
+        // the conversion later joins back to it. A customer is dealt once (the
+        // check above) and the deal is stored, so a change of draw moves nobody.
         List<Map<String, Object>> arms = armsOf(journey);
         List<String> candidates = new java.util.ArrayList<>();
         candidates.add("holdout");
@@ -833,6 +836,7 @@ public class JourneyService {
         boolean hasArms = !armDefs.isEmpty();
         Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
         Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
+        com.bss.campaign.dto.LiftInterval liftInterval = LiftReadout.interval(treated, treatedConv, heldOut, holdoutConv);
         // attributed revenue, per exposed customer (see the campaign readout)
         java.math.BigDecimal treatedRevenue = enrollmentRevenue(all, false);
         java.math.BigDecimal holdoutRevenue = enrollmentRevenue(all, true);
@@ -856,8 +860,8 @@ public class JourneyService {
                 holdoutRate == null ? null : Math.round(holdoutRate * 1000) / 10.0,
                 treatedRate == null || holdoutRate == null ? null
                         : Math.round((treatedRate - holdoutRate) * 1000) / 10.0,
-                heldOut > 0 && heldOut < 5
-                        ? "holdout under 5 people — the lift is an anecdote, not a measurement" : null,
+                liftInterval,
+                LiftReadout.note(heldOut, liftInterval),
                 revenue,
                 edited ? journey.getStepsEditedAt() : null,
                 edited ? "steps were edited after launch — earlier enrollees walked a different version" : null);
@@ -1012,8 +1016,8 @@ public class JourneyService {
     /**
      * The rule, in one place and in plain words: every arm keeps a floor of traffic;
      * an arm is judged only after it has enough treated enrolments; the best arm
-     * takes the rest of the traffic only when its conversion rate beats the runner-up
-     * with a one-sided z above the threshold. Otherwise nothing moves. Every call
+     * takes the rest of the traffic only when the odds that it really beats the
+     * runner-up reach a bar that holds however often this runs. Otherwise nothing moves. Every call
      * writes a ledger entry — shift, hold, or waiting — with the numbers it saw.
      */
     private TuneEntry tuneJourney(Journey journey) {
@@ -1022,7 +1026,7 @@ public class JourneyService {
         List<ArmRow> rows = armRows(journey, arms, all);
         Map<String, Integer> before = weightsOf(journey, arms);
         String at = OffsetDateTime.now().toString();
-        // the rule lives in ZThresholdTunerPolicy behind the seam; this method
+        // the rule lives in AlwaysValidTunerPolicy behind the seam; this method
         // only feeds it the numbers (as the open context the policy reads) and
         // keeps the journey's ledger
         Map<String, Object> ctx = new LinkedHashMap<>();
@@ -1031,7 +1035,8 @@ public class JourneyService {
         ctx.put("before", before);
         ctx.put("minPerArm", tuneMinPerArm);
         ctx.put("floorPercent", tuneFloorPercent);
-        ctx.put("threshold", tuneZ);
+        ctx.put("alpha", tuneAlpha);
+        ctx.put("effectSd", tuneEffectSd);
         com.bss.campaign.decision.DecisionRecord judged = decisions.decide(
                 com.bss.campaign.decision.DecisionPoints.JOURNEY_ARM_WEIGHTS, journey.getId(), ctx,
                 List.of("shift", "hold", "waiting"), List.of(), "hold");
@@ -1040,10 +1045,8 @@ public class JourneyService {
         if (judged.evidence().get("after") instanceof Map<?, ?> a) {
             a.forEach((k, v) -> after.put(String.valueOf(k), ((Number) v).intValue()));
         }
-        boolean judgedZ = judged.evidence().get("z") instanceof Number;
         TuneEntry entry = new TuneEntry(at, rows, before,
-                judgedZ ? ((Number) judged.evidence().get("z")).doubleValue() : null,
-                judgedZ ? tuneZ : null,
+                evidenceNumber(judged, "z"), null, evidenceNumber(judged, "odds"), evidenceNumber(judged, "bar"),
                 judged.reason(), decision, after, judged.decisionId());
         if ("shift".equals(decision)) {
             try {
@@ -1067,6 +1070,10 @@ public class JourneyService {
         journey.setLastUpdate(OffsetDateTime.now());
         journeys.save(journey);
         return entry;
+    }
+
+    private static Double evidenceNumber(com.bss.campaign.decision.DecisionRecord judged, String key) {
+        return judged.evidence().get(key) instanceof Number n ? n.doubleValue() : null;
     }
 
     private void applyArms(Journey entity, JsonNode raw, boolean resetWeights) {

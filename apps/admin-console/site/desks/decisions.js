@@ -91,7 +91,7 @@ function rowWords(d, names) {
       const pr = ctx.priorities || {}; const held = Object.keys(pr).find((k) => k !== d.action);
       return `${journeyName(names, d.action)} spoke to customer ${shortId(d.subjectId)}; ${journeyName(names, held)} waited an hour`;
     }
-    case 'journey.armWeights': return `${journeyName(names, d.subjectId)}: ${actionWords(d)}${ev.z !== undefined ? ` (evidence z ${ev.z})` : ''}`;
+    case 'journey.armWeights': return `${journeyName(names, d.subjectId)}: ${actionWords(d)}${ev.odds !== undefined ? ` (${ev.odds} to 1 that it is real)` : ev.z !== undefined ? ` (evidence z ${ev.z})` : ''}`;
     case 'catalog.advisorProposal': return `the advisor proposed ${actionWords(d)} for ${d.subjectId}`;
     case 'desk.suggestion': return `the desk suggested “${ev.title || d.reason || d.action}”`;
     default: return `${subjectWords(d, names)}: ${d.action}`;
@@ -124,7 +124,7 @@ function receiptLines(d, names) {
       break;
     case 'journey.armWeights': {
       const rows = (ctx.rows || []).map((r) => `${r.name}: ${r.converted} of ${r.enrolled} converted`).join('; ');
-      lines.push(`We looked at: each variant's results (${rows}), the current split, and whether the difference is evidence yet (needs z ≥ ${ctx.threshold}, at least ${ctx.minPerArm} customers per variant).`);
+      lines.push(`We looked at: each variant's results (${rows}), the current split, and whether the difference is evidence yet (${ctx.alpha ? `at most a ${Math.round(ctx.alpha * 100)} % chance of crowning luck, however often it is checked` : `needs z ≥ ${ctx.threshold}`}, at least ${ctx.minPerArm} customers per variant).`);
       break;
     }
     case 'journey.nextBestAction': {
